@@ -41,12 +41,12 @@ The steps below helps you create a Self-Signed certificate. If you're using an e
 
 * **Run** the [generatecert.ps1](/generatecert.ps1) powershell script **as Admin**. Update the variables to the desired values. Especially the ones highlighted in screenshot below.
 
-  ![how to generate certs](/images/generatecert.png)
+  ![how to generate certs](./images/generatecert.png)
 
 
 * From the output console, **copy** the certificate signature from output window (the highlighted portion in screenshot below).The Certificate Signature will be an input to the ARM template. **DO NOT** copy `---- BEGIN CERTIFICATE ---` and `----- END CERTIFICATE -----`. **Only copy the text in between**.
 
-    ![Generate Cert Output](/images/generatecertpowershelloutput.png)
+    ![Generate Cert Output](./images/generatecertpowershelloutput.png)
 
 This powershell script will generate self-signed root and client certificates and also export the root certificate signature and client certificate file. Client certificate is automatically installed on the computer that you used to generate it. If you want to install a client certificate on another client computer, the exported .pfx file is also generated in the script which will be stored on local drive.
 
@@ -73,7 +73,7 @@ Certificates are used by Azure to authenticate clients connecting to a VNet over
 * Fill other necessary info and click **Purchase**.
 * This deployment takes ~30-45 minutes to complete.
 
-    ![Run ARM Template](/images/runarmtemplate.png)
+    ![Run ARM Template](./images/runarmtemplate.png)
 
 This template creates a VNet with a Gateway subnet associated to Azure Storage Service endpoint. It then creates a public IP which is used to create a VPN Gateway in the VNet. Finally it configures a Dynamic Routing gateway with Point-to-Site configuration with tunnel type SSTP including VPN client address pool, client root certificates and revoked certificates and then creates the Gateway.
 
@@ -81,13 +81,13 @@ This template creates a VNet with a Gateway subnet associated to Azure Storage S
 
 * Once the deployment fully completes, click on your gateway and go to the **Virtual Network Gateway >> Point-to-Site confirmation** tab from the left pane. **Download VPN client** by clicking the button on the top.
 
-  ![download VPN client](/images/downloadvpnclient.png)
+  ![download VPN client](./images/downloadvpnclient.png)
 
 * Unzip the client and browse into the folder.
 
 * If you are running amd64 - Run **VpnClientSetupAmd64.exe** from the **VPN Download client that was just installed WindowsAmd64** folder, run the x86 version in case your client is x86.
 
-  ![Install VPN Client](/images/installvpnclient.png)
+  ![Install VPN Client](./images/installvpnclient.png)
 
 ## Step 4 - Install Client cert [Optional Step]  
 
@@ -97,14 +97,14 @@ These instructions are assuming that you generated the client cert and exported 
 
 * Locate the cert on your machine that was exported and **double click** on **P2SClientCert.pfx**. This will be at the path that you specified for variable *$pathtostoreoutputfiles*.
 
-    ![Located exported client cert](/images/locatedexportedclientcert.png)
+    ![Located exported client cert](./images/locatedexportedclientcert.png)
 
 * Follow the prompt and when prompted for password, input the value you had provided to variable *$clientcertpassword* to script.
-![Install cert first 3 steps](/images/installcertfirst3steps.png)
+![Install cert first 3 steps](./images/installcertfirst3steps.png)
 
 * Follow the prompt and use default values until it says that certificate is successfully installed.
 
-    ![Install cert last 4 steps](/images/installcertlast4steps.png)
+    ![Install cert last 4 steps](./images/installcertlast4steps.png)
 
 
 ## Step 5 - Configure VPN route so that traffic to specified Storage account(s) goes through the VPN Tunnel
@@ -113,12 +113,12 @@ These instructions are assuming that you generated the client cert and exported 
 
 * Replace the value of ***$VNetId*** in RouteSetupAndConnectToVPN.ps1 by copying it from the **downloaded and unzipped VPN client folder path -> Generic -> VpnSettings.xml**.
 
-  ![VPNSetting](/images/howtocopyvnetid.png)
+  ![VPNSetting](./images/howtocopyvnetid.png)
 
 * Replace the value of **$FileShareHostList** information with your own. `You can give multiple accounts separated by comma.`
 * Run the RouteSetupAndConnectToVPN.ps1 script **as ADMIN**.
 
-  ![Run Routing Script](/images/runroutingscript.png)
+  ![Run Routing Script](./images/runroutingscript.png)
 
 * If you have an existing mounted share, you will need to **re-establish the SMB connection** by re-mounting the share for VPN to take effect.
 
