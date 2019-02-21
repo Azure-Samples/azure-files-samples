@@ -39,7 +39,7 @@ and Tunnel Type should only be SSTP. The template below takes care of these conf
 
 The steps below helps you create a Self-Signed certificate. If you're using an enterprise solution, you can use your existing certificate chain. Acquire the .cer file for the root certificate that you want to use. To learn more about certificates and Azure VPN interop read the [Azure Point To Site VPN documentation](https://docs.microsoft.com/en-us/azure/vpn-gateway/vpn-gateway-howto-point-to-site-classic-azure-portal#generatecerts).
 
-* **Run** the [generatecert.ps1](/generatecert.ps1) powershell script **as Admin**. Update the variables to the desired values. Especially the ones highlighted in screenshot below.
+* **Run** the [generatecert.ps1](./generatecert.ps1) powershell script **as Admin**. Update the variables to the desired values. Especially the ones highlighted in screenshot below.
 
   ![how to generate certs](./images/generatecert.png)
 
@@ -91,9 +91,9 @@ This template creates a VNet with a Gateway subnet associated to Azure Storage S
 
 ## Step 4 - Install Client cert [Optional Step]  
 
-This step is only needed if you are installing VPN on a different computer than where certificates were generated using [generatecert.ps1](/generatecert.ps1) in step # 1 above. If you are using the same machine, the client cert was already installed as part of step #1.
+This step is only needed if you are installing VPN on a different computer than where certificates were generated using [generatecert.ps1](./generatecert.ps1) in step # 1 above. If you are using the same machine, the client cert was already installed as part of step #1.
 
-These instructions are assuming that you generated the client cert and exported it when [generatecert.ps1](/generatecert.ps1) was run.
+These instructions are assuming that you generated the client cert and exported it when [generatecert.ps1](./generatecert.ps1) was run.
 
 * Locate the cert on your machine that was exported and **double click** on **P2SClientCert.pfx**. This will be at the path that you specified for variable *$pathtostoreoutputfiles*.
 
