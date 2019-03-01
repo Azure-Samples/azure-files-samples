@@ -151,5 +151,5 @@ Here are the details instructions to [persist connection for Azure Files](https:
     ```
 ## Conclusion
 
-Thats it. This will get you to a Point to Site VPN setup that works well with Azure Files.
+Thats it. This will get you to a Point to Site VPN setup that works well with Azure Files. In case of questions, please contact azurefiles@microsoft.com.
 
