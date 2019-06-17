@@ -7,8 +7,7 @@
 - [Step 2 - Deploy ARM Template to create VNet and P2S VPN Gateway](#step-2---deploy-arm-template-to-create-vnet-and-p2s-vpn-gateway)
 - [Step 3 - Download and install the VPN client](#step-3---download-and-install-the-vpn-client)
 - [Step 4 - Install Client cert [Optional Step]](#step-4---install-client-cert-optional-step)
-- [Step 5 - Configure VPN route so that traffic to specified Storage account(s) goes through the VPN Tunnel](#step-5---configure-vpn-route-so-that-traffic-to-specified-storage-accounts-goes-through-the-vpn-tunnel)
-- [Step 6 - Persist and mount Azure File Share](#step-6---persist-and-mount-azure-file-share)
+- [Step 5 - Persist and mount Azure File Share](#step-6---persist-and-mount-azure-file-share)
 - [Conclusion](#conclusion)
 <!-- /TOC -->
 
@@ -106,27 +105,7 @@ These instructions are assuming that you generated the client cert and exported 
 
     ![Install cert last 4 steps](./images/installcertlast4steps.png)
 
-
-## Step 5 - Configure VPN route so that traffic to specified Storage account(s) goes through the VPN Tunnel
-
-* Open [RouteSetupAndConnectToVPN.ps1](RouteSetupAndConnectToVPN.ps1) powershell script.
-
-* Replace the value of ***$VNetId*** in RouteSetupAndConnectToVPN.ps1 by copying it from the **downloaded and unzipped VPN client folder path -> Generic -> VpnSettings.xml**.
-
-  ![VPNSetting](./images/howtocopyvnetid.png)
-
-* Replace the value of **$FileShareHostList** information with your own. `You can give multiple accounts separated by comma.`
-* Run the RouteSetupAndConnectToVPN.ps1 script **as ADMIN**.
-
-  ![Run Routing Script](./images/runroutingscript.png)
-
-* If you have an existing mounted share, you will need to **re-establish the SMB connection** by re-mounting the share for VPN to take effect.
-
-> Storage Account IP can get updated automatically. RouteSetupAndConnectToVPN.ps1 should be **run as a scheduled task at startup** to reconnect the VPN if a constant connection is desired with **admin permissions**.
-
-This script will fetch the IP address of the Storage account in which your file share resides and update the routes.txt located under C:\users\YOURUSERNAME\AppData\Roaming\Microsoft\Network\Connections\Cm folder. This script will also connect to VPN.
-
-## Step 6 - Persist and mount Azure File Share
+## Step 5 - Persist and mount Azure File Share
 
 Persist your Azure Files credentials and use a persistent mount to enable mounting at every startup after reboot.
 
