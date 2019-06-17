@@ -53,10 +53,12 @@
       },
       "vpnClientCustomRoutes": {
           "type": "array",
-          "defaultValue": [
-          ],
+          "defaultValue": [ 
+            "192.168.3.0/24",
+            "192.168.4.0/24"
+        ],
           "metadata": {
-              "description": "Custom routes IP address range specified by customer to set on Gateway and Vpn clients. This should be the Storage account IP. Get this by running nslookup <StorageAccountName>.file.core.windows.net"
+              "description": "IP addres that was obtained in previous step. Custom routes IP address range specified by customer to set on Gateway and Vpn clients. This should be the Storage account IP. Get this by running nslookup <StorageAccountName>.file.core.windows.net"
           }       
       },
       "clientRootCertName": {
