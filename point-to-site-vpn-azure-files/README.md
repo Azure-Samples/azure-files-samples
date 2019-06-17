@@ -4,10 +4,11 @@
 - [Overview](#overview)
 - [Prerequisite](#prerequisite)
 - [Step 1 - Generate Root and Client Certificate](#step-1---generate-root-and-client-certificate)
-- [Step 2 - Deploy ARM Template to create VNet and P2S VPN Gateway](#step-2---deploy-arm-template-to-create-vnet-and-p2s-vpn-gateway)
-- [Step 3 - Download and install the VPN client](#step-3---download-and-install-the-vpn-client)
-- [Step 4 - Install Client cert [Optional Step]](#step-4---install-client-cert-optional-step)
-- [Step 5 - Persist and mount Azure File Share](#step-6---persist-and-mount-azure-file-share)
+- [Step 2 - Find your Storage Account IP](#step-2---find-your-storage-account-ip)
+- [Step 3 - Deploy ARM Template to create VNet and P2S VPN Gateway](#step-3---deploy-arm-template-to-create-vnet-and-p2s-vpn-gateway)
+- [Step 4 - Download and install the VPN client](#step-4---download-and-install-the-vpn-client)
+- [Step 5 - Install Client cert [Optional Step]](#step-5---install-client-cert-optional-step)
+- [Step 6 - Persist and mount Azure File Share](#step-6---persist-and-mount-azure-file-share)
 - [Conclusion](#conclusion)
 <!-- /TOC -->
 
@@ -93,7 +94,7 @@ Aliases:  mystorageaccount.file.core.windows.net
 
 This template creates a VNet with a Gateway subnet associated to Azure Storage Service endpoint. It then creates a public IP which is used to create a VPN Gateway in the VNet. Finally it configures a Dynamic Routing gateway with Point-to-Site configuration including VPN client address pool, client root certificates and revoked certificates and then creates the Gateway.
 
-## Step 3 - Download and install the VPN client
+## Step 4 - Download and install the VPN client
 
 * Once the deployment fully completes, click on your gateway and go to the **Virtual Network Gateway >> Point-to-Site confirmation** tab from the left pane. **Download VPN client** by clicking the button on the top.
 
@@ -105,7 +106,7 @@ This template creates a VNet with a Gateway subnet associated to Azure Storage S
 
   ![Install VPN Client](./images/installvpnclient.png)
 
-## Step 4 - Install Client cert [Optional Step]  
+## Step 5 - Install Client cert [Optional Step]  
 
 This step is only needed if you are installing VPN on a different computer than where certificates were generated using [generatecert.ps1](./generatecert.ps1) in step # 1 above. If you are using the same machine, the client cert was already installed as part of step #1.
 
@@ -123,7 +124,7 @@ These instructions are assuming that you generated the client cert and exported 
     ![Install cert last 4 steps](./images/installcertlast4steps.png)
 
 
-## Step 5 - Persist and mount Azure File Share
+## Step 6 - Persist and mount Azure File Share
 
 Persist your Azure Files credentials and use a persistent mount to enable mounting at every startup after reboot.
 
