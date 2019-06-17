@@ -16,12 +16,11 @@ Azure Files offers fully managed file shares in the cloud that are accessible vi
 
 Azure file shares can be mounted concurrently by cloud or on-premises deployments of Windows, Linux, and macOS.  
 
-While connecting from on-prem, sometimes ISPs block port 445.Azure VPN Gateway connects your on-premises networks to Azure through Point-to-Site VPNs in a similar way that you set up and connect to a remote branch office. The connectivity is secure and uses the industry-standard protocols SSTP.
+While connecting from on-prem, sometimes ISPs block port 445.Azure VPN Gateway connects your on-premises networks to Azure through Point-to-Site VPNs in a similar way that you set up and connect to a remote branch office. The connectivity is secure and uses the industry-standard protocols KIEv2.
 
 With this tutorial, one will be able to work around port 445 block by sending SMB traffic from a Windows machine over a secure tunnel instead of on internet. 
 
-This is a custom deployment for Azure Files of Point to Site VPN solution. In order for Point to Site VPN to work well Azure Files, Storage service endpoint should be added to virtual network
-and Tunnel Type should only be SSTP. The template below takes care of these configuration settings.
+This is a custom deployment for Azure Files of Point to Site VPN solution. In order for Point to Site VPN to work well Azure Files, Storage service endpoint should be added to virtual network. The template below takes care of these configuration settings.
 
 >> NOTE
 >>
@@ -59,7 +58,25 @@ Certificates are used by Azure to authenticate clients connecting to a VNet over
 >>
 >> Client cert needs to be installed on every connecting client. You can either install the same client cert (after it is created and exported as done in the script above) or create one for each client using root cert.
 
-## Step 2 - Deploy ARM Template to create VNet and P2S VPN Gateway
+## Step 2 - Find your Storage Account IP
+You will need custom routes IP address range to be fed into the ARM template that will be run.
+
+Get the Storage account IP. Get this by running nslookup. Make sure you replace StorageAccountName with your own storage account's name.
+
+```powershell
+nsloopup <StorageAccountName>.file.core.windows.net
+```
+Output will be something like
+
+```
+Name:    file.bn7prdstr03a.store.core.windows.net
+Address:  52.239.223.23
+Aliases:  mystorageaccount.file.core.windows.net
+```
+
+
+## Step 3 - Deploy ARM Template to create VNet and P2S VPN Gateway
+
 <a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure-Samples%2Fazure-files-samples%2Fmaster%2Fpoint-to-site-vpn-azure-files%2Fazuredeploy.json" target="_blank">
     <img src="http://azuredeploy.net/deploybutton.png"/>
 </a>
@@ -74,7 +91,7 @@ Certificates are used by Azure to authenticate clients connecting to a VNet over
 
     ![Run ARM Template](./images/runarmtemplate.png)
 
-This template creates a VNet with a Gateway subnet associated to Azure Storage Service endpoint. It then creates a public IP which is used to create a VPN Gateway in the VNet. Finally it configures a Dynamic Routing gateway with Point-to-Site configuration with tunnel type SSTP including VPN client address pool, client root certificates and revoked certificates and then creates the Gateway.
+This template creates a VNet with a Gateway subnet associated to Azure Storage Service endpoint. It then creates a public IP which is used to create a VPN Gateway in the VNet. Finally it configures a Dynamic Routing gateway with Point-to-Site configuration including VPN client address pool, client root certificates and revoked certificates and then creates the Gateway.
 
 ## Step 3 - Download and install the VPN client
 
@@ -104,6 +121,7 @@ These instructions are assuming that you generated the client cert and exported 
 * Follow the prompt and use default values until it says that certificate is successfully installed.
 
     ![Install cert last 4 steps](./images/installcertlast4steps.png)
+
 
 ## Step 5 - Persist and mount Azure File Share
 
