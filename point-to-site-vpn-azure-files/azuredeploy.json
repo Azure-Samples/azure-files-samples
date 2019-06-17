@@ -58,7 +58,7 @@
               "192.168.4.0/24"
           ],
           "metadata": {
-              "description": "Custom routes IP address range specified by customer to set on Gateway and Vpn clients."
+              "description": "Custom routes IP address range specified by customer to set on Gateway and Vpn clients. This should be the Storage account IP. Get this by running nslookup <StorageAccountName>.file.core.windows.net"
           }       
       },
       "clientRootCertName": {
@@ -155,7 +155,7 @@
                       ]
                   },
                   "vpnClientProtocols": [
-                      "SSTP"
+                      "IKEv2"
                   ],
                   "vpnClientRootCertificates": [
                       {
