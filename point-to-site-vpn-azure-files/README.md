@@ -151,14 +151,14 @@ Here are the details instructions to [persist connection for Azure Files](https:
     New-PSDrive -Name X -PSProvider FileSystem -Root "\\<your-storage-account-name>.file.core.windows.net\<your-file-share-name>" -Persist 
     ```
 
-### Step 7 - Add additional storage accounts [Optional Step]
+## Step 7 - Add additional storage accounts [Optional Step]
 
 Update the custom routes on existing Gateway and then redownload VpnClient package. Note currently Powershell is available. Portal and CLI support are coming soon.
 
-* Download Powershell Package - https://www.powershellgallery.com/packages/Az/2.0.0 
+* Download latest PowerShell Package - https://www.powershellgallery.com/packages/Az/2.0.0 
 * Use  below command to update the custom routes parameter value.
 
-    ```PowerShell
+    ```powershell
     # Update the custom routes on existing Gateway and then redownload VpnClient package
     $RG = "TestRG"
     $Location = "Central Us"
