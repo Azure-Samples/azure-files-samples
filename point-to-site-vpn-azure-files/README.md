@@ -86,7 +86,8 @@ Aliases:  mystorageaccount.file.core.windows.net
 </a>
 
 * Click **Deploy To Azure** button above. It will take you to Azure Portal.
-* **Paste** the **Client Root Cert Data** copied from copied from previous step.
+* **Paste** the **Client Root Cert Data** copied from first step.
+* **Paste** the **Storage Account IP** in **VPN Cient Customer Routes** copied from  from step # 2.
 * Fill other necessary info and click **Purchase**.
 * This deployment takes ~30-45 minutes to complete.
 
