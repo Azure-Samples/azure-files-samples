@@ -9,6 +9,7 @@
 - [Step 4 - Download and install the VPN client](#step-4---download-and-install-the-vpn-client)
 - [Step 5 - Install Client cert [Optional Step]](#step-5---install-client-cert-optional-step)
 - [Step 6 - Persist and mount Azure File Share](#step-6---persist-and-mount-azure-file-share)
+- [Step 7 - Add additional storage accounts [Optional Step]](#step-7---add-additional-storage-accounts-optional-step])
 - [Conclusion](#conclusion)
 <!-- /TOC -->
 
@@ -71,7 +72,7 @@ Output will be something like
 
 ```
 Name:    file.bn7prdstr03a.store.core.windows.net
-Address:  52.239.223.23
+Address:  20.38.99.200
 Aliases:  mystorageaccount.file.core.windows.net
 ```
 
@@ -156,21 +157,9 @@ Here are the details instructions to [persist connection for Azure Files](https:
 Update the custom routes on existing Gateway and then redownload VpnClient package. Note currently Powershell is available. Portal and CLI support are coming soon.
 
 * Download latest PowerShell Package - https://www.powershellgallery.com/packages/Az/2.0.0 
-* Use  below command to update the custom routes parameter value.
-
-    ```powershell
-    # Update the custom routes on existing Gateway and then redownload VpnClient package
-    $RG = "TestRG"
-    $Location = "Central Us"
-    $DNS = "10.1.1.3"
-    $GWName = "VnetGw
-    
-    $Gateway = Get-AzVirtualNetworkGateway -ResourceGroupName $RG -Name $GWName 
-    Set-AzVirtualNetworkGateway -VirtualNetworkGateway $actual -VpnClientProtocol IkeV2 -CustomRoute $NewCustomRoutes
-    $packageUrl = Get-AzVpnClientPackage -ResourceGroupName $RG -VirtualNetworkGatewayName $GWName -ProcessorArchitecture Amd64 
-    
-    ```
+* Run  [updatecustomroutesonexistinggatewayscript.ps1](./updatecustomroutesonexistinggatewayscript.ps1) to update the custom routes parameter value. You will need to replace the parameter values before running the script.
 * Redownload and install the VpnClient package (Step4 above)
+
 ## Conclusion
 
 Thats it. This will get you to a Point to Site VPN setup that works well with Azure Files. In case of questions, please contact azurefiles@microsoft.com.
