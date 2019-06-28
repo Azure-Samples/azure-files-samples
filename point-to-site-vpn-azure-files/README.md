@@ -87,7 +87,7 @@ Aliases:  mystorageaccount.file.core.windows.net
 
 * Click **Deploy To Azure** button above. It will take you to Azure Portal.
 * **Paste** the **Client Root Cert Data** copied from first step.
-* **Paste** the **Storage Account IP** in **VPN Cient Customer Routes** copied from  from step # 2.
+* **Paste** the **Storage Account CIDR Address** in **VPN Cient Customer Routes** copied from  from step # 2. Note this has to be in **CIDR format**. For example if the output of Step #2 is 20.38.99.200, then one needs to pass value as ["20.38.99.200/32"] as field expected CIDR format and not ip address.
 * Fill other necessary info and click **Purchase**.
 * This deployment takes ~30-45 minutes to complete.
 
@@ -106,6 +106,8 @@ This template creates a VNet with a Gateway subnet associated to Azure Storage S
 * If you are running amd64 - Run **VpnClientSetupAmd64.exe** from the **VPN Download client that was just installed WindowsAmd64** folder, run the x86 version in case your client is x86.
 
   ![Install VPN Client](./images/installvpnclient.png)
+
+* **Start** the VPN client.
 
 ## Step 5 - Install Client cert [Optional Step]  
 
@@ -148,6 +150,27 @@ Here are the details instructions to [persist connection for Azure Files](https:
     ```PowerShell
     New-PSDrive -Name X -PSProvider FileSystem -Root "\\<your-storage-account-name>.file.core.windows.net\<your-file-share-name>" -Persist 
     ```
+
+### Step 7 - Add additional storage accounts [Optional Step]
+
+Update the custom routes on existing Gateway and then redownload VpnClient package. Note currently Powershell is available. Portal and CLI support are coming soon.
+
+* Download Powershell Package - https://www.powershellgallery.com/packages/Az/2.0.0 
+* Use  below command to update the custom routes parameter value.
+
+    ```PowerShell
+    # Update the custom routes on existing Gateway and then redownload VpnClient package
+    $RG = "TestRG"
+    $Location = "Central Us"
+    $DNS = "10.1.1.3"
+    $GWName = "VnetGw
+    
+    $Gateway = Get-AzVirtualNetworkGateway -ResourceGroupName $RG -Name $GWName 
+    Set-AzVirtualNetworkGateway -VirtualNetworkGateway $actual -VpnClientProtocol IkeV2 -CustomRoute $NewCustomRoutes
+    $packageUrl = Get-AzVpnClientPackage -ResourceGroupName $RG -VirtualNetworkGatewayName $GWName -ProcessorArchitecture Amd64 
+    
+    ```
+* Redownload and install the VpnClient package (Step4 above)
 ## Conclusion
 
 Thats it. This will get you to a Point to Site VPN setup that works well with Azure Files. In case of questions, please contact azurefiles@microsoft.com.
