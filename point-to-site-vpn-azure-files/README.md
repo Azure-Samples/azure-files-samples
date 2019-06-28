@@ -87,7 +87,7 @@ Aliases:  mystorageaccount.file.core.windows.net
 
 * Click **Deploy To Azure** button above. It will take you to Azure Portal.
 * **Paste** the **Client Root Cert Data** copied from first step.
-* **Paste** the **Storage Account CIDR Address** in **VPN Cient Customer Routes** copied from  from step # 2. Note this has to be in **CIDR format**. For example if the output of Step #2 is 20.38.99.200, then one needs to pass value as ["20.38.99.200/32"] as field expected CIDR format and not ip address.
+* **Paste** the **Storage Account CIDR Address** in **VPN Client Custom Routes** copied from  from step # 2. Note this has to be in **CIDR format**. For example if the output of Step #2 is 20.38.99.200, then one needs to pass value as ["20.38.99.200/32"] as field expected CIDR format and not ip address.
 * Fill other necessary info and click **Purchase**.
 * This deployment takes ~30-45 minutes to complete.
 
