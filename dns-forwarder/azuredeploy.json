@@ -1,0 +1,251 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "virtualNetworkResourceGroupName": {
+            "type": "string",
+            "metadata": {
+                "description": "The resource group of the virtual network that needs a DNS forwarder."
+            }
+        },
+        "virtualNetworkName": { 
+            "type": "string",
+            "metadata": {
+                "description": "The virtual network to add the DNS forwarder to."
+            }
+        },
+        "virtualNetworkSubnetName":{
+            "type": "string",
+            "metadata": {
+                "description": "The specific subnet to use."
+            }
+        },
+        "dnsForwarderRootName": {
+            "type": "string",
+            "defaultValue": "DnsForwarder",
+            "metadata": {
+                "description": "The name of the DNS VM."
+            }
+        },
+        "dnsForwarderTempPassword": {
+            "type": "securestring",
+            "metadata": {
+                "description": "A temporary password for the DNS VMs to use until they are domain joined."
+            }
+        },
+        "domainJoinForwarders": {
+            "type": "bool",
+            "defaultValue": true,
+            "metadata": {
+                "description": "Whether or not to domain join the DNS forwarder VMs. The default value is yes, meaning odjBlob1 and odjBlob2 are required."
+            }
+        },
+        "odjBlob1": {
+            "type": "string",
+            "metadata": {
+                "description": "The offline domain join blob for the DNS forwarder #1."
+            }
+        },
+        "odjBlob2": {
+            "type": "string",
+            "metadata": {
+                "description": "The offline domain join blob for the DNS forwarder #2."
+            }
+        },
+        "domainName": {
+            "type": "string",
+            "metadata": {
+                "description": "The domain name of the (presumably) on-premises AD."
+            }
+        },
+        "onpremDnsServers": {
+            "type": "string",
+            "metadata": {
+                "description": "The on-premises DNS servers serving the domain."
+            }
+        }
+    },
+    "variables": {
+        "vmTempUsername": "tempUser",
+        "vmSkuName": "2019-Datacenter-Core",
+        "vmSize": "Standard_DS1_v2",
+        "azurePrivateDnsIpAddress": "168.63.129.16",
+        "storageEndpoint": "[environment().suffixes.storage]",
+        "location": "francecentral"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Compute/availabilitySets",
+            "apiVersion": "2019-03-01",
+            "name": "[concat(parameters('dnsForwarderRootName'), '-AvailabilitySet')]",
+            "location": "[variables('location')]",
+            "sku": {
+                "name": "Aligned"
+            },
+            "properties":{
+                "platformUpdateDomainCount": 5,
+                "platformFaultDomainCount": 2,
+                "virtualMachines": [
+                    { 
+                        "id": "[resourceId('Microsoft.Compute/virtualMachines', concat(parameters('dnsForwarderRootName'), '-1'))]" 
+                    },
+                    {
+                        "id": "[resourceId('Microsoft.Compute/virtualMachines', concat(parameters('dnsForwarderRootName'), '-2'))]"
+                    }
+                ]
+            }
+        },
+        {
+            "type": "Microsoft.Compute/virtualMachines",
+            "apiVersion": "2019-03-01",
+            "name": "[concat(parameters('dnsForwarderRootName'), '-1')]",
+            "location": "[variables('location')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Compute/availabilitySets', concat(parameters('dnsForwarderRootName'), '-AvailabilitySet'))]",
+                "[resourceId('Microsoft.Network/networkInterfaces', concat(parameters('dnsForwarderRootName'), '-1-NIC'))]"
+            ],
+            "properties": {
+                "availabilitySet": {
+                    "id": "[resourceId('Microsoft.Compute/availabilitySets', concat(parameters('dnsForwarderRootName'), '-AvailabilitySet'))]"
+                },
+                "hardwareProfile": {
+                    "vmSize": "[variables('vmSize')]"
+                },
+                "storageProfile": {
+                    "imageReference": {
+                        "publisher": "MicrosoftWindowsServer",
+                        "offer": "WindowsServer",
+                        "sku": "[variables('vmSkuName')]",
+                        "version": "latest"
+                    },
+                    "osDisk": {
+                        "osType": "Windows",
+                        "name": "[concat(parameters('dnsForwarderRootName'), '-1-OsDisk')]",
+                        "createOption": "FromImage",
+                        "caching": "ReadWrite",
+                        "managedDisk": {
+                            "storageAccountType": "StandardSSD_LRS"
+                        },
+                        "diskSizeGB": 127
+                    },
+                    "dataDisks": []
+                },
+                "osProfile": {
+                    "computerName": "[concat(parameters('dnsForwarderRootName'), '-1')]",
+                    "adminUsername": "[variables('vmTempUsername')]",
+                    "adminPassword": "[parameters('dnsForwarderTempPassword')]",
+                    "windowsConfiguration": {
+                        "provisionVMAgent": true,
+                        "enableAutomaticUpdates": true
+                    },
+                    "secrets": [],
+                    "allowExtensionOperations": true
+                },
+                "networkProfile": {
+                    "networkInterfaces": [{
+                        "id": "[resourceId('Microsoft.Network/networkInterfaces', concat(parameters('dnsForwarderRootName'), '-1-NIC'))]"
+                    }]
+                },
+                "licenseType": "Windows_Server"
+            }
+        },
+        {
+            "type": "Microsoft.Compute/virtualMachines",
+            "apiVersion": "2019-03-01",
+            "name": "[concat(parameters('dnsForwarderRootName'), '-2')]",
+            "location": "[variables('location')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Compute/availabilitySets', concat(parameters('dnsForwarderRootName'), '-AvailabilitySet'))]",
+                "[resourceId('Microsoft.Network/networkInterfaces', concat(parameters('dnsForwarderRootName'), '-2-NIC'))]"
+            ],
+            "properties": {
+                "availabilitySet": {
+                    "id": "[resourceId('Microsoft.Compute/availabilitySets', concat(parameters('dnsForwarderRootName'), '-AvailabilitySet'))]"
+                },
+                "hardwareProfile": {
+                    "vmSize": "[variables('vmSize')]"
+                },
+                "storageProfile": {
+                    "imageReference": {
+                        "publisher": "MicrosoftWindowsServer",
+                        "offer": "WindowsServer",
+                        "sku": "[variables('vmSkuName')]",
+                        "version": "latest"
+                    },
+                    "osDisk": {
+                        "osType": "Windows",
+                        "name": "[concat(parameters('dnsForwarderRootName'), '-2-OsDisk')]",
+                        "createOption": "FromImage",
+                        "caching": "ReadWrite",
+                        "managedDisk": {
+                            "storageAccountType": "StandardSSD_LRS"
+                        },
+                        "diskSizeGB": 127
+                    },
+                    "dataDisks": []
+                },
+                "osProfile": {
+                    "computerName": "[concat(parameters('dnsForwarderRootName'), '-2')]",
+                    "adminUsername": "[variables('vmTempUsername')]",
+                    "adminPassword": "[parameters('dnsForwarderTempPassword')]",
+                    "windowsConfiguration": {
+                        "provisionVMAgent": true,
+                        "enableAutomaticUpdates": true
+                    },
+                    "secrets": [],
+                    "allowExtensionOperations": true
+                },
+                "networkProfile": {
+                    "networkInterfaces": [{
+                        "id": "[resourceId('Microsoft.Network/networkInterfaces', concat(parameters('dnsForwarderRootName'), '-2-NIC'))]"
+                    }]
+                },
+                "licenseType": "Windows_Server"
+            }
+        },
+        {
+            "type": "Microsoft.Network/networkInterfaces",
+            "apiVersion": "2019-09-01",
+            "name": "[concat(parameters('dnsForwarderRootName'), '-1-NIC')]",
+            "location": "[variables('location')]",
+            "properties": {
+                "ipConfigurations": [{
+                    "name": "defaultIpConfig",
+                    "properties": {
+                        "privateIPAllocationMethod": "Dynamic",
+                        "subnet": {
+                            "id": "[concat(resourceId(parameters('virtualNetworkResourceGroupName'), 'Microsoft.Network/virtualNetworks', parameters('virtualNetworkName')), '/subnets/', parameters('virtualNetworkSubnetName'))]"
+                        },
+                        "primary": true,
+                        "privateIPAddressVersion": "IPv4"
+                    }
+                }],
+                "dnsSettings": { "dnsServers": [] },
+                "enableAcceleratedNetworking": false,
+                "enableIPForwarding": false
+            }
+        },
+        {
+            "type": "Microsoft.Network/networkInterfaces",
+            "apiVersion": "2019-09-01",
+            "name": "[concat(parameters('dnsForwarderRootName'), '-2-NIC')]",
+            "location": "[variables('location')]",
+            "properties": {
+                "ipConfigurations": [{
+                    "name": "defaultIpConfig",
+                    "properties": {
+                        "privateIPAllocationMethod": "Dynamic",
+                        "subnet": {
+                            "id": "[concat(resourceId(parameters('virtualNetworkResourceGroupName'), 'Microsoft.Network/virtualNetworks', parameters('virtualNetworkName')), '/subnets/', parameters('virtualNetworkSubnetName'))]"
+                        },
+                        "primary": true,
+                        "privateIPAddressVersion": "IPv4"
+                    }
+                }],
+                "dnsSettings": { "dnsServers": [] },
+                "enableAcceleratedNetworking": false,
+                "enableIPForwarding": false
+            }
+        }
+    ]
+}
