@@ -2,6 +2,12 @@
     "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
     "parameters": {
+        "location":{
+            "type": "string",
+            "metadata": {
+                "description": "The location of the virtual network and DNS forwarders must be identical."
+            }
+        },
         "virtualNetworkResourceGroupName": {
             "type": "string",
             "metadata": {
@@ -33,7 +39,7 @@
                 "description": "A temporary password for the DNS VMs to use until they are domain joined."
             }
         },
-        "domainJoinForwarders": {
+        "domainJoin": {
             "type": "bool",
             "defaultValue": true,
             "metadata": {
@@ -41,13 +47,13 @@
             }
         },
         "odjBlob1": {
-            "type": "string",
+            "type": "securestring",
             "metadata": {
                 "description": "The offline domain join blob for the DNS forwarder #1."
             }
         },
         "odjBlob2": {
-            "type": "string",
+            "type": "securestring",
             "metadata": {
                 "description": "The offline domain join blob for the DNS forwarder #2."
             }
@@ -58,8 +64,8 @@
                 "description": "The domain name of the (presumably) on-premises AD."
             }
         },
-        "onpremDnsServers": {
-            "type": "string",
+        "onPremDnsServers": {
+            "type": "array",
             "metadata": {
                 "description": "The on-premises DNS servers serving the domain."
             }
@@ -71,14 +77,137 @@
         "vmSize": "Standard_DS1_v2",
         "azurePrivateDnsIpAddress": "168.63.129.16",
         "storageEndpoint": "[environment().suffixes.storage]",
-        "location": "francecentral"
+        "scriptURL": "https://raw.githubusercontent.com/wmgries/azure-files-samples/dns-forwarder/dns-forwarder/configureVM.ps1",
+        "scriptName": "configureVM.ps1"
     },
+    "functions": [
+        {
+            "namespace": "ps",
+            "members": {
+                "paramSwitch": {
+                    "parameters": [
+                        {
+                            "name": "paramName",
+                            "type": "string"
+                        },
+                        {
+                            "name": "boolValue",
+                            "type": "bool"
+                        }
+                    ],
+                    "output": {
+                        "type": "string",
+                        "value": "[concat(' -', parameters('paramName'), if(not(parameters('boolValue')), ':$false', ''))]"
+                    }
+                },
+                "paramBool": {
+                    "parameters": [
+                        {
+                            "name": "paramName",
+                            "type": "string"
+                        },
+                        {
+                            "name": "boolValue",
+                            "type": "bool"
+                        }
+                    ],
+                    "output": {
+                        "type": "string",
+                        "value": "[concat(' -', parameters('paramName'), ' $', string(parameters('boolValue')))]"
+                    }
+                },
+                "paramString": {
+                    "parameters": [
+                        {
+                            "name": "paramName",
+                            "type": "string"
+                        },
+                        {
+                            "name": "strValue",
+                            "type": "string"
+                        }
+                    ],
+                    "output": {
+                        "type": "string",
+                        "value": "[concat(' -', parameters('paramName'), ' ''', parameters('strValue'), '''')]"
+                    }
+                },
+                "paramInt": {
+                    "parameters": [
+                        {
+                            "name": "paramName",
+                            "type": "string"
+                        },
+                        {
+                            "name": "intValue",
+                            "type": "int"
+                        }
+                    ],
+                    "output": {
+                        "type": "string",
+                        "value": "[concat(' -', parameters('paramName'), ' ', parameters('intValue'))]"
+                    }
+                },
+                "paramStringArray": {                    
+                    "parameters": [
+                        {
+                            "name": "paramName",
+                            "type": "string"
+                        },
+                        {
+                            "name": "strArrValue",
+                            "type": "array"
+                        }
+                    ],
+                    "output": {
+                        "type": "string",
+                        "value": "[concat(' -', parameters('paramName'), ' @', replace(replace(replace(string(parameters('strArrValue')), '[', '('), ']', ')'), '\"', ''''))]"
+                    }
+                },
+                "paramIntArray": {
+                    "parameters": [
+                        {
+                            "name": "paramName",
+                            "type": "string"
+                        },
+                        {
+                            "name": "intArrValue",
+                            "type": "array"
+                        }
+                    ],
+                    "output": {
+                        "type": "string",
+                        "value": "[concat(' -', parameters('paramName'), ' @', replace(replace(string(parameters('intArrValue')), '[', '('), ']', ')'))]"
+                    }
+                },
+                "scriptStart": {
+                    "parameters": [
+                        {
+                            "name": "scriptName",
+                            "type": "string"
+                        }
+                    ],
+                    "output": {
+                        "type": "string",
+                        "value": "[concat('powershell.exe', ' -Command \"./', parameters('scriptName'))]"
+                    }
+                },
+                "scriptEnd": {
+                    "parameters": [],
+                    "output": {
+                        "type": "string",
+                        "value": "\""
+                    }
+                }
+            }
+        }
+    ],
     "resources": [
         {
             "type": "Microsoft.Compute/availabilitySets",
             "apiVersion": "2019-03-01",
             "name": "[concat(parameters('dnsForwarderRootName'), '-AvailabilitySet')]",
-            "location": "[variables('location')]",
+            "location": "[parameters('location')]",
             "sku": {
                 "name": "Aligned"
             },
@@ -99,7 +228,7 @@
             "type": "Microsoft.Compute/virtualMachines",
             "apiVersion": "2019-03-01",
             "name": "[concat(parameters('dnsForwarderRootName'), '-1')]",
-            "location": "[variables('location')]",
+            "location": "[parameters('location')]",
             "dependsOn": [
                 "[resourceId('Microsoft.Compute/availabilitySets', concat(parameters('dnsForwarderRootName'), '-AvailabilitySet'))]",
                 "[resourceId('Microsoft.Network/networkInterfaces', concat(parameters('dnsForwarderRootName'), '-1-NIC'))]"
@@ -153,7 +282,7 @@
             "type": "Microsoft.Compute/virtualMachines",
             "apiVersion": "2019-03-01",
             "name": "[concat(parameters('dnsForwarderRootName'), '-2')]",
-            "location": "[variables('location')]",
+            "location": "[parameters('location')]",
             "dependsOn": [
                 "[resourceId('Microsoft.Compute/availabilitySets', concat(parameters('dnsForwarderRootName'), '-AvailabilitySet'))]",
                 "[resourceId('Microsoft.Network/networkInterfaces', concat(parameters('dnsForwarderRootName'), '-2-NIC'))]"
@@ -207,7 +336,7 @@
             "type": "Microsoft.Network/networkInterfaces",
             "apiVersion": "2019-09-01",
             "name": "[concat(parameters('dnsForwarderRootName'), '-1-NIC')]",
-            "location": "[variables('location')]",
+            "location": "[parameters('location')]",
             "properties": {
                 "ipConfigurations": [{
                     "name": "defaultIpConfig",
@@ -229,7 +358,7 @@
             "type": "Microsoft.Network/networkInterfaces",
             "apiVersion": "2019-09-01",
             "name": "[concat(parameters('dnsForwarderRootName'), '-2-NIC')]",
-            "location": "[variables('location')]",
+            "location": "[parameters('location')]",
             "properties": {
                 "ipConfigurations": [{
                     "name": "defaultIpConfig",
@@ -246,6 +375,62 @@
                 "enableAcceleratedNetworking": false,
                 "enableIPForwarding": false
             }
+        },
+        {
+            "type": "Microsoft.Compute/virtualMachines/extensions",
+            "name": "[concat(parameters('dnsForwarderRootName'), '-1/setupscript')]",
+            "apiVersion": "2018-06-01",
+            "location": "[parameters('location')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Compute/virtualMachines', concat(parameters('dnsForwarderRootName'), '-1'))]"
+            ],
+            "properties": {
+                "publisher": "Microsoft.Compute",
+                "type": "CustomScriptExtension",
+                "typeHandlerVersion": "1.9",
+                "autoUpgradeMinorVersion": true,
+                "settings": {
+                    "fileUris": [ "[variables('scriptURL')]" ]
+                },
+                "protectedSettings": {
+                    "commandToExecute": "[concat(ps.scriptStart(variables('scriptName')), ps.paramSwitch('DomainJoin', parameters('domainJoin')), ps.paramString('DomainName', parameters('domainName')), ps.paramString('OdjBlob', parameters('odjBlob1')), ps.paramStringArray('OnPremDnsServers', parameters('onPremDnsServers')), ps.paramString('StorageEndpoint', variables('storageEndpoint')), ps.paramString('PrivateDnsIp', variables('azurePrivateDnsIpAddress')), ps.paramString('TempUser', variables('vmTempUsername')), ps.scriptEnd())]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Compute/virtualMachines/extensions",
+            "name": "[concat(parameters('dnsForwarderRootName'), '-2/setupscript')]",
+            "apiVersion": "2018-06-01",
+            "location": "[parameters('location')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Compute/virtualMachines', concat(parameters('dnsForwarderRootName'), '-2'))]"
+            ],
+            "properties": {
+                "publisher": "Microsoft.Compute",
+                "type": "CustomScriptExtension",
+                "typeHandlerVersion": "1.9",
+                "autoUpgradeMinorVersion": true,
+                "settings": {
+                    "fileUris": [ "[variables('scriptURL')]" ]
+                },
+                "protectedSettings": {
+                    "commandToExecute": "[concat(ps.scriptStart(variables('scriptName')), ps.paramSwitch('DomainJoin', parameters('domainJoin')), ps.paramString('DomainName', parameters('domainName')), ps.paramString('OdjBlob', parameters('odjBlob2')), ps.paramStringArray('OnPremDnsServers', parameters('onPremDnsServers')), ps.paramString('StorageEndpoint', variables('storageEndpoint')), ps.paramString('PrivateDnsIp', variables('azurePrivateDnsIpAddress')), ps.paramString('TempUser', variables('vmTempUsername')), ps.scriptEnd())]"
+                }
+            }
         }
-    ]
+    ],
+    "outputs": {
+        "storageEndpoint": {
+            "type": "string",
+            "value": "[variables('storageEndpoint')]"
+        },
+        "dnsForwarder1-PrivateIP": {
+            "type": "string",
+            "value": "[reference(resourceId('Microsoft.Network/networkInterfaces', concat(parameters('dnsForwarderRootName'), '-1-NIC'))).ipConfigurations[0].properties.privateIPAddress]"
+        }, 
+        "dnsForwarder2-PrivateIP": {
+            "type": "string",
+            "value": "[reference(resourceId('Microsoft.Network/networkInterfaces', concat(parameters('dnsForwarderRootName'), '-2-NIC'))).ipConfigurations[0].properties.privateIPAddress]"
+        }
+    }
 }
