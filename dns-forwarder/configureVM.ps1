@@ -1,13 +1,24 @@
 param(
-    [string]$DomainName,
-    [string]$RootDomainName,
+    [string]$EncodedForwardingRules,
     [string]$OdjBlob,
-    [string[]]$OnPremDnsServers,
-    [string]$StorageEndpoint,
-    [string]$PrivateDnsIp,
     [string]$TempUser,
     [switch]$SkipUserDisable
 )
+
+function ConvertFrom-EncodedJson {
+    param(
+        [string]$String
+    )
+
+    $String = $String.
+        Replace("*", "`"").
+        Replace("<", "[").
+        Replace(">", "]").
+        Replace("^", "{").
+        Replace("%", "}")
+    
+    return (ConvertFrom-Json -InputObject $String)
+}
 
 function Write-OdjBlob {
     param(
@@ -45,18 +56,14 @@ Invoke-Expression `
         -Command "djoin.exe /requestodj /loadfile `"$dnsForwarderOdj`" /windowspath $($env:windir) /localos" | `
     Out-File -FilePath $djOutput
 
-$domainZoneName = Get-DnsServerZone | Where-Object { $_.ZoneName -eq $RootDomainName }
-if ($null -eq $domainZoneName) {
-    Add-DnsServerConditionalForwarderZone `
-        -Name $RootDomainName `
-        -MasterServers $OnpremDnsServers
-}
-
-$storageZoneName = Get-DnsServerZone | Where-Object { $_.ZoneName -eq $StorageEndpoint }
-if ($null -eq $storageZoneName) {
-    Add-DnsServerConditionalForwarderZone `
-        -Name $StorageEndpoint `
-        -MasterServers $PrivateDnsIp
+$forwardingRules = ConvertFrom-EncodedJson -String $EncodedForwardingRules
+foreach($forwardRule in $forwardingRules) {
+    $zoneName = Get-DnsServerZone | Where-Object { $_.ZoneName -eq $forwardRule.domainName }
+    if ($null -eq $zoneName) {
+        Add-DnsServerConditionalForwarderZone `
+            -Name $forwardRule.domainName `
+            -MasterServers $forwardRule.masterServers
+    }
 }
 
 ipconfig.exe /renew | Out-Null 
