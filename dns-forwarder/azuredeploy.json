@@ -39,13 +39,6 @@
                 "description": "A temporary password for the DNS VMs to use until they are domain joined."
             }
         },
-        "domainJoin": {
-            "type": "bool",
-            "defaultValue": true,
-            "metadata": {
-                "description": "Whether or not to domain join the DNS forwarder VMs. The default value is yes, meaning odjBlob1 and odjBlob2 are required."
-            }
-        },
         "odjBlob1": {
             "type": "securestring",
             "metadata": {
@@ -62,6 +55,12 @@
             "type": "string",
             "metadata": {
                 "description": "The domain name of the (presumably) on-premises AD."
+            }
+        },
+        "rootDomainName": {
+            "type": "string",
+            "metadata": {
+                "description": "The root domain for your organization's AD deployment."
             }
         },
         "onPremDnsServers": {
@@ -393,7 +392,7 @@
                     "fileUris": [ "[variables('scriptURL')]" ]
                 },
                 "protectedSettings": {
-                    "commandToExecute": "[concat(ps.scriptStart(variables('scriptName')), ps.paramSwitch('DomainJoin', parameters('domainJoin')), ps.paramString('DomainName', parameters('domainName')), ps.paramString('OdjBlob', parameters('odjBlob1')), ps.paramStringArray('OnPremDnsServers', parameters('onPremDnsServers')), ps.paramString('StorageEndpoint', variables('storageEndpoint')), ps.paramString('PrivateDnsIp', variables('azurePrivateDnsIpAddress')), ps.paramString('TempUser', variables('vmTempUsername')), ps.scriptEnd())]"
+                    "commandToExecute": "[concat(ps.scriptStart(variables('scriptName')), ps.paramString('DomainName', parameters('domainName')), ps.paramString('RootDomainName', parameters('rootDomainName')), ps.paramString('OdjBlob', parameters('odjBlob1')), ps.paramStringArray('OnPremDnsServers', parameters('onPremDnsServers')), ps.paramString('StorageEndpoint', variables('storageEndpoint')), ps.paramString('PrivateDnsIp', variables('azurePrivateDnsIpAddress')), ps.paramString('TempUser', variables('vmTempUsername')), ps.scriptEnd())]"
                 }
             }
         },
@@ -414,7 +413,7 @@
                     "fileUris": [ "[variables('scriptURL')]" ]
                 },
                 "protectedSettings": {
-                    "commandToExecute": "[concat(ps.scriptStart(variables('scriptName')), ps.paramSwitch('DomainJoin', parameters('domainJoin')), ps.paramString('DomainName', parameters('domainName')), ps.paramString('OdjBlob', parameters('odjBlob2')), ps.paramStringArray('OnPremDnsServers', parameters('onPremDnsServers')), ps.paramString('StorageEndpoint', variables('storageEndpoint')), ps.paramString('PrivateDnsIp', variables('azurePrivateDnsIpAddress')), ps.paramString('TempUser', variables('vmTempUsername')), ps.scriptEnd())]"
+                    "commandToExecute": "[concat(ps.scriptStart(variables('scriptName')), ps.paramString('DomainName', parameters('domainName')), ps.paramString('RootDomainName', parameters('rootDomainName')), ps.paramString('OdjBlob', parameters('odjBlob2')), ps.paramStringArray('OnPremDnsServers', parameters('onPremDnsServers')), ps.paramString('StorageEndpoint', variables('storageEndpoint')), ps.paramString('PrivateDnsIp', variables('azurePrivateDnsIpAddress')), ps.paramString('TempUser', variables('vmTempUsername')), ps.scriptEnd())]"
                 }
             }
         }

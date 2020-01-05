@@ -1,6 +1,6 @@
 param(
-    [switch]$DomainJoin,
     [string]$DomainName,
+    [string]$RootDomainName,
     [string]$OdjBlob,
     [string[]]$OnPremDnsServers,
     [string]$StorageEndpoint,
@@ -36,22 +36,20 @@ Install-WindowsFeature `
         -WarningAction SilentlyContinue | `
     Out-Null
 
-if ($DomainJoin) {
-    $path = Get-Location | Select-Object -ExpandProperty Path
-    $dnsForwarderOdj = [System.IO.Path]::Combine($path, "dnsforwarder.odj")
-    $djOutput = [System.IO.Path]::Combine($path, "djOutput.txt")
-    
-    Write-OdjBlob -OdjBlob $OdjBlob -Path $dnsForwarderOdj
-    Invoke-Expression `
-            -Command "djoin.exe /requestodj /loadfile `"$dnsForwarderOdj`" /windowspath $($env:windir) /localos" | `
-        Out-File -FilePath $djOutput
+$path = Get-Location | Select-Object -ExpandProperty Path
+$dnsForwarderOdj = [System.IO.Path]::Combine($path, "dnsforwarder.odj")
+$djOutput = [System.IO.Path]::Combine($path, "djOutput.txt")
 
-    $domainZoneName = Get-DnsServerZone | Where-Object { $_.ZoneName -eq $DomainName }
-    if ($null -eq $domainZoneName) {
-        Add-DnsServerConditionalForwarderZone `
-            -Name $DomainName `
-            -MasterServers $OnpremDnsServers
-    }
+Write-OdjBlob -OdjBlob $OdjBlob -Path $dnsForwarderOdj
+Invoke-Expression `
+        -Command "djoin.exe /requestodj /loadfile `"$dnsForwarderOdj`" /windowspath $($env:windir) /localos" | `
+    Out-File -FilePath $djOutput
+
+$domainZoneName = Get-DnsServerZone | Where-Object { $_.ZoneName -eq $RootDomainName }
+if ($null -eq $domainZoneName) {
+    Add-DnsServerConditionalForwarderZone `
+        -Name $RootDomainName `
+        -MasterServers $OnpremDnsServers
 }
 
 $storageZoneName = Get-DnsServerZone | Where-Object { $_.ZoneName -eq $StorageEndpoint }
