@@ -468,3 +468,103 @@ function Install-OSFeature {
         }
     }
 }
+
+function Request-OSFeature {
+    <#
+    .SYNOPSIS
+    Request the features to be installed that are required for a cmdlet/script.
+
+    .DESCRIPTION
+    This cmdlet is a wrapper around the Install-OSFeature cmdlet, primarily to be used in cmdlets/scripts 
+    to ensure the required OS feature prerequisites are installed before the rest of the cmdlet executes. The required features,
+    independent of the actual OS running, can be described, and this cmdlet figures out the rest.
+
+    .PARAMETER WindowsClientCapability
+    The names of features which are Windows client capabilities.
+
+    .PARAMETER WindowsClientOptionalFeature
+    The names of features which are Windows client optional features.
+
+    .PARAMETER WindowsServerFeature
+    The names of features which are Windows Server features.
+
+    .EXAMPLE
+    Request-OSFeature `
+            -WindowsClientCapability "Rsat.ActiveDirectory.DS-LDS.Tools" `
+            -WindowsServerFeature "RSAT-AD-PowerShell"
+    #>
+
+    [CmdletBinding()]
+    
+    param(
+        [Parameter(Mandatory=$false)]
+        [string[]]$WindowsClientCapability,
+
+        [Parameter(Mandatory=$false)]
+        [string[]]$WindowsClientOptionalFeature,
+
+        [Parameter(Mandatory=$false)]
+        [string[]]$WindowsServerFeature
+    )
+
+    $features = Get-OSFeature
+    $foundFeatures = @()
+    $notFoundFeatures = @()
+
+    switch((Get-OSPlatform)) {
+        "Windows" {
+            switch((Get-WindowsInstallationType)) {
+                "Client" {
+                    $foundFeatures += $features | `
+                        Where-Object { $_.Name -in $WindowsClientCapability -or $_.Name -in $WindowsClientOptionalFeature } 
+
+                    if ($PSBoundParameters.ContainsKey("WindowsClientCapability")) { 
+                        $notFoundFeatures += $WindowsClientCapability | `
+                            Where-Object { $_ -notin ($foundFeatures | Select-Object -ExpandProperty Name) }
+                    }
+
+                    if ($PSBoundParameters.ContainsKey("WindowsClientOptionalFeature")) {   
+                        $notFoundFeatures += $WindowsClientOptionalFeature | `
+                            Where-Object { $_ -notin ($foundFeatures | Select-Object -ExpandProperty Name) }
+                    }
+                }
+
+                { ($_ -eq "Server") -or ($_ -eq "Server Core") } {
+                    $foundFeatures += $features | `
+                        Where-Object { $_.Name -in $WindowsServerFeature }
+                    
+                    $notFoundFeatures += $WindowsServerFeature | `
+                        Where-Object { $_ -notin ($foundFeatures | Select-Object -ExpandProperty Name) }
+                }
+            }
+        }
+
+        "Linux" {
+            throw [System.NotImplementedException]::new()
+        }
+
+        "OSX" {
+            throw [System.NotImplementedException]::new()
+        }
+
+        default {
+            throw [System.NotImplementedException]::new()
+        }
+    }
+
+    Install-OSFeature -OSFeature $foundFeatures
+
+    if ($null -ne $notFoundFeatures -and $notFoundFeatures.Length -gt 0) {
+        $notFoundBuilder = [StringBuilder]::new()
+        $notFoundBuilder.Append("The following features could not be found: ") | Out-Null
+        for($i=0; $i -lt $notFoundFeatures.Length; $i++) {
+            if ($i -gt 0) {
+                $notFoundBuilder.Append(", ") | Out-Null
+            }
+
+            $notFoundBuilder.Append($notFoundFeatures[$i]) | Out-Null
+        }
+
+        Write-Error -Message $notFoundBuilder.ToString() -ErrorAction Stop
+    }
+}
