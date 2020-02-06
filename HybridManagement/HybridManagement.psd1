@@ -72,11 +72,19 @@
     FunctionsToExport = "Get-IsElevatedSession",
         "Assert-IsElevatedSession",
         "Get-OSPlatform",
+        "Assert-IsWindows",
+        "Get-IsDomainJoined",
+        "Assert-IsDomainJoined",
         "Get-OSVersion",
         "Get-WindowsInstallationType",
         "Get-OSFeature",
         "Install-OSFeature",
-        "Request-OSFeature"
+        "Request-OSFeature",
+        "Get-AzStorageAccountADObject",
+        "Get-AzStorageKerberosTicketStatus",
+        "Test-ADPasswordMatchesAccountKerbKey",
+        "Update-AzStorageAccountADObjectPassword",
+        "Join-AzStorageAccountForAuth"
     
     # Cmdlets to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no cmdlets to export.
     CmdletsToExport = @()
