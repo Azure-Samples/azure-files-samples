@@ -49,7 +49,7 @@ function Get-IsElevatedSession {
     }
 }
 
-function Test-IsElevatedSession {
+function Assert-IsElevatedSession {
     <#
     .SYNOPSIS
     Check if the session is elevated and throw an error if it isn't.
@@ -58,7 +58,7 @@ function Test-IsElevatedSession {
     This cmdlet uses the Get-IsElevatedSession to throw a nice error message to the user if the session isn't elevated.
     
     .EXAMPLE
-    Test-IsElevatedSession
+    Assert-IsElevatedSession
     # User sees either nothing (session is elevated), or an error message (session is not elevated).
     #>
 
@@ -290,7 +290,7 @@ function Get-OSFeature {
                 "Client" {
                     # Windows client only allows the underlying cmdlets to run if the session
                     # is elevated, therefore this check is added.
-                    Test-IsElevatedSession
+                    Assert-IsElevatedSession
 
                     # WindowsCapabilities are only available on Windows 10.
                     if ($winVer -ge [Version]::new(10,0,0,0)) {
@@ -408,7 +408,7 @@ function Install-OSFeature {
     process {
         switch ((Get-OSPlatform)) {
             "Windows" {
-                Test-IsElevatedSession
+                Assert-IsElevatedSession
                 $winVer = Get-OSVersion
 
                 switch((Get-WindowsInstallationType)) {
