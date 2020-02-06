@@ -1,3 +1,5 @@
+using namespace System
+using namespace System.Text
 
 function Get-IsElevatedSession {
     <#
@@ -290,35 +292,38 @@ function Get-OSFeature {
                     # is elevated, therefore this check is added.
                     Test-IsElevatedSession
 
-                    # Get-WindowsCapability appends additional fields to the actual name of the feature, ex.
-                    # Rsat.ActiveDirectory.DS-LDS.Tools~~~~0.0.1.0. This code strips that out to hopefully get
-                    # to something easier to use. This behavior may be changed in the future. Features exposed
-                    # through Get-WindowsCapability appear to be dynamic, exposed through the internet, although
-                    # it's unclear how frequently they're updated, or if the version number is guaranteed to change
-                    # if they are.
-                    $features = Get-WindowsCapability -Online | `
-                        Select-Object `
-                            @{ Name= "InternalName"; Expression = { $_.Name } },
-                            @{ Name = "Name"; Expression = { $_.Name.Split("~")[0] } },
-                            @{ Name = "Field1"; Expression = { $_.Name.Split("~")[1] } }, 
-                            @{ Name = "Field2"; Expression = { $_.Name.Split("~")[2] } },
-                            @{ Name = "Language"; Expression = { $_.Name.Split("~")[3] } },
-                            @{ Name = "Version"; Expression = { $_.Name.Split("~")[4] } },
-                            @{ Name = "Installed"; Expression = { $_.State -eq "Installed" } } | `
-                        ForEach-Object {
-                            if (![string]::IsNullOrEmpty($_.Language)) {
-                                $Name = ($_.Name + "-" + $_.Language)
-                            } else {
-                                $Name = $_.Name
-                            }
+                    # WindowsCapabilities are only available on Windows 10.
+                    if ($winVer -ge [Version]::new(10,0,0,0)) {
+                        # Get-WindowsCapability appends additional fields to the actual name of the feature, ex.
+                        # Rsat.ActiveDirectory.DS-LDS.Tools~~~~0.0.1.0. This code strips that out to hopefully get
+                        # to something easier to use. This behavior may be changed in the future. Features exposed
+                        # through Get-WindowsCapability appear to be dynamic, exposed through the internet, although
+                        # it's unclear how frequently they're updated, or if the version number is guaranteed to change
+                        # if they are.
+                        $features = Get-WindowsCapability -Online | `
+                            Select-Object `
+                                @{ Name= "InternalName"; Expression = { $_.Name } },
+                                @{ Name = "Name"; Expression = { $_.Name.Split("~")[0] } },
+                                @{ Name = "Field1"; Expression = { $_.Name.Split("~")[1] } }, 
+                                @{ Name = "Field2"; Expression = { $_.Name.Split("~")[2] } },
+                                @{ Name = "Language"; Expression = { $_.Name.Split("~")[3] } },
+                                @{ Name = "Version"; Expression = { $_.Name.Split("~")[4] } },
+                                @{ Name = "Installed"; Expression = { $_.State -eq "Installed" } } | `
+                            ForEach-Object {
+                                if (![string]::IsNullOrEmpty($_.Language)) {
+                                    $Name = ($_.Name + "-" + $_.Language)
+                                } else {
+                                    $Name = $_.Name
+                                }
 
-                            [OSFeature]::new(
-                                $Name, 
-                                $_.InternalName, 
-                                $_.Version, 
-                                $_.Installed, 
-                                [OSFeatureKind]::WindowsClientCapability)
-                        }
+                                [OSFeature]::new(
+                                    $Name, 
+                                    $_.InternalName, 
+                                    $_.Version, 
+                                    $_.Installed, 
+                                    [OSFeatureKind]::WindowsClientCapability)
+                            }
+                    }
 
                     # Features exposed via Get-WindowsOptionalFeature aren't versioned independently of the OS. 
                     # Updates may occur to these features, but happen inside of the normal OS process. 
@@ -370,4 +375,96 @@ function Get-OSFeature {
     }
 
     return $features
+}
+
+function Install-OSFeature {
+    <#
+    .SYNOPSIS
+    Install a requested operating system feature.
+
+    .DESCRIPTION
+    This cmdlet will use the underlying OS-specific feature installation methods to install the requested feature(s).
+    This is currently Windows only.
+
+    .PARAMETER OSFeature
+    The feature(s) to be installed.
+
+    .EXAMPLE 
+    # Install the RSAT AD PowerShell module. 
+    if ((Get-OSPlatform) -eq "Windows" -and (Get-WindowsInstallationType) -eq "Client") {
+        $rsatADFeature = Get-OSFeature | `
+            Where-Object { $_.Name -eq "Rsat.ActiveDirectory.DS-LDS.Tools" } | `
+            Install-OSFeature
+    }
+    #>
+
+    [CmdletBinding()]
+    
+    param(
+        [Parameter(Mandatory=$true, ParameterSetName="OSFeature", ValueFromPipeline=$true)]
+        [OSFeature[]]$OSFeature
+    )
+
+    process {
+        switch ((Get-OSPlatform)) {
+            "Windows" {
+                Test-IsElevatedSession
+                $winVer = Get-OSVersion
+
+                switch((Get-WindowsInstallationType)) {
+                    "Client" {
+                        if ($winVer -ge [version]::new(10,0,0,0)) {
+                            $OSFeature | `
+                                Where-Object { !$_.Installed } | `
+                                Where-Object { $_.FeatureKind -eq [OSFeatureKind]::WindowsClientCapability } | `
+                                Select-Object @{ Name = "Name"; Expression = { $_.InternalOSName } } | `
+                                Add-WindowsCapability -Online | `
+                                Out-Null
+                        } else {
+                            $foundCapabilities = $OSFeature | `
+                                Where-Object { $_.FeatureKind -eq [OSFeatureKind]::WindowsClientCapability }
+                            
+                            if ($null -ne $foundCapabilities) {
+                                Write-Error `
+                                    -Message "Windows capabilities are not supported on Windows versions prior to Windows 10." `
+                                    -ErrorAction Stop
+                            }
+                        }
+
+                        $optionalFeatureNames = $OSFeature | `
+                            Where-Object { !$_.Installed } | `
+                            Where-Object { $_.FeatureKind -eq [OSFeatureKind]::WindowsClientOptionalFeature } | `
+                            Select-Object @{ Name = "FeatureName"; Expression = { $_.InternalOSName } } | `
+                            Enable-WindowsOptionalFeature -Online | `
+                            Out-Null
+                    }
+            
+                    { ($_ -eq "Server") -or ($_ -eq "Server Core") } {
+                        $OSFeature | `
+                            Where-Object { !$_.Installed } | `
+                            Where-Object { $_.FeatureKind -eq [OSFeatureKind]::WindowsServerFeature } | `
+                            Select-Object -ExpandProperty InternalOSName | `
+                            Install-WindowsFeature | `
+                            Out-Null
+                    }
+            
+                    default {
+                        Write-Error -Message "Unknown Windows installation type $_" -ErrorAction Stop
+                    }
+                }
+            }
+    
+            "Linux" {
+                throw [System.PlatformNotSupportedException]::new()
+            }
+    
+            "OSX" {
+                throw [System.PlatformNotSupportedException]::new()
+            }
+    
+            default {
+                throw [System.PlatformNotSupportedException]::new()
+            }
+        }
+    }
 }
