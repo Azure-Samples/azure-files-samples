@@ -82,7 +82,7 @@
         "Request-OSFeature",
         "Get-AzStorageAccountADObject",
         "Get-AzStorageKerberosTicketStatus",
-        "Test-ADPasswordMatchesAccountKerbKey",
+        "Test-AzStorageAccountADObjectPasswordIsKerbKey",
         "Update-AzStorageAccountADObjectPassword",
         "Join-AzStorageAccountForAuth"
     

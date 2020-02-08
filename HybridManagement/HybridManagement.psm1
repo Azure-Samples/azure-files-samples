@@ -1320,16 +1320,66 @@ function Set-StorageAccountDomainProperties {
     Write-Verbose "Set-StorageAccountDomainProperties: Complete"
 }
 
-function Test-ADPasswordMatchesAccountKerbKey {
+class KerbKeyMatch {
+    [string]$ResourceGroupName
+    [string]$StorageAccountName
+    [string]$KerbKeyName
+    [bool]$KeyMatches
+
+    KerbKeyMatch(
+        [string]$resourceGroupName,
+        [string]$storageAccountName,
+        [string]$kerbKeyName,
+        [bool]$keyMatches 
+    ) {
+        $this.ResourceGroupName = $resourceGroupName
+        $this.StorageAccountName = $storageAccountName
+        $this.KerbKeyName = $kerbKeyName
+        $this.KeyMatches = $keyMatches
+    }
+}
+
+function Test-AzStorageAccountADObjectPasswordIsKerbKey {
     #requires -Module Az, @{ ModuleName = "Az.Storage"; RequiredVersion = "1.8.2" }
+
+    <#
+    .SYNOPSIS
+    Check Kerberos keys kerb1 and kerb2 against the AD object for the storage account.
+
+    .DESCRIPTION
+    This cmdlet checks to see if kerb1, kerb2, or something else matches the actual password on the AD object. This cmdlet can be used to validate that authentication issues are not occurring because the password on the AD object does not match one of the Kerberos keys. It is also used by Invoke-AzStorageAccountADObjectPasswordRotation to determine which Kerberos to rotate to.
+
+    .PARAMETER ResourceGroupName
+    The resource group of the storage account to check.
+
+    .PARAMETER StorageAccountName
+    The storage account name of the storage account to check.
+
+    .PARAMETER StorageAccount
+    The storage account to check.
+
+    .EXAMPLE
+    PS> Test-AzStorageAccountADObjectPasswordIsKerbKey -ResourceGroupName "myResourceGroup" -StorageAccountName "mystorageaccount123"
+
+    .EXAMPLE
+    PS> $storageAccountsToCheck = Get-AzStorageAccount -ResourceGroup "rgWithDJStorageAccounts"
+    PS> $storageAccountsToCheck | Test-AzStorageAccountADObjectPasswordIsKerbKey 
+
+    .OUTPUTS
+    KerbKeyMatch, defined in this module.
+    #>
 
     [CmdletBinding()]
     param(
-         [Parameter(Mandatory=$true, Position=0)]
+         [Parameter(Mandatory=$true, Position=0, ParameterSetName="StorageAccountName")]
          [string]$ResourceGroupName,
 
-         [Parameter(Mandatory=$true, Position=1)]
-         [string]$Name
+         [Parameter(Mandatory=$true, Position=1, ParameterSetName="StorageAccountName")]
+         [Alias('Name')]
+         [string]$StorageAccountName,
+
+         [Parameter(Mandatory=$true, Position=0, ValueFromPipeline=$true, ParameterSetName="StorageAccount")]
+         [Microsoft.Azure.Commands.Management.Storage.Models.PSStorageAccount]$StorageAccount
     )
 
     begin {
@@ -1339,31 +1389,75 @@ function Test-ADPasswordMatchesAccountKerbKey {
     }
 
     process
-    {   
-        $domain = Get-ADDomain
+    {
+        $getObjParams = @{}
+        switch ($PSCmdlet.ParameterSetName) {
+            "StorageAccountName" {
+                $keys = Get-AzStorageAccountKey -ResourceGroupName $ResourceGroupName -Name $StorageAccountName -ListKerbKey
+                $getObjParams += @{ 
+                    "ResourceGroupName" = $ResourceGroupName; 
+                    "StorageAccountName" = $StorageAccountName 
+                }
+            }
 
-        $keys = Get-AzStorageAccountKey -ResourceGroupName $ResourceGroupName -Name $Name -ListKerbKey
+            "StorageAccount" {
+                $keys = $StorageAccount | Get-AzStorageAccountKey -ListKerbKey
+                $ResourceGroupName = $StorageAccount.ResourceGroupName
+                $StorageAccountName = $StorageAccount.StorageAccountName
+                $getObjParams += @{
+                    "StorageAccount" = $StorageAccount
+                }
+            }
+
+            default {
+                throw [ArgumentException]::new("Unrecognized parameter set $_")
+            }
+        }
         
-        $kerbKeys = $keys | Where-Object {$_.KeyName -like "kerb*"}
+        $kerbKeys = $keys | Where-Object { $_.KeyName -like "kerb*" }
+        $adObj = Get-AzStorageAccountADObject @getObjParams
 
-        $userName = $domain.Name + "\" + $Name
+        $domainNameBuilder = [StringBuilder]::new() 
+        $domainArray = $adObj.DistinguishedName | Where-Object { $_ -like "DC=*" }
+        for($i=0; $i -lt $domainArray.Length; $i++) {
+            if ($i -gt 0) {
+                $domainNameBuilder.Append(",") | Out-Null
+            }
 
-        foreach ($key in $kerbKeys)
-        {
-            if ((New-Object Directoryservices.DirectoryEntry "", $userName, $key.Value).PsBase.Name -ne $null)
-            {
+            $domainNameBuilder.Append($domainArray[$i]) | Out-Null
+        }
+
+        $domain = Get-ADDomain -Identity $domainNameBuilder.ToString()
+        $userName = $domain.Name + "\" + $adObj.Name
+
+        $oneKeyMatches = $false
+        $keyMatches = [KerbKeyMatch[]]@()
+        foreach ($key in $kerbKeys) {
+            if ($null -ne (New-Object Directoryservices.DirectoryEntry "", $userName, $key.Value).PsBase.Name) {
                 Write-Verbose "Found that $($key.KeyName) matches password for $Name in AD."
-                return $true
+                $oneKeyMatches = $true
+                $keyMatches += [KerbKeyMatch]::new(
+                    $ResourceGroupName, 
+                    $StorageAccountName, 
+                    $key.KeyName, 
+                    $true)
+            } else {
+                $keyMatches += [KerbKeyMatch]::new(
+                    $ResourceGroupName, 
+                    $StorageAccountName, 
+                    $key.KeyName, 
+                    $false)
             }
         }
 
-        Write-Error "Password for $userName does not match kerb1 or kerb2 of storage account: $Name `
-            Please run the following command to resync the AD password with the kerb key of the storage account and retry. `
-            
-                Update-AzStorageAccountADObjectPassword -ResourceGroupName <resourceGroupName> -StorageAccountName <storageAccountName> -RotateToKerbKey kerb1 `
-                "
+        if (!$oneKeyMatches) {
+            Write-Warning `
+                    -Message ("Password for $userName does not match kerb1 or kerb2 of storage account: $StorageAccountName." + `
+                    "Please run the following command to resync the AD password with the kerb key of the storage account and " +  `
+                    "retry: Update-AzStorageAccountADObjectPassword.")
+        }
 
-        return $false
+        return $keyMatches
     }
 }
 
@@ -1538,6 +1632,10 @@ function Update-AzStorageAccountADObjectPassword {
                 $StorageAccount.StorageAccountName + " not changed.")
         }        
     }
+}
+
+function Invoke-AzStorageAccountADObjectPasswordRotation {
+
 }
 
 function Join-AzStorageAccountForAuth {
