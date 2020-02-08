@@ -1635,7 +1635,129 @@ function Update-AzStorageAccountADObjectPassword {
 }
 
 function Invoke-AzStorageAccountADObjectPasswordRotation {
+    #requires -Module Az, @{ ModuleName = "Az.Storage"; RequiredVersion = "1.8.2" }
 
+    <#
+    .SYNOPSIS
+    Do a password rotation of kerb key used on the AD object representing the storage account.
+
+    .DESCRIPTION
+    This cmdlet wraps Update-AzStorageAccountADObjectPassword to rotate whatever the current kerb key is to the other one. It's not strictly speaking required to do a rotation, always regenerating kerb1 is ok to do is well.
+
+    .PARAMETER ResourceGroupName
+    The resource group of the storage account to be rotated.
+
+    .PARAMETER StorageAccountName
+    The name of the storage account to be rotated. 
+
+    .PARAMETER StorageAccount
+    The storage account to be rotated.
+
+    .EXAMPLE
+    PS> Invoke-AzStorageAccountADObjectPasswordRotation -ResourceGroupName "myResourceGroup" -StorageAccountName "mystorageaccount123"
+
+    .EXAMPLE
+    PS> $storageAccounts = Get-AzStorageAccount -ResourceGroupName "myResourceGroup"
+    PS> $storageAccounts | Invoke-AzStorageAccountADObjectPasswordRotation
+    #>
+
+    [CmdletBinding(SupportsShouldProcess, ConfirmImpact="High")]
+    param(
+        [Parameter(Mandatory=$true, Position=1, ParameterSetName="StorageAccountName")]
+        [string]$ResourceGroupName,
+
+        [Parameter(Mandatory=$true, Position=2, ParameterSetName="StorageAccountName")]
+        [string]$StorageAccountName,
+
+        [Parameter(
+            Mandatory=$true, 
+            Position=1, 
+            ValueFromPipeline=$true, 
+            ParameterSetName="StorageAccount")]
+        [Microsoft.Azure.Commands.Management.Storage.Models.PSStorageAccount]$StorageAccount
+    )
+
+    begin {
+        Assert-IsWindows
+        Assert-IsDomainJoined
+        Request-ADFeature
+    }
+
+    process {
+        $testParams = @{}
+        $updateParams = @{}
+        switch ($PSCmdlet.ParameterSetName) {
+            "StorageAccountName" {
+                $testParams += @{ 
+                    "ResourceGroupName" = $ResourceGroupName; 
+                    "StorageAccountName" = $StorageAccountName 
+                }
+
+                $updateParams += @{
+                    "ResourceGroupName" = $ResourceGroupName;
+                    "StorageAccountName" = $StorageAccountName
+                }
+            }
+
+            "StorageAccount" {
+                $testParams += @{ 
+                    "StorageAccount" = $StorageAccount 
+                }
+
+                $updateParams += @{
+                    "StorageAccount" = $StorageAccount
+                }
+            }
+
+            default {
+                throw [ArgumentException]::new("Unrecognized parameter set $_")
+            }
+        }
+
+        $testParams += @{ "WarningAction" = "SilentlyContinue" }
+
+        $keyMatches = Test-AzStorageAccountADObjectPasswordIsKerbKey @testParams
+        $keyMatch = $keyMatches | Where-Object { $_.KeyMatches }
+
+        switch ($keyMatch.KerbKeyName) {
+            "kerb1" {
+                $updateParams += @{
+                    "RotateToKerbKey" = "kerb2"
+                }
+                $RotateFromKerbKey = "kerb1"
+                $RotateToKerbKey = "kerb2"
+            }
+
+            "kerb2" {
+                $updateParams += @{
+                    "RotateToKerbKey" = "kerb1"
+                }
+                $RotateFromKerbKey = "kerb2"
+                $RotateToKerbKey = "kerb1"
+            }
+
+            $null {
+                $updateParams += @{
+                    "RotateToKerbKey" = "kerb1"
+                }
+                $RotateFromKerbKey = "none"
+                $RotateToKerbKey = "kerb1"
+            }
+
+            default {
+                throw [ArgumentException]::new("Unrecognized kerb key $_")
+            }
+        }
+
+        $caption = "Rotate from Kerberos key $RotateFromKerbKey to $RotateToKerbKey."
+        $verboseConfirmMessage = "This action will rotate the password from $RotateFromKerbKey to $RotateToKerbKey using Update-AzStorageAccountADObjectPassword." 
+        
+        if ($PSCmdlet.ShouldProcess($verboseConfirmMessage, $verboseConfirmMessage, $caption)) {
+            Update-AzStorageAccountADObjectPassword @updateParams
+        } else {
+            Write-Verbose -Message "No password rotation performed."
+        }
+    }
 }
 
 function Join-AzStorageAccountForAuth {
