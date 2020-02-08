@@ -1418,7 +1418,7 @@ function Test-AzStorageAccountADObjectPasswordIsKerbKey {
         $adObj = Get-AzStorageAccountADObject @getObjParams
 
         $domainNameBuilder = [StringBuilder]::new() 
-        $domainArray = $adObj.DistinguishedName | Where-Object { $_ -like "DC=*" }
+        $domainArray = $adObj.DistinguishedName.Split(",") | Where-Object { $_ -like "DC=*" }
         for($i=0; $i -lt $domainArray.Length; $i++) {
             if ($i -gt 0) {
                 $domainNameBuilder.Append(",") | Out-Null
