@@ -55,7 +55,7 @@ function Assert-IsElevatedSession {
     Check if the session is elevated and throw an error if it isn't.
     
     .DESCRIPTION
-    This cmdlet uses the Get-IsElevatedSession to throw a nice error message to the user if the session isn't elevated.
+    This cmdlet uses the Get-IsElevatedSession cmdlet to throw a nice error message to the user if the session isn't elevated.
     
     .EXAMPLE
     Assert-IsElevatedSession
@@ -78,12 +78,7 @@ function Get-OSPlatform {
     Get the OS running the current PowerShell session.
 
     .DESCRIPTION
-    This cmdlet is a wrapper around the System.Runtime.InteropServices.RuntimeInformation .NET standard class 
-    that makes it easier to work with in PowerShell 5.1/6/7/etc. $IsWindows, etc. is defined in PS6+, however
-    since it's not defined in PowerShell 5.1, it's not incredibly useful for writing PowerShell code meant to 
-    be executed in either language version. As older versions of .NET Framework do not support the 
-    RuntimeInformation .NET standard class, if the PSEdition is "Desktop", by default you're running on Windows,
-    since only "Core" releases are cross-platform.
+    This cmdlet is a wrapper around the System.Runtime.InteropServices.RuntimeInformation .NET standard class that makes it easier to work with in PowerShell 5.1/6/7/etc. $IsWindows, etc. is defined in PS6+, however since it's not defined in PowerShell 5.1, it's not incredibly useful for writing PowerShell code meant to be executed in either language version. As older versions of .NET Framework do not support the RuntimeInformation .NET standard class, if the PSEdition is "Desktop", by default you're running on Windows, since only "Core" releases are cross-platform.
 
     .EXAMPLE
     if ((Get-OSPlatform) -eq "Windows") {
@@ -126,6 +121,21 @@ function Get-OSPlatform {
 }
 
 function Assert-IsWindows {
+    <#
+    .SYNOPSIS
+    Check if the session is being run on Windows and throw an error if it isn't.
+
+    .DESCRIPTION
+    This cmdlet uses the Get-OSPlatform cmdlet to throw a nice error message to the user if the session isn't Windows.
+
+    .EXAMPLE
+    Assert-IsWindows
+    # User either sees nothing or an error message.
+    #>
+
+    [CmdletBinding()]
+    param()
+
     if ((Get-OSPlatform) -ne "Windows") {
         throw [PlatformNotSupportedException]::new()
     }
@@ -134,12 +144,20 @@ function Assert-IsWindows {
 function Get-IsDomainJoined {
     <#
     .SYNOPSIS
-    Checks that script is being run in a domain-joined environment.
+    Checks that script is being run in on computer that is domain-joined.
     
     .DESCRIPTION
+    This cmdlet returns true if the cmdlet is running in a domain-joined session or false if it's not.
 
     .EXAMPLE
-    PS > Confirm-RunningInDomainJoinedEnvironment
+    if ((Get-IsDomainJoined)) {
+        # Do something if computer is domain joined.
+    } else {
+        # Do something else if the computer is not domain joined.
+    }
+
+    .OUTPUTS
+    System.Boolean, indicating whether or not the computer is domain joined.
     #>
 
     [CmdletBinding()]
@@ -164,6 +182,17 @@ function Get-IsDomainJoined {
 }
 
 function Assert-IsDomainJoined {
+    <#
+    .SYNOPSIS
+    Check if the session is being run on a domain joined machine and throw an error if it isn't.
+
+    .DESCRIPTION 
+    This cmdlet uses the Get-IsDomainJoined cmdlet to throw a nice error message to the user if the session isn't domain joined.
+
+    .EXAMPLE
+    Assert-IsDomainJoined
+    #>
+
     [CmdletBinding()]
     param()
 
@@ -180,9 +209,7 @@ function Get-OSVersion {
     Get the version number of the OS.
 
     .DESCRIPTION
-    This cmdlet provides the OS's internal version number, for example 10.0.18363.0 for Windows 10, 
-    version 1909 (the public release). This cmdlet is not yet defined on Linux/macOS
-    sessions.
+    This cmdlet provides the OS's internal version number, for example 10.0.18363.0 for Windows 10, version 1909 (the public release). This cmdlet is not yet defined on Linux/macOS sessions.
 
     .EXAMPLE
     if ((Get-OSVersion) -ge [System.Version]::new(10,0,0,0)) {
@@ -221,10 +248,7 @@ function Get-WindowsInstallationType {
     Get the Windows installation type (ex. Client, Server, ServerCore, etc.).
 
     .DESCRIPTION
-    This cmdlet provides the installation type of the Windows OS, primarily to allow for cmdlet behavior changes depending 
-    on whether the cmdlet is being run on a Windows client ("Client") or a Windows Server ("Server", "ServerCore"). This cmdlet
-    is (obviously) only available for Windows PowerShell sessions and will return a PlatformNotSupportedException for non-Windows
-    sessions.
+    This cmdlet provides the installation type of the Windows OS, primarily to allow for cmdlet behavior changes depending on whether the cmdlet is being run on a Windows client ("Client") or a Windows Server ("Server", "ServerCore"). This cmdlet is (obviously) only available for Windows PowerShell sessions and will return a PlatformNotSupportedException for non-Windows sessions.
 
     .EXAMPLE
     switch ((Get-WindowsInstallationType)) {
@@ -305,9 +329,7 @@ function Get-OSFeature {
     Get the list of available/installed features for your OS.
 
     .DESCRIPTION
-    Get the list of available/installed features for your OS. Currently this cmdlet only works for Windows OSes,
-    but works for both Windows client and Windows Server, which among them provide three different ways of enabling/disabling
-    features (if there are more than three, this cmdlet doesn't suppor them yet).
+    Get the list of available/installed features for your OS. Currently this cmdlet only works for Windows OSes, but works for both Windows client and Windows Server, which among them provide three different ways of enabling/disabling features (if there are more than three, this cmdlet doesn't suppor them yet).
 
     .EXAMPLE
     # Check to see if the Windows 10 client RSAT AD PowerShell module is installed. 
@@ -430,8 +452,7 @@ function Install-OSFeature {
     Install a requested operating system feature.
 
     .DESCRIPTION
-    This cmdlet will use the underlying OS-specific feature installation methods to install the requested feature(s).
-    This is currently Windows only.
+    This cmdlet will use the underlying OS-specific feature installation methods to install the requested feature(s). This is currently Windows only.
 
     .PARAMETER OSFeature
     The feature(s) to be installed.
@@ -522,9 +543,7 @@ function Request-OSFeature {
     Request the features to be installed that are required for a cmdlet/script.
 
     .DESCRIPTION
-    This cmdlet is a wrapper around the Install-OSFeature cmdlet, primarily to be used in cmdlets/scripts 
-    to ensure the required OS feature prerequisites are installed before the rest of the cmdlet executes. The required features,
-    independent of the actual OS running, can be described, and this cmdlet figures out the rest.
+    This cmdlet is a wrapper around the Install-OSFeature cmdlet, primarily to be used in cmdlets/scripts to ensure the required OS feature prerequisites are installed before the rest of the cmdlet executes. The required features, independent of the actual OS running, can be described, and this cmdlet figures out the rest.
 
     .PARAMETER WindowsClientCapability
     The names of features which are Windows client capabilities.
@@ -617,6 +636,17 @@ function Request-OSFeature {
 }
 
 function Request-ADFeature {
+    <#
+    .SYNOPSIS
+    Ensure the ActiveDirectory PowerShell module is installed prior to running the rest of the caller cmdlet.
+
+    .DESCRIPTION
+    This cmdlet is helper around Request-OSFeature specifically meant for the RSAT AD PowerShell module. It uses the optimization of checking if the ActiveDirectory module is available before using the Request-OSFeature cmdlet, since this is quite a bit faster (and does not require session elevation on Windows client) before using the Request-OSFeature cmdlet. This cmdlet is not exported.
+    
+    .EXAMPLE
+    Request-ADFeature
+    #>
+
     [CmdletBinding()]
     param()
 
