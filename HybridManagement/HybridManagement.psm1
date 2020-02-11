@@ -671,7 +671,10 @@ function Request-ADFeature {
             -WindowsServerFeature "RSAT-AD-PowerShell"
     }
 
-    Import-Module -Name ActiveDirectory
+    $adModule = Get-Module -Name ActiveDirectory 
+    if ($null -eq $adModule) {
+        Import-Module -Name ActiveDirectory
+    }
 }
 
 function Validate-StorageAccount {
@@ -1309,12 +1312,15 @@ function Set-StorageAccountDomainProperties {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory=$true, Position=0)]
-        [string]$ResourceGroupName,
+        [string]$ADObjectName,
 
         [Parameter(Mandatory=$true, Position=1)]
+        [string]$ResourceGroupName,
+
+        [Parameter(Mandatory=$true, Position=2)]
         [string]$StorageAccountName,
 
-        [Parameter(Mandatory=$false, Position=2)]
+        [Parameter(Mandatory=$false, Position=3)]
         [string]$Domain
     )
 
@@ -1332,7 +1338,7 @@ function Set-StorageAccountDomainProperties {
     }
 
     $azureStorageIdentity = Get-AzStorageAccountADObject `
-        -ADObjectName $StorageAccountName `
+        -ADObjectName $ADObjectName `
         -Domain $Domain `
         -ErrorAction Stop
     $azureStorageSid = $azureStorageIdentity.SID.Value
@@ -1932,6 +1938,7 @@ function Join-AzStorageAccountForAuth {
 
             # Create the service account object for the storage account.
             New-ADAccountForStorageAccount `
+                -ADObjectName $ADObjectNameOverride `
                 -StorageAccountName $StorageAccountName `
                 -ResourceGroupName $ResourceGroupName `
                 -Domain $Domain `
@@ -1941,6 +1948,7 @@ function Join-AzStorageAccountForAuth {
 
             # Set domain properties on the storage account.
             Set-StorageAccountDomainProperties `
+                -ADObjectName $ADObjectNameOverride `
                 -ResourceGroupName $ResourceGroupName `
                 -StorageAccountName $StorageAccountName `
                 -Domain $Domain
