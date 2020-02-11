@@ -1,4 +1,7 @@
 using namespace System
+using namespace System.Collections
+using namespace System.Collections.Generic
+using namespace System.Collections.Specialized
 using namespace System.Text
 
 function Get-IsElevatedSession {
@@ -671,7 +674,7 @@ function Request-ADFeature {
 }
 
 function Validate-StorageAccount {
-    #requires -Module Az, @{ ModuleName = "Az.Storage"; RequiredVersion = "1.8.2" }
+    #requires -Module @{ ModuleName = "Az.Storage"; RequiredVersion = "1.8.2" }
 
     [CmdletBinding()]
     param (
@@ -714,7 +717,7 @@ function Validate-StorageAccount {
 }
 
 function Ensure-KerbKeyExists {
-    #requires -Module Az, @{ ModuleName = "Az.Storage"; RequiredVersion = "1.8.2" }
+    #requires -Module @{ ModuleName = "Az.Storage"; RequiredVersion = "1.8.2" }
 
     <#
     .SYNOPSIS
@@ -789,7 +792,7 @@ function Ensure-KerbKeyExists {
 }
 
 function Get-ServicePrincipalName {
-    #requires -Module Az, @{ ModuleName = "Az.Storage"; RequiredVersion = "1.8.2" }
+    #requires -Module @{ ModuleName = "Az.Storage"; RequiredVersion = "1.8.2" }
 
     <#
     .SYNOPSIS
@@ -826,7 +829,7 @@ function Get-ServicePrincipalName {
 }
 
 function New-ADAccountForStorageAccount {
-    #requires -Module Az, @{ ModuleName = "Az.Storage"; RequiredVersion = "1.8.2" }
+    #requires -Module @{ ModuleName = "Az.Storage"; RequiredVersion = "1.8.2" }
 
     <#
     .SYNOPSIS
@@ -981,7 +984,7 @@ function New-ADAccountForStorageAccount {
 }
 
 function Get-AzStorageAccountADObject {
-    #requires -Module Az, @{ ModuleName = "Az.Storage"; RequiredVersion = "1.8.2" }
+    #requires -Module @{ ModuleName = "Az.Storage"; RequiredVersion = "1.8.2" }
 
     <#
     .SYNOPSIS
@@ -1137,7 +1140,7 @@ function Get-AzStorageAccountADObject {
 }
 
 function Get-AzStorageKerberosTicketStatus {
-    #requires -Module Az, @{ ModuleName = "Az.Storage"; RequiredVersion = "1.8.2" }
+    #requires -Module @{ ModuleName = "Az.Storage"; RequiredVersion = "1.8.2" }
 
     <#
     .SYNOPSIS
@@ -1270,7 +1273,7 @@ function Get-AzStorageKerberosTicketStatus {
 }
 
 function Set-StorageAccountDomainProperties {
-    #requires -Module Az, @{ ModuleName = "Az.Storage"; RequiredVersion = "1.8.2" }
+    #requires -Module @{ ModuleName = "Az.Storage"; RequiredVersion = "1.8.2" }
 
     <#
     .SYNOPSIS
@@ -1350,12 +1353,21 @@ function Set-StorageAccountDomainProperties {
     Write-Verbose "Set-StorageAccountDomainProperties: Complete"
 }
 
+# A class for structuring the results of the Test-AzStorageAccountADObjectPasswordIsKerbKey cmdlet.
 class KerbKeyMatch {
+    # The resource group of the storage account that was tested.
     [string]$ResourceGroupName
+
+    # The name of the storage account that was tested.
     [string]$StorageAccountName
+
+    # The Kerberos key, either kerb1 or kerb2.
     [string]$KerbKeyName
+
+    # Whether or not the key matches.
     [bool]$KeyMatches
 
+    # A default constructor for the KerbKeyMatch class.
     KerbKeyMatch(
         [string]$resourceGroupName,
         [string]$storageAccountName,
@@ -1370,7 +1382,7 @@ class KerbKeyMatch {
 }
 
 function Test-AzStorageAccountADObjectPasswordIsKerbKey {
-    #requires -Module Az, @{ ModuleName = "Az.Storage"; RequiredVersion = "1.8.2" }
+    #requires -Module @{ ModuleName = "Az.Storage"; RequiredVersion = "1.8.2" }
 
     <#
     .SYNOPSIS
@@ -1492,7 +1504,7 @@ function Test-AzStorageAccountADObjectPasswordIsKerbKey {
 }
 
 function Update-AzStorageAccountADObjectPassword {
-    #requires -Module Az, @{ ModuleName = "Az.Storage"; RequiredVersion = "1.8.2" }
+    #requires -Module @{ ModuleName = "Az.Storage"; RequiredVersion = "1.8.2" }
 
     <#
     .SYNOPSIS
@@ -1665,7 +1677,7 @@ function Update-AzStorageAccountADObjectPassword {
 }
 
 function Invoke-AzStorageAccountADObjectPasswordRotation {
-    #requires -Module Az, @{ ModuleName = "Az.Storage"; RequiredVersion = "1.8.2" }
+    #requires -Module @{ ModuleName = "Az.Storage"; RequiredVersion = "1.8.2" }
 
     <#
     .SYNOPSIS
@@ -1791,7 +1803,7 @@ function Invoke-AzStorageAccountADObjectPasswordRotation {
 }
 
 function Join-AzStorageAccountForAuth {
-    #requires -Module Az, @{ ModuleName = "Az.Storage"; RequiredVersion = "1.8.2" }
+    #requires -Module @{ ModuleName = "Az.Storage"; RequiredVersion = "1.8.2" }
 
     <#
     .SYNOPSIS 
@@ -1920,6 +1932,361 @@ function Join-AzStorageAccountForAuth {
                 -ResourceGroupName $ResourceGroupName `
                 -StorageAccountName $StorageAccountName `
                 -Domain $Domain
+        }
+    }
+}
+
+function Expand-AzResourceId {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true, Position=0, ValueFromPipeline=$true)]
+        [string]$ResourceId
+    )
+
+    process {
+        $split = $ResourceId.Split("/")
+        $split = $split[1..$split.Length]
+    
+        $result = [OrderedDictionary]::new()
+        $key = [string]$null
+        $value = [string]$null
+
+        for($i=0; $i -lt $split.Length; $i++) {
+            if (!($i % 2)) {
+                $key = $split[$i]
+            } else {
+                $value = $split[$i]
+                $result.Add($key, $value)
+
+                $key = [string]$null
+                $value = [string]$null
+            }
+        }
+
+        return $result
+    }
+}
+
+function Compress-AzResourceId {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true, Position=0, ValueFromPipeline=$true)]
+        [OrderedDictionary]$ExpandedResourceId
+    )   
+
+    process {
+        $sb = [StringBuilder]::new()
+
+        foreach($entry in $ExpandedResourceId.GetEnumerator()) {
+            $sb.Append(("/" + $entry.Key + "/" + $entry.Value)) | Out-Null
+        }
+
+        return $sb.ToString()
+    }
+}
+
+function Request-ConnectAzureAD {
+    [CmdletBinding()]
+    param()
+
+    $aadModule = Get-Module | Where-Object { $_.Name -like "AzureAD" }
+    if ($null -eq $aadModule) {
+        if ($PSVersionTable.PSVersion -ge [Version]::new(6,0,0,0)) {
+            Import-WinModule -Name AzureAD
+        } else {
+            Import-Module -Name AzureAD
+        }
+    }
+
+    try {
+        Get-AzureADTenantDetail -ErrorAction Stop | Out-Null
+    } catch {
+        $context = Get-AzContext
+        Connect-AzureAD `
+                -TenantId $context.Tenant.Id `
+                -AccountId $context.Account.Id `
+                -AzureEnvironmentName $context.Environment.Name | `
+            Out-Null
+    }
+}
+
+function Get-AzureADDomainInternal {
+    [CmdletBinding()]
+    param()
+
+    Assert-IsWindows
+    Request-ConnectAzureAD
+    
+    return (Get-AzureADDomain)
+}
+
+function Get-AzCurrentAzureADUser {
+    [CmdletBinding()]
+    param()
+
+    $context = Get-AzContext
+    $friendlyLogin = $context.Account.Id
+    $friendlyLoginSplit = $friendlyLogin.Split("@")
+
+    $domains = Get-AzureADDomainInternal
+    $domainNames = $domains | Select-Object -ExpandProperty Name
+
+    if ($friendlyLoginSplit[1] -in $domainNames) {
+        return $friendlyLogin
+    } else {
+        $username = ($friendlyLoginSplit[0] + "_" + $friendlyLoginSplit[1] + "#EXT#")
+
+        foreach($domain in $domains) {
+            $possibleName = ($username + "@" + $domain.Name) 
+            $foundUser = Get-AzADUser -UserPrincipalName $possibleName
+            if ($null -ne $foundUser) {
+                return $possibleName
+            }
+        }
+    }
+}
+
+$ClassicAdministratorsSet = $false
+$ClassicAdministrators = [HashSet[string]]::new()
+$OperationCache = [Dictionary[string, Microsoft.Azure.Commands.Resources.Models.Authorization.PSRoleDefinition[]]]::new()
+function Test-AzPermission {
+    #requires -Module Az.Resources
+
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true, ValueFromPipelineByPropertyName=$true)]
+        [Alias("ResourceId", "Id")]
+        [string]$Scope,
+
+        [Parameter(Mandatory=$true, ParameterSetName="OperationsName")]
+        [string[]]$OperationName,
+
+        [Parameter(Mandatory=$true, ParameterSetName="OperationsObj")]
+        [Microsoft.Azure.Commands.Resources.Models.PSResourceProviderOperation[]]$Operation,
+
+        [Parameter(Mandatory=$false)]
+        [string]$SignInName,
+
+        [Parameter(Mandatory=$false)]
+        [switch]$RefreshCache
+    )
+
+    begin {
+        # Populate the classic administrator cache
+        if (!$ClassicAdministratorsSet -or $RefreshCache) {
+            if (!$ClassicAdministratorsSet) {
+                $ClassicAdministratorsSet = $true
+            } else {
+                $ClassicAdministrators.Clear()
+            }
+
+            $ResourceIdComponents = $Scope | Expand-AzResourceId
+            $subscription = $ResourceIdComponents.subscriptions
+            $roleAssignments = Get-AzRoleAssignment `
+                    -Scope "/subscriptions/$subscription" `
+                    -IncludeClassicAdministrators | `
+                Where-Object { $_.Scope -eq "/subscriptions/$subscription" }
+            
+            $_classicAdministrators = $roleAssignments | `
+                Where-Object { 
+                    $split = $_.RoleDefinitionName.Split(";"); 
+                    "CoAdministrator" -in $split -or "ServiceAdministrator" -in $split
+                }
+            
+            foreach ($admin in $_classicAdministrators) {
+                $ClassicAdministrators.Add($admin.SignInName) | Out-Null
+            }
+        }
+    }
+
+    process {
+        # Normalize operations to $Operation
+        if ($PSCmdlet.ParameterSetName -eq "OperationsName") {
+            $Operation = $OperationName | `
+                Get-AzProviderOperation
+        }
+
+        # If a specific user isn't given, use the current PowerShell logged in user.
+        # This is expected to be the normal case.
+        if (!$PSBoundParameters.ContainsKey("SignInName")) {
+            $SignInName = Get-AzCurrentAzureADUser
+        }
+
+        # Build lookup dictionary of which operations the user has. Start with having none.
+        $userHasOperation = [Dictionary[string, bool]]::new()
+        foreach($op in $Operation) {
+            $userHasOperation.Add($op.Operation, $false)
+        }        
+
+        # Get the classic administrator sign in name. If the user is using an identity based on 
+        # the name (i.e. jdoe@contoso.com), these are the same. If the user is using an identity 
+        # external, ARM will contain #EXT# and classic won't.
+        $ClassicSignInName = $SignInName
+        if ($SignInName -like "*#EXT#*") {
+            $SignInSplit = $SignInName.Split("@")
+            $ClassicSignInName = $SignInSplit[0].Replace("#EXT#", "").Replace("_", "@")
+        }
+
+        if ($ClassicAdministrators.Contains($ClassicSignInName)) {
+            foreach($op in $Operation) {
+                $userHasOperation[$op.Operation] = $true
+            }
+
+            return $userHasOperation
+        }
+
+        $roleAssignments = Get-AzRoleAssignment -Scope $Scope -SignInName $SignInName
+
+        if ($RefreshCache) {
+            $OperationCache.Clear()
+        }
+
+        foreach($roleAssignment in $roleAssignments) {
+            $operationsInRole = [string[]]$null
+            if (!$OperationCache.TryGetValue($roleAssignment.RoleDefinitionId, [ref]$operationsInRole)) {
+                $operationsInRole = Get-AzRoleDefinition -Id $roleAssignment.RoleDefinitionId
+                $OperationCache.Add($roleAssignment.RoleDefinitionId, $operationsInRole)
+            }
+
+            foreach($op in $Operation) {
+                $matches = $false
+
+                if (!$op.IsDataAction) {
+                    foreach($action in $operationsInRole.Actions) {
+                        if ($op.Operation -like $action) {
+                            $matches = $true
+                            break
+                        }
+                    }
+
+                    if ($matches) {
+                        foreach($notAction in $operationsInRole.NotActions) {
+                            if ($op.Operation -like $notAction) {
+                                $matches = $false
+                                break
+                            }
+                        }
+                    }
+                } else {
+                    foreach($dataAction in $operationsInRole.DataActions) {
+                        if ($op.Operation -like $dataAction) {
+                            $matches = $true
+                            break
+                        }
+                    }
+
+                    if ($matches) {
+                        foreach($notDataAction in $operationsInRole.NotDataActions) {
+                            if ($op.Operation -like $notDataAction) {
+                                $matches = $false
+                                break
+                            }
+                        }
+                    }
+                }
+
+                $userHasOperation[$op.Operation] = $userHasOperation[$op.Operation] -or $matches
+            }
+        }
+
+        $denyAssignments = Get-AzDenyAssignment -Scope $Scope -SignInName $SignInName
+        foreach($denyAssignment in $denyAssignments) {
+            foreach($op in $Operation) {
+                $matches = $false
+
+                if (!$op.IsDataAction) {
+                    foreach($action in $denyAssignment.Actions) {
+                        if ($op.Operation -like $action) {
+                            $matches = $true
+                            break
+                        }
+                    }
+
+                    if ($matches) {
+                        foreach($notAction in $denyAssignment.NotActions) {
+                            if ($op.Operation -like $notAction) {
+                                $matches = $false
+                                break
+                            }
+                        }
+                    }
+                } else {
+                    foreach($dataAction in $denyAssignment.DataActions) {
+                        if ($op.Operation -like $dataAction) {
+                            $matches = $true
+                            break
+                        }
+                    }
+
+                    if ($matches) {
+                        foreach($notDataAction in $denyAssignment.NotDataActions) {
+                            if ($op.Operation -like $notDataAction) {
+                                $matches = $false
+                                break
+                            }
+                        }
+                    }
+                }
+
+                $userHasOperation[$op.Operation] = $userHasOperation[$op.Operation] -and !$matches
+            }
+        }
+        
+        return $userHasOperation
+    }
+}
+
+function Assert-AzPermission {
+    #requires -Module Az.Resources
+
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true, ValueFromPipelineByPropertyName=$true)]
+        [Alias("ResourceId", "Id")]
+        [string]$Scope,
+
+        [Parameter(Mandatory=$true, ParameterSetName="OperationsName")]
+        [string[]]$OperationName,
+
+        [Parameter(Mandatory=$true, ParameterSetName="OperationsObj")]
+        [Microsoft.Azure.Commands.Resources.Models.PSResourceProviderOperation[]]$Operation
+    )
+
+    process {
+        $testParams = @{}
+        switch ($PSCmdlet.ParameterSetName) {
+            "OperationsName" {
+                $testParams += @{
+                    "OperationName" = $OperationName
+                }
+            }
+
+            "OperationsObj" {
+                $testParams += @{
+                    "Operation" = $Operation
+                }
+            }
+
+            default {
+                throw [ArgumentException]::new("Unrecognized parameter set $_")
+            }
+        }
+
+        $permissionMatches = Test-AzPermission @testParams
+        $falseValues = $permissionMatches | Where-Object { $_.Value -eq $false }
+        if ($null -ne $falseValues) {
+            $errorBuilder = [StringBuilder]::new()
+            $errorBuilder.Append("The current user lacks the following permissions: ") | Out-Null
+            for($i=0; $i -lt $falseValues.Length; $i++) {
+                if ($i -gt 0) {
+                    $errorBuilder.Append(", ") | Out-Null
+                }
+
+                $errorBuilder.Append($falseValues.Key) | Out-Null
+            }
+
+            $errorBuilder.Append(".") | Out-Null
+            Write-Error -Message $errorBuilder.ToString() -ErrorAction Stop
         }
     }
 }
