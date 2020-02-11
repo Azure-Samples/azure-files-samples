@@ -3,6 +3,7 @@ using namespace System.Collections
 using namespace System.Collections.Generic
 using namespace System.Collections.Specialized
 using namespace System.Text
+using namespace System.Security
 
 function Get-IsElevatedSession {
     <#
@@ -850,19 +851,22 @@ function New-ADAccountForStorageAccount {
 
     [CmdletBinding()]
     param (
-        [Parameter(Mandatory=$true, Position=0, HelpMessage="Storage account name")]
+        [Parameter(Mandatory=$true, Position=0)]
+        [string]$ADObjectName,
+
+        [Parameter(Mandatory=$true, Position=1, HelpMessage="Storage account name")]
         [string]$StorageAccountName, 
 
-        [Parameter(Mandatory=$true, Position=1, HelpMessage="Resource group name")]
+        [Parameter(Mandatory=$true, Position=2, HelpMessage="Resource group name")]
         [string]$ResourceGroupName,
 
-        [Parameter(Mandatory=$false, Position=2)]
+        [Parameter(Mandatory=$false, Position=3)]
         [string]$Domain,
 
-        [Parameter(Mandatory=$false, Position=3)]
+        [Parameter(Mandatory=$false, Position=4)]
         [string]$OrganizationalUnit,
 
-        [Parameter(Mandatory=$false, Position=4)]
+        [Parameter(Mandatory=$false, Position=5)]
         [ValidateSet("ServiceLogonAccount", "ComputerAccount")]
         [string]$ObjectType = "ServiceLogonAccount"
     )
@@ -927,9 +931,9 @@ function New-ADAccountForStorageAccount {
                 Write-Verbose -Message "`$ServiceAccountName is $StorageAccountName"
 
                 New-ADUser `
-                    -SamAccountName $StorageAccountName `
+                    -SamAccountName $ADObjectName `
                     -Path $path `
-                    -Name $StorageAccountName `
+                    -Name $ADObjectName `
                     -AccountPassword $fileServiceAccountPwdSecureString `
                     -AllowReversiblePasswordEncryption $false `
                     -PasswordNeverExpires $true `
@@ -949,9 +953,9 @@ function New-ADAccountForStorageAccount {
 
             "ComputerAccount" {
                 New-ADComputer `
-                    -SAMAccountName $StorageAccountName `
+                    -SAMAccountName $ADObjectName `
                     -Path $path `
-                    -Name $StorageAccountName `
+                    -Name $ADObjectName `
                     -AccountPassword $fileServiceAccountPwdSecureString `
                     -AllowReversiblePasswordEncryption $false `
                     -Description "Computer account object for Azure storage account $StorageAccountName." `
@@ -1889,14 +1893,22 @@ function Join-AzStorageAccountForAuth {
     }
 
     process {
-        if (![System.String]::IsNullOrEmpty($ADObjectNameOverride)) {
-            Write-Error -Message "Specifying an override for a service/computer account is not currently implemented." -ErrorAction Stop
-        }
-
         if ($PSCmdlet.ParameterSetName -eq "StorageAccount") {
             $StorageAccountName = $StorageAccount.StorageAccountName
             $ResourceGroupName = $StorageAccount.ResourceGroupName
         }
+        
+        if (!$PSBoundParameters.ContainsKey("ADObjectNameOverride")) {
+            if ($StorageAccountName.Length -gt 15) {
+                $randomSuffix = Get-RandomString -StringLength 5 -AlphanumericOnly
+                $ADObjectNameOverride = $StorageAccountName.Substring(0, 10) + $randomSuffix
+
+            } else {
+                $ADObjectNameOverride = $StorageAccountName
+            }
+        }
+        
+        Write-Verbose -Message "Using $ADObjectNameOverride as the name for the ADObject."
 
         $caption = "Domain join $StorageAccountName"
         $verboseConfirmMessage = ("This action will domain join the requested storage account to the requested domain.")
@@ -2444,4 +2456,128 @@ function Assert-AzPermission {
             Write-Error -Message $errorBuilder.ToString() -ErrorAction Stop
         }
     }
+}
+
+# This class is a wrapper around SecureString and StringBuilder to provide a consistent interface 
+# (Append versus AppendChar) and specialized object return (give a string when StringBuilder, 
+# SecureString when SecureString) so you don't have to care what the underlying object is. 
+class OptionalSecureStringBuilder {
+    hidden [SecureString]$SecureString
+    hidden [StringBuilder]$StringBuilder
+    hidden [bool]$IsSecureString
+
+    # Create an OptionalSecureStringBuilder with the desired underlying object.
+    OptionalSecureStringBuilder([bool]$isSecureString) {
+        $this.IsSecureString = $isSecureString
+        if ($this.IsSecureString) {
+            $this.SecureString = [SecureString]::new()
+        } else {
+            $this.StringBuilder = [StringBuilder]::new()
+        }
+    }
+    
+    # Append a string to the internal object.
+    [void]Append([string]$append) {
+        if ($this.IsSecureString) {
+            foreach($c in $append) {
+                $this.SecureString.AppendChar($c)
+            }
+        } else {
+            $this.StringBuilder.Append($append) | Out-Null
+        }
+    }
+
+    # Get the actual object you've been writing to.
+    [object]GetInternalObject() {
+        if ($this.IsSecureString) {
+            return $this.SecureString
+        } else {
+            return $this.StringBuilder.ToString()
+        }
+    }
+}
+
+function Get-RandomString {
+    <#
+    .SYNOPSIS
+    Generate a random string for the purposes of password generation or random characters for unique names.
+
+    .DESCRIPTION
+    Generate a random string for the purposes of password generation or random characters for unique names.
+
+    .PARAMETER StringLength
+    The length of the string to generate.
+
+    .PARAMETER AlphanumericOnly
+    The string should only include alphanumeric characters.
+
+    .PARAMETER CaseSensitive
+    Distinguishes between the same characters of different case. 
+
+    .PARAMETER IncludeSimilarCharacters
+    Include characters that might easily be mistaken for each other (depending on the font): 1, l, I.
+
+    .PARAMETER ExcludeCharacters
+    Don't include these characters in the random string.
+    
+    .PARAMETER AsSecureString
+    Return the object as a secure string rather than a regular string.
+
+    .EXAMPLE
+    Get-RandomString -StringLength 10 -AlphanumericOnly -AsSecureString
+
+    .OUTPUTS
+    System.String
+    System.Security.SecureString
+    #>
+
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)]
+        [int]$StringLength,
+
+        [Parameter(Mandatory=$false)]
+        [switch]$AlphanumericOnly,
+
+        [Parameter(Mandatory=$false)]
+        [switch]$CaseSensitive,
+
+        [Parameter(Mandatory=$false)]
+        [switch]$IncludeSimilarCharacters,
+
+        [Parameter(Mandatory=$false)]
+        [string[]]$ExcludeCharacters,
+
+        [Parameter(Mandatory=$false)]
+        [switch]$AsSecureString
+    )
+
+    $characters = [string[]]@()
+
+    $characters += 97..122 | ForEach-Object { [char]$_ }
+    if ($CaseSensitive) {
+        $characters += 65..90 | ForEach-Object { [char]$_ }
+    }
+
+    $characters += 0..9 | ForEach-Object { $_.ToString() }
+    
+    if (!$AlphanumericOnly) {
+        $characters += 33..46 | ForEach-Object { [char]$_ }
+        $characters += 91..96 | ForEach-Object { [char]$_ }
+        $characters += 123..126 | ForEach-Object { [char]$_ }
+    }
+
+    if (!$IncludeSimilarCharacters) {
+        $ExcludeCharacters += "1", "l", "I", "0", "O"
+    }
+
+    $characters = $characters | Where-Object { $_ -notin $ExcludeCharacters }
+
+    $acc = [OptionalSecureStringBuilder]::new($AsSecureString)
+    for($i=0; $i -lt $StringLength; $i++) {
+        $random = Get-Random -Minimum 0 -Maximum $characters.Length
+        $acc.Append($characters[$random])
+    }
+
+    return $acc.GetInternalObject()
 }
