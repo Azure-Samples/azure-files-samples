@@ -1937,9 +1937,39 @@ function Join-AzStorageAccountForAuth {
 }
 
 function Expand-AzResourceId {
+    <#
+    .SYNOPSIS
+    Breakdown an ARM id by parts.
+
+    .DESCRIPTION
+    This cmdlet breaks down an ARM id by its parts, to make it easy to use the components as inputs in cmdlets/scripts.
+
+    .PARAMETER ResourceId
+    The resource identifier to be broken down.
+
+    .EXAMPLE
+    $idParts = Get-AzStorageAccount `
+            -ResourceGroupName "myResourceGroup" `
+            -StorageAccountName "mystorageaccount123" | `
+        Expand-AzResourceId
+
+    # Get the subscription 
+    $subscription = $idParts.subscriptions
+
+    # Do something else interesting as desired.
+
+    .OUTPUTS
+    System.Collections.Specialized.OrderedDictionary
+    #>
+
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory=$true, Position=0, ValueFromPipeline=$true)]
+        [Parameter(
+            Mandatory=$true, 
+            Position=0, 
+            ValueFromPipeline=$true, 
+            ValueFromPipelineByPropertyName=$true)]
+        [Alias("Scope", "Id")]
         [string]$ResourceId
     )
 
@@ -1968,6 +1998,32 @@ function Expand-AzResourceId {
 }
 
 function Compress-AzResourceId {
+    <#
+    .SYNOPSIS
+    Recombine an expanded ARM id into a single string which can be used by Az cmdlets.
+
+    .DESCRIPTION
+    This cmdlet takes the output of the cmdlet Expand-AzResourceId and puts it back into a single string identifier. Note, this cmdlet does not currently validate that components are valid in an ARM template, so use with care.
+
+    .PARAMETER ExpandedResourceId
+    An OrderedDictionary representing an expanded ARM identifier.
+
+    .EXAMPLE
+    $fileShareId = Get-AzRmStorageShare `
+            -ResourceGroupName "myResourceGroup" `
+            -StorageAccountName "mystorageaccount123" `
+            -Name "testshare" | `
+        Expand-AzResourceId
+    
+    $fileShareId.Remove("shares")
+    $fileShareId.Remove("fileServices")
+
+    $storageAccountId = $fileShareId | Compress-AzResourceId
+
+    .OUTPUTS
+    System.String
+    #>
+
     [CmdletBinding()]
     param(
         [Parameter(Mandatory=$true, Position=0, ValueFromPipeline=$true)]
@@ -1986,13 +2042,26 @@ function Compress-AzResourceId {
 }
 
 function Request-ConnectAzureAD {
+    <#
+    .SYNOPSIS
+    Connect to an Azure AD tenant using the AzureAD cmdlets.
+
+    .DESCRIPTION
+    Correctly import the AzureAD module for your PowerShell version and then sign in using the same tenant is the currently signed in Az user. This wrapper is necessary as 1. AzureAD is not directly compatible with PowerShell 6 (though this can be achieved through the WindowsCompatibility module), and 2. AzureAD doesn't necessarily log you into the same tenant as the Az cmdlets according to their documentation (although it's not clear when it doesn't).
+
+    .EXAMPLE
+    Request-ConnectAzureAD
+    #>
+
     [CmdletBinding()]
     param()
+
+    Assert-IsWindows
 
     $aadModule = Get-Module | Where-Object { $_.Name -like "AzureAD" }
     if ($null -eq $aadModule) {
         if ($PSVersionTable.PSVersion -ge [Version]::new(6,0,0,0)) {
-            Import-WinModule -Name AzureAD
+            Import-WinModule -Name AzureAD -Verbose:$false
         } else {
             Import-Module -Name AzureAD
         }
@@ -2011,16 +2080,63 @@ function Request-ConnectAzureAD {
 }
 
 function Get-AzureADDomainInternal {
-    [CmdletBinding()]
-    param()
+    <#
+    .SYNOPSIS
+    Get the Azure AD domains associated with this Azure AD tenant.
 
-    Assert-IsWindows
-    Request-ConnectAzureAD
-    
-    return (Get-AzureADDomain)
+    .DESCRIPTION
+    This cmdlet is a wrapper around Get-AzureADDomain that is provided to future proof for adding cross-platform support, as AzureAD is not a cross-platform PowerShell module.
+
+    .PARAMETER Name
+    Specifies the name of a domain.
+
+    .EXAMPLE
+    $domains = Get-AzureADDomainInternal
+
+    .EXAMPLE
+    $specificDomain = Get-AzureADDomainInternal -Name "contoso.com"
+
+    .OUTPUTS
+    Microsoft.Open.AzureAD.Model.Domain
+    Deserialized.Microsoft.Open.AzureAD.Model.Domain, if accessed through the WindowsCompatibility module
+    #>
+
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$false, ValueFromPipeline=$true, ValueFromPipelineByPropertyName=$true)]
+        [string]$Name
+    )
+
+    begin {
+        Assert-IsWindows
+        Request-ConnectAzureAD
+    }
+
+    process {
+        $getParams = @{}
+        if ($PSBoundParameters.ContainsKey("Name")) {
+            $getParams += @{ "Name" = $Name}
+        }
+
+        return (Get-AzureADDomain @Name)
+    }
 }
 
 function Get-AzCurrentAzureADUser {
+    <#
+    .SYNOPSIS
+    Get the name of the Azure AD user logged into Az PowerShell.
+
+    .DESCRIPTION
+    In general, Get-AzContext provides the logged in username of the user using Az module, however, for accounts that are not part of the Azure AD domain (ex. like a MSA used to create an Azure subscription), this will not match the Azure AD identity, which will be of the format: externalemail_outlook.com#EXT#@contoso.com. This cmdlet returns the correct user as defined in Azure AD.
+
+    .EXAMPLE
+    $currentUser = Get-AzCurrentAzureADUser
+
+    .OUTPUTS
+    System.String
+    #>
+
     [CmdletBinding()]
     param()
 
@@ -2052,6 +2168,29 @@ $OperationCache = [Dictionary[string, Microsoft.Azure.Commands.Resources.Models.
 function Test-AzPermission {
     #requires -Module Az.Resources
 
+    <#
+    .SYNOPSIS
+    Test specific permissions required for a given user.
+
+    .DESCRIPTION
+    Since customers can defined custom roles for their Azure users, checking permissions isn't as easy as simply looking at the predefined roles. Additionally, users may be in multiple roles that confer (or remove) the ability to do specific things on an Azure resource. This cmdlet takes a list of specific operations and ensures that the user, current or specified, has the specified permissions on the scope (subscription, resource group, or resource).
+
+    .EXAMPLE
+    # Does the current user have the ability to list storage account keys?
+    $storageAccount = Get-AzStorageAccount -ResourceGroupName "myResourceGroup" -Name "csostoracct"
+    $storageAccount | Test-AzPermission -OperationName "Microsoft.Storage/storageAccounts/listkeys/action"
+
+    .EXAMPLE
+    # Does this specific user have the ability to list storage account keys
+    $storageAccount = Get-AzStorageAccount -ResourceGroupName "myResourceGroup" -Name "csostoracct"
+    $storageAccount | Test-AzPermission `
+            -OperationName "Microsoft.Storage/storageAccounts/listkeys/action" `
+            -SignInName "user@contoso.com"
+
+    .OUTPUTS
+    System.Collections.Generic.Dictionary<string, bool>
+    #>
+
     [CmdletBinding()]
     param(
         [Parameter(Mandatory=$true, ValueFromPipelineByPropertyName=$true)]
@@ -2071,7 +2210,7 @@ function Test-AzPermission {
         [switch]$RefreshCache
     )
 
-    begin {
+    process {
         # Populate the classic administrator cache
         if (!$ClassicAdministratorsSet -or $RefreshCache) {
             if (!$ClassicAdministratorsSet) {
@@ -2097,9 +2236,7 @@ function Test-AzPermission {
                 $ClassicAdministrators.Add($admin.SignInName) | Out-Null
             }
         }
-    }
 
-    process {
         # Normalize operations to $Operation
         if ($PSCmdlet.ParameterSetName -eq "OperationsName") {
             $Operation = $OperationName | `
@@ -2239,6 +2376,19 @@ function Test-AzPermission {
 function Assert-AzPermission {
     #requires -Module Az.Resources
 
+    <#
+    .SYNOPSIS
+    Check if the user has the required permissions and throw an error if they don't.
+
+    .DESCRIPTION
+    This cmdlet wraps Test-AzPermission and throws an error if the user does not have the required permissions. This cmdlet is meant for use in cmdlets or scripts.
+
+    .EXAMPLE
+    $storageAccount = Get-AzStorageAccount -ResourceGroupName "myResourceGroup" -Name "mystorageaccount123"
+    $storageAccount | Assert-AzPermission -OperationName "Microsoft.Storage/storageAccounts/listkeys/action"
+    # Errors will be thrown if the user does not have this permission.
+    #>
+
     [CmdletBinding()]
     param(
         [Parameter(Mandatory=$true, ValueFromPipelineByPropertyName=$true)]
@@ -2254,6 +2404,11 @@ function Assert-AzPermission {
 
     process {
         $testParams = @{}
+
+        $testParams += @{
+            "Scope" = $Scope
+        }
+
         switch ($PSCmdlet.ParameterSetName) {
             "OperationsName" {
                 $testParams += @{
@@ -2273,7 +2428,7 @@ function Assert-AzPermission {
         }
 
         $permissionMatches = Test-AzPermission @testParams
-        $falseValues = $permissionMatches | Where-Object { $_.Value -eq $false }
+        $falseValues = $permissionMatches.GetEnumerator() | Where-Object { $_.Value -eq $false }
         if ($null -ne $falseValues) {
             $errorBuilder = [StringBuilder]::new()
             $errorBuilder.Append("The current user lacks the following permissions: ") | Out-Null
@@ -2282,7 +2437,7 @@ function Assert-AzPermission {
                     $errorBuilder.Append(", ") | Out-Null
                 }
 
-                $errorBuilder.Append($falseValues.Key) | Out-Null
+                $errorBuilder.Append($falseValues[$i].Key) | Out-Null
             }
 
             $errorBuilder.Append(".") | Out-Null
