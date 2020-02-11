@@ -871,7 +871,7 @@ function New-ADAccountForStorageAccount {
 
         [Parameter(Mandatory=$false, Position=5)]
         [ValidateSet("ServiceLogonAccount", "ComputerAccount")]
-        [string]$ObjectType = "ServiceLogonAccount"
+        [string]$ObjectType = "ComputerAccount"
     )
 
     Assert-IsWindows
@@ -1883,7 +1883,7 @@ function Join-AzStorageAccountForAuth {
 
         [Parameter(Mandatory=$false, Position=3)]
         [ValidateSet("ServiceLogonAccount", "ComputerAccount")]
-        [string]$DomainAccountType = "ServiceLogonAccount",
+        [string]$DomainAccountType = "ComputerAccount",
 
         [Parameter(Mandatory=$false, Position=4)]
         [string]$OrganizationalUnitName,
