@@ -1,4 +1,7 @@
 using namespace System
+using namespace System.Collections
+using namespace System.Collections.Generic
+using namespace System.Collections.Specialized
 using namespace System.Text
 
 function Get-IsElevatedSession {
@@ -55,7 +58,7 @@ function Assert-IsElevatedSession {
     Check if the session is elevated and throw an error if it isn't.
     
     .DESCRIPTION
-    This cmdlet uses the Get-IsElevatedSession to throw a nice error message to the user if the session isn't elevated.
+    This cmdlet uses the Get-IsElevatedSession cmdlet to throw a nice error message to the user if the session isn't elevated.
     
     .EXAMPLE
     Assert-IsElevatedSession
@@ -78,12 +81,7 @@ function Get-OSPlatform {
     Get the OS running the current PowerShell session.
 
     .DESCRIPTION
-    This cmdlet is a wrapper around the System.Runtime.InteropServices.RuntimeInformation .NET standard class 
-    that makes it easier to work with in PowerShell 5.1/6/7/etc. $IsWindows, etc. is defined in PS6+, however
-    since it's not defined in PowerShell 5.1, it's not incredibly useful for writing PowerShell code meant to 
-    be executed in either language version. As older versions of .NET Framework do not support the 
-    RuntimeInformation .NET standard class, if the PSEdition is "Desktop", by default you're running on Windows,
-    since only "Core" releases are cross-platform.
+    This cmdlet is a wrapper around the System.Runtime.InteropServices.RuntimeInformation .NET standard class that makes it easier to work with in PowerShell 5.1/6/7/etc. $IsWindows, etc. is defined in PS6+, however since it's not defined in PowerShell 5.1, it's not incredibly useful for writing PowerShell code meant to be executed in either language version. As older versions of .NET Framework do not support the RuntimeInformation .NET standard class, if the PSEdition is "Desktop", by default you're running on Windows, since only "Core" releases are cross-platform.
 
     .EXAMPLE
     if ((Get-OSPlatform) -eq "Windows") {
@@ -126,6 +124,21 @@ function Get-OSPlatform {
 }
 
 function Assert-IsWindows {
+    <#
+    .SYNOPSIS
+    Check if the session is being run on Windows and throw an error if it isn't.
+
+    .DESCRIPTION
+    This cmdlet uses the Get-OSPlatform cmdlet to throw a nice error message to the user if the session isn't Windows.
+
+    .EXAMPLE
+    Assert-IsWindows
+    # User either sees nothing or an error message.
+    #>
+
+    [CmdletBinding()]
+    param()
+
     if ((Get-OSPlatform) -ne "Windows") {
         throw [PlatformNotSupportedException]::new()
     }
@@ -134,12 +147,20 @@ function Assert-IsWindows {
 function Get-IsDomainJoined {
     <#
     .SYNOPSIS
-    Checks that script is being run in a domain-joined environment.
+    Checks that script is being run in on computer that is domain-joined.
     
     .DESCRIPTION
+    This cmdlet returns true if the cmdlet is running in a domain-joined session or false if it's not.
 
     .EXAMPLE
-    PS > Confirm-RunningInDomainJoinedEnvironment
+    if ((Get-IsDomainJoined)) {
+        # Do something if computer is domain joined.
+    } else {
+        # Do something else if the computer is not domain joined.
+    }
+
+    .OUTPUTS
+    System.Boolean, indicating whether or not the computer is domain joined.
     #>
 
     [CmdletBinding()]
@@ -164,6 +185,17 @@ function Get-IsDomainJoined {
 }
 
 function Assert-IsDomainJoined {
+    <#
+    .SYNOPSIS
+    Check if the session is being run on a domain joined machine and throw an error if it isn't.
+
+    .DESCRIPTION 
+    This cmdlet uses the Get-IsDomainJoined cmdlet to throw a nice error message to the user if the session isn't domain joined.
+
+    .EXAMPLE
+    Assert-IsDomainJoined
+    #>
+
     [CmdletBinding()]
     param()
 
@@ -180,9 +212,7 @@ function Get-OSVersion {
     Get the version number of the OS.
 
     .DESCRIPTION
-    This cmdlet provides the OS's internal version number, for example 10.0.18363.0 for Windows 10, 
-    version 1909 (the public release). This cmdlet is not yet defined on Linux/macOS
-    sessions.
+    This cmdlet provides the OS's internal version number, for example 10.0.18363.0 for Windows 10, version 1909 (the public release). This cmdlet is not yet defined on Linux/macOS sessions.
 
     .EXAMPLE
     if ((Get-OSVersion) -ge [System.Version]::new(10,0,0,0)) {
@@ -221,10 +251,7 @@ function Get-WindowsInstallationType {
     Get the Windows installation type (ex. Client, Server, ServerCore, etc.).
 
     .DESCRIPTION
-    This cmdlet provides the installation type of the Windows OS, primarily to allow for cmdlet behavior changes depending 
-    on whether the cmdlet is being run on a Windows client ("Client") or a Windows Server ("Server", "ServerCore"). This cmdlet
-    is (obviously) only available for Windows PowerShell sessions and will return a PlatformNotSupportedException for non-Windows
-    sessions.
+    This cmdlet provides the installation type of the Windows OS, primarily to allow for cmdlet behavior changes depending on whether the cmdlet is being run on a Windows client ("Client") or a Windows Server ("Server", "ServerCore"). This cmdlet is (obviously) only available for Windows PowerShell sessions and will return a PlatformNotSupportedException for non-Windows sessions.
 
     .EXAMPLE
     switch ((Get-WindowsInstallationType)) {
@@ -305,9 +332,7 @@ function Get-OSFeature {
     Get the list of available/installed features for your OS.
 
     .DESCRIPTION
-    Get the list of available/installed features for your OS. Currently this cmdlet only works for Windows OSes,
-    but works for both Windows client and Windows Server, which among them provide three different ways of enabling/disabling
-    features (if there are more than three, this cmdlet doesn't suppor them yet).
+    Get the list of available/installed features for your OS. Currently this cmdlet only works for Windows OSes, but works for both Windows client and Windows Server, which among them provide three different ways of enabling/disabling features (if there are more than three, this cmdlet doesn't suppor them yet).
 
     .EXAMPLE
     # Check to see if the Windows 10 client RSAT AD PowerShell module is installed. 
@@ -430,8 +455,7 @@ function Install-OSFeature {
     Install a requested operating system feature.
 
     .DESCRIPTION
-    This cmdlet will use the underlying OS-specific feature installation methods to install the requested feature(s).
-    This is currently Windows only.
+    This cmdlet will use the underlying OS-specific feature installation methods to install the requested feature(s). This is currently Windows only.
 
     .PARAMETER OSFeature
     The feature(s) to be installed.
@@ -522,9 +546,7 @@ function Request-OSFeature {
     Request the features to be installed that are required for a cmdlet/script.
 
     .DESCRIPTION
-    This cmdlet is a wrapper around the Install-OSFeature cmdlet, primarily to be used in cmdlets/scripts 
-    to ensure the required OS feature prerequisites are installed before the rest of the cmdlet executes. The required features,
-    independent of the actual OS running, can be described, and this cmdlet figures out the rest.
+    This cmdlet is a wrapper around the Install-OSFeature cmdlet, primarily to be used in cmdlets/scripts to ensure the required OS feature prerequisites are installed before the rest of the cmdlet executes. The required features, independent of the actual OS running, can be described, and this cmdlet figures out the rest.
 
     .PARAMETER WindowsClientCapability
     The names of features which are Windows client capabilities.
@@ -617,6 +639,17 @@ function Request-OSFeature {
 }
 
 function Request-ADFeature {
+    <#
+    .SYNOPSIS
+    Ensure the ActiveDirectory PowerShell module is installed prior to running the rest of the caller cmdlet.
+
+    .DESCRIPTION
+    This cmdlet is helper around Request-OSFeature specifically meant for the RSAT AD PowerShell module. It uses the optimization of checking if the ActiveDirectory module is available before using the Request-OSFeature cmdlet, since this is quite a bit faster (and does not require session elevation on Windows client) before using the Request-OSFeature cmdlet. This cmdlet is not exported.
+    
+    .EXAMPLE
+    Request-ADFeature
+    #>
+
     [CmdletBinding()]
     param()
 
@@ -641,7 +674,7 @@ function Request-ADFeature {
 }
 
 function Validate-StorageAccount {
-    #requires -Module Az, @{ ModuleName = "Az.Storage"; RequiredVersion = "1.8.2" }
+    #requires -Module @{ ModuleName = "Az.Storage"; RequiredVersion = "1.8.2" }
 
     [CmdletBinding()]
     param (
@@ -684,7 +717,7 @@ function Validate-StorageAccount {
 }
 
 function Ensure-KerbKeyExists {
-    #requires -Module Az, @{ ModuleName = "Az.Storage"; RequiredVersion = "1.8.2" }
+    #requires -Module @{ ModuleName = "Az.Storage"; RequiredVersion = "1.8.2" }
 
     <#
     .SYNOPSIS
@@ -759,7 +792,7 @@ function Ensure-KerbKeyExists {
 }
 
 function Get-ServicePrincipalName {
-    #requires -Module Az, @{ ModuleName = "Az.Storage"; RequiredVersion = "1.8.2" }
+    #requires -Module @{ ModuleName = "Az.Storage"; RequiredVersion = "1.8.2" }
 
     <#
     .SYNOPSIS
@@ -796,7 +829,7 @@ function Get-ServicePrincipalName {
 }
 
 function New-ADAccountForStorageAccount {
-    #requires -Module Az, @{ ModuleName = "Az.Storage"; RequiredVersion = "1.8.2" }
+    #requires -Module @{ ModuleName = "Az.Storage"; RequiredVersion = "1.8.2" }
 
     <#
     .SYNOPSIS
@@ -951,7 +984,7 @@ function New-ADAccountForStorageAccount {
 }
 
 function Get-AzStorageAccountADObject {
-    #requires -Module Az, @{ ModuleName = "Az.Storage"; RequiredVersion = "1.8.2" }
+    #requires -Module @{ ModuleName = "Az.Storage"; RequiredVersion = "1.8.2" }
 
     <#
     .SYNOPSIS
@@ -1107,7 +1140,7 @@ function Get-AzStorageAccountADObject {
 }
 
 function Get-AzStorageKerberosTicketStatus {
-    #requires -Module Az, @{ ModuleName = "Az.Storage"; RequiredVersion = "1.8.2" }
+    #requires -Module @{ ModuleName = "Az.Storage"; RequiredVersion = "1.8.2" }
 
     <#
     .SYNOPSIS
@@ -1240,7 +1273,7 @@ function Get-AzStorageKerberosTicketStatus {
 }
 
 function Set-StorageAccountDomainProperties {
-    #requires -Module Az, @{ ModuleName = "Az.Storage"; RequiredVersion = "1.8.2" }
+    #requires -Module @{ ModuleName = "Az.Storage"; RequiredVersion = "1.8.2" }
 
     <#
     .SYNOPSIS
@@ -1320,16 +1353,75 @@ function Set-StorageAccountDomainProperties {
     Write-Verbose "Set-StorageAccountDomainProperties: Complete"
 }
 
-function Test-ADPasswordMatchesAccountKerbKey {
-    #requires -Module Az, @{ ModuleName = "Az.Storage"; RequiredVersion = "1.8.2" }
+# A class for structuring the results of the Test-AzStorageAccountADObjectPasswordIsKerbKey cmdlet.
+class KerbKeyMatch {
+    # The resource group of the storage account that was tested.
+    [string]$ResourceGroupName
+
+    # The name of the storage account that was tested.
+    [string]$StorageAccountName
+
+    # The Kerberos key, either kerb1 or kerb2.
+    [string]$KerbKeyName
+
+    # Whether or not the key matches.
+    [bool]$KeyMatches
+
+    # A default constructor for the KerbKeyMatch class.
+    KerbKeyMatch(
+        [string]$resourceGroupName,
+        [string]$storageAccountName,
+        [string]$kerbKeyName,
+        [bool]$keyMatches 
+    ) {
+        $this.ResourceGroupName = $resourceGroupName
+        $this.StorageAccountName = $storageAccountName
+        $this.KerbKeyName = $kerbKeyName
+        $this.KeyMatches = $keyMatches
+    }
+}
+
+function Test-AzStorageAccountADObjectPasswordIsKerbKey {
+    #requires -Module @{ ModuleName = "Az.Storage"; RequiredVersion = "1.8.2" }
+
+    <#
+    .SYNOPSIS
+    Check Kerberos keys kerb1 and kerb2 against the AD object for the storage account.
+
+    .DESCRIPTION
+    This cmdlet checks to see if kerb1, kerb2, or something else matches the actual password on the AD object. This cmdlet can be used to validate that authentication issues are not occurring because the password on the AD object does not match one of the Kerberos keys. It is also used by Invoke-AzStorageAccountADObjectPasswordRotation to determine which Kerberos to rotate to.
+
+    .PARAMETER ResourceGroupName
+    The resource group of the storage account to check.
+
+    .PARAMETER StorageAccountName
+    The storage account name of the storage account to check.
+
+    .PARAMETER StorageAccount
+    The storage account to check.
+
+    .EXAMPLE
+    PS> Test-AzStorageAccountADObjectPasswordIsKerbKey -ResourceGroupName "myResourceGroup" -StorageAccountName "mystorageaccount123"
+
+    .EXAMPLE
+    PS> $storageAccountsToCheck = Get-AzStorageAccount -ResourceGroup "rgWithDJStorageAccounts"
+    PS> $storageAccountsToCheck | Test-AzStorageAccountADObjectPasswordIsKerbKey 
+
+    .OUTPUTS
+    KerbKeyMatch, defined in this module.
+    #>
 
     [CmdletBinding()]
     param(
-         [Parameter(Mandatory=$true, Position=0)]
+         [Parameter(Mandatory=$true, Position=0, ParameterSetName="StorageAccountName")]
          [string]$ResourceGroupName,
 
-         [Parameter(Mandatory=$true, Position=1)]
-         [string]$Name
+         [Parameter(Mandatory=$true, Position=1, ParameterSetName="StorageAccountName")]
+         [Alias('Name')]
+         [string]$StorageAccountName,
+
+         [Parameter(Mandatory=$true, Position=0, ValueFromPipeline=$true, ParameterSetName="StorageAccount")]
+         [Microsoft.Azure.Commands.Management.Storage.Models.PSStorageAccount]$StorageAccount
     )
 
     begin {
@@ -1339,36 +1431,80 @@ function Test-ADPasswordMatchesAccountKerbKey {
     }
 
     process
-    {   
-        $domain = Get-ADDomain
+    {
+        $getObjParams = @{}
+        switch ($PSCmdlet.ParameterSetName) {
+            "StorageAccountName" {
+                $keys = Get-AzStorageAccountKey -ResourceGroupName $ResourceGroupName -Name $StorageAccountName -ListKerbKey
+                $getObjParams += @{ 
+                    "ResourceGroupName" = $ResourceGroupName; 
+                    "StorageAccountName" = $StorageAccountName 
+                }
+            }
 
-        $keys = Get-AzStorageAccountKey -ResourceGroupName $ResourceGroupName -Name $Name -ListKerbKey
+            "StorageAccount" {
+                $keys = $StorageAccount | Get-AzStorageAccountKey -ListKerbKey
+                $ResourceGroupName = $StorageAccount.ResourceGroupName
+                $StorageAccountName = $StorageAccount.StorageAccountName
+                $getObjParams += @{
+                    "StorageAccount" = $StorageAccount
+                }
+            }
+
+            default {
+                throw [ArgumentException]::new("Unrecognized parameter set $_")
+            }
+        }
         
-        $kerbKeys = $keys | Where-Object {$_.KeyName -like "kerb*"}
+        $kerbKeys = $keys | Where-Object { $_.KeyName -like "kerb*" }
+        $adObj = Get-AzStorageAccountADObject @getObjParams
 
-        $userName = $domain.Name + "\" + $Name
+        $domainNameBuilder = [StringBuilder]::new() 
+        $domainArray = $adObj.DistinguishedName.Split(",") | Where-Object { $_ -like "DC=*" }
+        for($i=0; $i -lt $domainArray.Length; $i++) {
+            if ($i -gt 0) {
+                $domainNameBuilder.Append(",") | Out-Null
+            }
 
-        foreach ($key in $kerbKeys)
-        {
-            if ((New-Object Directoryservices.DirectoryEntry "", $userName, $key.Value).PsBase.Name -ne $null)
-            {
+            $domainNameBuilder.Append($domainArray[$i]) | Out-Null
+        }
+
+        $domain = Get-ADDomain -Identity $domainNameBuilder.ToString()
+        $userName = $domain.Name + "\" + $adObj.Name
+
+        $oneKeyMatches = $false
+        $keyMatches = [KerbKeyMatch[]]@()
+        foreach ($key in $kerbKeys) {
+            if ($null -ne (New-Object Directoryservices.DirectoryEntry "", $userName, $key.Value).PsBase.Name) {
                 Write-Verbose "Found that $($key.KeyName) matches password for $Name in AD."
-                return $true
+                $oneKeyMatches = $true
+                $keyMatches += [KerbKeyMatch]::new(
+                    $ResourceGroupName, 
+                    $StorageAccountName, 
+                    $key.KeyName, 
+                    $true)
+            } else {
+                $keyMatches += [KerbKeyMatch]::new(
+                    $ResourceGroupName, 
+                    $StorageAccountName, 
+                    $key.KeyName, 
+                    $false)
             }
         }
 
-        Write-Error "Password for $userName does not match kerb1 or kerb2 of storage account: $Name `
-            Please run the following command to resync the AD password with the kerb key of the storage account and retry. `
-            
-                Update-AzStorageAccountADObjectPassword -ResourceGroupName <resourceGroupName> -StorageAccountName <storageAccountName> -RotateToKerbKey kerb1 `
-                "
+        if (!$oneKeyMatches) {
+            Write-Warning `
+                    -Message ("Password for $userName does not match kerb1 or kerb2 of storage account: $StorageAccountName." + `
+                    "Please run the following command to resync the AD password with the kerb key of the storage account and " +  `
+                    "retry: Update-AzStorageAccountADObjectPassword.")
+        }
 
-        return $false
+        return $keyMatches
     }
 }
 
 function Update-AzStorageAccountADObjectPassword {
-    #requires -Module Az, @{ ModuleName = "Az.Storage"; RequiredVersion = "1.8.2" }
+    #requires -Module @{ ModuleName = "Az.Storage"; RequiredVersion = "1.8.2" }
 
     <#
     .SYNOPSIS
@@ -1540,8 +1676,134 @@ function Update-AzStorageAccountADObjectPassword {
     }
 }
 
+function Invoke-AzStorageAccountADObjectPasswordRotation {
+    #requires -Module @{ ModuleName = "Az.Storage"; RequiredVersion = "1.8.2" }
+
+    <#
+    .SYNOPSIS
+    Do a password rotation of kerb key used on the AD object representing the storage account.
+
+    .DESCRIPTION
+    This cmdlet wraps Update-AzStorageAccountADObjectPassword to rotate whatever the current kerb key is to the other one. It's not strictly speaking required to do a rotation, always regenerating kerb1 is ok to do is well.
+
+    .PARAMETER ResourceGroupName
+    The resource group of the storage account to be rotated.
+
+    .PARAMETER StorageAccountName
+    The name of the storage account to be rotated. 
+
+    .PARAMETER StorageAccount
+    The storage account to be rotated.
+
+    .EXAMPLE
+    PS> Invoke-AzStorageAccountADObjectPasswordRotation -ResourceGroupName "myResourceGroup" -StorageAccountName "mystorageaccount123"
+
+    .EXAMPLE
+    PS> $storageAccounts = Get-AzStorageAccount -ResourceGroupName "myResourceGroup"
+    PS> $storageAccounts | Invoke-AzStorageAccountADObjectPasswordRotation
+    #>
+
+    [CmdletBinding(SupportsShouldProcess, ConfirmImpact="High")]
+    param(
+        [Parameter(Mandatory=$true, Position=1, ParameterSetName="StorageAccountName")]
+        [string]$ResourceGroupName,
+
+        [Parameter(Mandatory=$true, Position=2, ParameterSetName="StorageAccountName")]
+        [string]$StorageAccountName,
+
+        [Parameter(
+            Mandatory=$true, 
+            Position=1, 
+            ValueFromPipeline=$true, 
+            ParameterSetName="StorageAccount")]
+        [Microsoft.Azure.Commands.Management.Storage.Models.PSStorageAccount]$StorageAccount
+    )
+
+    begin {
+        Assert-IsWindows
+        Assert-IsDomainJoined
+        Request-ADFeature
+    }
+
+    process {
+        $testParams = @{}
+        $updateParams = @{}
+        switch ($PSCmdlet.ParameterSetName) {
+            "StorageAccountName" {
+                $testParams += @{ 
+                    "ResourceGroupName" = $ResourceGroupName; 
+                    "StorageAccountName" = $StorageAccountName 
+                }
+
+                $updateParams += @{
+                    "ResourceGroupName" = $ResourceGroupName;
+                    "StorageAccountName" = $StorageAccountName
+                }
+            }
+
+            "StorageAccount" {
+                $testParams += @{ 
+                    "StorageAccount" = $StorageAccount 
+                }
+
+                $updateParams += @{
+                    "StorageAccount" = $StorageAccount
+                }
+            }
+
+            default {
+                throw [ArgumentException]::new("Unrecognized parameter set $_")
+            }
+        }
+
+        $testParams += @{ "WarningAction" = "SilentlyContinue" }
+
+        $keyMatches = Test-AzStorageAccountADObjectPasswordIsKerbKey @testParams
+        $keyMatch = $keyMatches | Where-Object { $_.KeyMatches }
+
+        switch ($keyMatch.KerbKeyName) {
+            "kerb1" {
+                $updateParams += @{
+                    "RotateToKerbKey" = "kerb2"
+                }
+                $RotateFromKerbKey = "kerb1"
+                $RotateToKerbKey = "kerb2"
+            }
+
+            "kerb2" {
+                $updateParams += @{
+                    "RotateToKerbKey" = "kerb1"
+                }
+                $RotateFromKerbKey = "kerb2"
+                $RotateToKerbKey = "kerb1"
+            }
+
+            $null {
+                $updateParams += @{
+                    "RotateToKerbKey" = "kerb1"
+                }
+                $RotateFromKerbKey = "none"
+                $RotateToKerbKey = "kerb1"
+            }
+
+            default {
+                throw [ArgumentException]::new("Unrecognized kerb key $_")
+            }
+        }
+
+        $caption = "Rotate from Kerberos key $RotateFromKerbKey to $RotateToKerbKey."
+        $verboseConfirmMessage = "This action will rotate the password from $RotateFromKerbKey to $RotateToKerbKey using Update-AzStorageAccountADObjectPassword." 
+        
+        if ($PSCmdlet.ShouldProcess($verboseConfirmMessage, $verboseConfirmMessage, $caption)) {
+            Update-AzStorageAccountADObjectPassword @updateParams
+        } else {
+            Write-Verbose -Message "No password rotation performed."
+        }
+    }
+}
+
 function Join-AzStorageAccountForAuth {
-    #requires -Module Az, @{ ModuleName = "Az.Storage"; RequiredVersion = "1.8.2" }
+    #requires -Module @{ ModuleName = "Az.Storage"; RequiredVersion = "1.8.2" }
 
     <#
     .SYNOPSIS 
@@ -1670,6 +1932,516 @@ function Join-AzStorageAccountForAuth {
                 -ResourceGroupName $ResourceGroupName `
                 -StorageAccountName $StorageAccountName `
                 -Domain $Domain
+        }
+    }
+}
+
+function Expand-AzResourceId {
+    <#
+    .SYNOPSIS
+    Breakdown an ARM id by parts.
+
+    .DESCRIPTION
+    This cmdlet breaks down an ARM id by its parts, to make it easy to use the components as inputs in cmdlets/scripts.
+
+    .PARAMETER ResourceId
+    The resource identifier to be broken down.
+
+    .EXAMPLE
+    $idParts = Get-AzStorageAccount `
+            -ResourceGroupName "myResourceGroup" `
+            -StorageAccountName "mystorageaccount123" | `
+        Expand-AzResourceId
+
+    # Get the subscription 
+    $subscription = $idParts.subscriptions
+
+    # Do something else interesting as desired.
+
+    .OUTPUTS
+    System.Collections.Specialized.OrderedDictionary
+    #>
+
+    [CmdletBinding()]
+    param(
+        [Parameter(
+            Mandatory=$true, 
+            Position=0, 
+            ValueFromPipeline=$true, 
+            ValueFromPipelineByPropertyName=$true)]
+        [Alias("Scope", "Id")]
+        [string]$ResourceId
+    )
+
+    process {
+        $split = $ResourceId.Split("/")
+        $split = $split[1..$split.Length]
+    
+        $result = [OrderedDictionary]::new()
+        $key = [string]$null
+        $value = [string]$null
+
+        for($i=0; $i -lt $split.Length; $i++) {
+            if (!($i % 2)) {
+                $key = $split[$i]
+            } else {
+                $value = $split[$i]
+                $result.Add($key, $value)
+
+                $key = [string]$null
+                $value = [string]$null
+            }
+        }
+
+        return $result
+    }
+}
+
+function Compress-AzResourceId {
+    <#
+    .SYNOPSIS
+    Recombine an expanded ARM id into a single string which can be used by Az cmdlets.
+
+    .DESCRIPTION
+    This cmdlet takes the output of the cmdlet Expand-AzResourceId and puts it back into a single string identifier. Note, this cmdlet does not currently validate that components are valid in an ARM template, so use with care.
+
+    .PARAMETER ExpandedResourceId
+    An OrderedDictionary representing an expanded ARM identifier.
+
+    .EXAMPLE
+    $fileShareId = Get-AzRmStorageShare `
+            -ResourceGroupName "myResourceGroup" `
+            -StorageAccountName "mystorageaccount123" `
+            -Name "testshare" | `
+        Expand-AzResourceId
+    
+    $fileShareId.Remove("shares")
+    $fileShareId.Remove("fileServices")
+
+    $storageAccountId = $fileShareId | Compress-AzResourceId
+
+    .OUTPUTS
+    System.String
+    #>
+
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true, Position=0, ValueFromPipeline=$true)]
+        [OrderedDictionary]$ExpandedResourceId
+    )   
+
+    process {
+        $sb = [StringBuilder]::new()
+
+        foreach($entry in $ExpandedResourceId.GetEnumerator()) {
+            $sb.Append(("/" + $entry.Key + "/" + $entry.Value)) | Out-Null
+        }
+
+        return $sb.ToString()
+    }
+}
+
+function Request-ConnectAzureAD {
+    <#
+    .SYNOPSIS
+    Connect to an Azure AD tenant using the AzureAD cmdlets.
+
+    .DESCRIPTION
+    Correctly import the AzureAD module for your PowerShell version and then sign in using the same tenant is the currently signed in Az user. This wrapper is necessary as 1. AzureAD is not directly compatible with PowerShell 6 (though this can be achieved through the WindowsCompatibility module), and 2. AzureAD doesn't necessarily log you into the same tenant as the Az cmdlets according to their documentation (although it's not clear when it doesn't).
+
+    .EXAMPLE
+    Request-ConnectAzureAD
+    #>
+
+    [CmdletBinding()]
+    param()
+
+    Assert-IsWindows
+
+    $aadModule = Get-Module | Where-Object { $_.Name -like "AzureAD" }
+    if ($null -eq $aadModule) {
+        if ($PSVersionTable.PSVersion -ge [Version]::new(6,0,0,0)) {
+            Import-WinModule -Name AzureAD -Verbose:$false
+        } else {
+            Import-Module -Name AzureAD
+        }
+    }
+
+    try {
+        Get-AzureADTenantDetail -ErrorAction Stop | Out-Null
+    } catch {
+        $context = Get-AzContext
+        Connect-AzureAD `
+                -TenantId $context.Tenant.Id `
+                -AccountId $context.Account.Id `
+                -AzureEnvironmentName $context.Environment.Name | `
+            Out-Null
+    }
+}
+
+function Get-AzureADDomainInternal {
+    <#
+    .SYNOPSIS
+    Get the Azure AD domains associated with this Azure AD tenant.
+
+    .DESCRIPTION
+    This cmdlet is a wrapper around Get-AzureADDomain that is provided to future proof for adding cross-platform support, as AzureAD is not a cross-platform PowerShell module.
+
+    .PARAMETER Name
+    Specifies the name of a domain.
+
+    .EXAMPLE
+    $domains = Get-AzureADDomainInternal
+
+    .EXAMPLE
+    $specificDomain = Get-AzureADDomainInternal -Name "contoso.com"
+
+    .OUTPUTS
+    Microsoft.Open.AzureAD.Model.Domain
+    Deserialized.Microsoft.Open.AzureAD.Model.Domain, if accessed through the WindowsCompatibility module
+    #>
+
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$false, ValueFromPipeline=$true, ValueFromPipelineByPropertyName=$true)]
+        [string]$Name
+    )
+
+    begin {
+        Assert-IsWindows
+        Request-ConnectAzureAD
+    }
+
+    process {
+        $getParams = @{}
+        if ($PSBoundParameters.ContainsKey("Name")) {
+            $getParams += @{ "Name" = $Name}
+        }
+
+        return (Get-AzureADDomain @Name)
+    }
+}
+
+function Get-AzCurrentAzureADUser {
+    <#
+    .SYNOPSIS
+    Get the name of the Azure AD user logged into Az PowerShell.
+
+    .DESCRIPTION
+    In general, Get-AzContext provides the logged in username of the user using Az module, however, for accounts that are not part of the Azure AD domain (ex. like a MSA used to create an Azure subscription), this will not match the Azure AD identity, which will be of the format: externalemail_outlook.com#EXT#@contoso.com. This cmdlet returns the correct user as defined in Azure AD.
+
+    .EXAMPLE
+    $currentUser = Get-AzCurrentAzureADUser
+
+    .OUTPUTS
+    System.String
+    #>
+
+    [CmdletBinding()]
+    param()
+
+    $context = Get-AzContext
+    $friendlyLogin = $context.Account.Id
+    $friendlyLoginSplit = $friendlyLogin.Split("@")
+
+    $domains = Get-AzureADDomainInternal
+    $domainNames = $domains | Select-Object -ExpandProperty Name
+
+    if ($friendlyLoginSplit[1] -in $domainNames) {
+        return $friendlyLogin
+    } else {
+        $username = ($friendlyLoginSplit[0] + "_" + $friendlyLoginSplit[1] + "#EXT#")
+
+        foreach($domain in $domains) {
+            $possibleName = ($username + "@" + $domain.Name) 
+            $foundUser = Get-AzADUser -UserPrincipalName $possibleName
+            if ($null -ne $foundUser) {
+                return $possibleName
+            }
+        }
+    }
+}
+
+$ClassicAdministratorsSet = $false
+$ClassicAdministrators = [HashSet[string]]::new()
+$OperationCache = [Dictionary[string, Microsoft.Azure.Commands.Resources.Models.Authorization.PSRoleDefinition[]]]::new()
+function Test-AzPermission {
+    #requires -Module Az.Resources
+
+    <#
+    .SYNOPSIS
+    Test specific permissions required for a given user.
+
+    .DESCRIPTION
+    Since customers can defined custom roles for their Azure users, checking permissions isn't as easy as simply looking at the predefined roles. Additionally, users may be in multiple roles that confer (or remove) the ability to do specific things on an Azure resource. This cmdlet takes a list of specific operations and ensures that the user, current or specified, has the specified permissions on the scope (subscription, resource group, or resource).
+
+    .EXAMPLE
+    # Does the current user have the ability to list storage account keys?
+    $storageAccount = Get-AzStorageAccount -ResourceGroupName "myResourceGroup" -Name "csostoracct"
+    $storageAccount | Test-AzPermission -OperationName "Microsoft.Storage/storageAccounts/listkeys/action"
+
+    .EXAMPLE
+    # Does this specific user have the ability to list storage account keys
+    $storageAccount = Get-AzStorageAccount -ResourceGroupName "myResourceGroup" -Name "csostoracct"
+    $storageAccount | Test-AzPermission `
+            -OperationName "Microsoft.Storage/storageAccounts/listkeys/action" `
+            -SignInName "user@contoso.com"
+
+    .OUTPUTS
+    System.Collections.Generic.Dictionary<string, bool>
+    #>
+
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true, ValueFromPipelineByPropertyName=$true)]
+        [Alias("ResourceId", "Id")]
+        [string]$Scope,
+
+        [Parameter(Mandatory=$true, ParameterSetName="OperationsName")]
+        [string[]]$OperationName,
+
+        [Parameter(Mandatory=$true, ParameterSetName="OperationsObj")]
+        [Microsoft.Azure.Commands.Resources.Models.PSResourceProviderOperation[]]$Operation,
+
+        [Parameter(Mandatory=$false)]
+        [string]$SignInName,
+
+        [Parameter(Mandatory=$false)]
+        [switch]$RefreshCache
+    )
+
+    process {
+        # Populate the classic administrator cache
+        if (!$ClassicAdministratorsSet -or $RefreshCache) {
+            if (!$ClassicAdministratorsSet) {
+                $ClassicAdministratorsSet = $true
+            } else {
+                $ClassicAdministrators.Clear()
+            }
+
+            $ResourceIdComponents = $Scope | Expand-AzResourceId
+            $subscription = $ResourceIdComponents.subscriptions
+            $roleAssignments = Get-AzRoleAssignment `
+                    -Scope "/subscriptions/$subscription" `
+                    -IncludeClassicAdministrators | `
+                Where-Object { $_.Scope -eq "/subscriptions/$subscription" }
+            
+            $_classicAdministrators = $roleAssignments | `
+                Where-Object { 
+                    $split = $_.RoleDefinitionName.Split(";"); 
+                    "CoAdministrator" -in $split -or "ServiceAdministrator" -in $split
+                }
+            
+            foreach ($admin in $_classicAdministrators) {
+                $ClassicAdministrators.Add($admin.SignInName) | Out-Null
+            }
+        }
+
+        # Normalize operations to $Operation
+        if ($PSCmdlet.ParameterSetName -eq "OperationsName") {
+            $Operation = $OperationName | `
+                Get-AzProviderOperation
+        }
+
+        # If a specific user isn't given, use the current PowerShell logged in user.
+        # This is expected to be the normal case.
+        if (!$PSBoundParameters.ContainsKey("SignInName")) {
+            $SignInName = Get-AzCurrentAzureADUser
+        }
+
+        # Build lookup dictionary of which operations the user has. Start with having none.
+        $userHasOperation = [Dictionary[string, bool]]::new()
+        foreach($op in $Operation) {
+            $userHasOperation.Add($op.Operation, $false)
+        }        
+
+        # Get the classic administrator sign in name. If the user is using an identity based on 
+        # the name (i.e. jdoe@contoso.com), these are the same. If the user is using an identity 
+        # external, ARM will contain #EXT# and classic won't.
+        $ClassicSignInName = $SignInName
+        if ($SignInName -like "*#EXT#*") {
+            $SignInSplit = $SignInName.Split("@")
+            $ClassicSignInName = $SignInSplit[0].Replace("#EXT#", "").Replace("_", "@")
+        }
+
+        if ($ClassicAdministrators.Contains($ClassicSignInName)) {
+            foreach($op in $Operation) {
+                $userHasOperation[$op.Operation] = $true
+            }
+
+            return $userHasOperation
+        }
+
+        $roleAssignments = Get-AzRoleAssignment -Scope $Scope -SignInName $SignInName
+
+        if ($RefreshCache) {
+            $OperationCache.Clear()
+        }
+
+        foreach($roleAssignment in $roleAssignments) {
+            $operationsInRole = [string[]]$null
+            if (!$OperationCache.TryGetValue($roleAssignment.RoleDefinitionId, [ref]$operationsInRole)) {
+                $operationsInRole = Get-AzRoleDefinition -Id $roleAssignment.RoleDefinitionId
+                $OperationCache.Add($roleAssignment.RoleDefinitionId, $operationsInRole)
+            }
+
+            foreach($op in $Operation) {
+                $matches = $false
+
+                if (!$op.IsDataAction) {
+                    foreach($action in $operationsInRole.Actions) {
+                        if ($op.Operation -like $action) {
+                            $matches = $true
+                            break
+                        }
+                    }
+
+                    if ($matches) {
+                        foreach($notAction in $operationsInRole.NotActions) {
+                            if ($op.Operation -like $notAction) {
+                                $matches = $false
+                                break
+                            }
+                        }
+                    }
+                } else {
+                    foreach($dataAction in $operationsInRole.DataActions) {
+                        if ($op.Operation -like $dataAction) {
+                            $matches = $true
+                            break
+                        }
+                    }
+
+                    if ($matches) {
+                        foreach($notDataAction in $operationsInRole.NotDataActions) {
+                            if ($op.Operation -like $notDataAction) {
+                                $matches = $false
+                                break
+                            }
+                        }
+                    }
+                }
+
+                $userHasOperation[$op.Operation] = $userHasOperation[$op.Operation] -or $matches
+            }
+        }
+
+        $denyAssignments = Get-AzDenyAssignment -Scope $Scope -SignInName $SignInName
+        foreach($denyAssignment in $denyAssignments) {
+            foreach($op in $Operation) {
+                $matches = $false
+
+                if (!$op.IsDataAction) {
+                    foreach($action in $denyAssignment.Actions) {
+                        if ($op.Operation -like $action) {
+                            $matches = $true
+                            break
+                        }
+                    }
+
+                    if ($matches) {
+                        foreach($notAction in $denyAssignment.NotActions) {
+                            if ($op.Operation -like $notAction) {
+                                $matches = $false
+                                break
+                            }
+                        }
+                    }
+                } else {
+                    foreach($dataAction in $denyAssignment.DataActions) {
+                        if ($op.Operation -like $dataAction) {
+                            $matches = $true
+                            break
+                        }
+                    }
+
+                    if ($matches) {
+                        foreach($notDataAction in $denyAssignment.NotDataActions) {
+                            if ($op.Operation -like $notDataAction) {
+                                $matches = $false
+                                break
+                            }
+                        }
+                    }
+                }
+
+                $userHasOperation[$op.Operation] = $userHasOperation[$op.Operation] -and !$matches
+            }
+        }
+        
+        return $userHasOperation
+    }
+}
+
+function Assert-AzPermission {
+    #requires -Module Az.Resources
+
+    <#
+    .SYNOPSIS
+    Check if the user has the required permissions and throw an error if they don't.
+
+    .DESCRIPTION
+    This cmdlet wraps Test-AzPermission and throws an error if the user does not have the required permissions. This cmdlet is meant for use in cmdlets or scripts.
+
+    .EXAMPLE
+    $storageAccount = Get-AzStorageAccount -ResourceGroupName "myResourceGroup" -Name "mystorageaccount123"
+    $storageAccount | Assert-AzPermission -OperationName "Microsoft.Storage/storageAccounts/listkeys/action"
+    # Errors will be thrown if the user does not have this permission.
+    #>
+
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true, ValueFromPipelineByPropertyName=$true)]
+        [Alias("ResourceId", "Id")]
+        [string]$Scope,
+
+        [Parameter(Mandatory=$true, ParameterSetName="OperationsName")]
+        [string[]]$OperationName,
+
+        [Parameter(Mandatory=$true, ParameterSetName="OperationsObj")]
+        [Microsoft.Azure.Commands.Resources.Models.PSResourceProviderOperation[]]$Operation
+    )
+
+    process {
+        $testParams = @{}
+
+        $testParams += @{
+            "Scope" = $Scope
+        }
+
+        switch ($PSCmdlet.ParameterSetName) {
+            "OperationsName" {
+                $testParams += @{
+                    "OperationName" = $OperationName
+                }
+            }
+
+            "OperationsObj" {
+                $testParams += @{
+                    "Operation" = $Operation
+                }
+            }
+
+            default {
+                throw [ArgumentException]::new("Unrecognized parameter set $_")
+            }
+        }
+
+        $permissionMatches = Test-AzPermission @testParams
+        $falseValues = $permissionMatches.GetEnumerator() | Where-Object { $_.Value -eq $false }
+        if ($null -ne $falseValues) {
+            $errorBuilder = [StringBuilder]::new()
+            $errorBuilder.Append("The current user lacks the following permissions: ") | Out-Null
+            for($i=0; $i -lt $falseValues.Length; $i++) {
+                if ($i -gt 0) {
+                    $errorBuilder.Append(", ") | Out-Null
+                }
+
+                $errorBuilder.Append($falseValues[$i].Key) | Out-Null
+            }
+
+            $errorBuilder.Append(".") | Out-Null
+            Write-Error -Message $errorBuilder.ToString() -ErrorAction Stop
         }
     }
 }
