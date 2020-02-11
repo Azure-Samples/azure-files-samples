@@ -677,9 +677,139 @@ function Request-ADFeature {
     }
 }
 
-function Validate-StorageAccount {
-    #requires -Module @{ ModuleName = "Az.Storage"; RequiredVersion = "1.8.2" }
+function Request-StorageAccountDJModules {
+    [CmdletBinding(SupportsShouldProcess, ConfirmImpact="High")]
+    param()
 
+    Assert-IsElevatedSession
+
+    # Get the current state of required PowerShell modules
+    # PowerShellGet, Az, Az.Storage 1.8.2, WindowsCompatibility (if PS6+), AzureAD
+    $psGetModule = Get-InstalledModule -Name PowerShellGet -AllVersions | `
+        Sort-Object -Property Version -Descending
+    $azModule = Get-InstalledModule -Name Az -AllVersions | `
+        Sort-Object -Property Version -Descending
+    $storageModule = Get-InstalledModule -Name Az.Storage -AllVersions | `
+        Sort-Object -Property Version -Descending
+    
+    if ($PSVersionTable.PSVersion -gt [Version]::new(6,0,0,0)) {
+        $winCompat = Get-InstalledModule -Name WindowsCompatibility -AllVersions
+    }
+
+    $azureADModule = Get-InstalledModule -Name AzureAD -AllVersions
+    if ($PSVersionTable.PSVersion -gt [Version]::new(6,0,0,0) -and $null -ne $winCompat) {
+        $azureADModule = Invoke-WinCommand -ScriptBlock { Get-InstalledModule -Name AzureAD -AllVersions }
+    }
+
+    # Build the confirmation message
+    $installCount = 0
+    $confirmBuilder = [StringBuilder]::new()
+    $confirmBuilder.Append("The following PowerShell modules were not installed and will be installed:") | Out-Null
+
+    if ($null -eq $psGetModule -or $psGetModule[0].Version -lt [Version]::new(1,6,0)) {
+        $installCount++
+        $confirmBuilder.Append(" PowerShellGet (version 1.6.0 or greater)") | Out-Null
+    } 
+    
+    if ($null -eq $azModule -or $azModule[0].Version -lt [Version]::new(2,8,0,0)) {
+        if ($installCount -gt 0) {
+            $confirmBuilder.Append(",") | Out-Null
+        }
+
+        $confirmBuilder.Append(" Az (version 2.8.0 or greater)") | Out-Null 
+        $installCount++
+    }
+
+    if ($null -eq $storageModule -or $storageModule[0] -lt [Version]::new(1,8,2,0)) {
+        if ($installCount -gt 0) {
+            $confirmBuilder.Append(",") | Out-Null
+        }
+
+        $confirmBuilder.Append(" Az.Storage (version 1.8.2 preview)") | Out-Null
+        $installCount++
+    }
+
+    if ($PSVersionTable.PSVersion -gt [Version]::new(6,0,0,0) -and $null -eq $winCompat) {
+        if ($installCount -gt 0) {
+            $confirmBuilder.Append(",") | Out-Null
+        }
+
+        $confirmBuilder.Append(" WindowsCompatibility") | Out-Null
+        $installCount++
+    }
+
+    if ($null -eq $azureADModule) {
+        if ($installCount -gt 0) {
+            $confirmBuilder.Append(",") | Out-Null
+        }
+
+        $confirmBuilder.Append(", AzureAD") | Out-Null
+        $installCount++
+    }
+
+    $confirmBuilder.Append(".") | Out-Null
+
+    # Do should process if modules must be installed
+    if ($installCount -gt 0) {
+        $caption = "Install required modules"
+        $verboseConfirmMessage = ($confirmBuilder.ToString())
+        
+        if ($PSCmdlet.ShouldProcess($verboseConfirmMessage, $verboseConfirmMessage, $caption)) {
+            if ($null -eq $psGetModule -or $psGetModule[0].Version -lt [Version]::new(1,6,0)) {
+                Remove-Module -Name PowerShellGet, PackageManagement -Force -ErrorAction SilentlyContinue
+                Install-PackageProvider -Name NuGet -Force | Out-Null
+
+                Install-Module `
+                        -Name PowerShellGet `
+                        -Repository PSGallery `
+                        -Force `
+                        -ErrorAction Stop `
+                        -SkipPublisherCheck
+                
+                Write-Verbose -Message "Installed latest version of PowerShellGet module."
+            } 
+
+            Remove-Module -Name PowerShellGet -Force -ErrorAction SilentlyContinue
+            Import-Module -Name PowerShellGet 
+            Get-Module -Name Az.* | Remove-Module
+            if ($null -eq $azModule -or $azModule[0].Version -lt [Version]::new(2,8,0,0)) {
+                Install-Module -Name Az -AllowClobber -Force -ErrorAction Stop
+                Write-Verbose -Message "Installed latest version of Az module."
+            }
+
+            if ($null -eq $storageModule -or $storageModule[0] -lt [Version]::new(1,8,2,0)) {
+                Install-Module `
+                    -Name Az.Storage `
+                    -AllowClobber `
+                    -AllowPrerelease `
+                    -Force `
+                    -RequiredVersion "1.8.2-preview"
+            }
+
+            if ($PSVersionTable.PSVersion -gt [Version]::new(6,0,0,0) -and $null -eq $winCompat) {
+                Install-Module -Name WindowsCompatibility -AllowClobber -Force
+                Import-Module -Name WindowsCompatibility
+            }
+
+            if ($null -eq $azureADModule) {
+                $scriptBlock = { 
+                    $azureADModule = Get-InstalledModule -Name AzureAD -AllVersions
+                    if ($null -eq $azureADModule) {
+                        Install-Module -Name AzureAD -AllowClobber -Force
+                    }
+                }
+
+                if ($PSVersionTable.PSVersion -gt [Version]::new(6,0,0,0)) {
+                    Invoke-WinCommand -ScriptBlock $scriptBlock
+                } else {
+                    $scriptBlock.Invoke()
+                }
+            }
+        }
+    }    
+}
+
+function Validate-StorageAccount {
     [CmdletBinding()]
     param (
          [Parameter(Mandatory=$true, Position=0)]
@@ -687,6 +817,10 @@ function Validate-StorageAccount {
          [Parameter(Mandatory=$true, Position=1)]
          [string]$Name
     )
+
+    begin {
+        Request-StorageAccountDJModules
+    }
 
     process
     {
@@ -721,8 +855,6 @@ function Validate-StorageAccount {
 }
 
 function Ensure-KerbKeyExists {
-    #requires -Module @{ ModuleName = "Az.Storage"; RequiredVersion = "1.8.2" }
-
     <#
     .SYNOPSIS
         Ensures the storage account has kerb keys created.
@@ -748,6 +880,10 @@ function Ensure-KerbKeyExists {
         [Parameter(Mandatory=$True, Position=1, HelpMessage="Storage account name")]
         [string]$StorageAccountName
     )
+
+    begin {
+        Request-StorageAccountDJModules
+    }
 
     process {
         Write-Verbose "Ensure-KerbKeyExists - Checking for kerberos keys for account:$storageAccountName in resource group:$ResourceGroupName"
@@ -796,8 +932,6 @@ function Ensure-KerbKeyExists {
 }
 
 function Get-ServicePrincipalName {
-    #requires -Module @{ ModuleName = "Az.Storage"; RequiredVersion = "1.8.2" }
-
     <#
     .SYNOPSIS
         Gets the service principal name for the storage account's identity in Active Directory.
@@ -824,6 +958,8 @@ function Get-ServicePrincipalName {
         [string]$resourceGroupName
     )
 
+    Request-StorageAccountDJModules
+
     $storageAccountObject = Get-AzStorageAccount -ResourceGroup $resourceGroupName -Name $storageAccountName
     $servicePrincipalName = $storageAccountObject.PrimaryEndpoints.File -replace 'https://','cifs/'
     $servicePrincipalName = $servicePrincipalName.Substring(0, $servicePrincipalName.Length - 1);
@@ -833,8 +969,6 @@ function Get-ServicePrincipalName {
 }
 
 function New-ADAccountForStorageAccount {
-    #requires -Module @{ ModuleName = "Az.Storage"; RequiredVersion = "1.8.2" }
-
     <#
     .SYNOPSIS
         Creates the identity for the storage account in Active Directory
@@ -877,6 +1011,7 @@ function New-ADAccountForStorageAccount {
     Assert-IsWindows
     Assert-IsDomainJoined
     Request-ADFeature
+    Request-StorageAccountDJModules
 
     Write-Verbose -Message "ObjectType: $ObjectType"
 
@@ -991,8 +1126,6 @@ function New-ADAccountForStorageAccount {
 }
 
 function Get-AzStorageAccountADObject {
-    #requires -Module @{ ModuleName = "Az.Storage"; RequiredVersion = "1.8.2" }
-
     <#
     .SYNOPSIS
     Get the AD object for a given storage account.
@@ -1070,6 +1203,7 @@ function Get-AzStorageAccountADObject {
         Assert-IsWindows
         Assert-IsDomainJoined
         Request-ADFeature
+        Request-StorageAccountDJModules
 
         if ($PSCmdlet.ParameterSetName -eq "ADObjectName") {
             if ([System.String]::IsNullOrEmpty($Domain)) {
@@ -1147,8 +1281,6 @@ function Get-AzStorageAccountADObject {
 }
 
 function Get-AzStorageKerberosTicketStatus {
-    #requires -Module @{ ModuleName = "Az.Storage"; RequiredVersion = "1.8.2" }
-
     <#
     .SYNOPSIS
     Gets an array of Kerberos tickets for Azure storage accounts with status information.
@@ -1171,6 +1303,7 @@ function Get-AzStorageKerberosTicketStatus {
 
     begin {
         Assert-IsWindows
+        Request-StorageAccountDJModules
     }
 
     process 
@@ -1280,8 +1413,6 @@ function Get-AzStorageKerberosTicketStatus {
 }
 
 function Set-StorageAccountDomainProperties {
-    #requires -Module @{ ModuleName = "Az.Storage"; RequiredVersion = "1.8.2" }
-
     <#
     .SYNOPSIS
        This sets the storage account's ActiveDirectoryProperties - information needed to support the UI
@@ -1327,6 +1458,7 @@ function Set-StorageAccountDomainProperties {
     Assert-IsWindows
     Assert-IsDomainJoined
     Request-ADFeature
+    Request-StorageAccountDJModules
 
     Write-Verbose "Set-StorageAccountDomainProperties: Enabling the feature on the storage account and providing the required properties to the storage service"
 
@@ -1392,8 +1524,6 @@ class KerbKeyMatch {
 }
 
 function Test-AzStorageAccountADObjectPasswordIsKerbKey {
-    #requires -Module @{ ModuleName = "Az.Storage"; RequiredVersion = "1.8.2" }
-
     <#
     .SYNOPSIS
     Check Kerberos keys kerb1 and kerb2 against the AD object for the storage account.
@@ -1438,6 +1568,7 @@ function Test-AzStorageAccountADObjectPasswordIsKerbKey {
         Assert-IsWindows
         Assert-IsDomainJoined
         Request-ADFeature
+        Request-StorageAccountDJModules
     }
 
     process
@@ -1514,8 +1645,6 @@ function Test-AzStorageAccountADObjectPasswordIsKerbKey {
 }
 
 function Update-AzStorageAccountADObjectPassword {
-    #requires -Module @{ ModuleName = "Az.Storage"; RequiredVersion = "1.8.2" }
-
     <#
     .SYNOPSIS
     Switch the password of the AD object representing the storage account to the indicated kerb key.
@@ -1594,6 +1723,7 @@ function Update-AzStorageAccountADObjectPassword {
         Assert-IsWindows
         Assert-IsDomainJoined
         Request-ADFeature
+        Request-StorageAccountDJModules
     }
 
     process {
@@ -1687,8 +1817,6 @@ function Update-AzStorageAccountADObjectPassword {
 }
 
 function Invoke-AzStorageAccountADObjectPasswordRotation {
-    #requires -Module @{ ModuleName = "Az.Storage"; RequiredVersion = "1.8.2" }
-
     <#
     .SYNOPSIS
     Do a password rotation of kerb key used on the AD object representing the storage account.
@@ -1733,6 +1861,7 @@ function Invoke-AzStorageAccountADObjectPasswordRotation {
         Assert-IsWindows
         Assert-IsDomainJoined
         Request-ADFeature
+        Request-StorageAccountDJModules
     }
 
     process {
@@ -1813,8 +1942,6 @@ function Invoke-AzStorageAccountADObjectPasswordRotation {
 }
 
 function Join-AzStorageAccountForAuth {
-    #requires -Module @{ ModuleName = "Az.Storage"; RequiredVersion = "1.8.2" }
-
     <#
     .SYNOPSIS 
     Domain join a storage account to an Active Directory Domain Controller.
@@ -1896,6 +2023,7 @@ function Join-AzStorageAccountForAuth {
         Assert-IsWindows
         Assert-IsDomainJoined
         Request-ADFeature
+        Request-StorageAccountDJModules
     }
 
     process {
@@ -2077,6 +2205,7 @@ function Request-ConnectAzureAD {
     param()
 
     Assert-IsWindows
+    Request-StorageAccountDJModules
 
     $aadModule = Get-Module | Where-Object { $_.Name -like "AzureAD" }
     if ($null -eq $aadModule) {
@@ -2186,8 +2315,6 @@ $ClassicAdministratorsSet = $false
 $ClassicAdministrators = [HashSet[string]]::new()
 $OperationCache = [Dictionary[string, Microsoft.Azure.Commands.Resources.Models.Authorization.PSRoleDefinition[]]]::new()
 function Test-AzPermission {
-    #requires -Module Az.Resources
-
     <#
     .SYNOPSIS
     Test specific permissions required for a given user.
@@ -2394,8 +2521,6 @@ function Test-AzPermission {
 }
 
 function Assert-AzPermission {
-    #requires -Module Az.Resources
-
     <#
     .SYNOPSIS
     Check if the user has the required permissions and throw an error if they don't.
