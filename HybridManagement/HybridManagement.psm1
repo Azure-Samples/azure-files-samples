@@ -1986,7 +1986,7 @@ function Invoke-AzStorageAccountADObjectPasswordRotation {
     }
 }
 
-function Join-AzStorageAccountForAuth {
+function Join-AzStorageAccount {
     <#
     .SYNOPSIS 
     Domain join a storage account to an Active Directory Domain Controller.
@@ -2027,18 +2027,18 @@ function Join-AzStorageAccountForAuth {
     arbitrary name. This does not affect how you access your storage account.
 
     .EXAMPLE
-    PS> Join-AzStorageAccountForAuth -ResourceGroupName "myResourceGroup" -StorageAccountName "myStorageAccount" -Domain "subsidiary.corp.contoso.com" -DomainAccountType ComputerAccount -OrganizationalUnitName "StorageAccountsOU"
+    PS> Join-AzStorageAccount -ResourceGroupName "myResourceGroup" -StorageAccountName "myStorageAccount" -Domain "subsidiary.corp.contoso.com" -DomainAccountType ComputerAccount -OrganizationalUnitName "StorageAccountsOU"
 
     .EXAMPLE 
     PS> $storageAccount = Get-AzStorageAccount -ResourceGroupName "myResourceGroup" -Name "myStorageAccount"
-    PS> Join-AzStorageAccountForAuth -StorageAccount $storageAccount -Domain "subsidiary.corp.contoso.com" -DomainAccountType ComputerAccount -OrganizationalUnitName "StorageAccountsOU"
+    PS> Join-AzStorageAccount -StorageAccount $storageAccount -Domain "subsidiary.corp.contoso.com" -DomainAccountType ComputerAccount -OrganizationalUnitName "StorageAccountsOU"
 
     .EXAMPLE
-    PS> Get-AzStorageAccount -ResourceGroupName "myResourceGroup" | Join-AzStorageAccountForAuth -Domain "subsidiary.corp.contoso.com" -DomainAccountType ComputerAccount -OrganizationalUnitName "StorageAccountsOU"
+    PS> Get-AzStorageAccount -ResourceGroupName "myResourceGroup" | Join-AzStorageAccount -Domain "subsidiary.corp.contoso.com" -DomainAccountType ComputerAccount -OrganizationalUnitName "StorageAccountsOU"
 
     In this example, note that a specific storage account has not been specified to 
     Get-AzStorageAccount. This means Get-AzStorageAccount will pipe every storage account 
-    in the resource group myResourceGroup to Join-AzStorageAccountForAuth.
+    in the resource group myResourceGroup to Join-AzStorageAccount.
     #>
 
     [CmdletBinding(SupportsShouldProcess, ConfirmImpact="Medium")]
@@ -2156,6 +2156,8 @@ function Join-AzStorageAccountForAuth {
     }
 }
 
+# Add alias for Join-AzStorageAccountForAuth
+New-Alias -Name "Join-AzStorageAccountForAuth" -Value "Join-AzStorageAccount"
 function Expand-AzResourceId {
     <#
     .SYNOPSIS
