@@ -827,16 +827,21 @@ function Request-AzPowerShellModule {
                     -RequiredVersion "1.11.1-preview" `
                     -SkipPublisherCheck `
                     -ErrorAction Stop
-                
-                Import-Module -Name Az.Storage -RequiredVersion "1.11.1"
-            } else {
-                Import-Module -ModuleInfo $storageModule
-            }            
+            }       
         }
     }
     
     Remove-Module -Name PowerShellGet -ErrorAction SilentlyContinue
     Remove-Module -Name PackageManagement -ErrorAction SilentlyContinue
+
+    $storageModule = Get-Module -Name Az.Storage -ListAvailable | `
+        Where-Object { 
+            $_.Version -eq [Version]::new(1,8,2) -or 
+            $_.Version -eq [Version]::new(1,11,1) 
+        } | `
+        Sort-Object -Property Version -Descending
+    
+    Import-Module -ModuleInfo $storageModule[0] -Global -ErrorAction Stop
 }
 
 function Validate-StorageAccount {
