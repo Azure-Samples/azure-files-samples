@@ -677,136 +677,166 @@ function Request-ADFeature {
     }
 }
 
-function Request-StorageAccountDJModules {
+function Request-PowerShellGetModule {
     [CmdletBinding(SupportsShouldProcess, ConfirmImpact="High")]
     param()
 
-    Assert-IsElevatedSession
-
-    # Get the current state of required PowerShell modules
-    # PowerShellGet, Az, Az.Storage 1.8.2, WindowsCompatibility (if PS6+), AzureAD
-    $psGetModule = Get-InstalledModule -Name PowerShellGet -AllVersions | `
+    $psGetModule = Get-Module -Name PowerShellGet -ListAvailable | `
         Sort-Object -Property Version -Descending
-    $azModule = Get-InstalledModule -Name Az -AllVersions | `
-        Sort-Object -Property Version -Descending
-    $storageModule = Get-InstalledModule -Name Az.Storage -AllVersions | `
-        Sort-Object -Property Version -Descending
-    
-    if ($PSVersionTable.PSVersion -gt [Version]::new(6,0,0,0)) {
-        $winCompat = Get-InstalledModule -Name WindowsCompatibility -AllVersions
-    }
-
-    $azureADModule = Get-InstalledModule -Name AzureAD -AllVersions
-    if ($PSVersionTable.PSVersion -gt [Version]::new(6,0,0,0) -and $null -ne $winCompat) {
-        $azureADModule = Invoke-WinCommand -ScriptBlock { Get-InstalledModule -Name AzureAD -AllVersions }
-    }
-
-    # Build the confirmation message
-    $installCount = 0
-    $confirmBuilder = [StringBuilder]::new()
-    $confirmBuilder.Append("The following PowerShell modules were not installed and will be installed:") | Out-Null
 
     if ($null -eq $psGetModule -or $psGetModule[0].Version -lt [Version]::new(1,6,0)) {
-        $installCount++
-        $confirmBuilder.Append(" PowerShellGet (version 1.6.0 or greater)") | Out-Null
-    } 
-    
-    if ($null -eq $azModule -or $azModule[0].Version -lt [Version]::new(2,8,0,0)) {
-        if ($installCount -gt 0) {
-            $confirmBuilder.Append(",") | Out-Null
-        }
-
-        $confirmBuilder.Append(" Az (version 2.8.0 or greater)") | Out-Null 
-        $installCount++
-    }
-
-    if ($null -eq $storageModule -or $storageModule[0] -lt [Version]::new(1,8,2,0)) {
-        if ($installCount -gt 0) {
-            $confirmBuilder.Append(",") | Out-Null
-        }
-
-        $confirmBuilder.Append(" Az.Storage (version 1.8.2 preview)") | Out-Null
-        $installCount++
-    }
-
-    if ($PSVersionTable.PSVersion -gt [Version]::new(6,0,0,0) -and $null -eq $winCompat) {
-        if ($installCount -gt 0) {
-            $confirmBuilder.Append(",") | Out-Null
-        }
-
-        $confirmBuilder.Append(" WindowsCompatibility") | Out-Null
-        $installCount++
-    }
-
-    if ($null -eq $azureADModule) {
-        if ($installCount -gt 0) {
-            $confirmBuilder.Append(",") | Out-Null
-        }
-
-        $confirmBuilder.Append(", AzureAD") | Out-Null
-        $installCount++
-    }
-
-    $confirmBuilder.Append(".") | Out-Null
-
-    # Do should process if modules must be installed
-    if ($installCount -gt 0) {
-        $caption = "Install required modules"
-        $verboseConfirmMessage = ($confirmBuilder.ToString())
+        $caption = "Install updated version of PowerShellGet"
+        $verboseConfirmMessage = "This module requires PowerShellGet 1.6.0+. This can be installed now if you are running as an administrator. At the end of the installation, importing this module will fail as you must close all open instances of PowerShell for the updated version of PowerShellGet to be available."
         
         if ($PSCmdlet.ShouldProcess($verboseConfirmMessage, $verboseConfirmMessage, $caption)) {
-            if ($null -eq $psGetModule -or $psGetModule[0].Version -lt [Version]::new(1,6,0)) {
+            if (!(Get-IsElevatedSession)) {
+                Write-Error -Message "To install PowerShellGet, you must import this module as an administrator. This module package does not generally require administrator privileges, so successive imports of this module can be from a non-elevated session." -ErrorAction Stop
+            }
+
+            try {
                 Remove-Module -Name PowerShellGet, PackageManagement -Force -ErrorAction SilentlyContinue
                 Install-PackageProvider -Name NuGet -Force | Out-Null
-
+    
                 Install-Module `
                         -Name PowerShellGet `
                         -Repository PSGallery `
                         -Force `
                         -ErrorAction Stop `
                         -SkipPublisherCheck
-                
-                Write-Verbose -Message "Installed latest version of PowerShellGet module."
-            } 
+            } catch {
+                Write-Error -Message "PowerShellGet was not successfully installed, and is a requirement of this module. See https://docs.microsoft.com/powershell/scripting/gallery/installing-psget for information on how to manually troubleshoot the PowerShellGet installation." -ErrorAction Stop
+            }             
+            
+            Write-Verbose -Message "Installed latest version of PowerShellGet module."
+            Write-Error -Message "PowerShellGet was successfully installed, however you must close all open PowerShell sessions to use the new version. The next import of this module will be able to use PowerShellGet." -ErrorAction Stop
+        }
+    }
 
-            Remove-Module -Name PowerShellGet -Force -ErrorAction SilentlyContinue
-            Import-Module -Name PowerShellGet 
-            Get-Module -Name Az.* | Remove-Module
-            if ($null -eq $azModule -or $azModule[0].Version -lt [Version]::new(2,8,0,0)) {
+    Remove-Module -Name PowerShellGet -ErrorAction SilentlyContinue
+    Remove-Module -Name PackageManagement -ErrorAction SilentlyContinue
+}
+
+function Request-AzureADModule {
+    [CmdletBinding(SupportsShouldProcess, ConfirmImpact="High")]
+    param()
+
+    if ($PSVersionTable.PSVersion -gt [Version]::new(6,0,0)) {
+        $winCompat = Get-Module -Name WindowsCompatibility -ListAvailable
+    }
+
+    $azureADModule = Get-Module -Name AzureAD -ListAvailable
+    if ($PSVersionTable.PSVersion -gt [Version]::new(6,0,0) -and $null -ne $winCompat) {
+        $azureADModule = Invoke-WinCommand -Verbose:$false -ScriptBlock { 
+            Get-Module -Name AzureAD -ListAvailable 
+        }
+    }
+
+    if (
+        ($PSVersionTable.PSVersion -gt [Version]::new(6,0,0,0) -and $null -eq $winCompat) -or 
+        $null -eq $azureADModule
+    ) {
+        $caption = "Install AzureAD PowerShell module"
+        $verboseConfirmMessage = "This cmdlet requires the Azure AD PowerShell module. This can be automatically installed now if you are running in an elevated sessions."
+        
+        if ($PSCmdlet.ShouldProcess($verboseConfirmMessage, $verboseConfirmMessage, $caption)) {
+            if (!(Get-IsElevatedSession)) {
+                Write-Error `
+                        -Message "To install AzureAD, you must run this cmdlet as an administrator. This cmdlet may not generally require administrator privileges." `
+                        -ErrorAction Stop
+            }
+
+            if ($PSVersionTable.PSVersion -gt [Version]::new(6,0,0) -and $null -eq $winCompat) {
+                Install-Module `
+                        -Name WindowsCompatibility `
+                        -AllowClobber `
+                        -Force `
+                        -ErrorAction Stop
+
+                Import-Module -Name WindowsCompatibility
+            }
+            
+            $scriptBlock = { 
+                $azureADModule = Get-Module -Name AzureAD -ListAvailable
+                if ($null -eq $azureADModule) {
+                    Install-Module `
+                            -Name AzureAD `
+                            -AllowClobber `
+                            -Force `
+                            -ErrorAction Stop
+                }
+            }
+
+            if ($PSVersionTable.PSVersion -gt [Version]::new(6,0,0)) {
+                Invoke-WinCommand `
+                        -ScriptBlock $scriptBlock `
+                        -Verbose:$false `
+                        -ErrorAction Stop
+            } else {
+                $scriptBlock.Invoke()
+            }
+        }
+    }
+
+    Remove-Module -Name PowerShellGet -ErrorAction SilentlyContinue
+    Remove-Module -Name PackageManagement -ErrorAction SilentlyContinue
+}
+
+function Request-AzPowerShellModule {
+    [CmdletBinding(SupportsShouldProcess, ConfirmImpact="High")]
+    param()
+
+    # There is an known issue where versions less than PS 6.2 don't have the Az rollup module installed:
+    # https://github.com/Azure/azure-powershell/issues/9835 
+    if ($PSVersionTable.PSVersion -gt [Version]::new(6,2)) {
+        $azModule = Get-Module -Name Az -ListAvailable
+    } else {
+        $azModule = Get-Module -Name Az.* -ListAvailable
+    }
+
+    $storageModule = Get-Module -Name Az.Storage -ListAvailable | `
+        Where-Object { 
+            $_.Version -eq [Version]::new(1,8,2) -or 
+            $_.Version -eq [Version]::new(1,11,1) 
+        } | `
+        Sort-Object -Property Version -Descending
+
+    # Do should process if modules must be installed
+    if ($null -eq $azModule -or $null -eq $storageModule) {
+        $caption = "Install Azure PowerShell modules"
+        $verboseConfirmMessage = "This module requires Azure PowerShell (`"Az`" module) 2.8.0+ and Az.Storage 1.8.2-preview+. This can be installed now if you are running as an administrator."
+        
+        if ($PSCmdlet.ShouldProcess($verboseConfirmMessage, $verboseConfirmMessage, $caption)) {
+            if (!(Get-IsElevatedSession)) {
+                Write-Error `
+                        -Message "To install the required Azure PowerShell modules, you must run this module as an administrator. This module does not generally require administrator privileges." `
+                        -ErrorAction Stop
+            }
+
+            if ($null -eq $azModule) {
+                Get-Module -Name Az.* | Remove-Module
                 Install-Module -Name Az -AllowClobber -Force -ErrorAction Stop
                 Write-Verbose -Message "Installed latest version of Az module."
             }
 
-            if ($null -eq $storageModule -or $storageModule[0] -lt [Version]::new(1,8,2,0)) {
+            if ($null -eq $storageModule) {
                 Install-Module `
                     -Name Az.Storage `
                     -AllowClobber `
                     -AllowPrerelease `
                     -Force `
-                    -RequiredVersion "1.8.2-preview"
-            }
-
-            if ($PSVersionTable.PSVersion -gt [Version]::new(6,0,0,0) -and $null -eq $winCompat) {
-                Install-Module -Name WindowsCompatibility -AllowClobber -Force
-                Import-Module -Name WindowsCompatibility
-            }
-
-            if ($null -eq $azureADModule) {
-                $scriptBlock = { 
-                    $azureADModule = Get-InstalledModule -Name AzureAD -AllVersions
-                    if ($null -eq $azureADModule) {
-                        Install-Module -Name AzureAD -AllowClobber -Force
-                    }
-                }
-
-                if ($PSVersionTable.PSVersion -gt [Version]::new(6,0,0,0)) {
-                    Invoke-WinCommand -ScriptBlock $scriptBlock
-                } else {
-                    $scriptBlock.Invoke()
-                }
-            }
+                    -RequiredVersion "1.11.1-preview" `
+                    -SkipPublisherCheck `
+                    -ErrorAction Stop
+                
+                Import-Module -Name Az.Storage -RequiredVersion "1.11.1"
+            } else {
+                Import-Module -ModuleInfo $storageModule
+            }            
         }
-    }    
+    }
+    
+    Remove-Module -Name PowerShellGet -ErrorAction SilentlyContinue
+    Remove-Module -Name PackageManagement -ErrorAction SilentlyContinue
 }
 
 function Validate-StorageAccount {
@@ -817,10 +847,6 @@ function Validate-StorageAccount {
          [Parameter(Mandatory=$true, Position=1)]
          [string]$Name
     )
-
-    begin {
-        Request-StorageAccountDJModules
-    }
 
     process
     {
@@ -880,10 +906,6 @@ function Ensure-KerbKeyExists {
         [Parameter(Mandatory=$True, Position=1, HelpMessage="Storage account name")]
         [string]$StorageAccountName
     )
-
-    begin {
-        Request-StorageAccountDJModules
-    }
 
     process {
         Write-Verbose "Ensure-KerbKeyExists - Checking for kerberos keys for account:$storageAccountName in resource group:$ResourceGroupName"
@@ -958,8 +980,6 @@ function Get-ServicePrincipalName {
         [string]$resourceGroupName
     )
 
-    Request-StorageAccountDJModules
-
     $storageAccountObject = Get-AzStorageAccount -ResourceGroup $resourceGroupName -Name $storageAccountName
     $servicePrincipalName = $storageAccountObject.PrimaryEndpoints.File -replace 'https://','cifs/'
     $servicePrincipalName = $servicePrincipalName.Substring(0, $servicePrincipalName.Length - 1);
@@ -1011,7 +1031,6 @@ function New-ADAccountForStorageAccount {
     Assert-IsWindows
     Assert-IsDomainJoined
     Request-ADFeature
-    Request-StorageAccountDJModules
 
     Write-Verbose -Message "ObjectType: $ObjectType"
 
@@ -1203,7 +1222,6 @@ function Get-AzStorageAccountADObject {
         Assert-IsWindows
         Assert-IsDomainJoined
         Request-ADFeature
-        Request-StorageAccountDJModules
 
         if ($PSCmdlet.ParameterSetName -eq "ADObjectName") {
             if ([System.String]::IsNullOrEmpty($Domain)) {
@@ -1303,7 +1321,6 @@ function Get-AzStorageKerberosTicketStatus {
 
     begin {
         Assert-IsWindows
-        Request-StorageAccountDJModules
     }
 
     process 
@@ -1458,7 +1475,6 @@ function Set-StorageAccountDomainProperties {
     Assert-IsWindows
     Assert-IsDomainJoined
     Request-ADFeature
-    Request-StorageAccountDJModules
 
     Write-Verbose "Set-StorageAccountDomainProperties: Enabling the feature on the storage account and providing the required properties to the storage service"
 
@@ -1568,7 +1584,6 @@ function Test-AzStorageAccountADObjectPasswordIsKerbKey {
         Assert-IsWindows
         Assert-IsDomainJoined
         Request-ADFeature
-        Request-StorageAccountDJModules
     }
 
     process
@@ -1723,7 +1738,6 @@ function Update-AzStorageAccountADObjectPassword {
         Assert-IsWindows
         Assert-IsDomainJoined
         Request-ADFeature
-        Request-StorageAccountDJModules
     }
 
     process {
@@ -1861,7 +1875,6 @@ function Invoke-AzStorageAccountADObjectPasswordRotation {
         Assert-IsWindows
         Assert-IsDomainJoined
         Request-ADFeature
-        Request-StorageAccountDJModules
     }
 
     process {
@@ -2023,7 +2036,6 @@ function Join-AzStorageAccountForAuth {
         Assert-IsWindows
         Assert-IsDomainJoined
         Request-ADFeature
-        Request-StorageAccountDJModules
     }
 
     process {
@@ -2205,7 +2217,7 @@ function Request-ConnectAzureAD {
     param()
 
     Assert-IsWindows
-    Request-StorageAccountDJModules
+    Request-AzureADModule
 
     $aadModule = Get-Module | Where-Object { $_.Name -like "AzureAD" }
     if ($null -eq $aadModule) {
@@ -2313,7 +2325,7 @@ function Get-AzCurrentAzureADUser {
 
 $ClassicAdministratorsSet = $false
 $ClassicAdministrators = [HashSet[string]]::new()
-$OperationCache = [Dictionary[string, Microsoft.Azure.Commands.Resources.Models.Authorization.PSRoleDefinition[]]]::new()
+$OperationCache = [Dictionary[string, object[]]]::new()
 function Test-AzPermission {
     <#
     .SYNOPSIS
@@ -2714,3 +2726,7 @@ function Get-RandomString {
 
     return $acc.GetInternalObject()
 }
+
+# Actions to run on module load
+Request-PowerShellGetModule
+Request-AzPowerShellModule
