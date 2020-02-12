@@ -833,14 +833,16 @@ function Request-AzPowerShellModule {
     
     Remove-Module -Name PowerShellGet -ErrorAction SilentlyContinue
     Remove-Module -Name PackageManagement -ErrorAction SilentlyContinue
+    Remove-Module -Name Az.Storage -Force -ErrorAction SilentlyContinue
+    Remove-Module -Name Az.Accounts -Force -ErrorAction SilentlyContinue
 
-    $storageModule = Get-Module -Name Az.Storage -ListAvailable | `
+    $storageModule = ,(Get-Module -Name Az.Storage -ListAvailable | `
         Where-Object { 
             $_.Version -eq [Version]::new(1,8,2) -or 
             $_.Version -eq [Version]::new(1,11,1) 
         } | `
-        Sort-Object -Property Version -Descending
-    
+        Sort-Object -Property Version -Descending)
+
     Import-Module -ModuleInfo $storageModule[0] -Global -ErrorAction Stop
 }
 
@@ -1025,8 +1027,11 @@ function New-ADAccountForStorageAccount {
         [Parameter(Mandatory=$false, Position=3)]
         [string]$Domain,
 
-        [Parameter(Mandatory=$false, Position=4)]
+        [Parameter(Mandatory=$false, Position=4, ParameterSetName="OUQuickName")]
         [string]$OrganizationalUnit,
+
+        [Parameter(Mandatory=$false, Position=4, ParameterSetName="OUDistinguishedName")]
+        [string]$OrganizationalUnitDistinguishedName,
 
         [Parameter(Mandatory=$false, Position=5)]
         [ValidateSet("ServiceLogonAccount", "ComputerAccount")]
@@ -1052,7 +1057,7 @@ function New-ADAccountForStorageAccount {
         }
     }
 
-    if (![System.String]::IsNullOrEmpty($OrganizationalUnit)) {
+    if ($PSBoundParameters.ContainsKey("OrganizationalUnit")) {
         $ou = Get-ADOrganizationalUnit -Filter { Name -eq $OrganizationalUnit } -Server $Domain
 
         #
@@ -1062,11 +1067,19 @@ function New-ADAccountForStorageAccount {
         if ($null -eq $ou)
         {
             Write-Error `
-                -Message "Could not find an organizational unit with name '$OrganizationalUnit' in the $Domain domain" `
-                -ErrorAction Stop
+                    -Message "Could not find an organizational unit with name '$OrganizationalUnit' in the $Domain domain" `
+                    -ErrorAction Stop
+        } elseif ($ou -is ([object[]])) {
+            Write-Error `
+                    -Message "Multiple OrganizationalUnits were found matching the name $OrganizationalUnit. To disambiguate the OU you want to join the storage account to, use the OrganizationalUnitDistinguishedName parameter." -ErrorAction Stop
         }
 
         $path = $ou.DistinguishedName
+    }
+
+    if ($PSBoundParameters.ContainsKey("OrganizationalUnitDistinguishedName")) {
+        $ou = Get-ADOrganizationalUnit -Identity $OrganizationalUnitDistinguishedName -Server $Domain -ErrorAction Stop
+        $path = $OrganizationalUnitDistinguishedName
     }
 
     Write-Verbose "New-ADAccountForStorageAccount: Creating a AD account in domain:$Domain to represent the storage account:$StorageAccountName"
@@ -2006,6 +2019,9 @@ function Join-AzStorageAccountForAuth {
     .PARAMETER OrganizationalUnitName
     The organizational unit for the AD object to be added to. This parameter is optional, but many environments will require it.
 
+    .PARAMETER OrganizationalUnitDistinguishedName
+    The distinguished name of the organizational unit (i.e. "OU=Workstations,DC=contoso,DC=com"). This parameter is optional, but many environments will require it.
+
     .PARAMETER ADObjectNameOverride
     By default, the AD object that is created will have a name to match the storage account. This parameter overrides that to an
     arbitrary name. This does not affect how you access your storage account.
@@ -2048,6 +2064,9 @@ function Join-AzStorageAccountForAuth {
         [string]$OrganizationalUnitName,
 
         [Parameter(Mandatory=$false, Position=5)]
+        [string]$OrganizationalUnitDistinguishedName,
+
+        [Parameter(Mandatory=$false, Position=5)]
         [string]$ADObjectNameOverride
     ) 
 
@@ -2058,6 +2077,16 @@ function Join-AzStorageAccountForAuth {
     }
 
     process {
+        # The proper way to do this is with a parameter set, but the parameter sets are not being generated correctly.
+        if (
+            $PSBoundParameters.ContainsKey("OrganizationalUnitName") -and 
+            $PSBoundParameters.ContainsKey("OrganizationalUnitDistinguishedName")
+        ) {
+            Write-Error `
+                    -Message "Only one of OrganizationalUnitName and OrganizationalUnitDistinguishedName should be specified." `
+                    -ErrorAction Stop
+        }
+
         if ($PSCmdlet.ParameterSetName -eq "StorageAccount") {
             $StorageAccountName = $StorageAccount.StorageAccountName
             $ResourceGroupName = $StorageAccount.ResourceGroupName
@@ -2096,14 +2125,26 @@ function Join-AzStorageAccountForAuth {
             Ensure-KerbKeyExists -ResourceGroupName $ResourceGroupName -StorageAccountName $StorageAccountName -ErrorAction Stop
 
             # Create the service account object for the storage account.
-            New-ADAccountForStorageAccount `
-                -ADObjectName $ADObjectNameOverride `
-                -StorageAccountName $StorageAccountName `
-                -ResourceGroupName $ResourceGroupName `
-                -Domain $Domain `
-                -OrganizationalUnit $OrganizationalUnitName `
-                -ObjectType $DomainAccountType `
-                -ErrorAction Stop
+            $newParams = @{
+                "ADObjectName" = $ADObjectNameOverride;
+                "StorageAccountName" = $StorageAccountName;
+                "ResourceGroupName" = $ResourceGroupName;
+                "ObjectType" = $DomainAccountType
+            }
+
+            if ($PSBoundParameters.ContainsKey("Domain")) {
+                $newParams += @{ "Domain" = $Domain }
+            }
+
+            if ($PSBoundParameters.ContainsKey("OrganizationalUnitName")) {
+                $newParams += @{ "OrganizationalUnit" = $OrganizationalUnitName }
+            }
+
+            if ($PSBoundParameters.ContainsKey("OrganizationalUnitDistinguishedName")) {
+                $newParams += @{ "OrganizationalUnitDistinguishedName" = $OrganizationalUnitDistinguishedName }
+            }
+
+            New-ADAccountForStorageAccount @newParams -ErrorAction Stop
 
             # Set domain properties on the storage account.
             Set-StorageAccountDomainProperties `
