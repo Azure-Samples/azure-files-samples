@@ -1075,12 +1075,26 @@ function New-ADAccountForStorageAccount {
 
     $fileServiceAccountPwdSecureString = ConvertTo-SecureString -String $kerb1Key.Value -AsPlainText -Force
 
-    #
-    # Create the identity in Active Directory.
-    #
+    # Get SPN
+    $spnValue = Get-ServicePrincipalName `
+            -storageAccountName $StorageAccountName `
+            -resourceGroupName $ResourceGroupName `
+            -ErrorAction Stop
 
-    $spnValue = Get-ServicePrincipalName -storageAccountName $StorageAccountName -resourceGroupName $ResourceGroupName -ErrorAction Stop
+    # Check to see if SPN already exists
+    $computerSpnMatch = Get-ADComputer `
+            -Filter { ServicePrincipalNames -eq $spnValue } `
+            -Server $Domain
 
+    $userSpnMatch = Get-ADUser `
+            -Filter { ServicePrincipalNames -eq $spnValue } `
+            -Server $Domain
+
+    if ($null -ne $computerSpnMatch -or $null -ne $userSpnMatch) {
+        Write-Error -Message "An AD object with a Service Principal Name of $spnValue already exists within AD. This might happen because you are rejoining a new storage account that shares names with an existing storage account, or if the domain join operation for a storage account failed in an incomplete state. Delete this AD object (or remove the SPN) to continue. See https://docs.microsoft.com/azure/storage/files/storage-troubleshoot-windows-file-connection-problems for more information." -ErrorAction Stop
+    }    
+
+    # Create the identity in Active Directory.    
     try
     {
         switch ($ObjectType) {
