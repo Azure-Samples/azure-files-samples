@@ -3,6 +3,7 @@ using namespace System.Collections
 using namespace System.Collections.Generic
 using namespace System.Collections.Specialized
 using namespace System.Text
+using namespace System.Security
 
 function Get-IsElevatedSession {
     <#
@@ -670,12 +671,182 @@ function Request-ADFeature {
             -WindowsServerFeature "RSAT-AD-PowerShell"
     }
 
-    Import-Module -Name ActiveDirectory
+    $adModule = Get-Module -Name ActiveDirectory 
+    if ($null -eq $adModule) {
+        Import-Module -Name ActiveDirectory
+    }
+}
+
+function Request-PowerShellGetModule {
+    [CmdletBinding(SupportsShouldProcess, ConfirmImpact="High")]
+    param()
+
+    $psGetModule = Get-Module -Name PowerShellGet -ListAvailable | `
+        Sort-Object -Property Version -Descending
+
+    if ($null -eq $psGetModule -or $psGetModule[0].Version -lt [Version]::new(1,6,0)) {
+        $caption = "Install updated version of PowerShellGet"
+        $verboseConfirmMessage = "This module requires PowerShellGet 1.6.0+. This can be installed now if you are running as an administrator. At the end of the installation, importing this module will fail as you must close all open instances of PowerShell for the updated version of PowerShellGet to be available."
+        
+        if ($PSCmdlet.ShouldProcess($verboseConfirmMessage, $verboseConfirmMessage, $caption)) {
+            if (!(Get-IsElevatedSession)) {
+                Write-Error -Message "To install PowerShellGet, you must import this module as an administrator. This module package does not generally require administrator privileges, so successive imports of this module can be from a non-elevated session." -ErrorAction Stop
+            }
+
+            try {
+                Remove-Module -Name PowerShellGet, PackageManagement -Force -ErrorAction SilentlyContinue
+                Install-PackageProvider -Name NuGet -Force | Out-Null
+    
+                Install-Module `
+                        -Name PowerShellGet `
+                        -Repository PSGallery `
+                        -Force `
+                        -ErrorAction Stop `
+                        -SkipPublisherCheck
+            } catch {
+                Write-Error -Message "PowerShellGet was not successfully installed, and is a requirement of this module. See https://docs.microsoft.com/powershell/scripting/gallery/installing-psget for information on how to manually troubleshoot the PowerShellGet installation." -ErrorAction Stop
+            }             
+            
+            Write-Verbose -Message "Installed latest version of PowerShellGet module."
+            Write-Error -Message "PowerShellGet was successfully installed, however you must close all open PowerShell sessions to use the new version. The next import of this module will be able to use PowerShellGet." -ErrorAction Stop
+        }
+    }
+
+    Remove-Module -Name PowerShellGet -ErrorAction SilentlyContinue
+    Remove-Module -Name PackageManagement -ErrorAction SilentlyContinue
+}
+
+function Request-AzureADModule {
+    [CmdletBinding(SupportsShouldProcess, ConfirmImpact="High")]
+    param()
+
+    if ($PSVersionTable.PSVersion -gt [Version]::new(6,0,0)) {
+        $winCompat = Get-Module -Name WindowsCompatibility -ListAvailable
+    }
+
+    $azureADModule = Get-Module -Name AzureAD -ListAvailable
+    if ($PSVersionTable.PSVersion -gt [Version]::new(6,0,0) -and $null -ne $winCompat) {
+        $azureADModule = Invoke-WinCommand -Verbose:$false -ScriptBlock { 
+            Get-Module -Name AzureAD -ListAvailable 
+        }
+    }
+
+    if (
+        ($PSVersionTable.PSVersion -gt [Version]::new(6,0,0,0) -and $null -eq $winCompat) -or 
+        $null -eq $azureADModule
+    ) {
+        $caption = "Install AzureAD PowerShell module"
+        $verboseConfirmMessage = "This cmdlet requires the Azure AD PowerShell module. This can be automatically installed now if you are running in an elevated sessions."
+        
+        if ($PSCmdlet.ShouldProcess($verboseConfirmMessage, $verboseConfirmMessage, $caption)) {
+            if (!(Get-IsElevatedSession)) {
+                Write-Error `
+                        -Message "To install AzureAD, you must run this cmdlet as an administrator. This cmdlet may not generally require administrator privileges." `
+                        -ErrorAction Stop
+            }
+
+            if ($PSVersionTable.PSVersion -gt [Version]::new(6,0,0) -and $null -eq $winCompat) {
+                Install-Module `
+                        -Name WindowsCompatibility `
+                        -AllowClobber `
+                        -Force `
+                        -ErrorAction Stop
+
+                Import-Module -Name WindowsCompatibility
+            }
+            
+            $scriptBlock = { 
+                $azureADModule = Get-Module -Name AzureAD -ListAvailable
+                if ($null -eq $azureADModule) {
+                    Install-Module `
+                            -Name AzureAD `
+                            -AllowClobber `
+                            -Force `
+                            -ErrorAction Stop
+                }
+            }
+
+            if ($PSVersionTable.PSVersion -gt [Version]::new(6,0,0)) {
+                Invoke-WinCommand `
+                        -ScriptBlock $scriptBlock `
+                        -Verbose:$false `
+                        -ErrorAction Stop
+            } else {
+                $scriptBlock.Invoke()
+            }
+        }
+    }
+
+    Remove-Module -Name PowerShellGet -ErrorAction SilentlyContinue
+    Remove-Module -Name PackageManagement -ErrorAction SilentlyContinue
+}
+
+function Request-AzPowerShellModule {
+    [CmdletBinding(SupportsShouldProcess, ConfirmImpact="High")]
+    param()
+
+    # There is an known issue where versions less than PS 6.2 don't have the Az rollup module installed:
+    # https://github.com/Azure/azure-powershell/issues/9835 
+    if ($PSVersionTable.PSVersion -gt [Version]::new(6,2)) {
+        $azModule = Get-Module -Name Az -ListAvailable
+    } else {
+        $azModule = Get-Module -Name Az.* -ListAvailable
+    }
+
+    $storageModule = Get-Module -Name Az.Storage -ListAvailable | `
+        Where-Object { 
+            $_.Version -eq [Version]::new(1,8,2) -or 
+            $_.Version -eq [Version]::new(1,11,1) 
+        } | `
+        Sort-Object -Property Version -Descending
+
+    # Do should process if modules must be installed
+    if ($null -eq $azModule -or $null -eq $storageModule) {
+        $caption = "Install Azure PowerShell modules"
+        $verboseConfirmMessage = "This module requires Azure PowerShell (`"Az`" module) 2.8.0+ and Az.Storage 1.8.2-preview+. This can be installed now if you are running as an administrator."
+        
+        if ($PSCmdlet.ShouldProcess($verboseConfirmMessage, $verboseConfirmMessage, $caption)) {
+            if (!(Get-IsElevatedSession)) {
+                Write-Error `
+                        -Message "To install the required Azure PowerShell modules, you must run this module as an administrator. This module does not generally require administrator privileges." `
+                        -ErrorAction Stop
+            }
+
+            if ($null -eq $azModule) {
+                Get-Module -Name Az.* | Remove-Module
+                Install-Module -Name Az -AllowClobber -Force -ErrorAction Stop
+                Write-Verbose -Message "Installed latest version of Az module."
+            }
+
+            if ($null -eq $storageModule) {
+                Install-Module `
+                    -Name Az.Storage `
+                    -AllowClobber `
+                    -AllowPrerelease `
+                    -Force `
+                    -RequiredVersion "1.11.1-preview" `
+                    -SkipPublisherCheck `
+                    -ErrorAction Stop
+            }       
+        }
+    }
+    
+    Remove-Module -Name PowerShellGet -ErrorAction SilentlyContinue
+    Remove-Module -Name PackageManagement -ErrorAction SilentlyContinue
+    Remove-Module -Name Az.Storage -Force -ErrorAction SilentlyContinue
+    Remove-Module -Name Az.Accounts -Force -ErrorAction SilentlyContinue
+
+    $storageModule = ,(Get-Module -Name Az.Storage -ListAvailable | `
+        Where-Object { 
+            $_.Version -eq [Version]::new(1,8,2) -or 
+            $_.Version -eq [Version]::new(1,11,1) 
+        } | `
+        Sort-Object -Property Version -Descending)
+
+    Import-Module -ModuleInfo $storageModule[0] -Global -ErrorAction Stop
 }
 
 function Validate-StorageAccount {
-    #requires -Module @{ ModuleName = "Az.Storage"; RequiredVersion = "1.8.2" }
-
     [CmdletBinding()]
     param (
          [Parameter(Mandatory=$true, Position=0)]
@@ -717,8 +888,6 @@ function Validate-StorageAccount {
 }
 
 function Ensure-KerbKeyExists {
-    #requires -Module @{ ModuleName = "Az.Storage"; RequiredVersion = "1.8.2" }
-
     <#
     .SYNOPSIS
         Ensures the storage account has kerb keys created.
@@ -792,8 +961,6 @@ function Ensure-KerbKeyExists {
 }
 
 function Get-ServicePrincipalName {
-    #requires -Module @{ ModuleName = "Az.Storage"; RequiredVersion = "1.8.2" }
-
     <#
     .SYNOPSIS
         Gets the service principal name for the storage account's identity in Active Directory.
@@ -829,8 +996,6 @@ function Get-ServicePrincipalName {
 }
 
 function New-ADAccountForStorageAccount {
-    #requires -Module @{ ModuleName = "Az.Storage"; RequiredVersion = "1.8.2" }
-
     <#
     .SYNOPSIS
         Creates the identity for the storage account in Active Directory
@@ -850,21 +1015,27 @@ function New-ADAccountForStorageAccount {
 
     [CmdletBinding()]
     param (
-        [Parameter(Mandatory=$true, Position=0, HelpMessage="Storage account name")]
+        [Parameter(Mandatory=$true, Position=0)]
+        [string]$ADObjectName,
+
+        [Parameter(Mandatory=$true, Position=1, HelpMessage="Storage account name")]
         [string]$StorageAccountName, 
 
-        [Parameter(Mandatory=$true, Position=1, HelpMessage="Resource group name")]
+        [Parameter(Mandatory=$true, Position=2, HelpMessage="Resource group name")]
         [string]$ResourceGroupName,
 
-        [Parameter(Mandatory=$false, Position=2)]
+        [Parameter(Mandatory=$false, Position=3)]
         [string]$Domain,
 
-        [Parameter(Mandatory=$false, Position=3)]
+        [Parameter(Mandatory=$false, Position=4, ParameterSetName="OUQuickName")]
         [string]$OrganizationalUnit,
 
-        [Parameter(Mandatory=$false, Position=4)]
+        [Parameter(Mandatory=$false, Position=4, ParameterSetName="OUDistinguishedName")]
+        [string]$OrganizationalUnitDistinguishedName,
+
+        [Parameter(Mandatory=$false, Position=5)]
         [ValidateSet("ServiceLogonAccount", "ComputerAccount")]
-        [string]$ObjectType = "ServiceLogonAccount"
+        [string]$ObjectType = "ComputerAccount"
     )
 
     Assert-IsWindows
@@ -886,7 +1057,7 @@ function New-ADAccountForStorageAccount {
         }
     }
 
-    if (![System.String]::IsNullOrEmpty($OrganizationalUnit)) {
+    if ($PSBoundParameters.ContainsKey("OrganizationalUnit")) {
         $ou = Get-ADOrganizationalUnit -Filter { Name -eq $OrganizationalUnit } -Server $Domain
 
         #
@@ -896,11 +1067,19 @@ function New-ADAccountForStorageAccount {
         if ($null -eq $ou)
         {
             Write-Error `
-                -Message "Could not find an organizational unit with name '$OrganizationalUnit' in the $Domain domain" `
-                -ErrorAction Stop
+                    -Message "Could not find an organizational unit with name '$OrganizationalUnit' in the $Domain domain" `
+                    -ErrorAction Stop
+        } elseif ($ou -is ([object[]])) {
+            Write-Error `
+                    -Message "Multiple OrganizationalUnits were found matching the name $OrganizationalUnit. To disambiguate the OU you want to join the storage account to, use the OrganizationalUnitDistinguishedName parameter." -ErrorAction Stop
         }
 
         $path = $ou.DistinguishedName
+    }
+
+    if ($PSBoundParameters.ContainsKey("OrganizationalUnitDistinguishedName")) {
+        $ou = Get-ADOrganizationalUnit -Identity $OrganizationalUnitDistinguishedName -Server $Domain -ErrorAction Stop
+        $path = $OrganizationalUnitDistinguishedName
     }
 
     Write-Verbose "New-ADAccountForStorageAccount: Creating a AD account in domain:$Domain to represent the storage account:$StorageAccountName"
@@ -914,12 +1093,26 @@ function New-ADAccountForStorageAccount {
 
     $fileServiceAccountPwdSecureString = ConvertTo-SecureString -String $kerb1Key.Value -AsPlainText -Force
 
-    #
-    # Create the identity in Active Directory.
-    #
+    # Get SPN
+    $spnValue = Get-ServicePrincipalName `
+            -storageAccountName $StorageAccountName `
+            -resourceGroupName $ResourceGroupName `
+            -ErrorAction Stop
 
-    $spnValue = Get-ServicePrincipalName -storageAccountName $StorageAccountName -resourceGroupName $ResourceGroupName -ErrorAction Stop
+    # Check to see if SPN already exists
+    $computerSpnMatch = Get-ADComputer `
+            -Filter { ServicePrincipalNames -eq $spnValue } `
+            -Server $Domain
 
+    $userSpnMatch = Get-ADUser `
+            -Filter { ServicePrincipalNames -eq $spnValue } `
+            -Server $Domain
+
+    if ($null -ne $computerSpnMatch -or $null -ne $userSpnMatch) {
+        Write-Error -Message "An AD object with a Service Principal Name of $spnValue already exists within AD. This might happen because you are rejoining a new storage account that shares names with an existing storage account, or if the domain join operation for a storage account failed in an incomplete state. Delete this AD object (or remove the SPN) to continue. See https://docs.microsoft.com/azure/storage/files/storage-troubleshoot-windows-file-connection-problems for more information." -ErrorAction Stop
+    }    
+
+    # Create the identity in Active Directory.    
     try
     {
         switch ($ObjectType) {
@@ -927,9 +1120,9 @@ function New-ADAccountForStorageAccount {
                 Write-Verbose -Message "`$ServiceAccountName is $StorageAccountName"
 
                 New-ADUser `
-                    -SamAccountName $StorageAccountName `
+                    -SamAccountName $ADObjectName `
                     -Path $path `
-                    -Name $StorageAccountName `
+                    -Name $ADObjectName `
                     -AccountPassword $fileServiceAccountPwdSecureString `
                     -AllowReversiblePasswordEncryption $false `
                     -PasswordNeverExpires $true `
@@ -949,9 +1142,9 @@ function New-ADAccountForStorageAccount {
 
             "ComputerAccount" {
                 New-ADComputer `
-                    -SAMAccountName $StorageAccountName `
+                    -SAMAccountName $ADObjectName `
                     -Path $path `
-                    -Name $StorageAccountName `
+                    -Name $ADObjectName `
                     -AccountPassword $fileServiceAccountPwdSecureString `
                     -AllowReversiblePasswordEncryption $false `
                     -Description "Computer account object for Azure storage account $StorageAccountName." `
@@ -984,8 +1177,6 @@ function New-ADAccountForStorageAccount {
 }
 
 function Get-AzStorageAccountADObject {
-    #requires -Module @{ ModuleName = "Az.Storage"; RequiredVersion = "1.8.2" }
-
     <#
     .SYNOPSIS
     Get the AD object for a given storage account.
@@ -1140,8 +1331,6 @@ function Get-AzStorageAccountADObject {
 }
 
 function Get-AzStorageKerberosTicketStatus {
-    #requires -Module @{ ModuleName = "Az.Storage"; RequiredVersion = "1.8.2" }
-
     <#
     .SYNOPSIS
     Gets an array of Kerberos tickets for Azure storage accounts with status information.
@@ -1273,8 +1462,6 @@ function Get-AzStorageKerberosTicketStatus {
 }
 
 function Set-StorageAccountDomainProperties {
-    #requires -Module @{ ModuleName = "Az.Storage"; RequiredVersion = "1.8.2" }
-
     <#
     .SYNOPSIS
        This sets the storage account's ActiveDirectoryProperties - information needed to support the UI
@@ -1305,12 +1492,15 @@ function Set-StorageAccountDomainProperties {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory=$true, Position=0)]
-        [string]$ResourceGroupName,
+        [string]$ADObjectName,
 
         [Parameter(Mandatory=$true, Position=1)]
+        [string]$ResourceGroupName,
+
+        [Parameter(Mandatory=$true, Position=2)]
         [string]$StorageAccountName,
 
-        [Parameter(Mandatory=$false, Position=2)]
+        [Parameter(Mandatory=$false, Position=3)]
         [string]$Domain
     )
 
@@ -1328,7 +1518,7 @@ function Set-StorageAccountDomainProperties {
     }
 
     $azureStorageIdentity = Get-AzStorageAccountADObject `
-        -ADObjectName $StorageAccountName `
+        -ADObjectName $ADObjectName `
         -Domain $Domain `
         -ErrorAction Stop
     $azureStorageSid = $azureStorageIdentity.SID.Value
@@ -1382,8 +1572,6 @@ class KerbKeyMatch {
 }
 
 function Test-AzStorageAccountADObjectPasswordIsKerbKey {
-    #requires -Module @{ ModuleName = "Az.Storage"; RequiredVersion = "1.8.2" }
-
     <#
     .SYNOPSIS
     Check Kerberos keys kerb1 and kerb2 against the AD object for the storage account.
@@ -1504,8 +1692,6 @@ function Test-AzStorageAccountADObjectPasswordIsKerbKey {
 }
 
 function Update-AzStorageAccountADObjectPassword {
-    #requires -Module @{ ModuleName = "Az.Storage"; RequiredVersion = "1.8.2" }
-
     <#
     .SYNOPSIS
     Switch the password of the AD object representing the storage account to the indicated kerb key.
@@ -1677,8 +1863,6 @@ function Update-AzStorageAccountADObjectPassword {
 }
 
 function Invoke-AzStorageAccountADObjectPasswordRotation {
-    #requires -Module @{ ModuleName = "Az.Storage"; RequiredVersion = "1.8.2" }
-
     <#
     .SYNOPSIS
     Do a password rotation of kerb key used on the AD object representing the storage account.
@@ -1802,9 +1986,7 @@ function Invoke-AzStorageAccountADObjectPasswordRotation {
     }
 }
 
-function Join-AzStorageAccountForAuth {
-    #requires -Module @{ ModuleName = "Az.Storage"; RequiredVersion = "1.8.2" }
-
+function Join-AzStorageAccount {
     <#
     .SYNOPSIS 
     Domain join a storage account to an Active Directory Domain Controller.
@@ -1837,23 +2019,26 @@ function Join-AzStorageAccountForAuth {
     .PARAMETER OrganizationalUnitName
     The organizational unit for the AD object to be added to. This parameter is optional, but many environments will require it.
 
+    .PARAMETER OrganizationalUnitDistinguishedName
+    The distinguished name of the organizational unit (i.e. "OU=Workstations,DC=contoso,DC=com"). This parameter is optional, but many environments will require it.
+
     .PARAMETER ADObjectNameOverride
     By default, the AD object that is created will have a name to match the storage account. This parameter overrides that to an
     arbitrary name. This does not affect how you access your storage account.
 
     .EXAMPLE
-    PS> Join-AzStorageAccountForAuth -ResourceGroupName "myResourceGroup" -StorageAccountName "myStorageAccount" -Domain "subsidiary.corp.contoso.com" -DomainAccountType ComputerAccount -OrganizationalUnitName "StorageAccountsOU"
+    PS> Join-AzStorageAccount -ResourceGroupName "myResourceGroup" -StorageAccountName "myStorageAccount" -Domain "subsidiary.corp.contoso.com" -DomainAccountType ComputerAccount -OrganizationalUnitName "StorageAccountsOU"
 
     .EXAMPLE 
     PS> $storageAccount = Get-AzStorageAccount -ResourceGroupName "myResourceGroup" -Name "myStorageAccount"
-    PS> Join-AzStorageAccountForAuth -StorageAccount $storageAccount -Domain "subsidiary.corp.contoso.com" -DomainAccountType ComputerAccount -OrganizationalUnitName "StorageAccountsOU"
+    PS> Join-AzStorageAccount -StorageAccount $storageAccount -Domain "subsidiary.corp.contoso.com" -DomainAccountType ComputerAccount -OrganizationalUnitName "StorageAccountsOU"
 
     .EXAMPLE
-    PS> Get-AzStorageAccount -ResourceGroupName "myResourceGroup" | Join-AzStorageAccountForAuth -Domain "subsidiary.corp.contoso.com" -DomainAccountType ComputerAccount -OrganizationalUnitName "StorageAccountsOU"
+    PS> Get-AzStorageAccount -ResourceGroupName "myResourceGroup" | Join-AzStorageAccount -Domain "subsidiary.corp.contoso.com" -DomainAccountType ComputerAccount -OrganizationalUnitName "StorageAccountsOU"
 
     In this example, note that a specific storage account has not been specified to 
     Get-AzStorageAccount. This means Get-AzStorageAccount will pipe every storage account 
-    in the resource group myResourceGroup to Join-AzStorageAccountForAuth.
+    in the resource group myResourceGroup to Join-AzStorageAccount.
     #>
 
     [CmdletBinding(SupportsShouldProcess, ConfirmImpact="Medium")]
@@ -1873,10 +2058,13 @@ function Join-AzStorageAccountForAuth {
 
         [Parameter(Mandatory=$false, Position=3)]
         [ValidateSet("ServiceLogonAccount", "ComputerAccount")]
-        [string]$DomainAccountType = "ServiceLogonAccount",
+        [string]$DomainAccountType = "ComputerAccount",
 
         [Parameter(Mandatory=$false, Position=4)]
         [string]$OrganizationalUnitName,
+
+        [Parameter(Mandatory=$false, Position=5)]
+        [string]$OrganizationalUnitDistinguishedName,
 
         [Parameter(Mandatory=$false, Position=5)]
         [string]$ADObjectNameOverride
@@ -1889,14 +2077,32 @@ function Join-AzStorageAccountForAuth {
     }
 
     process {
-        if (![System.String]::IsNullOrEmpty($ADObjectNameOverride)) {
-            Write-Error -Message "Specifying an override for a service/computer account is not currently implemented." -ErrorAction Stop
+        # The proper way to do this is with a parameter set, but the parameter sets are not being generated correctly.
+        if (
+            $PSBoundParameters.ContainsKey("OrganizationalUnitName") -and 
+            $PSBoundParameters.ContainsKey("OrganizationalUnitDistinguishedName")
+        ) {
+            Write-Error `
+                    -Message "Only one of OrganizationalUnitName and OrganizationalUnitDistinguishedName should be specified." `
+                    -ErrorAction Stop
         }
 
         if ($PSCmdlet.ParameterSetName -eq "StorageAccount") {
             $StorageAccountName = $StorageAccount.StorageAccountName
             $ResourceGroupName = $StorageAccount.ResourceGroupName
         }
+        
+        if (!$PSBoundParameters.ContainsKey("ADObjectNameOverride")) {
+            if ($StorageAccountName.Length -gt 15) {
+                $randomSuffix = Get-RandomString -StringLength 5 -AlphanumericOnly
+                $ADObjectNameOverride = $StorageAccountName.Substring(0, 10) + $randomSuffix
+
+            } else {
+                $ADObjectNameOverride = $StorageAccountName
+            }
+        }
+        
+        Write-Verbose -Message "Using $ADObjectNameOverride as the name for the ADObject."
 
         $caption = "Domain join $StorageAccountName"
         $verboseConfirmMessage = ("This action will domain join the requested storage account to the requested domain.")
@@ -1919,16 +2125,30 @@ function Join-AzStorageAccountForAuth {
             Ensure-KerbKeyExists -ResourceGroupName $ResourceGroupName -StorageAccountName $StorageAccountName -ErrorAction Stop
 
             # Create the service account object for the storage account.
-            New-ADAccountForStorageAccount `
-                -StorageAccountName $StorageAccountName `
-                -ResourceGroupName $ResourceGroupName `
-                -Domain $Domain `
-                -OrganizationalUnit $OrganizationalUnitName `
-                -ObjectType $DomainAccountType `
-                -ErrorAction Stop
+            $newParams = @{
+                "ADObjectName" = $ADObjectNameOverride;
+                "StorageAccountName" = $StorageAccountName;
+                "ResourceGroupName" = $ResourceGroupName;
+                "ObjectType" = $DomainAccountType
+            }
+
+            if ($PSBoundParameters.ContainsKey("Domain")) {
+                $newParams += @{ "Domain" = $Domain }
+            }
+
+            if ($PSBoundParameters.ContainsKey("OrganizationalUnitName")) {
+                $newParams += @{ "OrganizationalUnit" = $OrganizationalUnitName }
+            }
+
+            if ($PSBoundParameters.ContainsKey("OrganizationalUnitDistinguishedName")) {
+                $newParams += @{ "OrganizationalUnitDistinguishedName" = $OrganizationalUnitDistinguishedName }
+            }
+
+            New-ADAccountForStorageAccount @newParams -ErrorAction Stop
 
             # Set domain properties on the storage account.
             Set-StorageAccountDomainProperties `
+                -ADObjectName $ADObjectNameOverride `
                 -ResourceGroupName $ResourceGroupName `
                 -StorageAccountName $StorageAccountName `
                 -Domain $Domain
@@ -1936,6 +2156,8 @@ function Join-AzStorageAccountForAuth {
     }
 }
 
+# Add alias for Join-AzStorageAccountForAuth
+New-Alias -Name "Join-AzStorageAccountForAuth" -Value "Join-AzStorageAccount"
 function Expand-AzResourceId {
     <#
     .SYNOPSIS
@@ -2057,6 +2279,7 @@ function Request-ConnectAzureAD {
     param()
 
     Assert-IsWindows
+    Request-AzureADModule
 
     $aadModule = Get-Module | Where-Object { $_.Name -like "AzureAD" }
     if ($null -eq $aadModule) {
@@ -2164,10 +2387,8 @@ function Get-AzCurrentAzureADUser {
 
 $ClassicAdministratorsSet = $false
 $ClassicAdministrators = [HashSet[string]]::new()
-$OperationCache = [Dictionary[string, Microsoft.Azure.Commands.Resources.Models.Authorization.PSRoleDefinition[]]]::new()
+$OperationCache = [Dictionary[string, object[]]]::new()
 function Test-AzPermission {
-    #requires -Module Az.Resources
-
     <#
     .SYNOPSIS
     Test specific permissions required for a given user.
@@ -2374,8 +2595,6 @@ function Test-AzPermission {
 }
 
 function Assert-AzPermission {
-    #requires -Module Az.Resources
-
     <#
     .SYNOPSIS
     Check if the user has the required permissions and throw an error if they don't.
@@ -2445,3 +2664,131 @@ function Assert-AzPermission {
         }
     }
 }
+
+# This class is a wrapper around SecureString and StringBuilder to provide a consistent interface 
+# (Append versus AppendChar) and specialized object return (give a string when StringBuilder, 
+# SecureString when SecureString) so you don't have to care what the underlying object is. 
+class OptionalSecureStringBuilder {
+    hidden [SecureString]$SecureString
+    hidden [StringBuilder]$StringBuilder
+    hidden [bool]$IsSecureString
+
+    # Create an OptionalSecureStringBuilder with the desired underlying object.
+    OptionalSecureStringBuilder([bool]$isSecureString) {
+        $this.IsSecureString = $isSecureString
+        if ($this.IsSecureString) {
+            $this.SecureString = [SecureString]::new()
+        } else {
+            $this.StringBuilder = [StringBuilder]::new()
+        }
+    }
+    
+    # Append a string to the internal object.
+    [void]Append([string]$append) {
+        if ($this.IsSecureString) {
+            foreach($c in $append) {
+                $this.SecureString.AppendChar($c)
+            }
+        } else {
+            $this.StringBuilder.Append($append) | Out-Null
+        }
+    }
+
+    # Get the actual object you've been writing to.
+    [object]GetInternalObject() {
+        if ($this.IsSecureString) {
+            return $this.SecureString
+        } else {
+            return $this.StringBuilder.ToString()
+        }
+    }
+}
+
+function Get-RandomString {
+    <#
+    .SYNOPSIS
+    Generate a random string for the purposes of password generation or random characters for unique names.
+
+    .DESCRIPTION
+    Generate a random string for the purposes of password generation or random characters for unique names.
+
+    .PARAMETER StringLength
+    The length of the string to generate.
+
+    .PARAMETER AlphanumericOnly
+    The string should only include alphanumeric characters.
+
+    .PARAMETER CaseSensitive
+    Distinguishes between the same characters of different case. 
+
+    .PARAMETER IncludeSimilarCharacters
+    Include characters that might easily be mistaken for each other (depending on the font): 1, l, I.
+
+    .PARAMETER ExcludeCharacters
+    Don't include these characters in the random string.
+    
+    .PARAMETER AsSecureString
+    Return the object as a secure string rather than a regular string.
+
+    .EXAMPLE
+    Get-RandomString -StringLength 10 -AlphanumericOnly -AsSecureString
+
+    .OUTPUTS
+    System.String
+    System.Security.SecureString
+    #>
+
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)]
+        [int]$StringLength,
+
+        [Parameter(Mandatory=$false)]
+        [switch]$AlphanumericOnly,
+
+        [Parameter(Mandatory=$false)]
+        [switch]$CaseSensitive,
+
+        [Parameter(Mandatory=$false)]
+        [switch]$IncludeSimilarCharacters,
+
+        [Parameter(Mandatory=$false)]
+        [string[]]$ExcludeCharacters,
+
+        [Parameter(Mandatory=$false)]
+        [switch]$AsSecureString
+    )
+
+    $characters = [string[]]@()
+
+    $characters += 97..122 | ForEach-Object { [char]$_ }
+    if ($CaseSensitive) {
+        $characters += 65..90 | ForEach-Object { [char]$_ }
+    }
+
+    $characters += 0..9 | ForEach-Object { $_.ToString() }
+    
+    if (!$AlphanumericOnly) {
+        $characters += 33..46 | ForEach-Object { [char]$_ }
+        $characters += 91..96 | ForEach-Object { [char]$_ }
+        $characters += 123..126 | ForEach-Object { [char]$_ }
+    }
+
+    if (!$IncludeSimilarCharacters) {
+        $ExcludeCharacters += "1", "l", "I", "0", "O"
+    }
+
+    $characters = $characters | Where-Object { $_ -notin $ExcludeCharacters }
+
+    $acc = [OptionalSecureStringBuilder]::new($AsSecureString)
+    for($i=0; $i -lt $StringLength; $i++) {
+        $random = Get-Random -Minimum 0 -Maximum $characters.Length
+        $acc.Append($characters[$random])
+    }
+
+    return $acc.GetInternalObject()
+}
+
+# Actions to run on module load
+Request-PowerShellGetModule
+Request-AzPowerShellModule
