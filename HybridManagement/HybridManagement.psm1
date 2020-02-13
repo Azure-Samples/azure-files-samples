@@ -846,6 +846,136 @@ function Request-AzPowerShellModule {
     Import-Module -ModuleInfo $storageModule[0] -Global -ErrorAction Stop
 }
 
+function Assert-DotNetFrameworkVersion {
+    <#
+    .SYNOPSIS
+    Require a particular .NET Framework version or throw an error if it's not available. 
+
+    .DESCRIPTION
+    This cmdlet makes it possible to throw an error if a particular .NET Framework version is not installed on Windows. It wraps the registry using the information about .NET Framework here: https://docs.microsoft.com/en-us/dotnet/framework/migration-guide/how-to-determine-which-versions-are-installed#query-the-registry-using-code. This cmdlet is not PowerShell 5.1 only, since it's reasonable to imagine a case where a PS6+ cmdlet/module would want to require a particular version of .NET.
+
+    .PARAMETER DotNetFrameworkVersion
+    The minimum version of .NET Framework to require. If a newer version is found, that will satisify the request.
+
+    .EXAMPLE 
+    Assert-DotNetFrameworkVersion
+    #>
+
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)]
+        [ValidateSet(
+            "Framework4.5", 
+            "Framework4.5.1",
+            "Framework4.5.2", 
+            "Framework4.6", 
+            "Framework4.6.1", 
+            "Framework4.6.2", 
+            "Framework4.7", 
+            "Framework4.7.1", 
+            "Framework4.7.2", 
+            "Framework4.8")]
+        [string]$DotNetFrameworkVersion
+    )
+
+    Assert-IsWindows
+
+    $v4 = Get-ChildItem -Path "HKLM:\SOFTWARE\Microsoft\NET Framework Setup\NDP" | `
+        Where-Object { $_.PSChildName -eq "v4" }
+    if ($null -eq $v4) {
+        Write-Error `
+                -Message "This module/cmdlet requires at least .NET 4.0 to be installed." `
+                -ErrorAction Stop
+    }
+
+    $full = Get-ChildItem -Path "HKLM:\SOFTWARE\Microsoft\NET Framework Setup\NDP\v4" | `
+        Where-Object { $_.PSChildName -eq "Full" }
+    if ($null -eq $full) {
+        Write-Error `
+                -Message "This module/cmdlet requires at least .NET 4.5 to be installed." `
+                -ErrorAction Stop
+    }
+
+    $release = Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full" | `
+        Select-Object -ExpandProperty Release
+    if ($null -eq $release) {
+        Write-Error `
+                -Message "The Release property is not set at HKLM:\SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full." `
+                -ErrorAction Stop
+    }
+
+    $minimumVersionMet = $false
+
+    # Logic taken from: https://docs.microsoft.com/en-us/dotnet/framework/migration-guide/how-to-determine-which-versions-are-installed#query-the-registry-using-code
+    switch($DotNetFrameworkVersion) {
+        "Framework4.5" {
+            if ($release -ge 378389) {
+                $minimumVersionMet = $true
+            }
+        }
+
+        "Framework4.5.1" {
+            if ($release -ge 378675) {
+                $minimumVersionMet = $true
+            }
+        }
+
+        "Framework4.5.2" {
+            if ($release -ge 379893) {
+                $minimumVersionMet = $true
+            }
+        }
+
+        "Framework4.6" {
+            if ($release -ge 393295) {
+                $minimumVersionMet = $true
+            }
+        }
+
+        "Framework4.6.1" {
+            if ($release -ge 394254) {
+                $minimumVersionMet = $true
+            }
+        } 
+
+        "Framework4.6.2" {
+            if ($release -ge 394802) {
+                $minimumVersionMet = $true
+            }
+        } 
+
+        "Framework4.7" {
+            if ($release -ge 460798) {
+                $minimumVersionMet = $true
+            }
+        } 
+
+        "Framework4.7.1" {
+            if ($release -ge 461308) {
+                $minimumVersionMet = $true
+            }
+        } 
+        
+        "Framework4.7.2" {
+            if ($release -ge 461808) {
+                $minimumVersionMet = $true
+            }
+        }
+            
+        "Framework4.8" {
+            if ($release -ge 528040) {
+                $minimumVersionMet = $true
+            }
+        }
+    }
+
+    if (!$minimumVersionMet) {
+        Write-Error `
+                -Message "This module/cmdlet requires at least .NET $DotNetFrameworkVersion to be installed. Please upgrade to the newest .NET Framework available." `
+                -ErrorAction Stop
+    }
+}
+
 function Validate-StorageAccount {
     [CmdletBinding()]
     param (
@@ -2792,3 +2922,10 @@ function Get-RandomString {
 # Actions to run on module load
 Request-PowerShellGetModule
 Request-AzPowerShellModule
+
+if ((Get-OSPlatform) -eq "Windows") {
+    if ($PSVersionTable.PSEdition -eq "Desktop") {
+        Assert-DotNetFrameworkVersion `
+            -DotNetFrameworkVersion Framework4.7.1
+    }
+}
