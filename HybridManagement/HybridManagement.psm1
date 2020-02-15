@@ -819,14 +819,30 @@ function Request-AzPowerShellModule {
             }
 
             if ($null -eq $storageModule) {
+                Remove-Module `
+                        -Name Az.Storage `
+                        -Force `
+                        -ErrorAction SilentlyContinue
+                
+                try {
+                    Uninstall-Module `
+                            -Name Az.Storage `
+                            -Force `
+                            -ErrorAction Stop
+                } catch {
+                    Write-Error `
+                            -Message "Unable to uninstall the GA version of the Az.Storage module in favor of the preview version (1.11.1-preview)." `
+                            -ErrorAction Stop
+                }
+
                 Install-Module `
-                    -Name Az.Storage `
-                    -AllowClobber `
-                    -AllowPrerelease `
-                    -Force `
-                    -RequiredVersion "1.11.1-preview" `
-                    -SkipPublisherCheck `
-                    -ErrorAction Stop
+                        -Name Az.Storage `
+                        -AllowClobber `
+                        -AllowPrerelease `
+                        -Force `
+                        -RequiredVersion "1.11.1-preview" `
+                        -SkipPublisherCheck `
+                        -ErrorAction Stop
             }       
         }
     }
