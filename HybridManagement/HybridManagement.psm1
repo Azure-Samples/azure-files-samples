@@ -28,7 +28,6 @@ function Get-IsElevatedSession {
     <#
     .SYNOPSIS
     Get the elevation status of the PowerShell session.
-
     .DESCRIPTION
     This cmdlet will check to see if the PowerShell session is running as administrator, generally allowing PowerShell code 
     to check to see if it's got enough permissions to do the things it needs to do. This cmdlet is not yet defined on Linux/macOS
@@ -40,7 +39,6 @@ function Get-IsElevatedSession {
     } else {
         # Some alternative code, or a nice error message.
     }
-
     .OUTPUTS 
     System.Boolean, indicating whether the session is elevated.
     #>
@@ -99,15 +97,12 @@ function Get-OSPlatform {
     <#
     .SYNOPSIS
     Get the OS running the current PowerShell session.
-
     .DESCRIPTION
     This cmdlet is a wrapper around the System.Runtime.InteropServices.RuntimeInformation .NET standard class that makes it easier to work with in PowerShell 5.1/6/7/etc. $IsWindows, etc. is defined in PS6+, however since it's not defined in PowerShell 5.1, it's not incredibly useful for writing PowerShell code meant to be executed in either language version. As older versions of .NET Framework do not support the RuntimeInformation .NET standard class, if the PSEdition is "Desktop", by default you're running on Windows, since only "Core" releases are cross-platform.
-
     .EXAMPLE
     if ((Get-OSPlatform) -eq "Windows") {
         # Do some Windows specific stuff
     }
-
     .OUTPUTS
     System.String, indicating the OS Platform name as defined by System.Runtime.InteropServices.RuntimeInformation.
     #>
@@ -147,10 +142,8 @@ function Assert-IsWindows {
     <#
     .SYNOPSIS
     Check if the session is being run on Windows and throw an error if it isn't.
-
     .DESCRIPTION
     This cmdlet uses the Get-OSPlatform cmdlet to throw a nice error message to the user if the session isn't Windows.
-
     .EXAMPLE
     Assert-IsWindows
     # User either sees nothing or an error message.
@@ -171,14 +164,12 @@ function Get-IsDomainJoined {
     
     .DESCRIPTION
     This cmdlet returns true if the cmdlet is running in a domain-joined session or false if it's not.
-
     .EXAMPLE
     if ((Get-IsDomainJoined)) {
         # Do something if computer is domain joined.
     } else {
         # Do something else if the computer is not domain joined.
     }
-
     .OUTPUTS
     System.Boolean, indicating whether or not the computer is domain joined.
     #>
@@ -208,10 +199,8 @@ function Assert-IsDomainJoined {
     <#
     .SYNOPSIS
     Check if the session is being run on a domain joined machine and throw an error if it isn't.
-
     .DESCRIPTION 
     This cmdlet uses the Get-IsDomainJoined cmdlet to throw a nice error message to the user if the session isn't domain joined.
-
     .EXAMPLE
     Assert-IsDomainJoined
     #>
@@ -230,15 +219,12 @@ function Get-OSVersion {
     <#
     .SYNOPSIS
     Get the version number of the OS.
-
     .DESCRIPTION
     This cmdlet provides the OS's internal version number, for example 10.0.18363.0 for Windows 10, version 1909 (the public release). This cmdlet is not yet defined on Linux/macOS sessions.
-
     .EXAMPLE
     if ((Get-OSVersion) -ge [System.Version]::new(10,0,0,0)) {
         # Do some Windows 10 specific stuff
     }
-
     .OUTPUTS
     System.Version, indicating the OS's internal version number.
     #>
@@ -269,21 +255,17 @@ function Get-WindowsInstallationType {
     <#
     .SYNOPSIS
     Get the Windows installation type (ex. Client, Server, ServerCore, etc.).
-
     .DESCRIPTION
     This cmdlet provides the installation type of the Windows OS, primarily to allow for cmdlet behavior changes depending on whether the cmdlet is being run on a Windows client ("Client") or a Windows Server ("Server", "ServerCore"). This cmdlet is (obviously) only available for Windows PowerShell sessions and will return a PlatformNotSupportedException for non-Windows sessions.
-
     .EXAMPLE
     switch ((Get-WindowsInstallationType)) {
         "Client" {
             # Do some stuff for Windows client.
         }
-
         { ($_ -eq "Server") -or ($_ -eq "Server Core") } {
             # Do some stuff for Windows Server.
         }
     }
-
     .OUTPUTS
     System.String, indicating the Windows installation type.
     #>
@@ -350,23 +332,19 @@ function Get-OSFeature {
     <#
     .SYNOPSIS
     Get the list of available/installed features for your OS.
-
     .DESCRIPTION
     Get the list of available/installed features for your OS. Currently this cmdlet only works for Windows OSes, but works for both Windows client and Windows Server, which among them provide three different ways of enabling/disabling features (if there are more than three, this cmdlet doesn't suppor them yet).
-
     .EXAMPLE
     # Check to see if the Windows 10 client RSAT AD PowerShell module is installed. 
     if ((Get-OSPlatform) -eq "Windows" -and (Get-WindowsInstallationType) -eq "Client") {
         $rsatADFeature = Get-OSFeature | `
             Where-Object { $_.Name -eq "Rsat.ActiveDirectory.DS-LDS.Tools" }
-
         if ($null -eq $rsatADFeature) {
             # Feature is not installed.
         } else {
             # Feature is installed
         }
     }
-
     .OUTPUTS
     OSFeature (defined in this PowerShell module), representing a feature available/installed in your OS.
     #>
@@ -473,13 +451,10 @@ function Install-OSFeature {
     <#
     .SYNOPSIS
     Install a requested operating system feature.
-
     .DESCRIPTION
     This cmdlet will use the underlying OS-specific feature installation methods to install the requested feature(s). This is currently Windows only.
-
     .PARAMETER OSFeature
     The feature(s) to be installed.
-
     .EXAMPLE 
     # Install the RSAT AD PowerShell module. 
     if ((Get-OSPlatform) -eq "Windows" -and (Get-WindowsInstallationType) -eq "Client") {
@@ -564,19 +539,14 @@ function Request-OSFeature {
     <#
     .SYNOPSIS
     Request the features to be installed that are required for a cmdlet/script.
-
     .DESCRIPTION
     This cmdlet is a wrapper around the Install-OSFeature cmdlet, primarily to be used in cmdlets/scripts to ensure the required OS feature prerequisites are installed before the rest of the cmdlet executes. The required features, independent of the actual OS running, can be described, and this cmdlet figures out the rest.
-
     .PARAMETER WindowsClientCapability
     The names of features which are Windows client capabilities.
-
     .PARAMETER WindowsClientOptionalFeature
     The names of features which are Windows client optional features.
-
     .PARAMETER WindowsServerFeature
     The names of features which are Windows Server features.
-
     .EXAMPLE
     Request-OSFeature `
             -WindowsClientCapability "Rsat.ActiveDirectory.DS-LDS.Tools" `
@@ -662,7 +632,6 @@ function Request-ADFeature {
     <#
     .SYNOPSIS
     Ensure the ActiveDirectory PowerShell module is installed prior to running the rest of the caller cmdlet.
-
     .DESCRIPTION
     This cmdlet is helper around Request-OSFeature specifically meant for the RSAT AD PowerShell module. It uses the optimization of checking if the ActiveDirectory module is available before using the Request-OSFeature cmdlet, since this is quite a bit faster (and does not require session elevation on Windows client) before using the Request-OSFeature cmdlet. This cmdlet is not exported.
     
@@ -1191,7 +1160,6 @@ function Ensure-KerbKeyExists {
         Notably, this command:
         - Queries the storage account's keys to see if there are any kerb keys.
         - Generates kerb keys if they do not yet exist.
-
     .EXAMPLE
         PS C:\> Ensure-KerbKeyExists -ResourceGroupName "resourceGroup" -StorageAccountName "storageAccountName"
     
@@ -1220,12 +1188,20 @@ function Ensure-KerbKeyExists {
             Write-Verbose "Caught exception: $($_.Exception.Message)"
         }
 
-        if ($kerb1Key -eq $null) {
+        if ($null -eq $kerb1Key) {
             #
             # The storage account doesn't have kerb keys yet.  Generate them now.
             #
 
-            $keys = New-AzStorageAccountKey -ResourceGroupName $ResourceGroupName -Name $StorageAccountName -KeyName kerb1 -ErrorAction Stop
+            try {
+                $keys = New-AzStorageAccountKey -ResourceGroupName $ResourceGroupName -Name $StorageAccountName -KeyName kerb1 -ErrorAction Stop
+            }
+            catch {
+                $storageAccount = Get-AzStorageAccount -ResourceGroupName $ResourceGroupName -Name $StorageAccountName;
+
+                Write-Error -Message "Unable to generate a Kerberos key for storage account: $($storageAccount.StorageAccountName).
+This might be because the 'Azure Files Authentication with Active Directory' feature is not yet available in this location ($($storageAccount.Location))." -ErrorAction Stop
+            }
 
             $kerb1Key = Get-AzStorageAccountKey -ResourceGroupName $ResourceGroupName -Name $StorageAccountName `
                  -ListKerbKey | Where-Object { $_.KeyName -eq "kerb1" }
@@ -1259,12 +1235,10 @@ function Get-ServicePrincipalName {
     
     .DESCRIPTION
         Gets the service principal name for the storage account's identity in Active Directory.
-
         Notably, this command:
             - Queries the storage account's file endpoint URL (i.e. "https://<storageAccount>.file.core.windows.net/")
             - Transforms that URL string into a SMB server service principal name 
                 (i.e. "cifs\<storageaccount>.file.core.windows.net")
-
     .EXAMPLE
         PS C:\> Get-ServicePrincipalName -storageAccountName "storageAccount" -resourceGroupName "resourceGroup"
         cifs\storageAccount.file.core.windows.net
@@ -1294,13 +1268,10 @@ function New-ADAccountForStorageAccount {
     
     .DESCRIPTION
         Creates the identity for the storage account in Active Directory
-
         Notably, this command:
             - Queries the storage account to get the "kerb1" key.
             - Creates a user identity in Active Directory using "kerb1" key as the identity's password.
             - Sets the spn value of the new identity to be "cifs\<storageaccountname>.file.core.windows.net
-
-
     .EXAMPLE
         PS C:\> New-ADAccountForStorageAccount -StorageAccountName "storageAccount" -ResourceGroupName "resourceGroup"
     #>
@@ -1319,10 +1290,12 @@ function New-ADAccountForStorageAccount {
         [Parameter(Mandatory=$false, Position=3)]
         [string]$Domain,
 
-        [Parameter(Mandatory=$false, Position=4, ParameterSetName="OUQuickName")]
+        [Parameter(Mandatory=$false, Position=4)]
+        # [Parameter(Mandatory=$false, Position=4, ParameterSetName="OUQuickName")]
         [string]$OrganizationalUnit,
 
-        [Parameter(Mandatory=$false, Position=4, ParameterSetName="OUDistinguishedName")]
+        [Parameter(Mandatory=$false, Position=4)]
+        # [Parameter(Mandatory=$false, Position=4, ParameterSetName="OUDistinguishedName")]
         [string]$OrganizationalUnitDistinguishedName,
 
         [Parameter(Mandatory=$false, Position=5)]
@@ -1344,7 +1317,11 @@ function New-ADAccountForStorageAccount {
     } else {
         try {
             $path = ((Get-ADDomain -Server $Domain).DistinguishedName)
-        } catch {
+        }
+        catch [Microsoft.ActiveDirectory.Management.ADServerDownException] {
+            Write-Error -Message "The specified domain '$Domain' either does not exist or could not be contacted." -ErrorAction Stop
+        }
+        catch {
             throw
         }
     }
@@ -1462,6 +1439,11 @@ function New-ADAccountForStorageAccount {
     must be less than 20 characters to be domain-joined."
         }
 
+        if ($_.Exception.GetType().Name -eq "UnauthorizedAccessException")
+        {
+            Write-Error "Access denied: You don't have permission to create an identity of type $ObjectType in Active Directory location path '$path' for the storage account '$StorageAccountName'"
+        }
+
         throw
     }    
 
@@ -1472,49 +1454,38 @@ function Get-AzStorageAccountADObject {
     <#
     .SYNOPSIS
     Get the AD object for a given storage account.
-
     .DESCRIPTION
     This cmdlet will lookup the AD object for a domain joined storage account. It will return the
     object from the ActiveDirectory module representing the type of AD object that was created,
     either a service logon account (user class) or a computer account. 
-
     .PARAMETER ResourceGroupName
     The name of the resource group containing the storage account. If you specify the StorageAccount 
     parameter you do not need to specify ResourceGroupName. 
-
     .PARAMETER StorageAccountName
     The name of the storage account that's already been domain joined to your DC. This cmdlet will return 
     nothing if the storage account has not been domain joined. If you specify StorageAccount, you do not need
     to specify StorageAccountName. 
-
     .PARAMETER StorageAccount
     A storage account object that has already been fetched using Get-AzStorageAccount. This cmdlet will 
     return nothing if the storage account has not been domain joined. If you specify ResourceGroupName and 
     StorageAccountName, you do not need to specify StorageAccount.
-
     .PARAMETER ADObjectName
     This parameter will look up a given object name in AD and cast it to the correct object type, either 
     class user (service logon account) or class computer. This parameter is primarily meant for internal use and 
     may be removed in a future release of the module.
-
     .PARAMETER Domain
     In combination with ADObjectName, the domain to look up the object in. This parameter is primarily 
     meant for internal use and may be removed in a future release of the module.
-
     .OUTPUTS
     Microsoft.ActiveDirectory.Management.ADUser or Microsoft.ActiveDirectory.Management.ADComputer,
     depending on the type of object the storage account was domain joined as.
-
     .EXAMPLE
     PS> Get-AzStorageAccountADObject -ResourceGroupName "myResourceGroup" -StorageAccountName "myStorageAccount"
-
     .EXAMPLE
     PS> $storageAccount = Get-AzStorageAccount -ResourceGroupName "myResourceGroup" -StorageAccountName "myStorageAccount"
     PS> Get-AzStorageAccountADObject -StorageAccount $StorageAccount
-
     .EXAMPLE
     PS> Get-AzStorageAccount -ResourceGroupName "myResourceGroup" | Get-AzStorageAccountADObject 
-
     In this example, note that a specific storage account has not been specified to 
     Get-AzStorageAccount. This means Get-AzStorageAccount will pipe every storage account 
     in the resource group myResourceGroup to Get-AzStorageAccountADObject.
@@ -1632,10 +1603,8 @@ function Get-AzStorageKerberosTicketStatus {
     It will return an array of these objects, each object having a property 'Azure Files Health Status'
     which tells the health of the ticket.  It will error when there are no ticketsfound or if there are 
     unhealthy tickets found.
-
     .OUTPUTS
     Object[] of PSCustomObject containing klist ticket output.
-
     .EXAMPLE
     PS> Get-AzStorageKerberosTicketStatus
     #>
@@ -1719,7 +1688,6 @@ function Get-AzStorageKerberosTicketStatus {
         Run the following command: 
             
             'klist get cifs/<storageaccountname>.file.core.windows.net'
-
         to request a ticket and then rerun this status command.
         "
         }
@@ -1761,7 +1729,6 @@ function Set-StorageAccountDomainProperties {
     
     .DESCRIPTION
         Creates the identity for the storage account in Active Directory
-
         Notably, this command:
             - Queries the domain for the identity created for the storage account.
                 - ActiveDirectoryAzureStorageSid
@@ -1776,7 +1743,6 @@ function Set-StorageAccountDomainProperties {
                 - ActiveDirectoryForestName
                 - ActiveDirectoryNetBiosDomainName
             - Sets these properties on the storage account.
-
     .EXAMPLE
         PS C:\> Create-ServiceAccount -StorageAccountName "storageAccount" -ResourceGroupName "resourceGroup"
     #>
@@ -1867,26 +1833,19 @@ function Test-AzStorageAccountADObjectPasswordIsKerbKey {
     <#
     .SYNOPSIS
     Check Kerberos keys kerb1 and kerb2 against the AD object for the storage account.
-
     .DESCRIPTION
     This cmdlet checks to see if kerb1, kerb2, or something else matches the actual password on the AD object. This cmdlet can be used to validate that authentication issues are not occurring because the password on the AD object does not match one of the Kerberos keys. It is also used by Invoke-AzStorageAccountADObjectPasswordRotation to determine which Kerberos to rotate to.
-
     .PARAMETER ResourceGroupName
     The resource group of the storage account to check.
-
     .PARAMETER StorageAccountName
     The storage account name of the storage account to check.
-
     .PARAMETER StorageAccount
     The storage account to check.
-
     .EXAMPLE
     PS> Test-AzStorageAccountADObjectPasswordIsKerbKey -ResourceGroupName "myResourceGroup" -StorageAccountName "mystorageaccount123"
-
     .EXAMPLE
     PS> $storageAccountsToCheck = Get-AzStorageAccount -ResourceGroup "rgWithDJStorageAccounts"
     PS> $storageAccountsToCheck | Test-AzStorageAccountADObjectPasswordIsKerbKey 
-
     .OUTPUTS
     KerbKeyMatch, defined in this module.
     #>
@@ -1987,7 +1946,6 @@ function Update-AzStorageAccountADObjectPassword {
     <#
     .SYNOPSIS
     Switch the password of the AD object representing the storage account to the indicated kerb key.
-
     .DESCRIPTION
     This cmdlet will switch the password of the AD object (either a service logon account or a computer 
     account, depending on which you selected when you domain joined the storage account to your DC), 
@@ -1998,25 +1956,20 @@ function Update-AzStorageAccountADObjectPassword {
     split over several hours where both kerb keys are rotated. The default key used when the storage 
     account is domain joined is kerb1, so to do a rotation, switch to kerb2, wait several hours, and then
     switch back to kerb1 (this cmdlet regenerates the keys before switching).
-
     .PARAMETER RotateToKerbKey
     The kerb key of the storage account that the AD object representing the storage account in your DC 
     will be set to.
-
     .PARAMETER ResourceGroupName
     The name of the resource group containing the storage account. If you specify the StorageAccount 
     parameter you do not need to specify ResourceGroupName. 
-
     .PARAMETER StorageAccountName
     The name of the storage account that's already been domain joined to your DC. This cmdlet will fail
     if the storage account has not been domain joined. If you specify StorageAccount, you do not need
     to specify StorageAccountName. 
-
     .PARAMETER StorageAccount
     A storage account object that has already been fetched using Get-AzStorageAccount. This cmdlet will 
     fail if the storage account has not been domain joined. If you specify ResourceGroupName and 
     StorageAccountName, you do not need to specify StorageAccount.
-
     .Example
     PS> Update-AzStorageAccountADObjectPassword -RotateToKerbKey kerb2 -ResourceGroupName "myResourceGroup" -StorageAccountName "myStorageAccount"
     
@@ -2158,22 +2111,16 @@ function Invoke-AzStorageAccountADObjectPasswordRotation {
     <#
     .SYNOPSIS
     Do a password rotation of kerb key used on the AD object representing the storage account.
-
     .DESCRIPTION
     This cmdlet wraps Update-AzStorageAccountADObjectPassword to rotate whatever the current kerb key is to the other one. It's not strictly speaking required to do a rotation, always regenerating kerb1 is ok to do is well.
-
     .PARAMETER ResourceGroupName
     The resource group of the storage account to be rotated.
-
     .PARAMETER StorageAccountName
     The name of the storage account to be rotated. 
-
     .PARAMETER StorageAccount
     The storage account to be rotated.
-
     .EXAMPLE
     PS> Invoke-AzStorageAccountADObjectPasswordRotation -ResourceGroupName "myResourceGroup" -StorageAccountName "mystorageaccount123"
-
     .EXAMPLE
     PS> $storageAccounts = Get-AzStorageAccount -ResourceGroupName "myResourceGroup"
     PS> $storageAccounts | Invoke-AzStorageAccountADObjectPasswordRotation
@@ -2282,52 +2229,39 @@ function Join-AzStorageAccount {
     <#
     .SYNOPSIS 
     Domain join a storage account to an Active Directory Domain Controller.
-
     .DESCRIPTION
     This cmdlet will perform the equivalent of an offline domain join on behalf of the indicated storage account.
     It will create an object in your AD domain, either a service logon account (which is really a user account) or a computer account
     account. This object will be used to perform Kerberos authentication to the Azure file shares in your storage account.
-
     .PARAMETER ResourceGroupName
     The name of the resource group containing the storage account you would like to domain join. If StorageAccount is specified, 
     this parameter should not specified.
-
     .PARAMETER StorageAccountName
     The name of the storage account you would like to domain join. If StorageAccount is specified, this parameter 
     should not be specified.
-
     .PARAMETER StorageAccount
     A storage account object you would like to domain join. If StorageAccountName and ResourceGroupName is specified, this 
     parameter should not specified.
-
     .PARAMETER Domain
     The domain you would like to join the storage account to. If you would like to join the same domain as the one you are 
     running the cmdlet from, you do not need to specify this parameter.
-
     .PARAMETER DomainAccountType
     The type of AD object to be used either a service logon account (user account) or a computer account. The default is to create 
     service logon account.
-
     .PARAMETER OrganizationalUnitName
     The organizational unit for the AD object to be added to. This parameter is optional, but many environments will require it.
-
     .PARAMETER OrganizationalUnitDistinguishedName
     The distinguished name of the organizational unit (i.e. "OU=Workstations,DC=contoso,DC=com"). This parameter is optional, but many environments will require it.
-
     .PARAMETER ADObjectNameOverride
     By default, the AD object that is created will have a name to match the storage account. This parameter overrides that to an
     arbitrary name. This does not affect how you access your storage account.
-
     .EXAMPLE
     PS> Join-AzStorageAccount -ResourceGroupName "myResourceGroup" -StorageAccountName "myStorageAccount" -Domain "subsidiary.corp.contoso.com" -DomainAccountType ComputerAccount -OrganizationalUnitName "StorageAccountsOU"
-
     .EXAMPLE 
     PS> $storageAccount = Get-AzStorageAccount -ResourceGroupName "myResourceGroup" -Name "myStorageAccount"
     PS> Join-AzStorageAccount -StorageAccount $storageAccount -Domain "subsidiary.corp.contoso.com" -DomainAccountType ComputerAccount -OrganizationalUnitName "StorageAccountsOU"
-
     .EXAMPLE
     PS> Get-AzStorageAccount -ResourceGroupName "myResourceGroup" | Join-AzStorageAccount -Domain "subsidiary.corp.contoso.com" -DomainAccountType ComputerAccount -OrganizationalUnitName "StorageAccountsOU"
-
     In this example, note that a specific storage account has not been specified to 
     Get-AzStorageAccount. This means Get-AzStorageAccount will pipe every storage account 
     in the resource group myResourceGroup to Join-AzStorageAccount.
@@ -2458,24 +2392,18 @@ function Expand-AzResourceId {
     <#
     .SYNOPSIS
     Breakdown an ARM id by parts.
-
     .DESCRIPTION
     This cmdlet breaks down an ARM id by its parts, to make it easy to use the components as inputs in cmdlets/scripts.
-
     .PARAMETER ResourceId
     The resource identifier to be broken down.
-
     .EXAMPLE
     $idParts = Get-AzStorageAccount `
             -ResourceGroupName "myResourceGroup" `
             -StorageAccountName "mystorageaccount123" | `
         Expand-AzResourceId
-
     # Get the subscription 
     $subscription = $idParts.subscriptions
-
     # Do something else interesting as desired.
-
     .OUTPUTS
     System.Collections.Specialized.OrderedDictionary
     #>
@@ -2519,13 +2447,10 @@ function Compress-AzResourceId {
     <#
     .SYNOPSIS
     Recombine an expanded ARM id into a single string which can be used by Az cmdlets.
-
     .DESCRIPTION
     This cmdlet takes the output of the cmdlet Expand-AzResourceId and puts it back into a single string identifier. Note, this cmdlet does not currently validate that components are valid in an ARM template, so use with care.
-
     .PARAMETER ExpandedResourceId
     An OrderedDictionary representing an expanded ARM identifier.
-
     .EXAMPLE
     $fileShareId = Get-AzRmStorageShare `
             -ResourceGroupName "myResourceGroup" `
@@ -2535,9 +2460,7 @@ function Compress-AzResourceId {
     
     $fileShareId.Remove("shares")
     $fileShareId.Remove("fileServices")
-
     $storageAccountId = $fileShareId | Compress-AzResourceId
-
     .OUTPUTS
     System.String
     #>
@@ -2563,10 +2486,8 @@ function Request-ConnectAzureAD {
     <#
     .SYNOPSIS
     Connect to an Azure AD tenant using the AzureAD cmdlets.
-
     .DESCRIPTION
     Correctly import the AzureAD module for your PowerShell version and then sign in using the same tenant is the currently signed in Az user. This wrapper is necessary as 1. AzureAD is not directly compatible with PowerShell 6 (though this can be achieved through the WindowsCompatibility module), and 2. AzureAD doesn't necessarily log you into the same tenant as the Az cmdlets according to their documentation (although it's not clear when it doesn't).
-
     .EXAMPLE
     Request-ConnectAzureAD
     #>
@@ -2602,19 +2523,14 @@ function Get-AzureADDomainInternal {
     <#
     .SYNOPSIS
     Get the Azure AD domains associated with this Azure AD tenant.
-
     .DESCRIPTION
     This cmdlet is a wrapper around Get-AzureADDomain that is provided to future proof for adding cross-platform support, as AzureAD is not a cross-platform PowerShell module.
-
     .PARAMETER Name
     Specifies the name of a domain.
-
     .EXAMPLE
     $domains = Get-AzureADDomainInternal
-
     .EXAMPLE
     $specificDomain = Get-AzureADDomainInternal -Name "contoso.com"
-
     .OUTPUTS
     Microsoft.Open.AzureAD.Model.Domain
     Deserialized.Microsoft.Open.AzureAD.Model.Domain, if accessed through the WindowsCompatibility module
@@ -2645,13 +2561,10 @@ function Get-AzCurrentAzureADUser {
     <#
     .SYNOPSIS
     Get the name of the Azure AD user logged into Az PowerShell.
-
     .DESCRIPTION
     In general, Get-AzContext provides the logged in username of the user using Az module, however, for accounts that are not part of the Azure AD domain (ex. like a MSA used to create an Azure subscription), this will not match the Azure AD identity, which will be of the format: externalemail_outlook.com#EXT#@contoso.com. This cmdlet returns the correct user as defined in Azure AD.
-
     .EXAMPLE
     $currentUser = Get-AzCurrentAzureADUser
-
     .OUTPUTS
     System.String
     #>
@@ -2688,22 +2601,18 @@ function Test-AzPermission {
     <#
     .SYNOPSIS
     Test specific permissions required for a given user.
-
     .DESCRIPTION
     Since customers can defined custom roles for their Azure users, checking permissions isn't as easy as simply looking at the predefined roles. Additionally, users may be in multiple roles that confer (or remove) the ability to do specific things on an Azure resource. This cmdlet takes a list of specific operations and ensures that the user, current or specified, has the specified permissions on the scope (subscription, resource group, or resource).
-
     .EXAMPLE
     # Does the current user have the ability to list storage account keys?
     $storageAccount = Get-AzStorageAccount -ResourceGroupName "myResourceGroup" -Name "csostoracct"
     $storageAccount | Test-AzPermission -OperationName "Microsoft.Storage/storageAccounts/listkeys/action"
-
     .EXAMPLE
     # Does this specific user have the ability to list storage account keys
     $storageAccount = Get-AzStorageAccount -ResourceGroupName "myResourceGroup" -Name "csostoracct"
     $storageAccount | Test-AzPermission `
             -OperationName "Microsoft.Storage/storageAccounts/listkeys/action" `
             -SignInName "user@contoso.com"
-
     .OUTPUTS
     System.Collections.Generic.Dictionary<string, bool>
     #>
@@ -2894,10 +2803,8 @@ function Assert-AzPermission {
     <#
     .SYNOPSIS
     Check if the user has the required permissions and throw an error if they don't.
-
     .DESCRIPTION
     This cmdlet wraps Test-AzPermission and throws an error if the user does not have the required permissions. This cmdlet is meant for use in cmdlets or scripts.
-
     .EXAMPLE
     $storageAccount = Get-AzStorageAccount -ResourceGroupName "myResourceGroup" -Name "mystorageaccount123"
     $storageAccount | Assert-AzPermission -OperationName "Microsoft.Storage/storageAccounts/listkeys/action"
