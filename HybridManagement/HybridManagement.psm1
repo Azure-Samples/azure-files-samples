@@ -286,6 +286,20 @@ function Get-WindowsInstallationType {
     return $installType
 }
 
+function Assert-IsWindowsServer {
+    [CmdletBinding()]
+    param()
+
+    Assert-IsWindows
+
+    $installationType = Get-WindowsInstallationType
+    if ($installationType -ne "Server" -and $installationType -ne "Server Core") {
+        Write-Error `
+                -Message "The cmdlet, script, or module must be run on a Windows Server installation." `
+                -ErrorAction Stop
+    }
+}
+
 # This PowerShell enumeration provides the various types of OS features. Currently, only Windows features
 # are supported.
 enum OSFeatureKind {
@@ -628,6 +642,86 @@ function Request-OSFeature {
         }
 
         Write-Error -Message $notFoundBuilder.ToString() -ErrorAction Stop
+    }
+}
+
+function Assert-OSFeature {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$false)]
+        [string[]]$WindowsClientCapability,
+
+        [Parameter(Mandatory=$false)]
+        [string[]]$WindowsClientOptionalFeature,
+
+        [Parameter(Mandatory=$false)]
+        [string[]]$WindowsServerFeature
+    )
+
+    $features = Get-OSFeature
+    $foundFeatures = @()
+    $notFoundFeatures = @()
+
+    switch((Get-OSPlatform)) {
+        "Windows" {
+            switch ((Get-WindowsInstallationType)) {
+                "Client" {
+                    $foundFeatures += $features | `
+                        Where-Object { $_.Name -in $WindowsClientCapability -or $_.Name -in $WindowsClientOptionalFeature } 
+
+                    if ($PSBoundParameters.ContainsKey("WindowsClientCapability")) { 
+                        $notFoundFeatures += $WindowsClientCapability | `
+                            Where-Object { $_ -notin ($foundFeatures | Select-Object -ExpandProperty Name) }
+                    }
+
+                    if ($PSBoundParameters.ContainsKey("WindowsClientOptionalFeature")) {   
+                        $notFoundFeatures += $WindowsClientOptionalFeature | `
+                            Where-Object { $_ -notin ($foundFeatures | Select-Object -ExpandProperty Name) }
+                    }
+                }
+
+                { ($_ -eq "Server") -or ($_ -eq "Server Core") } {
+                    $foundFeatures += $features | `
+                        Where-Object { $_.Name -in $WindowsServerFeature }
+                    
+                    $notFoundFeatures += $WindowsServerFeature | `
+                        Where-Object { $_ -notin ($foundFeatures | Select-Object -ExpandProperty Name) }
+                }
+
+                default {
+                    throw [PlatformNotSupportedException]::new("Windows installation type $_ is not currently supported.")
+                }
+            }
+        }
+
+        "Linux" {
+            throw [PlatformNotSupportedException]::new()
+        }
+
+        "OSX" {
+            throw [PlatformNotSupportedException]::new()
+        }
+
+        default {
+            throw [PlatformNotSupportedException]::new()
+        }
+    }
+
+    if ($null -ne $notFoundFeatures -and $notFoundFeatures.Length -gt 0) {
+        $errorBuilder = [StringBuilder]::new()
+        $errorBuilder.Append("The following features could not be found: ") | Out-Null
+
+        $i=0
+        $notFoundFeatures | ForEach-Object { 
+            if ($i -gt 0) {
+                $errorBuilder.Append(", ") | Out-Null
+            }
+
+            $errorBuilder.Append($_) | Out-Null
+        }
+
+        $errorBuilder.Append(".") | Out-Null
+        Write-Error -Message $errorBuilder.ToString() -ErrorAction Stop
     }
 }
 
@@ -4054,106 +4148,51 @@ function Clear-DnsClientCacheInternal {
     }
 }
 
-function Push-AzDnsServerConfiguration {
+function Push-DnsServerConfiguration {
     [CmdletBinding()]
 
     param(
-        [Parameter(Mandatory=$true)]
+        [Parameter(Mandatory=$true, ParameterSetName="AzDnsServer")]
+        [Parameter(Mandatory=$true, ParameterSetName="OnPremDnsServer")]
         [DnsForwardingRuleSet]$DnsForwardingRuleSet,
 
-        [Parameter(Mandatory=$false)]
+        [Parameter(Mandatory=$false, ParameterSetName="AzDnsServer")]
+        [Parameter(Mandatory=$false, ParameterSetName="OnPremDnsServer")]
         [ValidateSet(
             "Overwrite", 
             "Merge", 
             "Disallow")]
-        [string]$ConflictBehavior = "Overwrite"
+        [string]$ConflictBehavior = "Overwrite",
+
+        [Parameter(Mandatory=$true, ParameterSetName="OnPremDnsServer")]
+        [switch]$OnPremDnsServer,
+
+        [Parameter(Mandatory=$true, ParameterSetName="OnPremDnsServer")]
+        [System.Collections.Generic.HashSet[string]]$AzDnsForwarderIpAddress
     )
 
-    $DnsForwardingRuleSet = $args[0]
-    $ConflictBehavior = $args[1]
+    Assert-IsWindowsServer
+    Assert-OSFeature -WindowsServerFeature "DNS", "RSAT-DNS-Server"
 
-    Test-OSFeature -WindowsServerFeature "DNS", "RSAT-DNS-Server"
+    if ($OnPremDnsServer) {
+        $rules = $DnsForwardingRuleSet | `
+            Select-Object -ExpandProperty DnsForwardingRules | `
+            Where-Object { $_.AzureResource }
+    } else {
+        $rules = $DnsForwardingRuleSet | `
+            Select-Object -ExpandProperty DnsForwardingRules
+    }
 
-    $rules = $DnsForwardingRuleSet.DnsForwardingRules
     foreach($rule in $rules) {
-        $existingZone = Get-DnsServerZone | `
-            Where-Object { $_.ZoneName -eq $rule.DomainName }
-
-        $masterServers = $rule.MasterServers
-        if ($null -ne $existingZone) {
-            switch($ConflictBehavior) {
-                "Overwrite" {
-                    $existingZone | Remove-DnsServerZone `
-                            -Confirm:$false `
-                            -Force
-                }
-
-                "Merge" {
-                    $existingMasterServers = $existingZone | `
-                        Select-Object -ExpandProperty MasterServers | `
-                        Select-Object -ExpandProperty IPAddressToString
-                    
-                    $masterServers = [System.Collections.Generic.HashSet[string]]::new(
-                        $masterServers)
-                    
-                    foreach($existingServer in $existingMasterServers) {
-                        $masterServers.Add($existingServer) | Out-Null
-                    }
-
-                    $existingZone | Remove-DnsServerZone `
-                            -Confirm:$false `
-                            -Force
-                }
-
-                "Disallow" {
-                    throw [System.ArgumentException]::new(
-                        "The DNS forwarding zone already exists", "DnsForwardingRuleSet")
-                }
-
-                default {
-                    throw [System.ArgumentException]::new(
-                        "Unexpected conflict behavior $ConflictBehavior", "ConflictBehavior")
-                }
-            }
-        }
-
-        Add-DnsServerConditionalForwarderZone `
-                -Name $rule.DomainName `
-                -MasterServers $masterServers
-    }
-}
-
-function Push-OnPremDnsServerConfiguration {
-    [CmdletBinding()]
-
-    param(
-        [Parameter(Mandatory=$true)]
-        [DnsForwardingRuleSet]$DnsForwardingRuleSet,
-
-        [Parameter(Mandatory=$true)]
-        [System.Collections.Generic.HashSet[string]]$AzDnsForwarderIpAddress,
-
-        [Parameter(Mandatory=$false)]
-        [ValidateSet(
-            "Overwrite", 
-            "Merge", 
-            "Disallow")]
-        [string]$ConflictBehavior = "Overwrite"
-    )
-
-    if ((Get-OSPlatform) -ne "Windows" -or (Get-WindowsInstallationType) -notcontains "Server") {
-        throw [PlatformNotSupportedException]::new()
-    }
-
-    $onPremRules = $DnsForwardingRuleSet | `
-        Select-Object -ExpandProperty DnsForwardingRules | `
-        Where-Object { $_.AzureResource }
-
-    foreach($rule in $onPremRules) {
         $zone = Get-DnsServerZone | `
             Where-Object { $_.ZoneName -eq $rule.DomainName }
 
-        $masterServers = $AzDnsForwarderIpAddress
+        if ($OnPremDnsServer) {
+            $masterServers = $AzDnsForwarderIpAddress
+        } else {
+            $masterServers = $rule.MasterServers
+        }
+
         if ($null -ne $zone) {
             switch($ConflictBehavior) {
                 "Overwrite" {
@@ -4167,8 +4206,13 @@ function Push-OnPremDnsServerConfiguration {
                         Select-Object -ExpandProperty MasterServers | `
                         Select-Object -ExpandProperty IPAddressToString
                     
-                    $masterServers = [System.Collections.Generic.HashSet[string]]::new(
-                        $AzDnsForwarderIpAddress)
+                    if ($OnPremDnsServer) {
+                        $masterServers = [System.Collections.Generic.HashSet[string]]::new(
+                            $AzDnsForwarderIpAddress)
+                    } else {
+                        $masterServers = [System.Collections.Generic.HashSet[string]]::new(
+                            $masterServers)
+                    }               
 
                     foreach($existingServer in $existingMasterServers) {
                         $masterServers.Add($existingServer) | Out-Null
@@ -4457,8 +4501,9 @@ function New-AzDnsForwarder {
                     $DnsForwardingRuleSet = [DnsForwardingRuleSet]::new(($args[0] | ConvertFrom-Json))
                     $dnsForwarderIPs = ([string[]]$args[1])
 
-                    Push-OnPremDnsServerConfiguration `
+                    Push-DnsServerConfiguration `
                             -DnsForwardingRuleSet $DnsForwardingRuleSet `
+                            -OnPremDnsServer `
                             -AzDnsForwarderIpAddress $dnsForwarderIPs
                 }
     }    
