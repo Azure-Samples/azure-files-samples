@@ -5,7 +5,14 @@ param(
     [switch]$SkipUserDisable
 )
 
-Import-Module .\HybridManagement.psd1
+Import-Module `
+        -Name .\HybridManagement.psd1 `
+        -ArgumentList @{ 
+            SkipPowerShellGetCheck = $true;
+            SkipAzPowerShellCheck = $true;
+            SkipDotNetFrameworkCheck = $true
+        }
+        
 Invoke-Expression -Command "using module HybridManagement"
 
 Get-OSFeature | `
