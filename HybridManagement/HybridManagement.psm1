@@ -4,7 +4,10 @@ using namespace System.Collections.Generic
 using namespace System.Collections.Specialized
 using namespace System.Text
 using namespace System.Security
-
+param(
+    [Parameter(Mandatory=$false, Position=0)]
+    [hashtable]$OverrideModuleConfig = @{}
+)
 # This module contains many cmdlets which may be used in different scenarios. Since the purpose 
 # of this module is to provide cmdlets that cross the cloud/on-premises boundary, you may want 
 # to take a look at what that cmdlets are doing prior to running them. For the ease of your 
@@ -1846,7 +1849,11 @@ function Initialize-RemoteSession {
 
         [Parameter(Mandatory=$true, ParameterSetName="Copy-Session")]
         [Parameter(Mandatory=$true, ParameterSetName="Copy-ComputerName")]
-        [switch]$InstallViaCopy
+        [switch]$InstallViaCopy,
+
+        [Parameter(Mandatory=$false, ParameterSetName="Copy-Session")]
+        [Parameter(Mandatory=$false, ParameterSetName="Copy-ComputerName")]
+        [hashtable]$OverrideModuleConfig = @{}
     )
 
     $paramSplit = $PSCmdlet.ParameterSetName.Split("-")
@@ -1928,10 +1935,11 @@ function Initialize-RemoteSession {
 
     Invoke-Command `
             -Session $Session `
-            -ArgumentList $moduleInfo.Name `
+            -ArgumentList $moduleInfo.Name, $OverrideModuleConfig `
             -ScriptBlock {
                 $moduleName = $args[0]
-                Import-Module -Name $moduleName
+                $OverrideModuleConfig = $args[1]
+                Import-Module -Name $moduleName -ArgumentList $OverrideModuleConfig
                 Invoke-Expression -Command "using module $moduleName"
             }
 
@@ -3705,9 +3713,6 @@ function Assert-AzPermission {
 #
 # DNS cmdlets
 #
-$azurePrivateDnsIp = "168.63.129.16"
-$DnsForwarderTemplate = "https://raw.githubusercontent.com/wmgries/azure-files-samples/AD-networking-merge/dns-forwarder/azuredeploy.json"
-
 class DnsForwardingRule {
     [string]$DomainName
     [bool]$AzureResource
@@ -4437,7 +4442,12 @@ function New-AzDnsForwarder {
         $session = Initialize-RemoteSession `
                 -ComputerName $server `
                 -Credential $Credential `
-                -InstallViaCopy
+                -InstallViaCopy `
+                -OverrideModuleConfig @{ 
+                    SkipPowerShellGetCheck = $true;
+                    SkipAzPowerShellCheck = $true;
+                    SkipDotNetFrameworkCheck = $true
+                }
         
         $serializedRuleSet = $DnsForwardingRuleSet | ConvertTo-Json -Compress -Depth 3
         Invoke-Command `
@@ -4464,12 +4474,82 @@ function New-AzDnsForwarder {
 #
 # Actions to run on module load
 #
-Request-PowerShellGetModule
-Request-AzPowerShellModule
+$AzurePrivateDnsIp = [string]$null
+$DnsForwarderTemplate = [string]$null
+$SkipPowerShellGetCheck = $false
+$SkipAzPowerShellCheck = $false
+$SkipDotNetFrameworkCheck = $false
+
+function Invoke-ModuleConfigPopulate {
+    <#
+    .SYNOPSIS
+    Populate module configuration parameters.
+
+    .DESCRIPTION
+    This cmdlet wraps the PrivateData object as defined in HybridManagement.psd1, as well as module parameter OverrideModuleConfig. If an override is specified, that value will be used, otherwise, the value from the PrivateData object will be used.
+
+    .PARAMETER OverrideModuleConfig
+    The OverrideModuleConfig specified in the parameters of the module, at the beginning of the module.
+
+    .EXAMPLE
+    Invoke-ModuleConfigPopulate -OverrideModuleConfig @{}
+    #>
+
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$false, Position=0)]
+        [hashtable]$OverrideModuleConfig
+    )
+
+    $DefaultModuleConfig = $MyInvocation.MyCommand.Module.PrivateData["Config"]
+
+    if ($OverrideModuleConfig.ContainsKey("AzurePrivateDnsIp")) {
+        $script:AzurePrivateDnsIp = $OverrideModuleConfig["AzurePrivateDnsIp"]
+    } else {
+        $script:AzurePrivateDnsIp = $DefaultModuleConfig["AzurePrivateDnsIp"]
+    }
+
+    if ($OverrideModuleConfig.ContainsKey("DnsForwarderTemplate")) {
+        $script:DnsForwarderTemplate = $OverrideModuleConfig["DnsForwarderTemplate"]
+    } else {
+        $script:DnsForwarderTemplate = $DefaultModuleConfig["DnsForwarderTemplate"]
+    }
+
+    if ($OverrideModuleConfig.ContainsKey("SkipPowerShellGetCheck")) {
+        $script:SkipPowerShellGetCheck = $OverrideModuleConfig["SkipPowerShellGetCheck"]
+    } else {
+        $script:SkipPowerShellGetCheck = $DefaultModuleConfig["SkipPowerShellGetCheck"]
+    }
+
+    if ($OverrideModuleConfig.ContainsKey("SkipAzPowerShellCheck")) {
+        $script:SkipAzPowerShellCheck = $OverrideModuleConfig["SkipAzPowerShellCheck"]
+    } else {
+        $script:SkipAzPowerShellCheck = $DefaultModuleConfig["SkipAzPowerShellCheck"]
+    }
+
+    if ($OverrideModuleConfig.ContainsKey("SkipDotNetFrameworkCheck")) {
+        $script:SkipDotNetFrameworkCheck = $OverrideModuleConfig["SkipDotNetFrameworkCheck"]
+    } else {
+        $script:SkipDotNetFrameworkCheck = $DefaultModuleConfig["SkipDotNetFrameworkCheck"]
+    }
+}
+
+Invoke-ModuleConfigPopulate `
+        -OverrideModuleConfig $OverrideModuleConfig
+
+if (!$SkipPowerShellGetCheck) {
+    Request-PowerShellGetModule
+}
+
+if (!$SkipAzPowerShellCheck) {
+    Request-AzPowerShellModule
+}
 
 if ((Get-OSPlatform) -eq "Windows") {
     if ($PSVersionTable.PSEdition -eq "Desktop") {
-        Assert-DotNetFrameworkVersion `
-            -DotNetFrameworkVersion Framework4.7.1
+        if (!$SkipDotNetFrameworkCheck) {
+            Assert-DotNetFrameworkVersion `
+                    -DotNetFrameworkVersion "Framework4.7.1"
+        }
     }
 }
