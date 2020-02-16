@@ -1,0 +1,201 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "functions": [ ],
+    "parameters": { 
+        "location": {
+            "type": "string",
+            "metadata": {
+                "description": "The location to deploy the VMs to."
+            }
+        },
+        "vmResourceRootName": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 11,
+            "metadata": {
+                "description": "The root name to use for resources."
+            }
+        },
+        "vmResourceIterator": {
+            "type": "int",
+            "minValue": 0,
+            "maxValue": 999,
+            "metadata": {
+                "description": "An iterator to use for resources."
+            }
+        },
+        "vmResourceCount": {
+            "type": "int",
+            "minValue": 0,
+            "maxValue": 999,
+            "metadata": {
+                "description": "The number of resources to deploy."
+            }
+        },
+        "vmSubnetId": {
+            "type": "string",
+            "metadata": {
+                "description": "The id of the subnet to add the VM resources to."
+            }
+        },
+        "vmDefaultUsername": {
+            "type": "string",
+            "metadata": {
+                "description": "The default username for the virtual machines."
+            }
+        },
+        "vmDefaultPassword": {
+            "type": "securestring",
+            "metadata": {
+                "description": "The default password for the virtual machines."
+            }
+        },
+        "vmSkuName": {
+            "type": "string",
+            "allowedValues": [
+                "2019-Datacenter-Core",
+                "2019-Datacenter",
+                "2016-Datacenter-Server-Core",
+                "2016-Datacenter"
+            ],
+            "defaultValue": "2019-Datacenter-Core",
+            "metadata": {
+                "description": "The Windows Server SKU to use."
+            }
+        },
+        "vmDiskType": {
+            "type": "string",
+            "allowedValues": [
+                "Standard_LRS",
+                "StandardSSD_LRS",
+                "Premium_LRS"
+            ],
+            "defaultValue": "StandardSSD_LRS",
+            "metadata": {
+                "description": "The disk type to use."
+            }
+        },
+        "vmSize": {
+            "type": "string",
+            "defaultValue": "Standard_DS1_v2",
+            "metadata": {
+                "description": "The VM size."
+            }
+        }
+    },
+    "variables": { },
+    "resources": [
+        {
+            "type": "Microsoft.Compute/availabilitySets",
+            "apiVersion": "2019-03-01",
+            "name": "[concat(parameters('vmResourceRootName'), '-AvailabilitySet')]",
+            "location": "[parameters('location')]",
+            "sku": {
+                "name": "Aligned"
+            },
+            "properties":{
+                "platformUpdateDomainCount": 5,
+                "platformFaultDomainCount": 2,
+                "virtualMachines": [
+                    { 
+                        "id": "[resourceId('Microsoft.Compute/virtualMachines', concat(parameters('vmResourceRootName'), '-', string(parameters('vmResourceIterator'))))]"
+                    },
+                    {
+                        "id": "[resourceId('Microsoft.Compute/virtualMachines', concat(parameters('vmResourceRootName'), '-', string(add(parameters('vmResourceIterator'),1))))]"
+                    }
+                ]
+            }
+        },
+        {
+            "type": "Microsoft.Compute/virtualMachines",
+            "apiVersion": "2019-03-01",
+            "name": "[concat(parameters('vmResourceRootName'), '-', string(copyIndex('vmIterator', parameters('vmResourceIterator'))))]",
+            "location": "[parameters('location')]",
+            "copy": {
+                "name": "vmIterator",
+                "count": "[parameters('vmResourceCount')]"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Compute/availabilitySets', concat(parameters('vmResourceRootName'), '-AvailabilitySet'))]",
+                "[resourceId('Microsoft.Network/networkInterfaces', concat(parameters('vmResourceRootName'), '-', string(copyIndex('vmIterator', parameters('vmResourceIterator'))), '-NIC'))]"
+            ],
+            "properties": {
+                "availabilitySet": {
+                    "id": "[resourceId('Microsoft.Compute/availabilitySets', concat(parameters('vmResourceRootName'), '-AvailabilitySet'))]"
+                },
+                "hardwareProfile": {
+                    "vmSize": "[parameters('vmSize')]"
+                },
+                "storageProfile": {
+                    "imageReference": {
+                        "publisher": "MicrosoftWindowsServer",
+                        "offer": "WindowsServer",
+                        "sku": "[parameters('vmSkuName')]",
+                        "version": "latest"
+                    },
+                    "osDisk": {
+                        "osType": "Windows",
+                        "name": "[concat(parameters('vmResourceRootName'), '-', string(copyIndex('vmIterator', parameters('vmResourceIterator'))), '-OsDisk')]",
+                        "createOption": "FromImage",
+                        "caching": "ReadWrite",
+                        "managedDisk": {
+                            "storageAccountType": "[parameters('vmDiskType')]"
+                        },
+                        "diskSizeGB": 127
+                    },
+                    "dataDisks": []
+                },
+                "osProfile": {
+                    "computerName": "[concat(parameters('vmResourceRootName'), '-', string(copyIndex('vmIterator', parameters('vmResourceIterator'))))]",
+                    "adminUsername": "[parameters('vmDefaultUsername')]",
+                    "adminPassword": "[parameters('vmDefaultPassword')]",
+                    "windowsConfiguration": {
+                        "provisionVMAgent": true,
+                        "enableAutomaticUpdates": true
+                    },
+                    "secrets": [],
+                    "allowExtensionOperations": true
+                },
+                "networkProfile": {
+                    "networkInterfaces": [{
+                        "id": "[resourceId('Microsoft.Network/networkInterfaces', concat(parameters('vmResourceRootName'), '-', string(copyIndex('vmIterator', parameters('vmResourceIterator'))), '-NIC'))]"
+                    }]
+                },
+                "licenseType": "Windows_Server"
+            }
+        },
+        {
+            "type": "Microsoft.Network/networkInterfaces",
+            "apiVersion": "2019-09-01",
+            "copy": {
+                "name": "nicIterator",
+                "count": "[parameters('vmResourceCount')]"
+            },
+            "name": "[concat(parameters('vmResourceRootName'), '-', string(copyIndex('nicIterator', parameters('vmResourceIterator'))), '-NIC')]",
+            "location": "[parameters('location')]",
+            "properties": {
+                "ipConfigurations": [{
+                    "name": "defaultIpConfig",
+                    "properties": {
+                        "privateIPAllocationMethod": "Dynamic",
+                        "subnet": {
+                            "id": "[parameters('vmSubnetId')]"
+                        },
+                        "primary": true,
+                        "privateIPAddressVersion": "IPv4"
+                    }
+                }],
+                "dnsSettings": { "dnsServers": [] },
+                "enableAcceleratedNetworking": false,
+                "enableIPForwarding": false
+            }
+        }
+    ],
+    "outputs": {
+        "vmResourceIterator": {
+            "type": "int",
+            "value": "[add(parameters('vmResourceIterator'), parameters('vmResourceCount'))]"
+        }
+    }
+}

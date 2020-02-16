@@ -1104,6 +1104,840 @@ function Get-RandomString {
     return $acc.GetInternalObject()
 }
 
+function Get-ADDomainInternal {
+    [CmdletBinding()]
+    
+    param(
+        [Parameter(Mandatory=$false, ValueFromPipeline=$true, Position=0)]
+        [string]$Identity,
+
+        [Parameter(Mandatory=$false)]
+        [System.Management.Automation.PSCredential]$Credential,
+
+        [Parameter(Mandatory=$false)]
+        [string]$Server
+    )
+
+    process {
+        switch((Get-OSPlatform)) {
+            "Windows" {
+                $parameters = @{}
+
+                if (![string]::IsNullOrEmpty($Identity)) {
+                    $parameters += @{ "Identity" = $Identity }
+                }
+
+                if ($null -ne $Credential) {
+                    $parameters += @{ "Credential" = $Credential }
+                }
+
+                if (![string]::IsNullOrEmpty($Server)) {
+                    $parameters += @{ "Server" = $Server }
+                }
+
+                return Get-ADDomain @parameters
+            }
+
+            "Linux" {
+                throw [System.PlatformNotSupportedException]::new()
+            }
+
+            "OSX" {
+                throw [System.PlatformNotSupportedException]::new()
+            }
+
+            default {
+                throw [System.PlatformNotSupportedException]::new()
+            }
+        }
+    }
+}
+
+function Get-ADComputerInternal {
+    [CmdletBinding()]
+    
+    param(
+        [Parameter(Mandatory=$true, ParameterSetName="FilterParameterSet")]
+        [string]$Filter,
+
+        [Parameter(Mandatory=$true, ParameterSetName="IdentityParameterSet")]
+        [string]$Identity,
+
+        [Parameter(Mandatory=$false)]
+        [string[]]$Properties,
+        
+        [Parameter(Mandatory=$false)]
+        [string]$Server
+    )
+
+    switch ((Get-OSPlatform)) {
+        "Windows" {
+            $parameters = @{}
+
+            if (![string]::IsNullOrEmpty($Filter)) {
+                $parameters += @{ "Filter" = $Filter }
+            }
+
+            if (![string]::IsNullOrEmpty($Identity)) {
+                $parameters += @{ "Identity" = $Identity }
+            }
+
+            if ($null -ne $Properties) {
+                $parameters += @{ "Properties" = $Properties }
+            }
+
+            if (![string]::IsNullOrEmpty($Server)) {
+                $parameters += @{ "Server" = $Server }
+            }
+
+            return Get-ADComputer @parameters
+        }
+
+        "Linux" {
+            throw [System.PlatformNotSupportedException]::new()
+        }
+
+        "OSX" {
+            throw [System.PlatformNotSupportedException]::new()
+        }
+
+        default {
+            throw [System.PlatformNotSupportedException]::new()
+        }
+    }
+}
+
+function ConvertTo-EncodedJson {
+    [CmdletBinding()]
+    
+    param(
+        [Parameter(Mandatory=$true, ValueFromPipeline=$true)]
+        [object]$Object,
+
+        [Parameter(Mandatory=$false)]
+        [int]$Depth = 2
+    )
+
+    $Object = ($Object | ConvertTo-Json -Compress -Depth $Depth).
+        Replace("`"", "*").
+        Replace("[", "<").
+        Replace("]", ">").
+        Replace("{", "^").
+        Replace("}", "%")
+    
+    return $Object
+}
+
+function ConvertFrom-EncodedJson {
+    [CmdletBinding()]
+    
+    param(
+        [string]$String
+    )
+
+    $String = $String.
+        Replace("*", "`"").
+        Replace("<", "[").
+        Replace(">", "]").
+        Replace("^", "{").
+        Replace("%", "}")
+    
+    return (ConvertFrom-Json -InputObject $String)
+}
+
+function Write-OdjBlob {
+    [CmdletBinding()]
+    
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$OdjBlob,
+
+        [Parameter(Mandatory=$true)]
+        [string]$Path
+    )
+
+    $byteArray = [System.Byte[]]@()
+    $byteArray += 255
+    $byteArray += 254
+
+    $byteArray += [System.Text.Encoding]::Unicode.GetBytes($OdjBlob)
+
+    $byteArray += 0
+    $byteArray += 0
+
+    $writer = [System.IO.File]::Create($Path)
+    $writer.Write($byteArray, 0, $byteArray.Length)
+
+    $writer.Close()
+    $writer.Dispose()
+}
+
+function Register-OfflineMachine {
+    [CmdletBinding()]
+    
+    param(
+        [Parameter(Mandatory=$true, ValueFromPipeline=$true)]
+        [string]$MachineName,
+        
+        [Parameter(Mandatory=$false)]
+        [string]$Domain,
+
+        [Parameter(Mandatory=$false)]
+        [string]$MachineOU,
+
+        [Parameter(Mandatory=$false)]
+        [string]$DCName,
+        
+        [Parameter(Mandatory=$false)]
+        [switch]$Reuse,
+
+        [Parameter(Mandatory=$false)]
+        [switch]$NoSearch,
+        
+        [Parameter(Mandatory=$false)]
+        [switch]$DefaultPassword,
+
+        [Parameter(Mandatory=$false)]
+        [switch]$RootCACertificates,
+
+        [Parameter(Mandatory=$false)]
+        [string]$CertificateTemplate,
+
+        [Parameter(Mandatory=$false)]
+        [string[]]$PolicyNames,
+
+        [Parameter(Mandatory=$false)]
+        [string[]]$PolicyPaths,
+        
+        [Parameter(Mandatory=$false)]
+        [string]$Netbios,
+        
+        [Parameter(Mandatory=$false)]
+        [string]$PersistentSite,
+
+        [Parameter(Mandatory=$false)]
+        [string]$DynamicSite,
+
+        [Parameter(Mandatory=$false)]
+        [string]$PrimaryDNS
+    )
+
+    process {
+        $properties = @{}
+
+        if ([string]::IsNullOrEmpty($Domain)) {
+            $Domain = Get-ADDomainInternal | `
+                Select-Object -ExpandProperty DNSRoot
+        } else {
+            try {
+                Get-ADDomainInternal -Identity $Domain | Out-Null
+            } catch {
+                throw [System.ArgumentException]::new(
+                    "Provided domain $Domain was not found.", "Domain")
+            }
+        }
+
+        $properties += @{ "Domain" = $Domain }
+
+        if (![string]::IsNullOrEmpty($MachineName)) {
+            $computer = Get-ADComputerInternal `
+                    -Filter "Name -eq `"$MachineName`"" `
+                    -Server $Domain
+
+            if ($null -ne $computer) {
+                throw [System.ArgumentException]::new(
+                    "Machine $MachineName already exists.", "MachineName")
+            }
+        } else {
+            throw [System.ArgumentException]::new(
+                "The machine name property must not be empty.", "MachineName")
+        }
+
+        $properties += @{ "MachineName" = $MachineName }
+
+        if ($PSBoundParameters.ContainsKey("MachineOU")) {
+            throw [System.NotImplementedException]::new()
+        }
+    
+        if ($PSBoundParameters.ContainsKey("DCName")) {
+            throw [System.NotImplementedException]::new()
+        }
+    
+        if ($PSBoundParameters.ContainsKey("Reuse")) {
+            throw [System.NotImplementedException]::new()
+        }
+        
+        if ($PSBoundParameters.ContainsKey("NoSearch")) {
+            throw [System.NotImplementedException]::new()
+        }
+        
+        if ($PSBoundParameters.ContainsKey("DefaultPassword")) {
+            throw [System.NotImplementedException]::new()
+        }
+    
+        if ($PSBoundParameters.ContainsKey("RootCACertificates")) {
+            throw [System.NotImplementedException]::new()
+        }
+    
+        if ($PSBoundParameters.ContainsKey("CertificateTemplate")) {
+            throw [System.NotImplementedException]::new()
+        }
+    
+        if ($PSBoundParameters.ContainsKey("PolicyNames")) {
+            throw [System.NotImplementedException]::new()
+        }
+    
+        if ($PSBoundParameters.ContainsKey("PolicyPaths")) {
+            throw [System.NotImplementedException]::new()
+        }
+        
+        if ($PSBoundParameters.ContainsKey("Netbios")) {
+            throw [System.NotImplementedException]::new()
+        }
+        
+        if ($PSBoundParameters.ContainsKey("PersistentSite")) {
+            throw [System.NotImplementedException]::new()
+        }
+    
+        if ($PSBoundParameters.ContainsKey("DynamicSite")) {
+            throw [System.NotImplementedException]::new()
+        }
+    
+        if ($PSBoundParameters.ContainsKey("PrimaryDNS")) {
+            throw [System.NotImplementedException]::new()
+        }
+
+        switch((Get-OSPlatform)) {
+            "Windows" {
+                return Register-OfflineMachineWindows @properties
+            }
+
+            "Linux" {
+                throw [System.PlatformNotSupportedException]::new()
+            }
+
+            "OSX" {
+                throw [System.PlatformNotSupportedException]::new()
+            }
+
+            default {
+                throw [System.PlatformNotSupportedException]::new()
+            }
+        }
+    }
+}
+
+function Register-OfflineMachineWindows {
+    [CmdletBinding()]
+    
+    param(
+        [Parameter(Mandatory=$true, ValueFromPipeline=$true)]
+        [string]$MachineName,
+        
+        [Parameter(Mandatory=$false)]
+        [string]$Domain,
+
+        [Parameter(Mandatory=$false)]
+        [string]$MachineOU,
+
+        [Parameter(Mandatory=$false)]
+        [string]$DCName,
+        
+        [Parameter(Mandatory=$false)]
+        [switch]$Reuse,
+
+        [Parameter(Mandatory=$false)]
+        [switch]$NoSearch,
+        
+        [Parameter(Mandatory=$false)]
+        [switch]$DefaultPassword,
+
+        [Parameter(Mandatory=$false)]
+        [switch]$RootCACertificates,
+
+        [Parameter(Mandatory=$false)]
+        [string]$CertificateTemplate,
+
+        [Parameter(Mandatory=$false)]
+        [string[]]$PolicyNames,
+
+        [Parameter(Mandatory=$false)]
+        [string[]]$PolicyPaths,
+        
+        [Parameter(Mandatory=$false)]
+        [string]$Netbios,
+        
+        [Parameter(Mandatory=$false)]
+        [string]$PersistentSite,
+
+        [Parameter(Mandatory=$false)]
+        [string]$DynamicSite,
+
+        [Parameter(Mandatory=$false)]
+        [string]$PrimaryDNS
+    )
+
+    process {
+        if ($PSBoundParameters.ContainsKey("MachineOU")) {
+            throw [System.NotImplementedException]::new()
+        }
+    
+        if ($PSBoundParameters.ContainsKey("DCName")) {
+            throw [System.NotImplementedException]::new()
+        }
+    
+        if ($PSBoundParameters.ContainsKey("Reuse")) {
+            throw [System.NotImplementedException]::new()
+        }
+        
+        if ($PSBoundParameters.ContainsKey("NoSearch")) {
+            throw [System.NotImplementedException]::new()
+        }
+        
+        if ($PSBoundParameters.ContainsKey("DefaultPassword")) {
+            throw [System.NotImplementedException]::new()
+        }
+    
+        if ($PSBoundParameters.ContainsKey("RootCACertificates")) {
+            throw [System.NotImplementedException]::new()
+        }
+    
+        if ($PSBoundParameters.ContainsKey("CertificateTemplate")) {
+            throw [System.NotImplementedException]::new()
+        }
+    
+        if ($PSBoundParameters.ContainsKey("PolicyNames")) {
+            throw [System.NotImplementedException]::new()
+        }
+    
+        if ($PSBoundParameters.ContainsKey("PolicyPaths")) {
+            throw [System.NotImplementedException]::new()
+        }
+        
+        if ($PSBoundParameters.ContainsKey("Netbios")) {
+            throw [System.NotImplementedException]::new()
+        }
+        
+        if ($PSBoundParameters.ContainsKey("PersistentSite")) {
+            throw [System.NotImplementedException]::new()
+        }
+    
+        if ($PSBoundParameters.ContainsKey("DynamicSite")) {
+            throw [System.NotImplementedException]::new()
+        }
+    
+        if ($PSBoundParameters.ContainsKey("PrimaryDNS")) {
+            throw [System.NotImplementedException]::new()
+        }
+
+        $sb = [System.Text.StringBuilder]::new()
+        $sb.Append("djoin.exe /provision") | Out-Null
+
+        $sb.Append(" /domain $Domain") | Out-Null
+        $sb.Append(" /machine $MachineName") | Out-Null
+
+        $tempFile = [System.IO.Path]::GetTempFileName()
+        $sb.Append(" /savefile $tempFile") | Out-Null
+        
+        $djoinResult = Invoke-Expression -Command $sb.ToString()
+
+        if ($djoinResult -like "*Computer provisioning completed successfully*") {
+            $blobArray = [System.Text.Encoding]::Unicode.GetBytes((Get-Content -Path $tempFile))
+            $blobArray = $blobArray[0..($blobArray.Length-3)]
+
+            Remove-Item -Path $tempFile
+
+            return [System.Text.Encoding]::Unicode.GetString($blobArray)
+        } else {
+            Write-Error `
+                    -Message "Machine $MachineName provisioning failed. DJoin output: $djoinResult" `
+                    -ErrorAction Stop
+        }
+    }
+}
+
+function Join-OfflineMachine {
+    [CmdletBinding()]
+    
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$OdjBlob,
+
+        [Parameter(Mandatory=$false, ParameterSetName="WindowsParameterSet")]
+        [string]$WindowsPath
+    )
+
+    switch((Get-OSPlatform)) {
+        "Windows" {
+            if ([string]::IsNullOrEmpty($WindowsPath)) {
+                $WindowsPath = $env:windir
+            }
+
+            $tempFile = [System.IO.Path]::GetTempFileName()
+            Write-OdjBlob -OdjBlob $OdjBlob -Path $tempFile
+
+            $sb = [System.Text.StringBuilder]::new()
+            $sb.Append("djoin.exe /requestodj") | Out-Null
+            $sb.Append(" /loadfile $tempFile") | Out-Null
+            $sb.Append(" /windowspath $WindowsPath") | Out-Null
+            $sb.Append(" /localos") | Out-Null
+
+            $djoinResult = Invoke-Expression -Command $sb.ToString()
+            if ($djoinResult -like "*successfully*") {
+                Write-Information -MessageData "Machine successfully provisioned. A reboot is required for changes to be applied."
+                Remove-Item -Path $tempFile
+            } else {
+                Write-Error `
+                        -Message "Machine failed to provision. DJoin output: $djoinResult" `
+                        -ErrorAction Stop
+            }
+        }
+        
+        "Linux" {
+            throw [System.PlatformNotSupportedException]::new()
+        }
+
+        "OSX" {
+            throw [System.PlatformNotSupportedException]::new()
+        }
+
+        default {
+            throw [System.PlatformNotSupportedException]::new()
+        }
+    }
+}
+
+function New-RegistryItem {
+    [CmdletBinding()]
+    
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$ParentPath,
+
+        [Parameter(Mandatory=$true)]
+        [string]$Name
+    )
+
+    Assert-IsWindows
+
+    $ParentPath = $args[0]
+    $Name = $args[1]
+
+    $regItem = Get-ChildItem -Path $ParentPath | `
+        Where-Object { $_.PSChildName -eq $Name }
+    
+    if ($null -eq $regItem) {
+        New-Item -Path ($ParentPath + "\" + $Name) | `
+            Out-Null
+    }
+}
+
+function New-RegistryItemProperty {
+    [CmdletBinding()]
+
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$Path,
+
+        [Parameter(Mandatory=$true)]
+        [string]$Name,
+
+        [Parameter(Mandatory=$true)]
+        [string]$Value
+    )
+
+    Assert-IsWindows
+
+    $regItemProperty = Get-ItemProperty -Path $Path | `
+        Where-Object { $_.Name -eq $Name }
+    
+    if ($null -eq $regItemProperty) {
+        New-ItemProperty `
+                -Path $Path `
+                -Name $Name `
+                -Value $Value | `
+            Out-Null
+    } else {
+        Set-ItemProperty `
+                -Path $Path `
+                -Name $Name `
+                -Value $Value | `
+            Out-Null
+    }
+}
+
+function Resolve-DnsNameInternal {
+    [CmdletBinding()]
+    
+    param(
+        [Parameter(
+            Mandatory=$true, 
+            Position=0, 
+            ValueFromPipeline=$true, 
+            ValueFromPipelineByPropertyName=$true)]
+        [string]$Name
+    )
+
+    process {
+        switch((Get-OSPlatform)) {
+            "Windows" {
+                return (Resolve-DnsName -Name $Name)
+            }
+
+            "Linux" {
+                throw [System.PlatformNotSupportedException]::new()
+            }
+
+            "OSX" {
+                throw [System.PlatformNotSupportedException]::new()
+            }
+
+            default {
+                throw [System.PlatformNotSupportedException]::new()
+            }
+        }
+    }
+}
+
+function Resolve-PathRelative {
+    [CmdletBinding()]
+
+    param(
+        [Parameter(
+            Mandatory=$true, 
+            Position=0)]
+        [string[]]$PathParts
+    )
+
+    return [System.IO.Path]::GetFullPath(
+        [System.IO.Path]::Combine($PathParts))
+}
+
+function Get-CurrentModule {
+    [CmdletBinding()]
+    param()
+
+    $ModuleInfo = Get-Module | Where-Object { $_.Path -eq $PSCommandPath }
+    if ($null -eq $moduleInfo) {
+        throw [System.IO.FileNotFoundException]::new(
+            "Could not find a loaded module with the indicated filename.", $PSCommandPath)
+    }
+
+    return $ModuleInfo
+}
+
+function Get-ModuleFiles {
+    [CmdletBinding()]
+
+    param(
+        [Parameter(Mandatory = $false, ValueFromPipeline=$true)]
+        [System.Management.Automation.PSModuleInfo]$ModuleInfo
+    )
+
+    process {
+        $moduleFiles = [System.Collections.Generic.HashSet[string]]::new()
+
+        if (!$PSBoundParameters.ContainsKey("ModuleInfo")) {
+            $ModuleInfo = Get-CurrentModule
+        }
+    
+        $manifestPath = Resolve-PathRelative `
+                -PathParts $ModuleInfo.ModuleBase, "$($moduleInfo.Name).psd1"
+        
+        if (!(Test-Path -Path $manifestPath)) {
+            throw [System.IO.FileNotFoundException]::new(
+                "Could not find a module manifest with the indicated filename", $manifestPath)
+        }
+        
+        try {
+            $manifest = Import-PowerShellDataFile -Path $manifestPath
+        } catch {
+            throw [System.IO.FileNotFoundException]::new(
+                "File matching name of manifest found, but does not contain module manifest.", $manifestPath)
+        }
+    
+        $moduleFiles.Add($manifestPath) | Out-Null
+        $moduleFiles.Add((Resolve-PathRelative `
+                -PathParts $ModuleInfo.ModuleBase, $manifest.RootModule)) | `
+            Out-Null
+        
+        if ($null -ne $manifest.NestedModules) {
+            foreach($nestedModule in $manifest.NestedModules) {
+                $moduleFiles.Add((Resolve-PathRelative `
+                        -PathParts $ModuleInfo.ModuleBase, $nestedModule)) | `
+                    Out-Null
+            }
+        }
+        
+        if ($null -ne $manifest.FormatsToProcess) {
+            foreach($format in $manifest.FormatsToProcess) {
+                $moduleFiles.Add((Resolve-PathRelative `
+                        -PathParts $ModuleInfo.ModuleBase, $format)) | `
+                    Out-Null
+            }
+        }
+    
+        if ($null -ne $manifest.RequiredAssemblies) {
+            foreach($assembly in $manifest.RequiredAssemblies) {
+                $moduleFiles.Add((Resolve-PathRelative `
+                        -PathParts $ModuleInfo.ModuleBase, $assembly)) | `
+                    Out-Null
+            }
+        }
+
+        return $moduleFiles
+    }
+}
+
+function Copy-RemoteModule {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)]
+        [System.Management.Automation.Runspaces.PSSession]$Session
+    )
+
+    $moduleInfo = Get-CurrentModule
+    $moduleFiles = Get-ModuleFiles | `
+        Get-Item | `
+        Select-Object `
+            @{ Name = "Name"; Expression = { $_.Name } }, 
+            @{ Name = "Content"; Expression = { (Get-Content -Path $_.FullName) } }
+
+    Invoke-Command `
+            -Session $Session  `
+            -ArgumentList $moduleInfo.Name, $moduleInfo.Version.ToString(), $moduleFiles `
+            -ScriptBlock {
+                $moduleName = $args[0]
+                $moduleVersion = $args[1]
+                $moduleFiles = $args[2]
+
+                $psModPath = $env:PSModulePath.Split(";")[0]
+                if (!(Test-Path -Path $psModPath)) {
+                    New-Item -Path $psModPath -ItemType Directory | Out-Null
+                }
+
+                $modulePath = [System.IO.Path]::Combine(
+                    $psModPath, $moduleName, $moduleVersion)
+                if (!(Test-Path -Path $modulePath)) {
+                    New-Item -Path $modulePath -ItemType Directory | Out-Null
+                }
+
+                foreach($moduleFile in $moduleFiles) {
+                    $filePath = [System.IO.Path]::Combine($modulePath, $moduleFile.Name)
+                    $fileContent = $moduleFile.Content
+                    Set-Content -Path $filePath -Value $fileContent
+                }
+            }
+}
+
+$sessionDictionary = [System.Collections.Generic.Dictionary[System.Tuple[string, string], System.Management.Automation.Runspaces.PSSession]]::new()
+function Initialize-RemoteSession {
+    [CmdletBinding()]
+    
+    param(
+        [Parameter(Mandatory=$true, ParameterSetName="Copy-Session")]
+        [System.Management.Automation.Runspaces.PSSession]$Session,
+
+        [Parameter(Mandatory=$true, ParameterSetName="Copy-ComputerName")]
+        [string]$ComputerName,
+
+        [Parameter(Mandatory=$false, ParameterSetName="Copy-ComputerName")]
+        [System.Management.Automation.PSCredential]$Credential,
+
+        [Parameter(Mandatory=$true, ParameterSetName="Copy-Session")]
+        [Parameter(Mandatory=$true, ParameterSetName="Copy-ComputerName")]
+        [switch]$InstallViaCopy
+    )
+
+    $paramSplit = $PSCmdlet.ParameterSetName.Split("-")
+    $ScriptCopyBehavior = $paramSplit[0]
+    $SessionBehavior = $paramSplit[1]
+
+    switch($SessionBehavior) {
+        "Session" { 
+            $ComputerName = $session.ComputerName
+            $username = Invoke-Command -Session $Session -ScriptBlock {
+                $(whoami).ToLowerInvariant()
+            }
+        }
+
+        "ComputerName" {
+            $sessionParameters = @{ "ComputerName" = $ComputerName }
+            
+            if ($PSBoundParameters.ContainsKey("Credential")) {
+                $sessionParameters += @{ "Credential" = $Credential }
+                $username = $Credential.UserName
+            } else {
+                $username = $(whoami).ToLowerInvariant()
+            }
+
+            $Session = New-PSSession @sessionParameters
+        }
+
+        default {
+            throw [System.ArgumentException]::new(
+                "Unrecognized session parameter set.", "SessionBehavior")
+        }
+    }
+    
+    $lookupTuple = [System.Tuple[string, string]]::new($ComputerName, $username)
+    $existingSession = [System.Management.Automation.Runspaces.PSSession]$null
+    if ($sessionDictionary.TryGetValue($lookupTuple, [ref]$existingSession)) {
+        if ($existingSession.State -ne "Opened") {
+            $sessionDictionary.Remove($existingSession)
+
+            Remove-PSSession `
+                    -Session $existingSession `
+                    -WarningAction SilentlyContinue `
+                    -ErrorAction SilentlyContinue
+            
+            $sessionDictionary.Add($lookupTuple, $Session)
+        } else {
+            Remove-PSSession `
+                -Session $Session `
+                -WarningAction SilentlyContinue `
+                -ErrorAction SilentlyContinue
+
+            $Session = $existingSession
+        }
+    } else {
+        $sessionDictionary.Add($lookupTuple, $Session)
+    }
+
+    $moduleInfo = Get-CurrentModule
+    $remoteModuleInfo = Get-Module `
+            -PSSession $Session `
+            -Name $moduleInfo.Name `
+            -ListAvailable
+    
+    switch($ScriptCopyBehavior) {
+        "Copy" {
+            if ($null -eq $remoteModuleInfo) {
+                Copy-RemoteModule -Session $Session
+            } elseif ($moduleInfo.Version -ne $remoteModuleInfo.Version) {
+                throw [PSSessionHybridManagementVersionMismatchException]::new(
+                    $moduleInfo.Version, $remoteModuleInfo.Version)
+            }
+        }
+
+        default {
+            throw [System.ArgumentException]::new(
+                "Unrecognized session parameter set.", "ScriptCopyBehavior")
+        }
+    }
+
+    Invoke-Command `
+            -Session $Session `
+            -ArgumentList $moduleInfo.Name `
+            -ScriptBlock {
+                $moduleName = $args[0]
+                Import-Module -Name $moduleName
+                Invoke-Expression -Command "using module $moduleName"
+            }
+
+    return $Session
+}
+
 #
 # Azure Files Active Directory cmdlets
 #
@@ -2871,7 +3705,756 @@ function Assert-AzPermission {
 #
 # DNS cmdlets
 #
+$azurePrivateDnsIp = "168.63.129.16"
+$DnsForwarderTemplate = "https://raw.githubusercontent.com/wmgries/azure-files-samples/AD-networking-merge/dns-forwarder/azuredeploy.json"
 
+class DnsForwardingRule {
+    [string]$DomainName
+    [bool]$AzureResource
+    [ISet[string]]$MasterServers
+
+    hidden Init(
+        [string]$domainName, 
+        [bool]$azureResource, 
+        [ISet[string]]$masterServers
+    ) {
+        $this.DomainName = $domainName
+        $this.AzureResource = $azureResource
+        $this.MasterServers = $masterServers
+    }
+
+    hidden Init(
+        [string]$domainName,
+        [bool]$azureResource,
+        [IEnumerable[string]]$masterServers 
+    ) {
+        $this.DomainName = $domainName
+        $this.AzureResource = $azureResource
+        $this.MasterServers = [HashSet[string]]::new($masterServers)
+    }
+
+    hidden Init(
+        [string]$domainName,
+        [bool]$azureResource,
+        [IEnumerable]$masterServers
+    ) {
+        $this.DomainName = $domainName
+        $this.AzureResource = $azureResource
+        $this.MasterServers = [HashSet[string]]::new()
+
+        foreach($item in $masterServers) {
+            $this.MasterServers.Add($item.ToString()) | Out-Null
+        }
+    }
+
+    DnsForwardingRule(
+        [string]$domainName, 
+        [bool]$azureResource, 
+        [ISet[string]]$masterServers
+    ) {
+        $this.Init($domainName, $azureResource, $masterServers)
+    }
+
+    DnsForwardingRule(
+        [string]$domainName,
+        [bool]$azureResource,
+        [IEnumerable[string]]$masterServers 
+    ) {
+        $this.Init($domainName, $azureResource, $masterServers)
+    }
+
+    DnsForwardingRule(
+        [string]$domainName,
+        [bool]$azureResource,
+        [IEnumerable]$masterServers
+    ) {
+        $this.Init($domainName, $azureResource, $masterServers)
+    }
+
+    DnsForwardingRule([PSCustomObject]$customObject) {
+        $properties = $customObject | `
+            Get-Member | `
+            Where-Object { $_.MemberType -eq "NoteProperty" }
+
+        $hasDomainName = $properties | `
+            Where-Object { $_.Name -eq "DomainName" }
+        if ($null -eq $hasDomainName) {
+            throw [ArgumentException]::new(
+                "Deserialized customObject does not have the DomainName property.", "customObject")
+        }
+        
+        $hasAzureResource = $properties | `
+            Where-Object { $_.Name -eq "AzureResource" }
+        if ($null -eq $hasAzureResource) {
+            throw [ArgumentException]::new(
+                "Deserialized customObject does not have the AzureResource property.", "customObject")
+        }
+
+        $hasMasterServers = $properties | `
+            Where-Object { $_.Name -eq "MasterServers" }
+        if ($null -eq $hasMasterServers) {
+            throw [ArgumentException]::new(
+                "Deserialized customObject does not have the MasterServers property.", "customObject")
+        }
+
+        if ($customObject.MasterServers -isnot [object[]]) {
+            throw [ArgumentException]::new(
+                "Deserialized MasterServers is not an array.", "customObject")
+        }
+
+        $this.Init(
+            $customObject.DomainName, 
+            $customObject.AzureResource, 
+            $customObject.MasterServers)
+    }
+
+    [int] GetHashCode() {
+        return $this.DomainName.GetHashCode()
+    }
+
+    [bool] Equals([object]$obj) {
+        return $obj.GetHashCode() -eq $this.GetHashCode()
+    }
+}
+
+class DnsForwardingRuleSet {
+    [ISet[DnsForwardingRule]]$DnsForwardingRules
+
+    DnsForwardingRuleSet() {
+        $this.DnsForwardingRules = [HashSet[DnsForwardingRule]]::new()
+    }
+
+    DnsForwardingRuleSet([IEnumerable]$dnsForwardingRules) {
+        $this.DnsForwardingRules = [HashSet[DnsForwardingRule]]::new()
+
+        foreach($rule in $dnsForwardingRules) {
+            $this.DnsForwardingRules.Add($rule) | Out-Null
+        }
+    }
+
+    DnsForwardingRuleSet([PSCustomObject]$customObject) {
+        $properties = $customObject | `
+            Get-Member | `
+            Where-Object { $_.MemberType -eq "NoteProperty" }
+        
+        $hasDnsForwardingRules = $properties | `
+            Where-Object { $_.Name -eq "DnsForwardingRules" }
+        if ($null -eq $hasDnsForwardingRules) {
+            throw [ArgumentException]::new(
+                "Deserialized customObject does not have the DnsForwardingRules property.", "customObject")
+        }
+
+        if ($customObject.DnsForwardingRules -isnot [object[]]) {
+            throw [ArgumentException]::new(
+                "Deserialized DnsForwardingRules is not an array.", "customObject")
+        }
+
+        $this.DnsForwardingRules = [HashSet[DnsForwardingRule]]::new()
+        foreach($rule in $customObject.DnsForwardingRules) {
+            $this.DnsForwardingRules.Add([DnsForwardingRule]::new($rule)) | Out-Null
+        }
+    }
+}
+
+function Add-AzDnsForwardingRule {
+    [CmdletBinding()]
+    
+    param(
+        [Parameter(
+            Mandatory=$true, 
+            ValueFromPipeline=$true, 
+            ValueFromPipelineByPropertyName=$true)]
+        [AllowEmptyCollection()]
+        [DnsForwardingRuleSet]$DnsForwardingRuleSet,
+
+        [Parameter(Mandatory=$true, ParameterSetName="AzureEndpointParameterSet")]
+        [ValidateSet(
+            "StorageAccountEndpoint", 
+            "SqlDatabaseEndpoint", 
+            "KeyVaultEndpoint")]
+        [string]$AzureEndpoint,
+        
+        [Parameter(Mandatory=$true, ParameterSetName="ManualParameterSet")]
+        [string]$DomainName,
+        
+        [Parameter(Mandatory=$false, ParameterSetName="ManualParameterSet")]
+        [switch]$AzureResource,
+
+        [Parameter(Mandatory=$true, ParameterSetName="ManualParameterSet")]
+        [System.Collections.Generic.HashSet[string]]$MasterServers,
+
+        [Parameter(Mandatory=$false)]
+        [ValidateSet(
+            "Overwrite",
+            "Merge",
+            "Disallow"
+        )]
+        [string]$ConflictBehavior = "Overwrite"
+    )
+    
+    process {
+        $forwardingRules = $DnsForwardingRuleSet.DnsForwardingRules
+
+        if ($PSCmdlet.ParameterSetName -eq "AzureEndpointParameterSet") {
+            $subscriptionContext = Get-AzContext
+            if ($null -eq $subscriptionContext) {
+                throw [AzureLoginRequiredException]::new()
+            }
+            $environmentEndpoints = Get-AzEnvironment -Name $subscriptionContext.Environment
+
+            switch($AzureEndpoint) {
+                "StorageAccountEndpoint" {
+                    $DomainName = $environmentEndpoints.StorageEndpointSuffix
+                    $AzureResource = $true
+
+                    $MasterServers = [System.Collections.Generic.HashSet[string]]::new()
+                    $MasterServers.Add($azurePrivateDnsIp) | Out-Null
+                }
+
+                "SqlDatabaseEndpoint" {
+                    $reconstructedEndpoint = [string]::Join(".", (
+                        $environmentEndpoints.SqlDatabaseDnsSuffix.Split(".") | Where-Object { ![string]::IsNullOrEmpty($_) }))
+                    
+                    $DomainName = $reconstructedEndpoint
+                    $AzureResource = $true
+
+                    $MasterServers = [System.Collections.Generic.HashSet[string]]::new()
+                    $MasterServers.Add($azurePrivateDnsIp) | Out-Null
+                }
+
+                "KeyVaultEndpoint" {
+                    $DomainName = $environmentEndpoints.AzureKeyVaultDnsSuffix
+                    $AzureResource = $true
+
+                    $MasterServers = [System.Collections.Generic.HashSet[string]]::new()
+                    $MasterServers.Add($azurePrivateDnsIp) | Out-Null
+                }
+            }
+        }
+
+        $forwardingRule = [DnsForwardingRule]::new($DomainName, $AzureResource, $MasterServers)
+        $conflictRule = [DnsForwardingRule]$null
+
+        if ($forwardingRules.TryGetValue($forwardingRule, [ref]$conflictRule)) {
+            switch($ConflictBehavior) {
+                "Overwrite" {
+                    $forwardingRules.Remove($conflictRule) | Out-Null
+                    $forwardingRules.Add($forwardingRule) | Out-Null
+                }
+
+                "Merge" {
+                    if ($forwardingRule.AzureResource -ne $conflictRule.AzureResource) {
+                        throw [System.ArgumentException]::new(
+                            "Azure resource status does not match for domain name $domain.", "AzureResource")
+                    }
+
+                    foreach($newMasterServer in $forwardingRule.MasterServers) {
+                        $conflictRule.MasterServers.Add($newMasterServer) | Out-Null
+                    }
+                }
+
+                "Disallow" {
+                    throw [System.ArgumentException]::new(
+                        "Domain name $domainName already exists in ruleset.", "DnsForwardingRules") 
+                }
+            }
+        } else {
+            $forwardingRules.Add($forwardingRule) | Out-Null
+        }
+
+        return $DnsForwardingRuleSet
+    }
+}
+
+function New-AzDnsForwardingRuleSet {
+    [CmdletBinding()]
+
+    param(
+        [Parameter(Mandatory=$false)]
+        [ValidateSet(
+            "StorageAccountEndpoint", 
+            "SqlDatabaseEndpoint", 
+            "KeyVaultEndpoint")]
+        [System.Collections.Generic.HashSet[string]]$AzureEndpoints,
+
+        [Parameter(Mandatory=$false)]
+        [switch]$SkipOnPremisesDns,
+
+        [Parameter(Mandatory=$false)]
+        [System.Collections.Generic.HashSet[string]]$OnPremDnsHostNames,
+
+        [Parameter(Mandatory=$false)]
+        [string]$OnPremDomainName,
+
+        [Parameter(Mandatory=$false)]
+        [switch]$SkipParentDomain
+    )
+
+    $ruleSet = [DnsForwardingRuleSet]::new()
+    foreach($azureEndpoint in $AzureEndpoints) {
+        Add-AzDnsForwardingRule -DnsForwardingRuleSet $ruleSet -AzureEndpoint $azureEndpoint | Out-Null
+    }
+
+    if (!$SkipOnPremisesDns) {
+        if ([string]::IsNullOrEmpty($OnPremDomainName)) {
+            $domain = Get-ADDomainInternal
+        } else {
+            $domain = Get-ADDomainInternal -Identity $OnPremDomainName
+        }
+
+        if (!$SkipParentDomain) {
+            while($null -ne $domain.ParentDomain) {
+                $domain = Get-ADDomainInternal -Identity $domain.ParentDomain
+            }
+        }
+
+        if ($null -eq $OnPremDnsHostNames) {
+            $onPremDnsServers = Resolve-DnsNameInternal -Name $domain.DNSRoot | `
+                Where-Object { $_.Type -eq "A" } | `
+                Select-Object -ExpandProperty IPAddress
+        } else {
+            $onPremDnsServers = $OnPremDnsHostNames | `
+                Resolve-DnsNameInternal | `
+                Where-Object { $_.Type -eq "A" } | `
+                Select-Object -ExpandProperty IPAddress
+        }
+
+        Add-AzDnsForwardingRule `
+                -DnsForwardingRuleSet $ruleSet `
+                -DomainName $domain.DNSRoot `
+                -MasterServers $OnPremDnsServers | `
+            Out-Null
+    }
+
+    return $ruleSet
+}
+
+function Clear-DnsClientCacheInternal {
+    switch((Get-OSPlatform)) {
+        "Windows" {
+            Clear-DnsClientCache
+        }
+
+        "Linux" {
+            throw [System.PlatformNotSupportedException]::new()
+        }
+
+        "OSX" {
+            throw [System.PlatformNotSupportedException]::new()
+        }
+
+        default {
+            throw [System.PlatformNotSupportedException]::new()
+        }
+    }
+}
+
+function Push-AzDnsServerConfiguration {
+    [CmdletBinding()]
+
+    param(
+        [Parameter(Mandatory=$true)]
+        [DnsForwardingRuleSet]$DnsForwardingRuleSet,
+
+        [Parameter(Mandatory=$false)]
+        [ValidateSet(
+            "Overwrite", 
+            "Merge", 
+            "Disallow")]
+        [string]$ConflictBehavior = "Overwrite"
+    )
+
+    $DnsForwardingRuleSet = $args[0]
+    $ConflictBehavior = $args[1]
+
+    Test-OSFeature -WindowsServerFeature "DNS", "RSAT-DNS-Server"
+
+    $rules = $DnsForwardingRuleSet.DnsForwardingRules
+    foreach($rule in $rules) {
+        $existingZone = Get-DnsServerZone | `
+            Where-Object { $_.ZoneName -eq $rule.DomainName }
+
+        $masterServers = $rule.MasterServers
+        if ($null -ne $existingZone) {
+            switch($ConflictBehavior) {
+                "Overwrite" {
+                    $existingZone | Remove-DnsServerZone `
+                            -Confirm:$false `
+                            -Force
+                }
+
+                "Merge" {
+                    $existingMasterServers = $existingZone | `
+                        Select-Object -ExpandProperty MasterServers | `
+                        Select-Object -ExpandProperty IPAddressToString
+                    
+                    $masterServers = [System.Collections.Generic.HashSet[string]]::new(
+                        $masterServers)
+                    
+                    foreach($existingServer in $existingMasterServers) {
+                        $masterServers.Add($existingServer) | Out-Null
+                    }
+
+                    $existingZone | Remove-DnsServerZone `
+                            -Confirm:$false `
+                            -Force
+                }
+
+                "Disallow" {
+                    throw [System.ArgumentException]::new(
+                        "The DNS forwarding zone already exists", "DnsForwardingRuleSet")
+                }
+
+                default {
+                    throw [System.ArgumentException]::new(
+                        "Unexpected conflict behavior $ConflictBehavior", "ConflictBehavior")
+                }
+            }
+        }
+
+        Add-DnsServerConditionalForwarderZone `
+                -Name $rule.DomainName `
+                -MasterServers $masterServers
+    }
+}
+
+function Push-OnPremDnsServerConfiguration {
+    [CmdletBinding()]
+
+    param(
+        [Parameter(Mandatory=$true)]
+        [DnsForwardingRuleSet]$DnsForwardingRuleSet,
+
+        [Parameter(Mandatory=$true)]
+        [System.Collections.Generic.HashSet[string]]$AzDnsForwarderIpAddress,
+
+        [Parameter(Mandatory=$false)]
+        [ValidateSet(
+            "Overwrite", 
+            "Merge", 
+            "Disallow")]
+        [string]$ConflictBehavior = "Overwrite"
+    )
+
+    if ((Get-OSPlatform) -ne "Windows" -or (Get-WindowsInstallationType) -notcontains "Server") {
+        throw [PlatformNotSupportedException]::new()
+    }
+
+    $onPremRules = $DnsForwardingRuleSet | `
+        Select-Object -ExpandProperty DnsForwardingRules | `
+        Where-Object { $_.AzureResource }
+
+    foreach($rule in $onPremRules) {
+        $zone = Get-DnsServerZone | `
+            Where-Object { $_.ZoneName -eq $rule.DomainName }
+
+        $masterServers = $AzDnsForwarderIpAddress
+        if ($null -ne $zone) {
+            switch($ConflictBehavior) {
+                "Overwrite" {
+                    $zone | Remove-DnsServerZone `
+                            -Confirm:$false `
+                            -Force
+                }
+
+                "Merge" {
+                    $existingMasterServers = $zone | `
+                        Select-Object -ExpandProperty MasterServers | `
+                        Select-Object -ExpandProperty IPAddressToString
+                    
+                    $masterServers = [System.Collections.Generic.HashSet[string]]::new(
+                        $AzDnsForwarderIpAddress)
+
+                    foreach($existingServer in $existingMasterServers) {
+                        $masterServers.Add($existingServer) | Out-Null
+                    }
+                    
+                    $zone | Remove-DnsServerZone `
+                            -Confirm:$false `
+                            -Force
+                }
+
+                "Disallow" {
+                    throw [System.ArgumentException]::new(
+                        "The DNS forwarding zone already exists", "DnsForwardingRuleSet")
+                }
+
+                default {
+                    throw [System.ArgumentException]::new(
+                        "Unexpected conflict behavior $ConflictBehavior", "ConflictBehavior")
+                }
+            }
+        }
+        
+        Add-DnsServerConditionalForwarderZone `
+                -Name $rule.DomainName `
+                -MasterServers $masterServers
+        
+        Clear-DnsClientCache
+        Clear-DnsServerCache `
+                -Confirm:$false `
+                -Force
+    }
+}
+
+function New-AzDnsForwarder {
+    [CmdletBinding()]
+
+    param(
+        [Parameter(Mandatory=$true)]
+        [DnsForwardingRuleSet]$DnsForwardingRuleSet,
+
+        [Parameter(Mandatory=$true)]
+        [System.Security.SecureString]$VmTemporaryPassword,
+
+        [Parameter(Mandatory=$true, ParameterSetName="NameParameterSet")]
+        [string]$VirtualNetworkResourceGroupName,
+
+        [Parameter(Mandatory=$true, ParameterSetName="NameParameterSet")]
+        [string]$VirtualNetworkName,
+
+        [Parameter(Mandatory=$true, ParameterSetName="NameParameterSet")]
+        [Parameter(Mandatory=$true, ParameterSetName="VNetObjectParameter")]
+        [string]$VirtualNetworkSubnetName,
+
+        [Parameter(Mandatory=$true, ParameterSetName="VNetObjectParameter")]
+        [Microsoft.Azure.Commands.Network.Models.PSVirtualNetwork]$VirtualNetwork,
+
+        [Parameter(Mandatory=$true, ParameterSetName="SubnetObjectParameter")]
+        [Microsoft.Azure.Commands.Network.Models.PSSubnet]$VirtualNetworkSubnet,
+
+        [Parameter(Mandatory=$false)]
+        [string]$DnsServerResourceGroupName,
+        
+        [Parameter(Mandatory=$false)]
+        [string]$DnsForwarderRootName = "DnsFwder",
+
+        [Parameter(Mandatory=$false)]
+        [string]$DomainToJoin,
+
+        [Parameter(Mandatory=$false)]
+        [int]$DnsForwarderRedundancyCount = 2,
+
+        [Parameter(Mandatory=$false)]
+        [System.Collections.Generic.HashSet[string]]$OnPremDnsHostNames,
+
+        [Parameter(Mandatory=$false)]
+        [System.Management.Automation.PSCredential]$Credential,
+
+        [Parameter(Mandatory=$false)]
+        [switch]$SkipParentDomain
+    )
+
+    switch($PSCmdlet.ParameterSetName) {
+        "NameParameterSet" {
+            # Verify virtual network is there. $virtualNetwork will be used to populate
+            # information later on.
+            $VirtualNetwork = Get-AzVirtualNetwork `
+                    -ResourceGroupName $virtualNetworkResourceGroupName | `
+                Where-Object { $_.Name -eq $virtualNetworkName }
+
+            if ($null -eq $VirtualNetwork) {
+            Write-Error `
+                    -Message "Virtual network $virtualNetworkName does not exist in resource group $virtualNetworkResourceGroupName." `
+                    -ErrorAction Stop
+            }
+
+            # Verify virtual network's subnet. 
+            $virtualNetworkSubnet = $VirtualNetwork | `
+                Select-Object -ExpandProperty Subnets | `
+                Where-Object { $_.Name -eq $virtualNetworkSubnetName } 
+
+            if ($null -eq $virtualNetworkSubnet) {
+                Write-Error `
+                        -Message "Subnet $virtualNetworkSubnetName does not exist in virtual network $($VirtualNetwork.Name)." `
+                        -ErrorAction Stop
+            }
+        }
+
+        "VNetObjectParameter" {
+            $VirtualNetworkSubnet = $VirtualNetwork | `
+                Select-Object -ExpandProperty Subnets | `
+                Where-Object { $_.Name -eq $virtualNetworkSubnetName } 
+
+            if ($null -eq $VirtualNetworkSubnet) {
+                Write-Error `
+                        -Message "Subnet $virtualNetworkSubnetName does not exist in virtual network $($VirtualNetwork.Name)." `
+                        -ErrorAction Stop
+            }
+        }
+
+        "SubnetObjectParameter" {
+            $virtualNetworkId = $VirtualNetworkSubnet.Id | Expand-AzResourceId
+            $VirtualNetwork = Get-AzVirtualNetwork `
+                -ResourceGroupName $virtualNetworkId["resourceGroups"] `
+                -Name $virtualNetworkId["virtualNetworks"]
+
+        }
+
+        default {
+            throw [ArgumentException]::new("Unhandled parameter set")
+        }
+    }
+
+    # Create resource group for the DNS forwarders, if it hasn't already
+    # been created. The resource group will have the same location as the vnet.
+    if ($PSBoundParameters.ContainsKey("DnsServerResourceGroupName")) {
+        $dnsServerResourceGroup = Get-AzResourceGroup | `
+            Where-Object { $_.ResourceGroupName -eq $DnsServerResourceGroupName }
+
+        if ($null -eq $dnsServerResourceGroup) { 
+            $dnsServerResourceGroup = New-AzResourceGroup `
+                    -Name $DnsServerResourceGroupName `
+                    -Location $virtualNetwork.Location
+        }
+    } else {
+        $DnsServerResourceGroupName = $virtualNetwork.ResourceGroupName
+    }    
+
+    # Get domain to join
+    if ([string]::IsNullOrEmpty($DomainToJoin)) {
+        $DomainToJoin = (Get-ADDomainInternal).DNSRoot
+    } else {
+        try {
+            $DomainToJoin = (Get-ADDomainInternal -Identity $DomainToJoin).DNSRoot
+        } catch {
+            throw [System.ArgumentException]::new(
+                "Could not find the domain $DomainToJoin", "DomainToJoin")
+        }
+    }
+
+    # Get incrementor 
+    $intCaster = {
+        param($name, $rootName, $domainName)
+
+        $str = $name.
+            Replace(".$domainName", "").
+            ToLowerInvariant().
+            Replace("$($rootName.ToLowerInvariant())-", "")
+        
+        $i = -1
+        if ([int]::TryParse($str, [ref]$i)) {
+            return $i
+        } else {
+            return -1
+        }
+    }
+
+    $filterCriteria = ($DnsForwarderRootName + "-*")
+    $currentIncrementor = Get-ADComputerInternal -Filter { Name -like $filterCriteria } | 
+        Select-Object Name, 
+            @{ 
+                Name = "Incrementor"; 
+                Expression = { $intCaster.Invoke($_.DNSHostName, $DnsForwarderRootName, $DomainToJoin) } 
+            } | `
+        Select-Object -ExpandProperty Incrementor | `
+        Measure-Object -Maximum | `
+        Select-Object -ExpandProperty Maximum
+    
+    if ($null -eq $currentIncrementor) {
+        $currentIncrementor = -1
+    }
+
+    if ($currentIncrementor -lt 1000) {
+        $currentIncrementor++
+    }
+
+    $incrementorSeed = $currentIncrementor
+
+    if ($null -eq $OnPremDnsHostNames) {
+        $onPremDnsServers = $DnsForwardingRuleSet.DnsForwardingRules | `
+            Where-Object { $_.AzureResource -eq $false } | `
+            Select-Object -ExpandProperty MasterServers
+        
+        $OnPremDnsHostNames = $onPremDnsServers | `
+            ForEach-Object { [System.Net.Dns]::GetHostEntry($_) } | `
+            Select-Object -ExpandProperty HostName
+    }
+
+    # Register new DNS servers for offline domain join
+    $redundancyTop = $currentIncrementor + $DnsForwarderRedundancyCount
+    $dnsForwarderNames = [string[]]@()
+    while ($currentIncrementor -lt $redundancyTop) {
+        $dnsForwarderNames += ($DnsForwarderRootName + "-" + $currentIncrementor)
+        $currentIncrementor++
+    }
+    
+    $odjBlobs = $dnsForwarderNames | Register-OfflineMachine -Domain $DomainToJoin
+    $domainJoinParameters = @{ "Domain" = $DomainToJoin; "DomainJoinBlobs" = $odjBlobs }
+    
+    ## Encode ruleset
+    $encodedDnsForwardingRuleSet = $DnsForwardingRuleSet | ConvertTo-EncodedJson -Depth 3
+
+    try {
+        $templateResult = New-AzResourceGroupDeployment `
+            -ResourceGroupName $DnsServerResourceGroupName `
+            -TemplateUri $DnsForwarderTemplate `
+            -location $virtualNetwork.Location `
+            -virtualNetworkResourceGroupName $VirtualNetworkResourceGroupName `
+            -virtualNetworkName $VirtualNetworkName `
+            -virtualNetworkSubnetName $VirtualNetworkSubnetName `
+            -dnsForwarderRootName $DnsForwarderRootName `
+            -vmResourceIterator $incrementorSeed `
+            -vmResourceCount $DnsForwarderRedundancyCount `
+            -dnsForwarderTempPassword $VmTemporaryPassword `
+            -odjBlobs $domainJoinParameters `
+            -encodedForwardingRules $encodedDnsForwardingRuleSet `
+            -ErrorAction Stop
+    } catch {
+        Write-Verbose $_
+        Write-Error -Message "This error message will eventually be replaced by a rollback functionality." -ErrorAction Stop
+    }
+
+    $nicNames = $dnsForwarderNames | `
+        Select-Object @{ Name = "NIC"; Expression = { ($_ + "-NIC") } } | `
+        Select-Object -ExpandProperty NIC
+
+    $ipAddresses = Get-AzNetworkInterface -ResourceGroupName $DnsServerResourceGroupName | `
+        Where-Object { $_.Name -in $nicNames } | `
+        Select-Object -ExpandProperty IpConfigurations | `
+        Select-Object -ExpandProperty PrivateIpAddress
+
+    if ($null -eq $virtualNetwork.DhcpOptions.DnsServers) {
+        $virtualNetwork.DhcpOptions.DnsServers = 
+            [System.Collections.Generic.List[string]]::new()
+    }
+
+    foreach($ipAddress in $ipAddresses) {
+        $virtualNetwork.DhcpOptions.DnsServers.Add($ipAddress)
+    }
+    
+    $virtualNetwork | Set-AzVirtualNetwork | Out-Null
+
+    foreach($dnsForwarder in $dnsForwarderNames) {
+        Restart-AzVM `
+                -ResourceGroupName $DnsServerResourceGroupName `
+                -Name $dnsForwarder | `
+            Out-Null
+    }
+
+    foreach($server in $OnPremDnsHostNames) {
+        # This assumes that a credential is given.
+        $session = Initialize-RemoteSession `
+                -ComputerName $server `
+                -Credential $Credential `
+                -InstallViaCopy
+        
+        $serializedRuleSet = $DnsForwardingRuleSet | ConvertTo-Json -Compress -Depth 3
+        Invoke-Command `
+                -Session $session `
+                -ArgumentList $serializedRuleSet, ([string[]]$ipAddresses) `
+                -ScriptBlock {
+                    $DnsForwardingRuleSet = [DnsForwardingRuleSet]::new(($args[0] | ConvertFrom-Json))
+                    $dnsForwarderIPs = ([string[]]$args[1])
+
+                    Push-OnPremDnsServerConfiguration `
+                            -DnsForwardingRuleSet $DnsForwardingRuleSet `
+                            -AzDnsForwarderIpAddress $dnsForwarderIPs
+                }
+    }    
+    
+    Clear-DnsClientCacheInternal
+}
 
 #
 # DFS-N cmdlets
