@@ -5,39 +5,19 @@ param(
     [switch]$SkipUserDisable
 )
 
-Import-Module .\AzureFilesArmUtilities.psm1
+Import-Module .\HybridManagement.psd1
+Invoke-Expression -Command "using module HybridManagement"
 
-Install-WindowsFeature `
-        -Name "DNS" `
-        -WarningAction SilentlyContinue | `
-    Out-Null
+Get-OSFeature | `
+    Where-Object { $_.Name -eq "DNS" -and !$_.Installed } | `
+    Install-OSFeature
 
-$path = Get-Location | Select-Object -ExpandProperty Path
-$dnsForwarderOdj = [System.IO.Path]::Combine($path, "dnsforwarder.odj")
-$djOutput = [System.IO.Path]::Combine($path, "djOutput.txt")
+Join-OfflineMachine `
+        -OdjBlob $OdjBlob `
+        -WindowsPath $env:windir
 
-Write-OdjBlob -OdjBlob $OdjBlob -Path $dnsForwarderOdj
-Join-WindowsMachine `
-    -OdjBlobPath $dnsForwarderOdj `
-    -WindowsPath $env:windir `
-    -JoinOutputPath $djOutput
-
-$forwardingRules = ConvertFrom-EncodedJson -String $EncodedForwardingRules
-foreach($forwardRule in $forwardingRules.DnsForwardingRules) {
-    $zoneName = Get-DnsServerZone | `
-        Where-Object { $_.ZoneName -eq $forwardRule.domainName }
-    
-    if ($null -eq $zoneName) {
-        Add-DnsServerConditionalForwarderZone `
-            -Name $forwardRule.domainName `
-            -MasterServers $forwardRule.masterServers
-    }
-}
-
-Clear-DnsClientCache
-Clear-DnsServerCache `
-    -Confirm:$false `
-    -Force
+$forwardingRules = [DnsForwardingRuleSet]::new((ConvertFrom-EncodedJson -String $EncodedForwardingRules))
+Push-DnsServerConfiguration -DnsForwardingRuleSet $forwardingRules
 
 if (!$SkipUserDisable) {
     Disable-LocalUser -Name $TempUser

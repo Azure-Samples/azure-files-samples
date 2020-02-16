@@ -75,7 +75,8 @@
         "vmSkuName": "2019-Datacenter-Core",
         "vmDiskType": "StandardSSD_LRS",
         "vmSize": "Standard_DS1_v2",
-        "sharedUtilitiesURL": "https://raw.githubusercontent.com/wmgries/azure-files-samples/AD-networking-merge/shared/AzureFilesArmUtilities.psm1",
+        "moduleManifestURL": "https://raw.githubusercontent.com/wmgries/azure-files-samples/AD-networking-merge/HybridManagement/HybridManagement.psd1",
+        "moduleFileURL": "https://raw.githubusercontent.com/wmgries/azure-files-samples/AD-networking-merge/HybridManagement/HybridManagement.psm1",
         "scriptURL": "https://raw.githubusercontent.com/wmgries/azure-files-samples/AD-networking-merge/dns-forwarder/configureVM.ps1",
         "scriptName": "configureVM.ps1"
     },
@@ -265,7 +266,8 @@
                 "settings": {
                     "fileUris": [ 
                         "[variables('scriptURL')]",
-                        "[variables('sharedUtilitiesURL')]"
+                        "[variables('moduleManifestURL')]",
+                        "[variables('moduleFileURL')]"
                     ]
                 },
                 "protectedSettings": {
