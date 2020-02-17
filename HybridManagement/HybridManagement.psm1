@@ -4253,9 +4253,6 @@ function New-AzDnsForwarder {
         [Parameter(Mandatory=$true)]
         [DnsForwardingRuleSet]$DnsForwardingRuleSet,
 
-        [Parameter(Mandatory=$true)]
-        [System.Security.SecureString]$VmTemporaryPassword,
-
         [Parameter(Mandatory=$true, ParameterSetName="NameParameterSet")]
         [string]$VirtualNetworkResourceGroupName,
 
@@ -4277,6 +4274,9 @@ function New-AzDnsForwarder {
         
         [Parameter(Mandatory=$false)]
         [string]$DnsForwarderRootName = "DnsFwder",
+
+        [Parameter(Mandatory=$false)]
+        [System.Security.SecureString]$VmTemporaryPassword,
 
         [Parameter(Mandatory=$false)]
         [string]$DomainToJoin,
@@ -4358,7 +4358,12 @@ function New-AzDnsForwarder {
         }
     } else {
         $DnsServerResourceGroupName = $virtualNetwork.ResourceGroupName
-    }    
+    }   
+    
+    # Randomly generate password if not provided.
+    if (!$PSBoundParameters.ContainsKey("VmTemporaryPassword")) {
+        $VmTemporaryPassword = Get-RandomString -StringLength 15 -CaseSensitive -AsSecureString
+    }
 
     # Get domain to join
     if ([string]::IsNullOrEmpty($DomainToJoin)) {
