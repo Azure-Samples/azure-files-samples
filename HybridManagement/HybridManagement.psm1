@@ -4246,9 +4246,313 @@ function Push-DnsServerConfiguration {
     }
 }
 
+function Confirm-AzDnsForwarderPreReqs {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true, ParameterSetName="NameParameterSet")]
+        [string]$VirtualNetworkResourceGroupName,
+
+        [Parameter(Mandatory=$true, ParameterSetName="NameParameterSet")]
+        [string]$VirtualNetworkName,
+
+        [Parameter(Mandatory=$true, ParameterSetName="NameParameterSet")]
+        [Parameter(Mandatory=$true, ParameterSetName="VNetObjectParameterSet")]
+        [string]$VirtualNetworkSubnetName,
+
+        [Parameter(Mandatory=$true, ParameterSetName="VNetObjectParameterSet")]
+        [Microsoft.Azure.Commands.Network.Models.PSVirtualNetwork]$VirtualNetwork,
+
+        [Parameter(Mandatory=$true, ParameterSetName="SubnetObjectParameterSet")]
+        [Microsoft.Azure.Commands.Network.Models.PSSubnet]$VirtualNetworkSubnet,
+        
+        [Parameter(Mandatory=$false)]
+        [string]$DomainToJoin,
+
+        [Parameter(Mandatory=$false)]
+        [string]$DnsForwarderRootName = "DnsFwder",
+
+        [Parameter(Mandatory=$false)]
+        [int]$DnsForwarderRedundancyCount = 2
+    )
+
+    Assert-IsDomainJoined
+
+    # Check networking parameters: VirtualNetwork and VirtualNetworkSubnet
+    switch($PSCmdlet.ParameterSetName) {
+        "NameParameterSet" {
+            # Get/verify virtual network is there.
+            $VirtualNetwork = Get-AzVirtualNetwork `
+                -ResourceGroupName $VirtualNetworkResourceGroupName `
+                -Name $VirtualNetworkName `
+                -ErrorAction SilentlyContinue
+            
+            if ($null -eq $VirtualNetwork) {
+                Write-Error `
+                        -Message "Virtual network $virtualNetworkName does not exist in resource group $virtualNetworkResourceGroupName." `
+                        -ErrorAction Stop
+            }
+
+            # Verify subnet
+            $VirtualNetworkSubnet = $VirtualNetwork | `
+                Select-Object -ExpandProperty Subnets | `
+                Where-Object { $_.Name -eq $VirtualNetworkSubnetName } 
+
+            if ($null -eq $virtualNetworkSubnet) {
+                Write-Error `
+                        -Message "Subnet $virtualNetworkSubnetName does not exist in virtual network $($VirtualNetwork.Name)." `
+                        -ErrorAction Stop
+            }
+        }
+
+        "VNetObjectParameterSet" {
+            # Capture information from the object
+            $VirtualNetworkName = $VirtualNetwork.Name
+            $VirtualNetworkResourceGroupName = $VirtualNetwork.ResourceGroupName
+
+            # Verify/update virtual network object
+            $VirtualNetwork = $VirtualNetwork | `
+                Get-AzVirtualNetwork -ErrorAction SilentlyContinue
+            
+            if ($null -eq $VirtualNetwork) {
+                Write-Error `
+                    -Message "Virtual network $virtualNetworkName does not exist in resource group $virtualNetworkResourceGroupName." `
+                    -ErrorAction Stop
+            } 
+
+            # Verify subnet
+            $VirtualNetworkSubnet = $VirtualNetwork | `
+                Select-Object -ExpandProperty Subnets | `
+                Where-Object { $_.Name -eq $VirtualNetworkSubnetName } 
+
+            if ($null -eq $VirtualNetworkSubnet) {
+                Write-Error `
+                        -Message "Subnet $virtualNetworkSubnetName does not exist in virtual network $($VirtualNetwork.Name)." `
+                        -ErrorAction Stop
+            }
+        }
+
+        "SubnetObjectParameterSet" {
+            # Get resource names from the ID
+            $virtualNetworkSubnetId = $VirtualNetworkSubnet.Id | Expand-AzResourceId
+            $VirtualNetworkName = $virtualNetworkSubnetId["virtualNetworks"]
+            $VirtualNetworkResourceGroupName = $virtualNetworkSubnetId["resourceGroups"]
+            $VirtualNetworkSubnetName = $virtualNetworkSubnetId["subnets"]
+
+            # Get/verify virtual network object
+            $VirtualNetwork = Get-AzVirtualNetwork `
+                -ResourceGroupName $VirtualNetworkResourceGroupName `
+                -Name $VirtualNetworkName `
+                -ErrorAction SilentlyContinue
+            
+            if ($null -eq $VirtualNetwork) {
+                Write-Error `
+                        -Message "Virtual network $virtualNetworkName does not exist in resource group $virtualNetworkResourceGroupName." `
+                        -ErrorAction Stop
+            }
+            
+            # Verify subnet object
+            $VirtualNetworkSubnet = $VirtualNetwork | `
+                Select-Object -ExpandProperty Subnets | `
+                Where-Object { $_.Id -eq $VirtualNetworkSubnet.Id }
+            
+            if ($null -eq $VirtualNetworkSubnet) {
+                Write-Error `
+                        -Message "Subnet $VirtualNetworkSubnetName could not be found." `
+                        -ErrorAction Stop
+            }
+        }
+
+        default {
+            throw [ArgumentException]::new("Unhandled parameter set $_.")
+        }
+    }
+
+    # Check domain
+    if ([string]::IsNullOrEmpty($DomainToJoin)) {
+        $DomainToJoin = (Get-ADDomainInternal).DNSRoot
+    } else {
+        try {
+            $DomainToJoin = (Get-ADDomainInternal -Identity $DomainToJoin).DNSRoot
+        } catch {
+            throw [System.ArgumentException]::new(
+                "Could not find the domain $DomainToJoin", "DomainToJoin")
+        }
+    }
+
+    # Get incrementor 
+    $intCaster = {
+        param($name, $rootName, $domainName)
+
+        $str = $name.
+            Replace(".$domainName", "").
+            ToLowerInvariant().
+            Replace("$($rootName.ToLowerInvariant())-", "")
+        
+        $i = -1
+        if ([int]::TryParse($str, [ref]$i)) {
+            return $i
+        } else {
+            return -1
+        }
+    }
+
+    # Check computer names
+    # not sure that the actual boundary conditions (greater than 999) being tested.
+    $filterCriteria = ($DnsForwarderRootName + "-*")
+    $incrementorSeed = Get-ADComputerInternal -Filter { Name -like $filterCriteria } | 
+        Select-Object Name, 
+            @{ 
+                Name = "Incrementor"; 
+                Expression = { $intCaster.Invoke($_.DNSHostName, $DnsForwarderRootName, $DomainToJoin) } 
+            } | `
+        Select-Object -ExpandProperty Incrementor | `
+        Measure-Object -Maximum | `
+        Select-Object -ExpandProperty Maximum
+    
+    if ($null -eq $incrementorSeed) {
+        $incrementorSeed = -1
+    }
+
+    if ($incrementorSeed -lt 1000) {
+        $incrementorSeed++
+    } else {
+        Write-Error `
+                -Message "There are more than 1000 DNS forwarders domain joined to this domain. Chose another DnsForwarderRootName." `
+                -ErrorAction Stop
+    }
+
+    $dnsForwarderNames = $incrementorSeed..($incrementorSeed+$DnsForwarderRedundancyCount-1) | `
+        ForEach-Object { $DnsForwarderRootName + "-" + $_.ToString() }
+
+    return @{
+        "VirtualNetwork" = $VirtualNetwork;
+        "VirtualNetworkSubnet" = $VirtualNetworkSubnet;
+        "DomainToJoin" = $DomainToJoin;
+        "DnsForwarderResourceIterator" = $incrementorSeed;
+        "DnsForwarderNames" = $dnsForwarderNames
+    }
+}
+
+function Join-AzDnsForwarder {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true, ValueFromPipelineByPropertyName=$true)]
+        [string]$DomainToJoin,
+
+        [Parameter(Mandatory=$true, ValueFromPipelineByPropertyName=$true)]
+        [string[]]$DnsForwarderNames
+    )
+
+    process {
+        $odjBlobs = $DnsForwarderNames | `
+            Register-OfflineMachine `
+                -Domain $DomainToJoin `
+                -ErrorAction Stop
+        
+        return @{ 
+            "Domain" = $DomainToJoin; 
+            "DomainJoinBlobs" = $odjBlobs 
+        }
+    }
+}
+
+function Invoke-AzDnsForwarderDeployment {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)]
+        [DnsForwardingRuleSet]$DnsForwardingRuleSet,
+
+        [Parameter(Mandatory=$true)]
+        [string]$DnsServerResourceGroupName,
+
+        [Parameter(Mandatory=$true)]
+        [Microsoft.Azure.Commands.Network.Models.PSVirtualNetwork]$VirtualNetwork,
+
+        [Parameter(Mandatory=$true)]
+        [Microsoft.Azure.Commands.Network.Models.PSSubnet]$VirtualNetworkSubnet,
+
+        [Parameter(Mandatory=$true)]
+        [hashtable]$DomainJoinParameters,
+
+        [Parameter(Mandatory=$true)]
+        [string]$DnsForwarderRootName,
+
+        [Parameter(Mandatory=$true)]
+        [int]$DnsForwarderResourceIterator,
+
+        [Parameter(Mandatory=$true)]
+        [int]$DnsForwarderResourceCount,
+
+        [Parameter(Mandatory=$true)]
+        [System.Security.SecureString]$VmTemporaryPassword
+    )
+
+    # Encode ruleset
+    $encodedDnsForwardingRuleSet = $DnsForwardingRuleSet | ConvertTo-EncodedJson -Depth 3
+
+    try {
+        $templateResult = New-AzResourceGroupDeployment `
+            -ResourceGroupName $DnsServerResourceGroupName `
+            -TemplateUri $DnsForwarderTemplate `
+            -location $VirtualNetwork.Location `
+            -virtualNetworkResourceGroupName $VirtualNetwork.ResourceGroupName `
+            -virtualNetworkName $VirtualNetwork.Name `
+            -virtualNetworkSubnetName $VirtualNetworkSubnet.Name `
+            -dnsForwarderRootName $DnsForwarderRootName `
+            -vmResourceIterator $DnsForwarderResourceIterator `
+            -vmResourceCount $DnsForwarderRedundancyCount `
+            -dnsForwarderTempPassword $VmTemporaryPassword `
+            -odjBlobs $DomainJoinParameters `
+            -encodedForwardingRules $encodedDnsForwardingRuleSet `
+            -ErrorAction Stop
+    } catch {
+        Write-Error -Message "This error message will eventually be replaced by a rollback functionality." -ErrorAction Stop
+    }
+}
+
+function Get-AzDnsForwarderIpAddress {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)]
+        [string[]]$DnsForwarderName
+    )
+
+    $nicNames = $DnsForwarderNames | `
+        Select-Object @{ Name = "NIC"; Expression = { ($_ + "-NIC") } } | `
+        Select-Object -ExpandProperty NIC
+
+    $ipAddresses = Get-AzNetworkInterface -ResourceGroupName $DnsServerResourceGroupName | `
+        Where-Object { $_.Name -in $nicNames } | `
+        Select-Object -ExpandProperty IpConfigurations | `
+        Select-Object -ExpandProperty PrivateIpAddress
+    
+    return $ipAddresses
+}
+
+function Update-AzVirtualNetworkDnsServers {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)]
+        [Microsoft.Azure.Commands.Network.Models.PSVirtualNetwork]$VirtualNetwork,
+
+        [Parameter(Mandatory=$true)]
+        [string[]]$DnsForwarderIpAddress
+    )
+
+    if ($null -eq $VirtualNetwork.DhcpOptions.DnsServers) {
+        $VirtualNetwork.DhcpOptions.DnsServers = 
+            [System.Collections.Generic.List[string]]::new()
+    }
+
+    foreach($ipAddress in $DnsForwarderIpAddress) {
+        $VirtualNetwork.DhcpOptions.DnsServers.Add($ipAddress)
+    }
+    
+    $VirtualNetwork | Set-AzVirtualNetwork -ErrorAction Stop | Out-Null
+}
+
 function New-AzDnsForwarder {
     [CmdletBinding()]
-
     param(
         [Parameter(Mandatory=$true)]
         [DnsForwardingRuleSet]$DnsForwardingRuleSet,
@@ -4294,56 +4598,59 @@ function New-AzDnsForwarder {
         [switch]$SkipParentDomain
     )
 
+    $confirmParameters = @{}
+
     switch($PSCmdlet.ParameterSetName) {
         "NameParameterSet" {
-            # Verify virtual network is there. $virtualNetwork will be used to populate
-            # information later on.
-            $VirtualNetwork = Get-AzVirtualNetwork `
-                    -ResourceGroupName $virtualNetworkResourceGroupName | `
-                Where-Object { $_.Name -eq $virtualNetworkName }
-
-            if ($null -eq $VirtualNetwork) {
-            Write-Error `
-                    -Message "Virtual network $virtualNetworkName does not exist in resource group $virtualNetworkResourceGroupName." `
-                    -ErrorAction Stop
-            }
-
-            # Verify virtual network's subnet. 
-            $virtualNetworkSubnet = $VirtualNetwork | `
-                Select-Object -ExpandProperty Subnets | `
-                Where-Object { $_.Name -eq $virtualNetworkSubnetName } 
-
-            if ($null -eq $virtualNetworkSubnet) {
-                Write-Error `
-                        -Message "Subnet $virtualNetworkSubnetName does not exist in virtual network $($VirtualNetwork.Name)." `
-                        -ErrorAction Stop
+            $confirmParameters += @{ 
+                "VirtualNetworkResourceGroupName" = $VirtualNetworkResourceGroupName;
+                "VirtualNetworkName" = $VirtualNetworkName;
+                "VirtualNetworkSubnetName" = $VirtualNetworkSubnetName;
             }
         }
 
         "VNetObjectParameter" {
-            $VirtualNetworkSubnet = $VirtualNetwork | `
-                Select-Object -ExpandProperty Subnets | `
-                Where-Object { $_.Name -eq $virtualNetworkSubnetName } 
-
-            if ($null -eq $VirtualNetworkSubnet) {
-                Write-Error `
-                        -Message "Subnet $virtualNetworkSubnetName does not exist in virtual network $($VirtualNetwork.Name)." `
-                        -ErrorAction Stop
+            $confirmParameters += @{
+                "VirtualNetwork" = $VirtualNetwork;
+                "VirtualNetworkSubnetName" = $VirtualNetworkSubnetName
             }
         }
 
         "SubnetObjectParameter" {
-            $virtualNetworkId = $VirtualNetworkSubnet.Id | Expand-AzResourceId
-            $VirtualNetwork = Get-AzVirtualNetwork `
-                -ResourceGroupName $virtualNetworkId["resourceGroups"] `
-                -Name $virtualNetworkId["virtualNetworks"]
-
+            $confirmParameters += @{
+                "VirtualNetworkSubnet" = $VirtualNetworkSubnet
+            }
         }
 
         default {
             throw [ArgumentException]::new("Unhandled parameter set")
         }
     }
+
+    if ($PSBoundParameters.ContainsKey("DomainToJoin")) {
+        $confirmParameters += @{
+            "DomainToJoin" = $DomainToJoin
+        }
+    }
+
+    if ($PSBoundParameters.ContainsKey("DnsForwarderRootName")) {
+        $confirmParameters += @{
+            "DnsForwarderRootName" = $DnsForwarderRootName
+        }
+    }
+
+    if ($PSBoundParameters.ContainsKey("DnsForwarderRedundancyCount")) {
+        $confirmParameters += @{ 
+            "DnsForwarderRedundancyCount" = $DnsForwarderRedundancyCount
+        }
+    }
+
+    $verifiedObjs = Confirm-AzDnsForwarderPreReqs @confirmParameters -ErrorAction Stop
+    $VirtualNetwork = $verifiedObjs.VirtualNetwork
+    $VirtualNetworkSubnet = $verifiedObjs.VirtualNetworkSubnet
+    $DomainToJoin = $verifiedObjs.DomainToJoin
+    $DnsForwarderResourceIterator = $verifiedObjs.DnsForwarderResourceIterator
+    $DnsForwarderNames = $verifiedObjs.DnsForwarderNames
 
     # Create resource group for the DNS forwarders, if it hasn't already
     # been created. The resource group will have the same location as the vnet.
@@ -4354,67 +4661,13 @@ function New-AzDnsForwarder {
         if ($null -eq $dnsServerResourceGroup) { 
             $dnsServerResourceGroup = New-AzResourceGroup `
                     -Name $DnsServerResourceGroupName `
-                    -Location $virtualNetwork.Location
+                    -Location $VirtualNetwork.Location
         }
     } else {
-        $DnsServerResourceGroupName = $virtualNetwork.ResourceGroupName
-    }   
-    
-    # Randomly generate password if not provided.
-    if (!$PSBoundParameters.ContainsKey("VmTemporaryPassword")) {
-        $VmTemporaryPassword = Get-RandomString -StringLength 15 -CaseSensitive -AsSecureString
-    }
+        $DnsServerResourceGroupName = $VirtualNetwork.ResourceGroupName
+    }       
 
-    # Get domain to join
-    if ([string]::IsNullOrEmpty($DomainToJoin)) {
-        $DomainToJoin = (Get-ADDomainInternal).DNSRoot
-    } else {
-        try {
-            $DomainToJoin = (Get-ADDomainInternal -Identity $DomainToJoin).DNSRoot
-        } catch {
-            throw [System.ArgumentException]::new(
-                "Could not find the domain $DomainToJoin", "DomainToJoin")
-        }
-    }
-
-    # Get incrementor 
-    $intCaster = {
-        param($name, $rootName, $domainName)
-
-        $str = $name.
-            Replace(".$domainName", "").
-            ToLowerInvariant().
-            Replace("$($rootName.ToLowerInvariant())-", "")
-        
-        $i = -1
-        if ([int]::TryParse($str, [ref]$i)) {
-            return $i
-        } else {
-            return -1
-        }
-    }
-
-    $filterCriteria = ($DnsForwarderRootName + "-*")
-    $currentIncrementor = Get-ADComputerInternal -Filter { Name -like $filterCriteria } | 
-        Select-Object Name, 
-            @{ 
-                Name = "Incrementor"; 
-                Expression = { $intCaster.Invoke($_.DNSHostName, $DnsForwarderRootName, $DomainToJoin) } 
-            } | `
-        Select-Object -ExpandProperty Incrementor | `
-        Measure-Object -Maximum | `
-        Select-Object -ExpandProperty Maximum
-    
-    if ($null -eq $currentIncrementor) {
-        $currentIncrementor = -1
-    }
-
-    if ($currentIncrementor -lt 1000) {
-        $currentIncrementor++
-    }
-
-    $incrementorSeed = $currentIncrementor
-
+    # Get names of on-premises host names
     if ($null -eq $OnPremDnsHostNames) {
         $onPremDnsServers = $DnsForwardingRuleSet.DnsForwardingRules | `
             Where-Object { $_.AzureResource -eq $false } | `
@@ -4425,59 +4678,33 @@ function New-AzDnsForwarder {
             Select-Object -ExpandProperty HostName
     }
 
-    # Register new DNS servers for offline domain join
-    $redundancyTop = $currentIncrementor + $DnsForwarderRedundancyCount
-    $dnsForwarderNames = [string[]]@()
-    while ($currentIncrementor -lt $redundancyTop) {
-        $dnsForwarderNames += ($DnsForwarderRootName + "-" + $currentIncrementor)
-        $currentIncrementor++
+    $domainJoinParameters = Join-AzDnsForwarder `
+            -DomainToJoin $DomainToJoin `
+            -DnsForwarderNames $DnsForwarderNames
+
+    if (!$PSBoundParameters.ContainsKey("VmTemporaryPassword")) {
+        $VmTemporaryPassword = Get-RandomString `
+                -StringLength 15 `
+                -CaseSensitive `
+                -AsSecureString
     }
     
-    $odjBlobs = $dnsForwarderNames | Register-OfflineMachine -Domain $DomainToJoin
-    $domainJoinParameters = @{ "Domain" = $DomainToJoin; "DomainJoinBlobs" = $odjBlobs }
-    
-    ## Encode ruleset
-    $encodedDnsForwardingRuleSet = $DnsForwardingRuleSet | ConvertTo-EncodedJson -Depth 3
+    Invoke-AzDnsForwarderDeployment `
+            -DnsForwardingRuleSet $DnsForwardingRuleSet `
+            -DnsServerResourceGroupName $DnsServerResourceGroupName `
+            -VirtualNetwork $VirtualNetwork `
+            -VirtualNetworkSubnet $VirtualNetworkSubnet `
+            -DomainJoinParameters $domainJoinParameters `
+            -DnsForwarderRootName $DnsForwarderRootName `
+            -DnsForwarderResourceIterator $DnsForwarderResourceIterator `
+            -VmTemporaryPassword $VmTemporaryPassword
 
-    try {
-        $templateResult = New-AzResourceGroupDeployment `
-            -ResourceGroupName $DnsServerResourceGroupName `
-            -TemplateUri $DnsForwarderTemplate `
-            -location $virtualNetwork.Location `
-            -virtualNetworkResourceGroupName $VirtualNetworkResourceGroupName `
-            -virtualNetworkName $VirtualNetworkName `
-            -virtualNetworkSubnetName $VirtualNetworkSubnetName `
-            -dnsForwarderRootName $DnsForwarderRootName `
-            -vmResourceIterator $incrementorSeed `
-            -vmResourceCount $DnsForwarderRedundancyCount `
-            -dnsForwarderTempPassword $VmTemporaryPassword `
-            -odjBlobs $domainJoinParameters `
-            -encodedForwardingRules $encodedDnsForwardingRuleSet `
-            -ErrorAction Stop
-    } catch {
-        Write-Verbose $_
-        Write-Error -Message "This error message will eventually be replaced by a rollback functionality." -ErrorAction Stop
-    }
+    $ipAddresses = Get-AzDnsForwarderIpAddress `
+            -DnsForwarderName $DnsForwarderNames
 
-    $nicNames = $dnsForwarderNames | `
-        Select-Object @{ Name = "NIC"; Expression = { ($_ + "-NIC") } } | `
-        Select-Object -ExpandProperty NIC
-
-    $ipAddresses = Get-AzNetworkInterface -ResourceGroupName $DnsServerResourceGroupName | `
-        Where-Object { $_.Name -in $nicNames } | `
-        Select-Object -ExpandProperty IpConfigurations | `
-        Select-Object -ExpandProperty PrivateIpAddress
-
-    if ($null -eq $virtualNetwork.DhcpOptions.DnsServers) {
-        $virtualNetwork.DhcpOptions.DnsServers = 
-            [System.Collections.Generic.List[string]]::new()
-    }
-
-    foreach($ipAddress in $ipAddresses) {
-        $virtualNetwork.DhcpOptions.DnsServers.Add($ipAddress)
-    }
-    
-    $virtualNetwork | Set-AzVirtualNetwork | Out-Null
+    Update-AzVirtualNetworkDnsServers `
+            -VirtualNetwork $VirtualNetwork `
+            -DnsForwarderIpAddress $ipAddresses
 
     foreach($dnsForwarder in $dnsForwarderNames) {
         Restart-AzVM `

@@ -105,6 +105,11 @@
         "Assert-AzPermission",
 
         # DNS cmdlets
+        "Confirm-AzDnsForwarderPreReqs",
+        "Join-AzDnsForwarder",
+        "Invoke-AzDnsForwarderDeployment",
+        "Get-AzDnsForwarderIpAddress",
+        "Update-AzVirtualNetworkDnsServers",
         "New-AzDnsForwarder",
         "New-AzDnsForwardingRuleSet",
         "Add-AzDnsForwardingRule",
