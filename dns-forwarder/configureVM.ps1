@@ -13,7 +13,7 @@ Import-Module `
             SkipDotNetFrameworkCheck = $true
         }
         
-Invoke-Expression -Command "using module .\HybridManagement.psd1"
+Invoke-Expression -Command "using module .\AzFilesHybrid.psd1"
 
 Get-OSFeature | `
     Where-Object { $_.Name -eq "DNS" -and !$_.Installed } | `
