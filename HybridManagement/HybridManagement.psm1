@@ -24,9 +24,8 @@ param(
 # - DFS-N cmdlets, which wrap Azure and Windows Server DFS-N to make it a more seamless process
 #   to adopt Azure Files to replace on-premises file servers.
 
-# 
-# General cmdlets
-#
+
+#region General cmdlets
 function Get-IsElevatedSession {
     <#
     .SYNOPSIS
@@ -2039,10 +2038,10 @@ function Initialize-RemoteSession {
 
     return $Session
 }
+#endregion
 
-#
-# Azure Files Active Directory cmdlets
-#
+
+#region Azure Files Active Directory cmdlets
 function Validate-StorageAccount {
     [CmdletBinding()]
     param (
@@ -3320,10 +3319,9 @@ function Join-AzStorageAccount {
 
 # Add alias for Join-AzStorageAccountForAuth
 New-Alias -Name "Join-AzStorageAccountForAuth" -Value "Join-AzStorageAccount"
+#endregion
 
-#
-# General Azure cmdlets
-#
+#region General Azure cmdlets
 function Expand-AzResourceId {
     <#
     .SYNOPSIS
@@ -3803,10 +3801,9 @@ function Assert-AzPermission {
         }
     }
 }
+#endregion
 
-#
-# DNS cmdlets
-#
+#region DNS cmdlets
 class DnsForwardingRule {
     [string]$DomainName
     [bool]$AzureResource
@@ -4742,15 +4739,12 @@ function New-AzDnsForwarder {
     
     Clear-DnsClientCacheInternal
 }
+#endregion
 
-#
-# DFS-N cmdlets
-#
+#region DFS-N cmdlets
+#endregion
 
-
-#
-# Actions to run on module load
-#
+#region Actions to run on module load
 $AzurePrivateDnsIp = [string]$null
 $DnsForwarderTemplate = [string]$null
 $SkipPowerShellGetCheck = $false
@@ -4830,3 +4824,4 @@ if ((Get-OSPlatform) -eq "Windows") {
         }
     }
 }
+#endregion
