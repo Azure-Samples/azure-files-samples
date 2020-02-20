@@ -4146,7 +4146,7 @@ function Clear-DnsClientCacheInternal {
 }
 
 function Push-DnsServerConfiguration {
-    [CmdletBinding()]
+    [CmdletBinding(SupportsShouldProcess=$true, ConfirmImpact="High")]
 
     param(
         [Parameter(Mandatory=$true, ParameterSetName="AzDnsServer")]
@@ -4171,75 +4171,80 @@ function Push-DnsServerConfiguration {
     Assert-IsWindowsServer
     Assert-OSFeature -WindowsServerFeature "DNS", "RSAT-DNS-Server"
 
-    if ($OnPremDnsServer) {
-        $rules = $DnsForwardingRuleSet | `
-            Select-Object -ExpandProperty DnsForwardingRules | `
-            Where-Object { $_.AzureResource }
-    } else {
-        $rules = $DnsForwardingRuleSet | `
-            Select-Object -ExpandProperty DnsForwardingRules
-    }
+    $caption = "Configure DNS server"
+    $verboseConfirmMessage = "This action will implement the DNS forwarding scheme as defined in the DnsForwardingRuleSet. Depending on the specified ConflictBehavior parameter, this may be a destructive operation."
 
-    foreach($rule in $rules) {
-        $zone = Get-DnsServerZone | `
-            Where-Object { $_.ZoneName -eq $rule.DomainName }
-
+    if ($PSCmdlet.ShouldProcess($verboseConfirmMessage, $verboseConfirmMessage, $caption)) {
         if ($OnPremDnsServer) {
-            $masterServers = $AzDnsForwarderIpAddress
+            $rules = $DnsForwardingRuleSet | `
+                Select-Object -ExpandProperty DnsForwardingRules | `
+                Where-Object { $_.AzureResource }
         } else {
-            $masterServers = $rule.MasterServers
+            $rules = $DnsForwardingRuleSet | `
+                Select-Object -ExpandProperty DnsForwardingRules
         }
 
-        if ($null -ne $zone) {
-            switch($ConflictBehavior) {
-                "Overwrite" {
-                    $zone | Remove-DnsServerZone `
-                            -Confirm:$false `
-                            -Force
-                }
+        foreach($rule in $rules) {
+            $zone = Get-DnsServerZone | `
+                Where-Object { $_.ZoneName -eq $rule.DomainName }
 
-                "Merge" {
-                    $existingMasterServers = $zone | `
-                        Select-Object -ExpandProperty MasterServers | `
-                        Select-Object -ExpandProperty IPAddressToString
-                    
-                    if ($OnPremDnsServer) {
-                        $masterServers = [System.Collections.Generic.HashSet[string]]::new(
-                            $AzDnsForwarderIpAddress)
-                    } else {
-                        $masterServers = [System.Collections.Generic.HashSet[string]]::new(
-                            $masterServers)
-                    }               
+            if ($OnPremDnsServer) {
+                $masterServers = $AzDnsForwarderIpAddress
+            } else {
+                $masterServers = $rule.MasterServers
+            }
 
-                    foreach($existingServer in $existingMasterServers) {
-                        $masterServers.Add($existingServer) | Out-Null
+            if ($null -ne $zone) {
+                switch($ConflictBehavior) {
+                    "Overwrite" {
+                        $zone | Remove-DnsServerZone `
+                                -Confirm:$false `
+                                -Force
                     }
-                    
-                    $zone | Remove-DnsServerZone `
-                            -Confirm:$false `
-                            -Force
-                }
 
-                "Disallow" {
-                    throw [System.ArgumentException]::new(
-                        "The DNS forwarding zone already exists", "DnsForwardingRuleSet")
-                }
+                    "Merge" {
+                        $existingMasterServers = $zone | `
+                            Select-Object -ExpandProperty MasterServers | `
+                            Select-Object -ExpandProperty IPAddressToString
+                        
+                        if ($OnPremDnsServer) {
+                            $masterServers = [System.Collections.Generic.HashSet[string]]::new(
+                                $AzDnsForwarderIpAddress)
+                        } else {
+                            $masterServers = [System.Collections.Generic.HashSet[string]]::new(
+                                $masterServers)
+                        }               
 
-                default {
-                    throw [System.ArgumentException]::new(
-                        "Unexpected conflict behavior $ConflictBehavior", "ConflictBehavior")
+                        foreach($existingServer in $existingMasterServers) {
+                            $masterServers.Add($existingServer) | Out-Null
+                        }
+                        
+                        $zone | Remove-DnsServerZone `
+                                -Confirm:$false `
+                                -Force
+                    }
+
+                    "Disallow" {
+                        throw [System.ArgumentException]::new(
+                            "The DNS forwarding zone already exists", "DnsForwardingRuleSet")
+                    }
+
+                    default {
+                        throw [System.ArgumentException]::new(
+                            "Unexpected conflict behavior $ConflictBehavior", "ConflictBehavior")
+                    }
                 }
             }
+            
+            Add-DnsServerConditionalForwarderZone `
+                    -Name $rule.DomainName `
+                    -MasterServers $masterServers
+            
+            Clear-DnsClientCache
+            Clear-DnsServerCache `
+                    -Confirm:$false `
+                    -Force
         }
-        
-        Add-DnsServerConditionalForwarderZone `
-                -Name $rule.DomainName `
-                -MasterServers $masterServers
-        
-        Clear-DnsClientCache
-        Clear-DnsServerCache `
-                -Confirm:$false `
-                -Force
     }
 }
 
@@ -4431,7 +4436,7 @@ function Confirm-AzDnsForwarderPreReqs {
 }
 
 function Join-AzDnsForwarder {
-    [CmdletBinding()]
+    [CmdletBinding(SupportsShouldProcess=$true, ConfirmImpact="Medium")]
     param(
         [Parameter(Mandatory=$true, ValueFromPipelineByPropertyName=$true)]
         [string]$DomainToJoin,
@@ -4441,20 +4446,26 @@ function Join-AzDnsForwarder {
     )
 
     process {
-        $odjBlobs = $DnsForwarderNames | `
-            Register-OfflineMachine `
-                -Domain $DomainToJoin `
-                -ErrorAction Stop
+        $caption = "Domain join DNS forwarders"
+        $verboseConfirmMessage = "This action will domain join your DNS forwarders to your domain."
         
-        return @{ 
-            "Domain" = $DomainToJoin; 
-            "DomainJoinBlobs" = $odjBlobs 
+        if ($PSCmdlet.ShouldProcess($verboseConfirmMessage, $verboseConfirmMessage, $caption)) {
+            $odjBlobs = $DnsForwarderNames | `
+                Register-OfflineMachine `
+                    -Domain $DomainToJoin `
+                    -ErrorAction Stop
+        
+            return @{ 
+                "Domain" = $DomainToJoin; 
+                "DomainJoinBlobs" = $odjBlobs 
+            }
         }
+        
     }
 }
 
 function Invoke-AzDnsForwarderDeployment {
-    [CmdletBinding()]
+    [CmdletBinding(SupportsShouldProcess=$true, ConfirmImpact="Medium")]
     param(
         [Parameter(Mandatory=$true)]
         [DnsForwardingRuleSet]$DnsForwardingRuleSet,
@@ -4487,23 +4498,28 @@ function Invoke-AzDnsForwarderDeployment {
     # Encode ruleset
     $encodedDnsForwardingRuleSet = $DnsForwardingRuleSet | ConvertTo-EncodedJson -Depth 3
 
-    try {
-        $templateResult = New-AzResourceGroupDeployment `
-            -ResourceGroupName $DnsServerResourceGroupName `
-            -TemplateUri $DnsForwarderTemplate `
-            -location $VirtualNetwork.Location `
-            -virtualNetworkResourceGroupName $VirtualNetwork.ResourceGroupName `
-            -virtualNetworkName $VirtualNetwork.Name `
-            -virtualNetworkSubnetName $VirtualNetworkSubnet.Name `
-            -dnsForwarderRootName $DnsForwarderRootName `
-            -vmResourceIterator $DnsForwarderResourceIterator `
-            -vmResourceCount $DnsForwarderRedundancyCount `
-            -dnsForwarderTempPassword $VmTemporaryPassword `
-            -odjBlobs $DomainJoinParameters `
-            -encodedForwardingRules $encodedDnsForwardingRuleSet `
-            -ErrorAction Stop
-    } catch {
-        Write-Error -Message "This error message will eventually be replaced by a rollback functionality." -ErrorAction Stop
+    $caption = "Deploy DNS forwarders in Azure"
+    $verboseConfirmMessage = "This action will deploy the DNS forwarders in Azure."
+
+    if ($PSCmdlet.ShouldProcess($verboseConfirmMessage, $verboseConfirmMessage, $caption)) {
+        try {
+            $templateResult = New-AzResourceGroupDeployment `
+                -ResourceGroupName $DnsServerResourceGroupName `
+                -TemplateUri $DnsForwarderTemplate `
+                -location $VirtualNetwork.Location `
+                -virtualNetworkResourceGroupName $VirtualNetwork.ResourceGroupName `
+                -virtualNetworkName $VirtualNetwork.Name `
+                -virtualNetworkSubnetName $VirtualNetworkSubnet.Name `
+                -dnsForwarderRootName $DnsForwarderRootName `
+                -vmResourceIterator $DnsForwarderResourceIterator `
+                -vmResourceCount $DnsForwarderRedundancyCount `
+                -dnsForwarderTempPassword $VmTemporaryPassword `
+                -odjBlobs $DomainJoinParameters `
+                -encodedForwardingRules $encodedDnsForwardingRuleSet `
+                -ErrorAction Stop
+        } catch {
+            Write-Error -Message "This error message will eventually be replaced by a rollback functionality." -ErrorAction Stop
+        }
     }
 }
 
@@ -4527,7 +4543,7 @@ function Get-AzDnsForwarderIpAddress {
 }
 
 function Update-AzVirtualNetworkDnsServers {
-    [CmdletBinding()]
+    [CmdletBinding(SupportsShouldProcess=$true, ConfirmImpact="High")]
     param(
         [Parameter(Mandatory=$true)]
         [Microsoft.Azure.Commands.Network.Models.PSVirtualNetwork]$VirtualNetwork,
@@ -4536,20 +4552,25 @@ function Update-AzVirtualNetworkDnsServers {
         [string[]]$DnsForwarderIpAddress
     )
 
-    if ($null -eq $VirtualNetwork.DhcpOptions.DnsServers) {
-        $VirtualNetwork.DhcpOptions.DnsServers = 
-            [System.Collections.Generic.List[string]]::new()
-    }
+    $caption = "Update your virtual network's DNS servers"
+    $verboseConfirmMessage = "This action will update your virtual network's DNS settings."
 
-    foreach($ipAddress in $DnsForwarderIpAddress) {
-        $VirtualNetwork.DhcpOptions.DnsServers.Add($ipAddress)
+    if ($PSCmdlet.ShouldProcess($verboseConfirmMessage, $verboseConfirmMessage, $caption)) {
+        if ($null -eq $VirtualNetwork.DhcpOptions.DnsServers) {
+            $VirtualNetwork.DhcpOptions.DnsServers = 
+                [System.Collections.Generic.List[string]]::new()
+        }
+
+        foreach($ipAddress in $DnsForwarderIpAddress) {
+            $VirtualNetwork.DhcpOptions.DnsServers.Add($ipAddress)
+        }
+        
+        $VirtualNetwork | Set-AzVirtualNetwork -ErrorAction Stop | Out-Null
     }
-    
-    $VirtualNetwork | Set-AzVirtualNetwork -ErrorAction Stop | Out-Null
 }
 
 function New-AzDnsForwarder {
-    [CmdletBinding()]
+    [CmdletBinding(SupportsShouldProcess=$true, ConfirmImpact="High")]
     param(
         [Parameter(Mandatory=$true)]
         [DnsForwardingRuleSet]$DnsForwardingRuleSet,
@@ -4595,151 +4616,160 @@ function New-AzDnsForwarder {
         [switch]$SkipParentDomain
     )
 
-    $confirmParameters = @{}
+    $caption = "Create Azure DNS forwarders"
+    $verboseConfirmMessage = "This action will fully configure DNS forwarding end-to-end, including deploying DNS forwarders in Azure VMs and configuring on-premises DNS to forward the appropriate zones to Azure."
 
-    switch($PSCmdlet.ParameterSetName) {
-        "NameParameterSet" {
+    if ($PSCmdlet.ShouldProcess($verboseConfirmMessage, $verboseConfirmMessage, $caption)) {
+        $confirmParameters = @{}
+
+        switch($PSCmdlet.ParameterSetName) {
+            "NameParameterSet" {
+                $confirmParameters += @{ 
+                    "VirtualNetworkResourceGroupName" = $VirtualNetworkResourceGroupName;
+                    "VirtualNetworkName" = $VirtualNetworkName;
+                    "VirtualNetworkSubnetName" = $VirtualNetworkSubnetName;
+                }
+            }
+
+            "VNetObjectParameter" {
+                $confirmParameters += @{
+                    "VirtualNetwork" = $VirtualNetwork;
+                    "VirtualNetworkSubnetName" = $VirtualNetworkSubnetName
+                }
+            }
+
+            "SubnetObjectParameter" {
+                $confirmParameters += @{
+                    "VirtualNetworkSubnet" = $VirtualNetworkSubnet
+                }
+            }
+
+            default {
+                throw [ArgumentException]::new("Unhandled parameter set")
+            }
+        }
+
+        if ($PSBoundParameters.ContainsKey("DomainToJoin")) {
+            $confirmParameters += @{
+                "DomainToJoin" = $DomainToJoin
+            }
+        }
+
+        if ($PSBoundParameters.ContainsKey("DnsForwarderRootName")) {
+            $confirmParameters += @{
+                "DnsForwarderRootName" = $DnsForwarderRootName
+            }
+        }
+
+        if ($PSBoundParameters.ContainsKey("DnsForwarderRedundancyCount")) {
             $confirmParameters += @{ 
-                "VirtualNetworkResourceGroupName" = $VirtualNetworkResourceGroupName;
-                "VirtualNetworkName" = $VirtualNetworkName;
-                "VirtualNetworkSubnetName" = $VirtualNetworkSubnetName;
+                "DnsForwarderRedundancyCount" = $DnsForwarderRedundancyCount
             }
         }
 
-        "VNetObjectParameter" {
-            $confirmParameters += @{
-                "VirtualNetwork" = $VirtualNetwork;
-                "VirtualNetworkSubnetName" = $VirtualNetworkSubnetName
+        $verifiedObjs = Confirm-AzDnsForwarderPreReqs @confirmParameters -ErrorAction Stop
+        $VirtualNetwork = $verifiedObjs.VirtualNetwork
+        $VirtualNetworkSubnet = $verifiedObjs.VirtualNetworkSubnet
+        $DomainToJoin = $verifiedObjs.DomainToJoin
+        $DnsForwarderResourceIterator = $verifiedObjs.DnsForwarderResourceIterator
+        $DnsForwarderNames = $verifiedObjs.DnsForwarderNames
+
+        # Create resource group for the DNS forwarders, if it hasn't already
+        # been created. The resource group will have the same location as the vnet.
+        if ($PSBoundParameters.ContainsKey("DnsServerResourceGroupName")) {
+            $dnsServerResourceGroup = Get-AzResourceGroup | `
+                Where-Object { $_.ResourceGroupName -eq $DnsServerResourceGroupName }
+
+            if ($null -eq $dnsServerResourceGroup) { 
+                $dnsServerResourceGroup = New-AzResourceGroup `
+                        -Name $DnsServerResourceGroupName `
+                        -Location $VirtualNetwork.Location
             }
+        } else {
+            $DnsServerResourceGroupName = $VirtualNetwork.ResourceGroupName
+        }       
+
+        # Get names of on-premises host names
+        if ($null -eq $OnPremDnsHostNames) {
+            $onPremDnsServers = $DnsForwardingRuleSet.DnsForwardingRules | `
+                Where-Object { $_.AzureResource -eq $false } | `
+                Select-Object -ExpandProperty MasterServers
+            
+            $OnPremDnsHostNames = $onPremDnsServers | `
+                ForEach-Object { [System.Net.Dns]::GetHostEntry($_) } | `
+                Select-Object -ExpandProperty HostName
         }
 
-        "SubnetObjectParameter" {
-            $confirmParameters += @{
-                "VirtualNetworkSubnet" = $VirtualNetworkSubnet
-            }
+        $domainJoinParameters = Join-AzDnsForwarder `
+                -DomainToJoin $DomainToJoin `
+                -DnsForwarderNames $DnsForwarderNames `
+                -Confirm:$false
+
+        if (!$PSBoundParameters.ContainsKey("VmTemporaryPassword")) {
+            $VmTemporaryPassword = Get-RandomString `
+                    -StringLength 15 `
+                    -CaseSensitive `
+                    -AsSecureString
         }
-
-        default {
-            throw [ArgumentException]::new("Unhandled parameter set")
-        }
-    }
-
-    if ($PSBoundParameters.ContainsKey("DomainToJoin")) {
-        $confirmParameters += @{
-            "DomainToJoin" = $DomainToJoin
-        }
-    }
-
-    if ($PSBoundParameters.ContainsKey("DnsForwarderRootName")) {
-        $confirmParameters += @{
-            "DnsForwarderRootName" = $DnsForwarderRootName
-        }
-    }
-
-    if ($PSBoundParameters.ContainsKey("DnsForwarderRedundancyCount")) {
-        $confirmParameters += @{ 
-            "DnsForwarderRedundancyCount" = $DnsForwarderRedundancyCount
-        }
-    }
-
-    $verifiedObjs = Confirm-AzDnsForwarderPreReqs @confirmParameters -ErrorAction Stop
-    $VirtualNetwork = $verifiedObjs.VirtualNetwork
-    $VirtualNetworkSubnet = $verifiedObjs.VirtualNetworkSubnet
-    $DomainToJoin = $verifiedObjs.DomainToJoin
-    $DnsForwarderResourceIterator = $verifiedObjs.DnsForwarderResourceIterator
-    $DnsForwarderNames = $verifiedObjs.DnsForwarderNames
-
-    # Create resource group for the DNS forwarders, if it hasn't already
-    # been created. The resource group will have the same location as the vnet.
-    if ($PSBoundParameters.ContainsKey("DnsServerResourceGroupName")) {
-        $dnsServerResourceGroup = Get-AzResourceGroup | `
-            Where-Object { $_.ResourceGroupName -eq $DnsServerResourceGroupName }
-
-        if ($null -eq $dnsServerResourceGroup) { 
-            $dnsServerResourceGroup = New-AzResourceGroup `
-                    -Name $DnsServerResourceGroupName `
-                    -Location $VirtualNetwork.Location
-        }
-    } else {
-        $DnsServerResourceGroupName = $VirtualNetwork.ResourceGroupName
-    }       
-
-    # Get names of on-premises host names
-    if ($null -eq $OnPremDnsHostNames) {
-        $onPremDnsServers = $DnsForwardingRuleSet.DnsForwardingRules | `
-            Where-Object { $_.AzureResource -eq $false } | `
-            Select-Object -ExpandProperty MasterServers
         
-        $OnPremDnsHostNames = $onPremDnsServers | `
-            ForEach-Object { [System.Net.Dns]::GetHostEntry($_) } | `
-            Select-Object -ExpandProperty HostName
-    }
+        Invoke-AzDnsForwarderDeployment `
+                -DnsForwardingRuleSet $DnsForwardingRuleSet `
+                -DnsServerResourceGroupName $DnsServerResourceGroupName `
+                -VirtualNetwork $VirtualNetwork `
+                -VirtualNetworkSubnet $VirtualNetworkSubnet `
+                -DomainJoinParameters $domainJoinParameters `
+                -DnsForwarderRootName $DnsForwarderRootName `
+                -DnsForwarderResourceIterator $DnsForwarderResourceIterator `
+                -DnsForwarderRedundancyCount $DnsForwarderRedundancyCount `
+                -VmTemporaryPassword $VmTemporaryPassword `
+                -ErrorAction Stop `
+                -Confirm:$false
 
-    $domainJoinParameters = Join-AzDnsForwarder `
-            -DomainToJoin $DomainToJoin `
-            -DnsForwarderNames $DnsForwarderNames
+        $ipAddresses = Get-AzDnsForwarderIpAddress `
+                -DnsForwarderName $DnsForwarderNames
 
-    if (!$PSBoundParameters.ContainsKey("VmTemporaryPassword")) {
-        $VmTemporaryPassword = Get-RandomString `
-                -StringLength 15 `
-                -CaseSensitive `
-                -AsSecureString
-    }
-    
-    Invoke-AzDnsForwarderDeployment `
-            -DnsForwardingRuleSet $DnsForwardingRuleSet `
-            -DnsServerResourceGroupName $DnsServerResourceGroupName `
-            -VirtualNetwork $VirtualNetwork `
-            -VirtualNetworkSubnet $VirtualNetworkSubnet `
-            -DomainJoinParameters $domainJoinParameters `
-            -DnsForwarderRootName $DnsForwarderRootName `
-            -DnsForwarderResourceIterator $DnsForwarderResourceIterator `
-            -DnsForwarderRedundancyCount $DnsForwarderRedundancyCount `
-            -VmTemporaryPassword $VmTemporaryPassword `
-            -ErrorAction Stop
+        Update-AzVirtualNetworkDnsServers `
+                -VirtualNetwork $VirtualNetwork `
+                -DnsForwarderIpAddress $ipAddresses `
+                -Confirm:$false
 
-    $ipAddresses = Get-AzDnsForwarderIpAddress `
-            -DnsForwarderName $DnsForwarderNames
+        foreach($dnsForwarder in $dnsForwarderNames) {
+            Restart-AzVM `
+                    -ResourceGroupName $DnsServerResourceGroupName `
+                    -Name $dnsForwarder | `
+                Out-Null
+        }
 
-    Update-AzVirtualNetworkDnsServers `
-            -VirtualNetwork $VirtualNetwork `
-            -DnsForwarderIpAddress $ipAddresses
+        foreach($server in $OnPremDnsHostNames) {
+            # This assumes that a credential is given.
+            $session = Initialize-RemoteSession `
+                    -ComputerName $server `
+                    -Credential $Credential `
+                    -InstallViaCopy `
+                    -OverrideModuleConfig @{ 
+                        SkipPowerShellGetCheck = $true;
+                        SkipAzPowerShellCheck = $true;
+                        SkipDotNetFrameworkCheck = $true
+                    }
+            
+            $serializedRuleSet = $DnsForwardingRuleSet | ConvertTo-Json -Compress -Depth 3
+            Invoke-Command `
+                    -Session $session `
+                    -ArgumentList $serializedRuleSet, ([string[]]$ipAddresses) `
+                    -ScriptBlock {
+                        $DnsForwardingRuleSet = [DnsForwardingRuleSet]::new(($args[0] | ConvertFrom-Json))
+                        $dnsForwarderIPs = ([string[]]$args[1])
 
-    foreach($dnsForwarder in $dnsForwarderNames) {
-        Restart-AzVM `
-                -ResourceGroupName $DnsServerResourceGroupName `
-                -Name $dnsForwarder | `
-            Out-Null
-    }
-
-    foreach($server in $OnPremDnsHostNames) {
-        # This assumes that a credential is given.
-        $session = Initialize-RemoteSession `
-                -ComputerName $server `
-                -Credential $Credential `
-                -InstallViaCopy `
-                -OverrideModuleConfig @{ 
-                    SkipPowerShellGetCheck = $true;
-                    SkipAzPowerShellCheck = $true;
-                    SkipDotNetFrameworkCheck = $true
-                }
+                        Push-DnsServerConfiguration `
+                                -DnsForwardingRuleSet $DnsForwardingRuleSet `
+                                -OnPremDnsServer `
+                                -AzDnsForwarderIpAddress $dnsForwarderIPs `
+                                -Confirm:$false
+                    }
+        }    
         
-        $serializedRuleSet = $DnsForwardingRuleSet | ConvertTo-Json -Compress -Depth 3
-        Invoke-Command `
-                -Session $session `
-                -ArgumentList $serializedRuleSet, ([string[]]$ipAddresses) `
-                -ScriptBlock {
-                    $DnsForwardingRuleSet = [DnsForwardingRuleSet]::new(($args[0] | ConvertFrom-Json))
-                    $dnsForwarderIPs = ([string[]]$args[1])
-
-                    Push-DnsServerConfiguration `
-                            -DnsForwardingRuleSet $DnsForwardingRuleSet `
-                            -OnPremDnsServer `
-                            -AzDnsForwarderIpAddress $dnsForwarderIPs
-                }
-    }    
-    
-    Clear-DnsClientCacheInternal
+        Clear-DnsClientCacheInternal
+    }
 }
 #endregion
 

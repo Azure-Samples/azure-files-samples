@@ -6,7 +6,7 @@ param(
 )
 
 Import-Module `
-        -Name .\HybridManagement.psd1 `
+        -Name .\AzFilesHybrid.psd1 `
         -ArgumentList @{ 
             SkipPowerShellGetCheck = $true;
             SkipAzPowerShellCheck = $true;
@@ -24,7 +24,7 @@ Join-OfflineMachine `
         -WindowsPath $env:windir
 
 $forwardingRules = [DnsForwardingRuleSet]::new((ConvertFrom-EncodedJson -String $EncodedForwardingRules))
-Push-DnsServerConfiguration -DnsForwardingRuleSet $forwardingRules
+Push-DnsServerConfiguration -DnsForwardingRuleSet $forwardingRules -Confirm:$false
 
 if (!$SkipUserDisable) {
     Disable-LocalUser -Name $TempUser
