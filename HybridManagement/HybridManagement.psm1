@@ -4481,7 +4481,7 @@ function Invoke-AzDnsForwarderDeployment {
         [int]$DnsForwarderResourceIterator,
 
         [Parameter(Mandatory=$true)]
-        [int]$DnsForwarderResourceCount,
+        [int]$DnsForwarderRedundancyCount,
 
         [Parameter(Mandatory=$true)]
         [System.Security.SecureString]$VmTemporaryPassword
@@ -4697,7 +4697,9 @@ function New-AzDnsForwarder {
             -DomainJoinParameters $domainJoinParameters `
             -DnsForwarderRootName $DnsForwarderRootName `
             -DnsForwarderResourceIterator $DnsForwarderResourceIterator `
-            -VmTemporaryPassword $VmTemporaryPassword
+            -DnsForwarderRedundancyCount $DnsForwarderRedundancyCount `
+            -VmTemporaryPassword $VmTemporaryPassword `
+            -ErrorAction Stop
 
     $ipAddresses = Get-AzDnsForwarderIpAddress `
             -DnsForwarderName $DnsForwarderNames
