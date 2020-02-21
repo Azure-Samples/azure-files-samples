@@ -4278,6 +4278,7 @@ function Confirm-AzDnsForwarderPreReqs {
     )
 
     Assert-IsDomainJoined
+    Assert-DnsForwarderArmTemplateVersion
 
     # Check networking parameters: VirtualNetwork and VirtualNetworkSubnet
     switch($PSCmdlet.ParameterSetName) {
@@ -4464,6 +4465,81 @@ function Join-AzDnsForwarder {
     }
 }
 
+function Get-ArmTemplateObject {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true, ValueFromPipeline=$true)]
+        [string]$ArmTemplateUri
+    )
+
+    process {
+        $request = Invoke-WebRequest `
+                -Uri $ArmTemplateUri `
+                -UseBasicParsing 
+
+        if ($request.StatusCode -ne 200) {
+            Write-Error `
+                    -Message "Unexpected status code when retrieving ARM template: $($request.StatusCode)" `
+                    -ErrorAction Stop
+        }
+
+        return ($request.Content | ConvertFrom-Json -Depth 100)
+    }
+}
+
+function Get-ArmTemplateVersion {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true, ValueFromPipeline=$true)]
+        [PSCustomObject]$ArmTemplateObject
+    )
+
+    process {
+        if ($ArmTemplateObject.'$schema' -ne "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#") {
+            throw [ArgumentException]::new(
+                "Provided ARM template is missing `$schema property and is therefore likely malformed or not an ARM template", 
+                "ArmTemplateObject")
+        }
+
+        if ($null -eq $ArmTemplateObject.contentVersion) {
+            Write-Error -Message "The provided ARM template is missing a content version." -ErrorAction Stop
+        }
+
+        $templateVersion = [Version]$null
+        if (![Version]::TryParse($ArmTemplateObject.contentVersion, [ref]$templateVersion)) {
+            Write-Error -Message "The ARM template content version is malformed." -ErrorAction Stop
+        }
+
+        return $templateVersion
+    }
+}
+
+function Assert-DnsForwarderArmTemplateVersion {
+    [CmdletBinding()]
+    param()
+
+    # Check ARM template version
+    $templateVersion = Get-ArmTemplateObject -ArmTemplateUri $DnsForwarderTemplate | `
+        Get-ArmTemplateVersion
+
+    if (
+        $templateVersion.Major -lt $ModuleVersion.Major -or 
+        $templateVersion.Minor -lt $ModuleVersion.Minor
+    ) {
+        Write-Error `
+                -Message "The template for deploying DNS forwarders in the Azure repository is an older version than the AzureFilesHybrid module expects. This likely indicates that you are using a development version of the AzureFilesHybrid module and should override the DnsForwarderTemplate config parameter on module load (or in AzureFilesHybrid.psd1) to match the correct development version." `
+                -ErrorAction Stop
+    } elseif (
+        $templateVersion.Major -gt $ModuleVersion.Major -or 
+        $templateVersion.Minor -gt $ModuleVersion.Minor
+    ) {
+        Write-Error -Message "The template for deploying DNS forwarders in the Azure repository is a newer version than the AzureFilesHybrid module expects. This likely indicates that you are using an older version of the AzureFilesHybrid module and should upgrade. This can be done by getting the newest version of the module from https://github.com/Azure-Samples/azure-files-samples/releases." -ErrorAction Stop
+    } else {
+        Write-Verbose -Message "DNS forwarder ARM template version is $($templateVersion.ToString())."
+        Write-Verbose -Message "AzureFilesHybrid module is version $($ModuleVersion.ToString())."
+    }
+}
+
 function Invoke-AzDnsForwarderDeployment {
     [CmdletBinding(SupportsShouldProcess=$true, ConfirmImpact="Medium")]
     param(
@@ -4494,6 +4570,8 @@ function Invoke-AzDnsForwarderDeployment {
         [Parameter(Mandatory=$true)]
         [System.Security.SecureString]$VmTemporaryPassword
     )
+
+    Assert-DnsForwarderArmTemplateVersion
 
     # Encode ruleset
     $encodedDnsForwardingRuleSet = $DnsForwardingRuleSet | ConvertTo-EncodedJson -Depth 3
@@ -4777,6 +4855,7 @@ function New-AzDnsForwarder {
 #endregion
 
 #region Actions to run on module load
+$ModuleVersion = [Version]$null
 $AzurePrivateDnsIp = [string]$null
 $DnsForwarderTemplate = [string]$null
 $SkipPowerShellGetCheck = $false
@@ -4789,7 +4868,7 @@ function Invoke-ModuleConfigPopulate {
     Populate module configuration parameters.
 
     .DESCRIPTION
-    This cmdlet wraps the PrivateData object as defined in HybridManagement.psd1, as well as module parameter OverrideModuleConfig. If an override is specified, that value will be used, otherwise, the value from the PrivateData object will be used.
+    This cmdlet wraps the PrivateData object as defined in AzureFilesHybrid.psd1, as well as module parameter OverrideModuleConfig. If an override is specified, that value will be used, otherwise, the value from the PrivateData object will be used.
 
     .PARAMETER OverrideModuleConfig
     The OverrideModuleConfig specified in the parameters of the module, at the beginning of the module.
@@ -4804,6 +4883,7 @@ function Invoke-ModuleConfigPopulate {
         [hashtable]$OverrideModuleConfig
     )
 
+    $script:ModuleVersion = $MyInvocation.MyCommand.Module.Version
     $DefaultModuleConfig = $MyInvocation.MyCommand.Module.PrivateData["Config"]
 
     if ($OverrideModuleConfig.ContainsKey("AzurePrivateDnsIp")) {
