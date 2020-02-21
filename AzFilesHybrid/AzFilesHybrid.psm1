@@ -4523,20 +4523,20 @@ function Assert-DnsForwarderArmTemplateVersion {
         Get-ArmTemplateVersion
 
     if (
-        $templateVersion.Major -lt $ModuleVersion.Major -or 
-        $templateVersion.Minor -lt $ModuleVersion.Minor
+        $templateVersion.Major -lt $DnsForwarderTemplateVersion.Major -or 
+        $templateVersion.Minor -lt $DnsForwarderTemplateVersion.Minor
     ) {
         Write-Error `
                 -Message "The template for deploying DNS forwarders in the Azure repository is an older version than the AzureFilesHybrid module expects. This likely indicates that you are using a development version of the AzureFilesHybrid module and should override the DnsForwarderTemplate config parameter on module load (or in AzureFilesHybrid.psd1) to match the correct development version." `
                 -ErrorAction Stop
     } elseif (
-        $templateVersion.Major -gt $ModuleVersion.Major -or 
-        $templateVersion.Minor -gt $ModuleVersion.Minor
+        $templateVersion.Major -gt $DnsForwarderTemplateVersion.Major -or 
+        $templateVersion.Minor -gt $DnsForwarderTemplateVersion.Minor
     ) {
         Write-Error -Message "The template for deploying DNS forwarders in the Azure repository is a newer version than the AzureFilesHybrid module expects. This likely indicates that you are using an older version of the AzureFilesHybrid module and should upgrade. This can be done by getting the newest version of the module from https://github.com/Azure-Samples/azure-files-samples/releases." -ErrorAction Stop
     } else {
         Write-Verbose -Message "DNS forwarder ARM template version is $($templateVersion.ToString())."
-        Write-Verbose -Message "AzureFilesHybrid module is version $($ModuleVersion.ToString())."
+        Write-Verbose -Message "Expected DnsForwarderTemplateVersion version is $($DnsForwarderTemplateVersion.ToString())."
     }
 }
 
@@ -4855,8 +4855,8 @@ function New-AzDnsForwarder {
 #endregion
 
 #region Actions to run on module load
-$ModuleVersion = [Version]$null
 $AzurePrivateDnsIp = [string]$null
+$DnsForwarderTemplateVersion = [Version]$null
 $DnsForwarderTemplate = [string]$null
 $SkipPowerShellGetCheck = $false
 $SkipAzPowerShellCheck = $false
@@ -4883,13 +4883,34 @@ function Invoke-ModuleConfigPopulate {
         [hashtable]$OverrideModuleConfig
     )
 
-    $script:ModuleVersion = $MyInvocation.MyCommand.Module.Version
     $DefaultModuleConfig = $MyInvocation.MyCommand.Module.PrivateData["Config"]
 
     if ($OverrideModuleConfig.ContainsKey("AzurePrivateDnsIp")) {
         $script:AzurePrivateDnsIp = $OverrideModuleConfig["AzurePrivateDnsIp"]
     } else {
         $script:AzurePrivateDnsIp = $DefaultModuleConfig["AzurePrivateDnsIp"]
+    }
+
+    if ($OverrideModuleConfig.ContainsKey("DnsForwarderTemplateVersion")) {
+        $script:DnsForwarderTemplateVersion = [Version]$null
+        $v = [Version]$null
+        if (![Version]::TryParse($OverrideModuleConfig["DnsForwarderTemplateVersion"], [ref]$v)) {
+            Write-Error `
+                    -Message "Unexpected DnsForwarderTemplateVersion version value specified in overrides." `
+                    -ErrorAction Stop
+        }
+
+        $script:DnsForwarderTemplateVersion = $v
+    } else {
+        $script:DnsForwarderTemplateVersion = [Version]$null
+        $v = [Version]$null
+        if (![Version]::TryParse($DefaultModuleConfig["DnsForwarderTemplateVersion"], [ref]$v)) {
+            Write-Error `
+                    -Message "Unexpected DnsForwarderTemplateVersion version value specified in AzFilesHybrid DefaultModuleConfig." `
+                    -ErrorAction Stop
+        }
+        
+        $script:DnsForwarderTemplateVersion = $v
     }
 
     if ($OverrideModuleConfig.ContainsKey("DnsForwarderTemplate")) {

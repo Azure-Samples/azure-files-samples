@@ -138,6 +138,7 @@
 
         Config = @{
             AzurePrivateDnsIp = "168.63.129.16";
+            DnsForwarderTemplateVersion = "0.1.0.0";
             DnsForwarderTemplate = "https://raw.githubusercontent.com/wmgries/azure-files-samples/AD-networking-merge/dns-forwarder/azuredeploy.json";
             SkipPowerShellGetCheck = $false;
             SkipAzPowerShellCheck = $false;
