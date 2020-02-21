@@ -1,0 +1,281 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "0.1.0.0",
+    "parameters": {
+        "location":{
+            "type": "string",
+            "metadata": {
+                "description": "The location of the virtual network and DNS forwarders must be identical."
+            }
+        },
+        "virtualNetworkResourceGroupName": {
+            "type": "string",
+            "metadata": {
+                "description": "The resource group of the virtual network that needs a DNS forwarder."
+            }
+        },
+        "virtualNetworkName": { 
+            "type": "string",
+            "metadata": {
+                "description": "The virtual network to add the DNS forwarder to."
+            }
+        },
+        "virtualNetworkSubnetName":{
+            "type": "string",
+            "metadata": {
+                "description": "The specific subnet to use."
+            }
+        },
+        "dnsForwarderRootName": {
+            "type": "string",
+            "defaultValue": "DnsFwder",
+            "minLength": 3,
+            "maxLength": 11,
+            "metadata": {
+                "description": "The name of the DNS VM."
+            }
+        },
+        "vmResourceIterator": {
+            "type": "int",
+            "minValue": 0,
+            "maxValue": 999,
+            "metadata": {
+                "description": "An iterator to use for the resources."
+            }
+        },
+        "vmResourceCount": {
+            "type": "int",
+            "minValue": 0,
+            "maxValue": 999,
+            "metadata": {
+                "description": "The number of resources to deploy."
+            }
+        },
+        "dnsForwarderTempPassword": {
+            "type": "securestring",
+            "metadata": {
+                "description": "A temporary password for the DNS VMs to use until they are domain joined."
+            }
+        },
+        "odjBlobs": {
+            "type": "object",
+            "metadata": {
+                "description": "The offline domain join blob for the DNS forwarder #1."
+            }
+        },
+        "encodedForwardingRules": {
+            "type": "string",
+            "metadata": {
+                "description": "The conditional forwarding rules to be configured on the DNS servers. Since these are passed to the PowerShell script, to simplify the exchange from the ARM template to the script, they are encoded as a string that is JSON with characters replaced. The encoding is as follows: \" => *, [[ => <, ]] => >,{ => ^, } => %. The PowerShell script is responsible for converting this back into an object array."
+            }
+        }
+    },
+    "variables": {
+        "vmTempUsername": "tempUser",
+        "vmSkuName": "2019-Datacenter-Core",
+        "vmDiskType": "StandardSSD_LRS",
+        "vmSize": "Standard_DS1_v2",
+        "deployVMsTemplate": "https://raw.githubusercontent.com/Azure-Samples/azure-files-samples/master/shared/deployVMs.json",
+        "moduleManifestURL": "https://raw.githubusercontent.com/Azure-Samples/azure-files-samples/master/AzFilesHybrid/AzFilesHybrid.psd1",
+        "moduleFileURL": "https://raw.githubusercontent.com/Azure-Samples/azure-files-samples/master/AzFilesHybrid/AzFilesHybrid.psm1",
+        "scriptURL": "https://raw.githubusercontent.com/Azure-Samples/azure-files-samples/master/dns-forwarder/configureVM.ps1",
+        "scriptName": "configureVM.ps1"
+    },
+    "functions": [
+        {
+            "namespace": "ps",
+            "members": {
+                "paramSwitch": {
+                    "parameters": [
+                        {
+                            "name": "paramName",
+                            "type": "string"
+                        },
+                        {
+                            "name": "boolValue",
+                            "type": "bool"
+                        }
+                    ],
+                    "output": {
+                        "type": "string",
+                        "value": "[concat(' -', parameters('paramName'), if(not(parameters('boolValue')), ':$false', ''))]"
+                    }
+                },
+                "paramBool": {
+                    "parameters": [
+                        {
+                            "name": "paramName",
+                            "type": "string"
+                        },
+                        {
+                            "name": "boolValue",
+                            "type": "bool"
+                        }
+                    ],
+                    "output": {
+                        "type": "string",
+                        "value": "[concat(' -', parameters('paramName'), ' $', string(parameters('boolValue')))]"
+                    }
+                },
+                "paramString": {
+                    "parameters": [
+                        {
+                            "name": "paramName",
+                            "type": "string"
+                        },
+                        {
+                            "name": "strValue",
+                            "type": "string"
+                        }
+                    ],
+                    "output": {
+                        "type": "string",
+                        "value": "[concat(' -', parameters('paramName'), ' ''', parameters('strValue'), '''')]"
+                    }
+                },
+                "paramInt": {
+                    "parameters": [
+                        {
+                            "name": "paramName",
+                            "type": "string"
+                        },
+                        {
+                            "name": "intValue",
+                            "type": "int"
+                        }
+                    ],
+                    "output": {
+                        "type": "string",
+                        "value": "[concat(' -', parameters('paramName'), ' ', parameters('intValue'))]"
+                    }
+                },
+                "paramStringArray": {                    
+                    "parameters": [
+                        {
+                            "name": "paramName",
+                            "type": "string"
+                        },
+                        {
+                            "name": "strArrValue",
+                            "type": "array"
+                        }
+                    ],
+                    "output": {
+                        "type": "string",
+                        "value": "[concat(' -', parameters('paramName'), ' @', replace(replace(replace(string(parameters('strArrValue')), '[', '('), ']', ')'), '\"', ''''))]"
+                    }
+                },
+                "paramIntArray": {
+                    "parameters": [
+                        {
+                            "name": "paramName",
+                            "type": "string"
+                        },
+                        {
+                            "name": "intArrValue",
+                            "type": "array"
+                        }
+                    ],
+                    "output": {
+                        "type": "string",
+                        "value": "[concat(' -', parameters('paramName'), ' @', replace(replace(string(parameters('intArrValue')), '[', '('), ']', ')'))]"
+                    }
+                },
+                "scriptStart": {
+                    "parameters": [
+                        {
+                            "name": "scriptName",
+                            "type": "string"
+                        }
+                    ],
+                    "output": {
+                        "type": "string",
+                        "value": "[concat('powershell.exe', ' -Command \"./', parameters('scriptName'))]"
+                    }
+                },
+                "scriptEnd": {
+                    "parameters": [],
+                    "output": {
+                        "type": "string",
+                        "value": "\""
+                    }
+                }
+            }
+        }
+    ],
+    "resources": [
+        {
+            "name": "deployVMs",
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2018-05-01",
+            "properties": {
+                "mode": "Incremental",
+                "parameters": {
+                    "location": {
+                        "value": "[parameters('location')]"
+                    },
+                    "vmResourceRootName": {
+                        "value": "[parameters('dnsForwarderRootName')]"
+                    },
+                    "vmResourceIterator": {
+                        "value": "[parameters('vmResourceIterator')]"
+                    },
+                    "vmResourceCount": {
+                        "value": "[parameters('vmResourceCount')]"
+                    },
+                    "vmSubnetId": {
+                        "value": "[concat(resourceId(parameters('virtualNetworkResourceGroupName'), 'Microsoft.Network/virtualNetworks', parameters('virtualNetworkName')), '/subnets/', parameters('virtualNetworkSubnetName'))]"
+                    },
+                    "vmDefaultUsername": {
+                        "value": "[variables('vmTempUsername')]"
+                    },
+                    "vmDefaultPassword": {
+                        "value": "[parameters('dnsForwarderTempPassword')]"
+                    },
+                    "vmSkuName": {
+                        "value": "[variables('vmSkuName')]"
+                    },
+                    "vmDiskType": {
+                        "value": "[variables('vmDiskType')]"
+                    },
+                    "vmSize": {
+                        "value": "[variables('vmSize')]"
+                    }
+                },
+                "templateLink": {
+                    "uri": "[variables('deployVMsTemplate')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Compute/virtualMachines/extensions",
+            "name": "[concat(parameters('dnsForwarderRootName'), '-', string(copyIndex('scriptExtIterator', parameters('vmResourceIterator'))), '/setupscript')]",
+            "apiVersion": "2018-06-01",
+            "location": "[parameters('location')]",
+            "copy": {
+                "name": "scriptExtIterator",
+                "count": "[parameters('vmResourceCount')]"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Resources/deployments', 'deployVMs')]"
+            ],
+            "properties": {
+                "publisher": "Microsoft.Compute",
+                "type": "CustomScriptExtension",
+                "typeHandlerVersion": "1.9",
+                "autoUpgradeMinorVersion": true,
+                "settings": {
+                    "fileUris": [ 
+                        "[variables('scriptURL')]",
+                        "[variables('moduleManifestURL')]",
+                        "[variables('moduleFileURL')]"
+                    ]
+                },
+                "protectedSettings": {
+                    "commandToExecute": "[concat(ps.scriptStart(variables('scriptName')), ps.paramString('EncodedForwardingRules', parameters('encodedForwardingRules')), ps.paramString('OdjBlob', parameters('odjBlobs').DomainJoinBlobs[copyIndex('scriptExtIterator')]), ps.paramString('TempUser', variables('vmTempUsername')), ps.scriptEnd())]"
+                }
+            }
+        }
+    ],
+    "outputs": { }
+}
