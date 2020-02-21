@@ -66,7 +66,7 @@ You will need custom routes IP address range to be fed into the ARM template tha
 Get the Storage account IP. Get this by running nslookup. Make sure you replace StorageAccountName with your own storage account's name.
 
 ```powershell
-nsloopup <StorageAccountName>.file.core.windows.net
+nslookup <StorageAccountName>.file.core.windows.net
 ```
 Output will be something like
 
