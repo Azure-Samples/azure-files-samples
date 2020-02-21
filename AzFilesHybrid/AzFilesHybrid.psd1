@@ -9,7 +9,7 @@
 @{
 
     # Script module or binary module file associated with this manifest.
-    RootModule = 'HybridManagement.psm1'
+    RootModule = 'AzFilesHybrid.psm1'
     
     # Version number of this module.
     ModuleVersion = '0.1.0.0'
@@ -82,6 +82,12 @@
         "Request-OSFeature",
         "Get-RandomString",
         "Assert-DotNetFrameworkVersion",
+        "Register-OfflineMachine",
+        "Join-OfflineMachine",
+        "ConvertFrom-EncodedJson",
+        "ConvertTo-EncodedJson",
+        "New-RegistryItem",
+        "New-RegistryItemProperty",
 
         # Azure Files AD domain join cmdlets
         "Get-AzStorageAccountADObject",
@@ -96,7 +102,18 @@
         "Compress-AzResourceId",
         "Get-AzCurrentAzureADUser",
         "Test-AzPermission",
-        "Assert-AzPermission"
+        "Assert-AzPermission",
+
+        # DNS cmdlets
+        "Confirm-AzDnsForwarderPreReqs",
+        "Join-AzDnsForwarder",
+        "Invoke-AzDnsForwarderDeployment",
+        "Get-AzDnsForwarderIpAddress",
+        "Update-AzVirtualNetworkDnsServers",
+        "New-AzDnsForwarder",
+        "New-AzDnsForwardingRuleSet",
+        "Add-AzDnsForwardingRule",
+        "Push-DnsServerConfiguration"
     
     # Cmdlets to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no cmdlets to export.
     CmdletsToExport = @()
@@ -118,6 +135,15 @@
     
     # Private data to pass to the module specified in RootModule/ModuleToProcess. This may also contain a PSData hashtable with additional module metadata used by PowerShell.
     PrivateData = @{
+
+        Config = @{
+            AzurePrivateDnsIp = "168.63.129.16";
+            DnsForwarderTemplateVersion = "0.1.0.0";
+            DnsForwarderTemplate = "https://raw.githubusercontent.com/wmgries/azure-files-samples/AD-networking-merge/dns-forwarder/azuredeploy.json";
+            SkipPowerShellGetCheck = $false;
+            SkipAzPowerShellCheck = $false;
+            SkipDotNetFrameworkCheck = $false
+        };
     
         PSData = @{
     
