@@ -80,18 +80,23 @@
         "Get-OSFeature",
         "Install-OSFeature",
         "Request-OSFeature",
+        "Get-RandomString",
+        "Assert-DotNetFrameworkVersion",
+
+        # Azure Files AD domain join cmdlets
         "Get-AzStorageAccountADObject",
         "Get-AzStorageKerberosTicketStatus",
         "Test-AzStorageAccountADObjectPasswordIsKerbKey",
         "Update-AzStorageAccountADObjectPassword",
         "Join-AzStorageAccount", 
         "Invoke-AzStorageAccountADObjectPasswordRotation",
+
+        # General Azure cmdlets
         "Expand-AzResourceId",
         "Compress-AzResourceId",
         "Get-AzCurrentAzureADUser",
         "Test-AzPermission",
-        "Assert-AzPermission",
-        "Get-RandomString"
+        "Assert-AzPermission"
     
     # Cmdlets to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no cmdlets to export.
     CmdletsToExport = @()

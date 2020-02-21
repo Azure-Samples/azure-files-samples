@@ -5,6 +5,25 @@ using namespace System.Collections.Specialized
 using namespace System.Text
 using namespace System.Security
 
+# This module contains many cmdlets which may be used in different scenarios. Since the purpose 
+# of this module is to provide cmdlets that cross the cloud/on-premises boundary, you may want 
+# to take a look at what that cmdlets are doing prior to running them. For the ease of your 
+# inspection, we have grouped them into several regions:
+# - General cmdlets, used across multiple scenarios. These check or assert information about 
+#   your environment, or wrap OS functionality (like *-OSFeature) to provide a common way of 
+#   dealing with things across OS environments.
+# - Azure Files Active Directory cmdlets, which make it possible to domain join your storage 
+#   accounts to replace a file server.
+# - General Azure cmdlets, which provide functionality that make working with Azure resources 
+#   easier.
+# - DNS cmdlets, which wrap Azure and on-premises DNS functions to make it possible to configure
+#   DNS to access Azure resources on-premises and vice versa.
+# - DFS-N cmdlets, which wrap Azure and Windows Server DFS-N to make it a more seamless process
+#   to adopt Azure Files to replace on-premises file servers.
+
+# 
+# General cmdlets
+#
 function Get-IsElevatedSession {
     <#
     .SYNOPSIS
@@ -788,14 +807,30 @@ function Request-AzPowerShellModule {
             }
 
             if ($null -eq $storageModule) {
+                Remove-Module `
+                        -Name Az.Storage `
+                        -Force `
+                        -ErrorAction SilentlyContinue
+                
+                try {
+                    Uninstall-Module `
+                            -Name Az.Storage `
+                            -Force `
+                            -ErrorAction Stop
+                } catch {
+                    Write-Error `
+                            -Message "Unable to uninstall the GA version of the Az.Storage module in favor of the preview version (1.11.1-preview)." `
+                            -ErrorAction Stop
+                }
+
                 Install-Module `
-                    -Name Az.Storage `
-                    -AllowClobber `
-                    -AllowPrerelease `
-                    -Force `
-                    -RequiredVersion "1.11.1-preview" `
-                    -SkipPublisherCheck `
-                    -ErrorAction Stop
+                        -Name Az.Storage `
+                        -AllowClobber `
+                        -AllowPrerelease `
+                        -Force `
+                        -RequiredVersion "1.11.1-preview" `
+                        -SkipPublisherCheck `
+                        -ErrorAction Stop
             }       
         }
     }
@@ -815,6 +850,263 @@ function Request-AzPowerShellModule {
     Import-Module -ModuleInfo $storageModule[0] -Global -ErrorAction Stop
 }
 
+function Assert-DotNetFrameworkVersion {
+    <#
+    .SYNOPSIS
+    Require a particular .NET Framework version or throw an error if it's not available. 
+
+    .DESCRIPTION
+    This cmdlet makes it possible to throw an error if a particular .NET Framework version is not installed on Windows. It wraps the registry using the information about .NET Framework here: https://docs.microsoft.com/en-us/dotnet/framework/migration-guide/how-to-determine-which-versions-are-installed#query-the-registry-using-code. This cmdlet is not PowerShell 5.1 only, since it's reasonable to imagine a case where a PS6+ cmdlet/module would want to require a particular version of .NET.
+
+    .PARAMETER DotNetFrameworkVersion
+    The minimum version of .NET Framework to require. If a newer version is found, that will satisify the request.
+
+    .EXAMPLE 
+    Assert-DotNetFrameworkVersion
+    #>
+
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)]
+        [ValidateSet(
+            "Framework4.5", 
+            "Framework4.5.1",
+            "Framework4.5.2", 
+            "Framework4.6", 
+            "Framework4.6.1", 
+            "Framework4.6.2", 
+            "Framework4.7", 
+            "Framework4.7.1", 
+            "Framework4.7.2", 
+            "Framework4.8")]
+        [string]$DotNetFrameworkVersion
+    )
+
+    Assert-IsWindows
+
+    $v4 = Get-ChildItem -Path "HKLM:\SOFTWARE\Microsoft\NET Framework Setup\NDP" | `
+        Where-Object { $_.PSChildName -eq "v4" }
+    if ($null -eq $v4) {
+        Write-Error `
+                -Message "This module/cmdlet requires at least .NET 4.0 to be installed." `
+                -ErrorAction Stop
+    }
+
+    $full = Get-ChildItem -Path "HKLM:\SOFTWARE\Microsoft\NET Framework Setup\NDP\v4" | `
+        Where-Object { $_.PSChildName -eq "Full" }
+    if ($null -eq $full) {
+        Write-Error `
+                -Message "This module/cmdlet requires at least .NET 4.5 to be installed." `
+                -ErrorAction Stop
+    }
+
+    $release = Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full" | `
+        Select-Object -ExpandProperty Release
+    if ($null -eq $release) {
+        Write-Error `
+                -Message "The Release property is not set at HKLM:\SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full." `
+                -ErrorAction Stop
+    }
+
+    $minimumVersionMet = $false
+
+    # Logic taken from: https://docs.microsoft.com/en-us/dotnet/framework/migration-guide/how-to-determine-which-versions-are-installed#query-the-registry-using-code
+    switch($DotNetFrameworkVersion) {
+        "Framework4.5" {
+            if ($release -ge 378389) {
+                $minimumVersionMet = $true
+            }
+        }
+
+        "Framework4.5.1" {
+            if ($release -ge 378675) {
+                $minimumVersionMet = $true
+            }
+        }
+
+        "Framework4.5.2" {
+            if ($release -ge 379893) {
+                $minimumVersionMet = $true
+            }
+        }
+
+        "Framework4.6" {
+            if ($release -ge 393295) {
+                $minimumVersionMet = $true
+            }
+        }
+
+        "Framework4.6.1" {
+            if ($release -ge 394254) {
+                $minimumVersionMet = $true
+            }
+        } 
+
+        "Framework4.6.2" {
+            if ($release -ge 394802) {
+                $minimumVersionMet = $true
+            }
+        } 
+
+        "Framework4.7" {
+            if ($release -ge 460798) {
+                $minimumVersionMet = $true
+            }
+        } 
+
+        "Framework4.7.1" {
+            if ($release -ge 461308) {
+                $minimumVersionMet = $true
+            }
+        } 
+        
+        "Framework4.7.2" {
+            if ($release -ge 461808) {
+                $minimumVersionMet = $true
+            }
+        }
+            
+        "Framework4.8" {
+            if ($release -ge 528040) {
+                $minimumVersionMet = $true
+            }
+        }
+    }
+
+    if (!$minimumVersionMet) {
+        Write-Error `
+                -Message "This module/cmdlet requires at least .NET $DotNetFrameworkVersion to be installed. Please upgrade to the newest .NET Framework available." `
+                -ErrorAction Stop
+    }
+}
+
+# This class is a wrapper around SecureString and StringBuilder to provide a consistent interface 
+# (Append versus AppendChar) and specialized object return (give a string when StringBuilder, 
+# SecureString when SecureString) so you don't have to care what the underlying object is. 
+class OptionalSecureStringBuilder {
+    hidden [SecureString]$SecureString
+    hidden [StringBuilder]$StringBuilder
+    hidden [bool]$IsSecureString
+
+    # Create an OptionalSecureStringBuilder with the desired underlying object.
+    OptionalSecureStringBuilder([bool]$isSecureString) {
+        $this.IsSecureString = $isSecureString
+        if ($this.IsSecureString) {
+            $this.SecureString = [SecureString]::new()
+        } else {
+            $this.StringBuilder = [StringBuilder]::new()
+        }
+    }
+    
+    # Append a string to the internal object.
+    [void]Append([string]$append) {
+        if ($this.IsSecureString) {
+            foreach($c in $append) {
+                $this.SecureString.AppendChar($c)
+            }
+        } else {
+            $this.StringBuilder.Append($append) | Out-Null
+        }
+    }
+
+    # Get the actual object you've been writing to.
+    [object]GetInternalObject() {
+        if ($this.IsSecureString) {
+            return $this.SecureString
+        } else {
+            return $this.StringBuilder.ToString()
+        }
+    }
+}
+
+function Get-RandomString {
+    <#
+    .SYNOPSIS
+    Generate a random string for the purposes of password generation or random characters for unique names.
+
+    .DESCRIPTION
+    Generate a random string for the purposes of password generation or random characters for unique names.
+
+    .PARAMETER StringLength
+    The length of the string to generate.
+
+    .PARAMETER AlphanumericOnly
+    The string should only include alphanumeric characters.
+
+    .PARAMETER CaseSensitive
+    Distinguishes between the same characters of different case. 
+
+    .PARAMETER IncludeSimilarCharacters
+    Include characters that might easily be mistaken for each other (depending on the font): 1, l, I.
+
+    .PARAMETER ExcludeCharacters
+    Don't include these characters in the random string.
+    
+    .PARAMETER AsSecureString
+    Return the object as a secure string rather than a regular string.
+
+    .EXAMPLE
+    Get-RandomString -StringLength 10 -AlphanumericOnly -AsSecureString
+
+    .OUTPUTS
+    System.String
+    System.Security.SecureString
+    #>
+
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)]
+        [int]$StringLength,
+
+        [Parameter(Mandatory=$false)]
+        [switch]$AlphanumericOnly,
+
+        [Parameter(Mandatory=$false)]
+        [switch]$CaseSensitive,
+
+        [Parameter(Mandatory=$false)]
+        [switch]$IncludeSimilarCharacters,
+
+        [Parameter(Mandatory=$false)]
+        [string[]]$ExcludeCharacters,
+
+        [Parameter(Mandatory=$false)]
+        [switch]$AsSecureString
+    )
+
+    $characters = [string[]]@()
+
+    $characters += 97..122 | ForEach-Object { [char]$_ }
+    if ($CaseSensitive) {
+        $characters += 65..90 | ForEach-Object { [char]$_ }
+    }
+
+    $characters += 0..9 | ForEach-Object { $_.ToString() }
+    
+    if (!$AlphanumericOnly) {
+        $characters += 33..46 | ForEach-Object { [char]$_ }
+        $characters += 91..96 | ForEach-Object { [char]$_ }
+        $characters += 123..126 | ForEach-Object { [char]$_ }
+    }
+
+    if (!$IncludeSimilarCharacters) {
+        $ExcludeCharacters += "1", "l", "I", "0", "O"
+    }
+
+    $characters = $characters | Where-Object { $_ -notin $ExcludeCharacters }
+
+    $acc = [OptionalSecureStringBuilder]::new($AsSecureString)
+    for($i=0; $i -lt $StringLength; $i++) {
+        $random = Get-Random -Minimum 0 -Maximum $characters.Length
+        $acc.Append($characters[$random])
+    }
+
+    return $acc.GetInternalObject()
+}
+
+#
+# Azure Files Active Directory cmdlets
+#
 function Validate-StorageAccount {
     [CmdletBinding()]
     param (
@@ -2092,6 +2384,10 @@ function Join-AzStorageAccount {
 
 # Add alias for Join-AzStorageAccountForAuth
 New-Alias -Name "Join-AzStorageAccountForAuth" -Value "Join-AzStorageAccount"
+
+#
+# General Azure cmdlets
+#
 function Expand-AzResourceId {
     <#
     .SYNOPSIS
@@ -2572,122 +2868,25 @@ function Assert-AzPermission {
     }
 }
 
-# This class is a wrapper around SecureString and StringBuilder to provide a consistent interface 
-# (Append versus AppendChar) and specialized object return (give a string when StringBuilder, 
-# SecureString when SecureString) so you don't have to care what the underlying object is. 
-class OptionalSecureStringBuilder {
-    hidden [SecureString]$SecureString
-    hidden [StringBuilder]$StringBuilder
-    hidden [bool]$IsSecureString
+#
+# DNS cmdlets
+#
 
-    # Create an OptionalSecureStringBuilder with the desired underlying object.
-    OptionalSecureStringBuilder([bool]$isSecureString) {
-        $this.IsSecureString = $isSecureString
-        if ($this.IsSecureString) {
-            $this.SecureString = [SecureString]::new()
-        } else {
-            $this.StringBuilder = [StringBuilder]::new()
-        }
-    }
-    
-    # Append a string to the internal object.
-    [void]Append([string]$append) {
-        if ($this.IsSecureString) {
-            foreach($c in $append) {
-                $this.SecureString.AppendChar($c)
-            }
-        } else {
-            $this.StringBuilder.Append($append) | Out-Null
-        }
-    }
 
-    # Get the actual object you've been writing to.
-    [object]GetInternalObject() {
-        if ($this.IsSecureString) {
-            return $this.SecureString
-        } else {
-            return $this.StringBuilder.ToString()
-        }
-    }
-}
+#
+# DFS-N cmdlets
+#
 
-function Get-RandomString {
-    <#
-    .SYNOPSIS
-    Generate a random string for the purposes of password generation or random characters for unique names.
-    .DESCRIPTION
-    Generate a random string for the purposes of password generation or random characters for unique names.
-    .PARAMETER StringLength
-    The length of the string to generate.
-    .PARAMETER AlphanumericOnly
-    The string should only include alphanumeric characters.
-    .PARAMETER CaseSensitive
-    Distinguishes between the same characters of different case. 
-    .PARAMETER IncludeSimilarCharacters
-    Include characters that might easily be mistaken for each other (depending on the font): 1, l, I.
-    .PARAMETER ExcludeCharacters
-    Don't include these characters in the random string.
-    
-    .PARAMETER AsSecureString
-    Return the object as a secure string rather than a regular string.
-    .EXAMPLE
-    Get-RandomString -StringLength 10 -AlphanumericOnly -AsSecureString
-    .OUTPUTS
-    System.String
-    System.Security.SecureString
-    #>
 
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory=$true)]
-        [int]$StringLength,
-
-        [Parameter(Mandatory=$false)]
-        [switch]$AlphanumericOnly,
-
-        [Parameter(Mandatory=$false)]
-        [switch]$CaseSensitive,
-
-        [Parameter(Mandatory=$false)]
-        [switch]$IncludeSimilarCharacters,
-
-        [Parameter(Mandatory=$false)]
-        [string[]]$ExcludeCharacters,
-
-        [Parameter(Mandatory=$false)]
-        [switch]$AsSecureString
-    )
-
-    $characters = [string[]]@()
-
-    $characters += 97..122 | ForEach-Object { [char]$_ }
-    if ($CaseSensitive) {
-        $characters += 65..90 | ForEach-Object { [char]$_ }
-    }
-
-    $characters += 0..9 | ForEach-Object { $_.ToString() }
-    
-    if (!$AlphanumericOnly) {
-        $characters += 33..46 | ForEach-Object { [char]$_ }
-        $characters += 91..96 | ForEach-Object { [char]$_ }
-        $characters += 123..126 | ForEach-Object { [char]$_ }
-    }
-
-    if (!$IncludeSimilarCharacters) {
-        $ExcludeCharacters += "1", "l", "I", "0", "O"
-    }
-
-    $characters = $characters | Where-Object { $_ -notin $ExcludeCharacters }
-
-    $acc = [OptionalSecureStringBuilder]::new($AsSecureString)
-    for($i=0; $i -lt $StringLength; $i++) {
-        $random = Get-Random -Minimum 0 -Maximum $characters.Length
-        $acc.Append($characters[$random])
-    }
-
-    return $acc.GetInternalObject()
-}
-
+#
 # Actions to run on module load
+#
 Request-PowerShellGetModule
 Request-AzPowerShellModule
+
+if ((Get-OSPlatform) -eq "Windows") {
+    if ($PSVersionTable.PSEdition -eq "Desktop") {
+        Assert-DotNetFrameworkVersion `
+            -DotNetFrameworkVersion Framework4.7.1
+    }
+}
