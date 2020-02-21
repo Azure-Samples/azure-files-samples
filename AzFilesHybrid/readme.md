@@ -1,0 +1,2 @@
+## Overview
+The AzFilesHybrid PowerShell module provides cmdlets for deploying and configuring Azure Files, namely, cmdlets for domain joining storage accounts to your on-premises Active Directory, and configuring your DNS servers.

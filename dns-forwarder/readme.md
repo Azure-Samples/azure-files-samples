@@ -3,11 +3,11 @@
 - [See also](#see-also)
 
 ## Overview
-This ARM template is provided in order to simplify the deployment of DNS forwarders for use with Azure Files (and other Azure services). In order to create a highly available DNS forwarding solution, we will deploy two virtual machines within an availability set, which ensures that your DNS server VMs are isolated across multiple physical servers, compute racks, storage units, and network switches. When the deployment is complete, you will have deployed:
+This ARM template is provided in order to simplify the deployment of DNS forwarders for use with Azure Files (and other Azure services). In order to create a highly available DNS forwarding solution, we will deploy two virtual machines within an availability set, which ensures that your DNS server VMs are isolated across multiple physical servers, compute racks, storage units, and network switches. When the deployment is complete, you will have deployed (where n is the number of instances that you select):
 
-- 2 Windows Server 2019 virtual machines.
-- 2 virtual disks (for the Windows Server OS).
-- 2 virtual network interfaces.
+- n Windows Server 2019 virtual machines.
+- n virtual disks (for the Windows Server OS).
+- n virtual network interfaces.
 - 1 availability set.
 
 Through use of the CustomScriptExtension, the template will also:
