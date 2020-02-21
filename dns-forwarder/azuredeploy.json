@@ -75,9 +75,10 @@
         "vmSkuName": "2019-Datacenter-Core",
         "vmDiskType": "StandardSSD_LRS",
         "vmSize": "Standard_DS1_v2",
-        "moduleManifestURL": "https://raw.githubusercontent.com/wmgries/azure-files-samples/AD-networking-merge/AzFilesHybrid/AzFilesHybrid.psd1",
-        "moduleFileURL": "https://raw.githubusercontent.com/wmgries/azure-files-samples/AD-networking-merge/AzFilesHybrid/AzFilesHybrid.psm1",
-        "scriptURL": "https://raw.githubusercontent.com/wmgries/azure-files-samples/AD-networking-merge/dns-forwarder/configureVM.ps1",
+        "deployVMsTemplate": "https://raw.githubusercontent.com/Azure-Samples/azure-files-samples/master/shared/deployVMs.json",
+        "moduleManifestURL": "https://raw.githubusercontent.com/Azure-Samples/azure-files-samples/master/AzFilesHybrid/AzFilesHybrid.psd1",
+        "moduleFileURL": "https://raw.githubusercontent.com/Azure-Samples/azure-files-samples/master/AzFilesHybrid/AzFilesHybrid.psm1",
+        "scriptURL": "https://raw.githubusercontent.com/Azure-Samples/azure-files-samples/master/dns-forwarder/configureVM.ps1",
         "scriptName": "configureVM.ps1"
     },
     "functions": [
@@ -242,7 +243,7 @@
                     }
                 },
                 "templateLink": {
-                    "uri": "https://raw.githubusercontent.com/wmgries/azure-files-samples/AD-networking-merge/shared/deployVMs.json"
+                    "uri": "[variables('deployVMsTemplate')]"
                 }
             }
         },
