@@ -2365,18 +2365,14 @@ function New-ADAccountForStorageAccount {
         # Give better error message when AD exception is thrown for invalid SAMAccountName length.
         #
 
-        if ($_.Exception.GetType().Name -eq "ADException" -and $StorageAccountName.Length -gt 20)
+        if ($_.Exception.GetType().Name -eq "ADException" -and $_.Exception.Message.Contains("required attribute"))
         {
-            Write-Error -Message "
-    Failed to create an Active Directory object with the name $StorageAccountName. 
-    The naming conventions are different for an Azure storage account and an Active Directory SAMAccountName.
-    The maximum number of characters in a SAMAccountName is 20.  Due to this limitation, storage account names
-    must be less than 20 characters to be domain-joined."
+            Write-Error -Message "Unable to create AD object.  Please check that you have permission to create an identity of type $ObjectType in Active Directory location path '$path' for the storage account '$StorageAccountName'"
         }
 
         if ($_.Exception.GetType().Name -eq "UnauthorizedAccessException")
         {
-            Write-Error "Access denied: You don't have permission to create an identity of type $ObjectType in Active Directory location path '$path' for the storage account '$StorageAccountName'"
+            Write-Error -Message "Access denied: You don't have permission to create an identity of type $ObjectType in Active Directory location path '$path' for the storage account '$StorageAccountName'"
         }
 
         throw
@@ -3222,9 +3218,11 @@ function Join-AzStorageAccount {
         [string]$DomainAccountType = "ComputerAccount",
 
         [Parameter(Mandatory=$false, Position=4)]
+        [Alias('OrganizationUnitName')]
         [string]$OrganizationalUnitName,
 
         [Parameter(Mandatory=$false, Position=5)]
+        [Alias('OrganizationUnitDistinguishedName')]
         [string]$OrganizationalUnitDistinguishedName,
 
         [Parameter(Mandatory=$false, Position=5)]
