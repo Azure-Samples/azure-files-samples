@@ -4086,6 +4086,8 @@ function New-AzDnsForwardingRuleSet {
         [switch]$SkipParentDomain
     )
 
+    Request-ADFeature
+
     $ruleSet = [DnsForwardingRuleSet]::new()
     foreach($azureEndpoint in $AzureEndpoints) {
         Add-AzDnsForwardingRule -DnsForwardingRuleSet $ruleSet -AzureEndpoint $azureEndpoint | Out-Null
@@ -4278,6 +4280,7 @@ function Confirm-AzDnsForwarderPreReqs {
     )
 
     Assert-IsDomainJoined
+    Request-ADFeature
     Assert-DnsForwarderArmTemplateVersion
 
     # Check networking parameters: VirtualNetwork and VirtualNetworkSubnet
