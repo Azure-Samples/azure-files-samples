@@ -2017,8 +2017,9 @@ function Initialize-RemoteSession {
             if ($null -eq $remoteModuleInfo) {
                 Copy-RemoteModule -Session $Session
             } elseif ($moduleInfo.Version -ne $remoteModuleInfo.Version) {
-                throw [PSSessionHybridManagementVersionMismatchException]::new(
-                    $moduleInfo.Version, $remoteModuleInfo.Version)
+                Write-Error `
+                        -Message "There is already a version of this module installed on the destination machine $($Session.ComputerName)" `
+                        -ErrorAction Stop
             }
         }
 
