@@ -935,6 +935,7 @@ function Request-AzPowerShellModule {
     Remove-Module -Name PackageManagement -ErrorAction SilentlyContinue
     Remove-Module -Name Az.Storage -Force -ErrorAction SilentlyContinue
     Remove-Module -Name Az.Accounts -Force -ErrorAction SilentlyContinue
+    Remove-Module -Name Az.Network -Force -ErrorAction SilentlyContinue
 
     $storageModule = ,(Get-Module -Name Az.Storage -ListAvailable | `
         Where-Object { 
@@ -944,6 +945,7 @@ function Request-AzPowerShellModule {
         Sort-Object -Property Version -Descending)
 
     Import-Module -ModuleInfo $storageModule[0] -Global -ErrorAction Stop
+    Import-Module -Name Az.Network -Global -ErrorAction Stop
 }
 
 function Assert-DotNetFrameworkVersion {
@@ -2015,8 +2017,9 @@ function Initialize-RemoteSession {
             if ($null -eq $remoteModuleInfo) {
                 Copy-RemoteModule -Session $Session
             } elseif ($moduleInfo.Version -ne $remoteModuleInfo.Version) {
-                throw [PSSessionHybridManagementVersionMismatchException]::new(
-                    $moduleInfo.Version, $remoteModuleInfo.Version)
+                Write-Error `
+                        -Message "There is already a version of this module installed on the destination machine $($Session.ComputerName)" `
+                        -ErrorAction Stop
             }
         }
 
@@ -2365,18 +2368,14 @@ function New-ADAccountForStorageAccount {
         # Give better error message when AD exception is thrown for invalid SAMAccountName length.
         #
 
-        if ($_.Exception.GetType().Name -eq "ADException" -and $StorageAccountName.Length -gt 20)
+        if ($_.Exception.GetType().Name -eq "ADException" -and $_.Exception.Message.Contains("required attribute"))
         {
-            Write-Error -Message "
-    Failed to create an Active Directory object with the name $StorageAccountName. 
-    The naming conventions are different for an Azure storage account and an Active Directory SAMAccountName.
-    The maximum number of characters in a SAMAccountName is 20.  Due to this limitation, storage account names
-    must be less than 20 characters to be domain-joined."
+            Write-Error -Message "Unable to create AD object.  Please check that you have permission to create an identity of type $ObjectType in Active Directory location path '$path' for the storage account '$StorageAccountName'"
         }
 
         if ($_.Exception.GetType().Name -eq "UnauthorizedAccessException")
         {
-            Write-Error "Access denied: You don't have permission to create an identity of type $ObjectType in Active Directory location path '$path' for the storage account '$StorageAccountName'"
+            Write-Error -Message "Access denied: You don't have permission to create an identity of type $ObjectType in Active Directory location path '$path' for the storage account '$StorageAccountName'"
         }
 
         throw
@@ -3222,9 +3221,11 @@ function Join-AzStorageAccount {
         [string]$DomainAccountType = "ComputerAccount",
 
         [Parameter(Mandatory=$false, Position=4)]
+        [Alias('OrganizationUnitName')]
         [string]$OrganizationalUnitName,
 
         [Parameter(Mandatory=$false, Position=5)]
+        [Alias('OrganizationUnitDistinguishedName')]
         [string]$OrganizationalUnitDistinguishedName,
 
         [Parameter(Mandatory=$false, Position=5)]
@@ -4086,6 +4087,8 @@ function New-AzDnsForwardingRuleSet {
         [switch]$SkipParentDomain
     )
 
+    Request-ADFeature
+
     $ruleSet = [DnsForwardingRuleSet]::new()
     foreach($azureEndpoint in $AzureEndpoints) {
         Add-AzDnsForwardingRule -DnsForwardingRuleSet $ruleSet -AzureEndpoint $azureEndpoint | Out-Null
@@ -4278,6 +4281,7 @@ function Confirm-AzDnsForwarderPreReqs {
     )
 
     Assert-IsDomainJoined
+    Request-ADFeature
     Assert-DnsForwarderArmTemplateVersion
 
     # Check networking parameters: VirtualNetwork and VirtualNetworkSubnet
