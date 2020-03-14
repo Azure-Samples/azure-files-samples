@@ -935,6 +935,7 @@ function Request-AzPowerShellModule {
     Remove-Module -Name PackageManagement -ErrorAction SilentlyContinue
     Remove-Module -Name Az.Storage -Force -ErrorAction SilentlyContinue
     Remove-Module -Name Az.Accounts -Force -ErrorAction SilentlyContinue
+    Remove-Module -Name Az.Network -Force -ErrorAction SilentlyContinue
 
     $storageModule = ,(Get-Module -Name Az.Storage -ListAvailable | `
         Where-Object { 
@@ -944,6 +945,7 @@ function Request-AzPowerShellModule {
         Sort-Object -Property Version -Descending)
 
     Import-Module -ModuleInfo $storageModule[0] -Global -ErrorAction Stop
+    Import-Module -Name Az.Network -Global -ErrorAction Stop
 }
 
 function Assert-DotNetFrameworkVersion {
@@ -2015,8 +2017,9 @@ function Initialize-RemoteSession {
             if ($null -eq $remoteModuleInfo) {
                 Copy-RemoteModule -Session $Session
             } elseif ($moduleInfo.Version -ne $remoteModuleInfo.Version) {
-                throw [PSSessionHybridManagementVersionMismatchException]::new(
-                    $moduleInfo.Version, $remoteModuleInfo.Version)
+                Write-Error `
+                        -Message "There is already a version of this module installed on the destination machine $($Session.ComputerName)" `
+                        -ErrorAction Stop
             }
         }
 
@@ -4084,6 +4087,8 @@ function New-AzDnsForwardingRuleSet {
         [switch]$SkipParentDomain
     )
 
+    Request-ADFeature
+
     $ruleSet = [DnsForwardingRuleSet]::new()
     foreach($azureEndpoint in $AzureEndpoints) {
         Add-AzDnsForwardingRule -DnsForwardingRuleSet $ruleSet -AzureEndpoint $azureEndpoint | Out-Null
@@ -4276,6 +4281,7 @@ function Confirm-AzDnsForwarderPreReqs {
     )
 
     Assert-IsDomainJoined
+    Request-ADFeature
     Assert-DnsForwarderArmTemplateVersion
 
     # Check networking parameters: VirtualNetwork and VirtualNetworkSubnet
