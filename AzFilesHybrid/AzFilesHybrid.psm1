@@ -4609,6 +4609,9 @@ function Get-AzDnsForwarderIpAddress {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory=$true)]
+        [string]$DnsServerResourceGroupName,
+
+        [Parameter(Mandatory=$true)]
         [string[]]$DnsForwarderName
     )
 
@@ -4808,6 +4811,7 @@ function New-AzDnsForwarder {
                 -Confirm:$false
 
         $ipAddresses = Get-AzDnsForwarderIpAddress `
+                -DnsServerResourceGroupName $DnsServerResourceGroupName `
                 -DnsForwarderName $DnsForwarderNames
 
         Update-AzVirtualNetworkDnsServers `
