@@ -58,7 +58,7 @@
             }
         },
         "odjBlobs": {
-            "type": "object",
+            "type": "secureObject",
             "metadata": {
                 "description": "The offline domain join blob for the DNS forwarder #1."
             }
