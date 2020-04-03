@@ -1,6 +1,6 @@
 {
     "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
-    "contentVersion": "0.1.0.0",
+    "contentVersion": "0.1.2.0",
     "parameters": {
         "location":{
             "type": "string",
@@ -58,7 +58,7 @@
             }
         },
         "odjBlobs": {
-            "type": "object",
+            "type": "secureObject",
             "metadata": {
                 "description": "The offline domain join blob for the DNS forwarder #1."
             }

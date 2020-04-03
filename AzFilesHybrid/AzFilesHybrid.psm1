@@ -4609,6 +4609,9 @@ function Get-AzDnsForwarderIpAddress {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory=$true)]
+        [string]$DnsServerResourceGroupName,
+
+        [Parameter(Mandatory=$true)]
         [string[]]$DnsForwarderName
     )
 
@@ -4808,6 +4811,7 @@ function New-AzDnsForwarder {
                 -Confirm:$false
 
         $ipAddresses = Get-AzDnsForwarderIpAddress `
+                -DnsServerResourceGroupName $DnsServerResourceGroupName `
                 -DnsForwarderName $DnsForwarderNames
 
         Update-AzVirtualNetworkDnsServers `
@@ -4823,16 +4827,26 @@ function New-AzDnsForwarder {
         }
 
         foreach($server in $OnPremDnsHostNames) {
-            # This assumes that a credential is given.
-            $session = Initialize-RemoteSession `
-                    -ComputerName $server `
-                    -Credential $Credential `
-                    -InstallViaCopy `
-                    -OverrideModuleConfig @{ 
-                        SkipPowerShellGetCheck = $true;
-                        SkipAzPowerShellCheck = $true;
-                        SkipDotNetFrameworkCheck = $true
-                    }
+            if ($PSBoundParameters.ContainsKey("Credential")) {
+                $session = Initialize-RemoteSession `
+                        -ComputerName $server `
+                        -Credential $Credential `
+                        -InstallViaCopy `
+                        -OverrideModuleConfig @{ 
+                            SkipPowerShellGetCheck = $true;
+                            SkipAzPowerShellCheck = $true;
+                            SkipDotNetFrameworkCheck = $true
+                        }
+            } else {
+                $session = Initialize-RemoteSession `
+                        -ComputerName $server `
+                        -InstallViaCopy `
+                        -OverrideModuleConfig @{ 
+                            SkipPowerShellGetCheck = $true;
+                            SkipAzPowerShellCheck = $true;
+                            SkipDotNetFrameworkCheck = $true
+                        }
+            }            
             
             $serializedRuleSet = $DnsForwardingRuleSet | ConvertTo-Json -Compress -Depth 3
             Invoke-Command `
