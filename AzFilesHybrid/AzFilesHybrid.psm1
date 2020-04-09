@@ -2726,6 +2726,98 @@ function Get-AadUserForSid {
     }
 }
 
+
+function Test-Port445Connectivity
+{
+    [CmdletBinding()]
+
+    param (
+        [Parameter(Mandatory=$True, Position=0, HelpMessage="Storage account name")]
+        [string]$storageAccountName,
+
+        [Parameter(Mandatory=$True, Position=1, HelpMessage="Resource group name")]
+        [string]$resourceGroupName
+    )
+
+    process
+    {
+        #
+        # Test-NetConnection -ComputerName <storageAccount>.file.core.windows.net -Port 445
+        #
+
+        $storageAccountObject = Get-AzStorageAccount -ResourceGroup $resourceGroupName -Name $storageAccountName;
+
+        $endpoint = $storageAccountObject.PrimaryEndpoints.File -replace 'https://', ''
+        $endpoint = $endpoint -replace '/', ''
+
+        Write-Verbose "Executing 'Test-NetConnection -ComputerName $endpoint -Port 445'"
+
+        $result = Test-NetConnection -ComputerName $endpoint -Port 445;
+
+        if ($result.TcpTestSucceeded -eq $False)
+        {
+            Write-Error "Unable to reach the storage account file endpoint.  To debug connectivity problems, please refer to `
+                the troubleshooting tool for Azure Files mounting errors on Windows, 'AzFileDiagnostics.ps1' `
+
+                https://gallery.technet.microsoft.com/Troubleshooting-tool-for-a9fa1fe5" -ErrorAction Stop
+        }
+    }
+}
+
+
+function Debug-AzStorageAccountADObject
+{
+    [CmdletBinding()]
+
+    param (
+        [Parameter(Mandatory=$True, Position=0, HelpMessage="Storage account name")]
+        [string]$storageAccountName,
+
+        [Parameter(Mandatory=$True, Position=1, HelpMessage="Resource group name")]
+        [string]$resourceGroupName
+    )
+
+    process
+    {
+        $azureStorageIdentity = Get-AzStorageAccountADObject -storageaccountName $StorageAccountName -ResourceGroupName $ResourceGroupName;
+
+        #
+        # Check if the object exists.
+        #
+
+        if ($azureStorageIdentity -eq $null)
+        {
+            Write-Error "ERROR: `
+                The domain cannot find a computer or user object for this storage account.
+                Please verify that the storage account has been domain-joined through the steps in Microsoft documentation: `
+                `
+                https://docs.microsoft.com/en-us/azure/storage/files/storage-files-identity-auth-active-directory-enable#12-domain-join-your-storage-account " `
+                -ErrorAction Stop
+        }
+
+        #
+        # Check if the object has the correct SPN (Service Principal Name)
+        #
+
+        $expectedSpnValue = Get-ServicePrincipalName `
+            -storageAccountName $storageAccountName `
+            -resourceGroupName $resourceGroupName `
+            -ErrorAction Stop
+
+        $properSpnSet = $azureStorageIdentity.ServicePrincipalNames.Contains($expectedSpnValue);
+
+        if ($properSpnSet -eq $False)
+        {
+            Write-Error "The AD object $($azureStorageIdentity.Name) does not have the proper SPN of '$expectedSpnValue' `
+                Please run the following command to repair the object in AD: 
+
+                'Set-AD$($azureStorageIdentity.ObjectClass) -Identity $($azureStorageIdentity.Name) -ServicePrincipalNames @{Add=`"$expectedSpnValue`"}'" `
+                -ErrorAction Stop
+        }
+    }
+}
+
+
 function Debug-AzStorageAccountAuth {
     <#
     .SYNOPSIS
@@ -2760,6 +2852,19 @@ function Debug-AzStorageAccountAuth {
         $filterIsPresent = ![string]::IsNullOrEmpty($Filter);
 
         #
+        # Port 445 check 
+        #
+        
+        if (!$filterIsPresent -or $Filter -match "CheckPort445Connectivity")
+        {
+            Write-Verbose "CheckPort445Connectivity - START"
+
+            Test-Port445Connectivity -storageaccountName $StorageAccountName -ResourceGroupName $ResourceGroupName;
+
+            Write-Verbose "CheckPort445Connectivity - SUCCESS"
+        }
+
+        #
         # Domain-Joined Check
         #
 
@@ -2777,6 +2882,11 @@ function Debug-AzStorageAccountAuth {
             Write-Verbose "CheckDomainJoined - SUCCESS"
         }
 
+        if (!$filterIsPresent -or $Filter -match "CheckADObject")
+        {
+            Debug-AzStorageAccountADObject -storageaccountName $StorageAccountName -ResourceGroupName $ResourceGroupName;
+        }
+
         if (!$filterIsPresent -or $Filter -match "CheckGetKerberosTicket")
         {
             $checksExecuted += 1;
@@ -2787,10 +2897,10 @@ function Debug-AzStorageAccountAuth {
             Write-Verbose "CheckGetKerberosTicket - SUCCESS"
         }
 
-        if (!$filterIsPresent -or $Filter -match "CheckSyncedPasswords")
+        if (!$filterIsPresent -or $Filter -match "CheckADObjectPasswordIsCorrect")
         {
             $checksExecuted += 1;
-            Write-Verbose "CheckSyncedPasswords - START"
+            Write-Verbose "CheckADObjectPasswordIsCorrec - START"
 
             $keyMatches = Test-AzStorageAccountADObjectPasswordIsKerbKey -StorageAccountName $StorageAccountName -ResourceGroupName $ResourceGroupName;
 
@@ -2803,7 +2913,7 @@ function Debug-AzStorageAccountAuth {
 
             }
 
-            Write-Verbose "CheckSyncedPasswords - SUCCESS"
+            Write-Verbose "CheckADObjectPasswordIsCorrect - SUCCESS"
         }
 
         if (!$filterIsPresent -or $Filter -match "CheckSidHasAadUser")
