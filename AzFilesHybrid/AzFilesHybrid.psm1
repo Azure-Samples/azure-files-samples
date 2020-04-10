@@ -2077,7 +2077,7 @@ function Validate-StorageAccount {
 
         if ($null -eq $StorageAccountObject)
         {
-            throw "Storage account not found: '$ResourceGroupName'"
+            throw "Storage account not found: '$StorageAccountName'"
         }
 
         Write-Verbose "Storage Account: $Name exists in Resource Group: $ResourceGroupName"
@@ -2195,7 +2195,7 @@ function Get-ServicePrincipalName {
     $servicePrincipalName = $storageAccountObject.PrimaryEndpoints.File -replace 'https://','cifs/'
     $servicePrincipalName = $servicePrincipalName.Substring(0, $servicePrincipalName.Length - 1);
 
-    Write-Verbose "Setting service principal name of $servicePrincipalName"
+    Write-Verbose "Generating service principal name of $servicePrincipalName"
     return $servicePrincipalName;
 }
 
@@ -2527,6 +2527,7 @@ function Get-AzStorageAccountADObject {
     }
 }
 
+
 function Get-AzStorageKerberosTicketStatus {
     <#
     .SYNOPSIS
@@ -2544,7 +2545,14 @@ function Get-AzStorageKerberosTicketStatus {
     #>
 
     [CmdletBinding()]
-    param()
+
+    param (
+        [Parameter(Mandatory=$True, Position=0, HelpMessage="Storage account name")]
+        [string]$storageAccountName,
+
+        [Parameter(Mandatory=$True, Position=1, HelpMessage="Resource group name")]
+        [string]$resourceGroupName
+    )
 
     begin {
         Assert-IsWindows
@@ -2552,7 +2560,14 @@ function Get-AzStorageKerberosTicketStatus {
 
     process 
     {
-        $TicketsArray = klist.exe tickets
+        $spnValue = Get-ServicePrincipalName `
+            -storageAccountName $storageAccountName `
+            -resourceGroupName $resourceGroupName `
+            -ErrorAction Stop
+
+        Write-Verbose "Running command 'klist.exe get $spnValue'"
+
+        $TicketsArray = klist.exe get $spnValue;
         $TicketsObject = @()
         $Counter = 0;
         $HealthyTickets = 0;
@@ -2564,8 +2579,40 @@ function Get-AzStorageKerberosTicketStatus {
         #
 
         foreach ($line in $TicketsArray)
-        {
-            if ($line -match "^#\d")
+        {   
+            Write-Verbose $line;
+
+            if ($line -match "0xc000018b")
+            {
+                #
+                # STATUS_NO_TRUST_SAM_ACCOUNT
+                # The SAM database on the Windows Server does not have a computer account for this workstation trust relationship.
+                #
+
+                Write-Error "ERROR: `
+                    The domain cannot find a computer or user object for this storage account.
+                    Please verify that the storage account has been domain-joined through the steps in Microsoft documentation: `
+                    `
+                    https://docs.microsoft.com/en-us/azure/storage/files/storage-files-identity-auth-active-directory-enable#12-domain-join-your-storage-account " `
+                     -ErrorAction Stop
+            }
+            elseif ($line -match "0x80090342")
+            {
+                #
+                # SEC_E_KDC_UNKNOWN_ETYPE
+                # The encryption type requested is not supported by the KDC.
+                #
+
+                Write-Error "ERROR: `
+                    Azure Files only supports Kerberos authentication with AD with RC4-HMAC encryption - which is being blocked by the KDC (Kerberos Key Distribution Center). `
+                    AES Kerberos encryption is not yet supported by Azure Files at this time.  To unblock authentication with RC4-HMAC encryption, please examine your group policy for `
+                    'Network security: Configure encryption types allowed for Kerberos' and add RC4-HMAC as an allowed encryption type.
+                    `
+                    https://docs.microsoft.com/en-us/windows/security/threat-protection/security-policy-settings/network-security-configure-encryption-types-allowed-for-kerberos" `
+                    -ErrorAction Stop
+
+            }
+            elseif ($line -match "^#\d")
             {
                 $Ticket = New-Object PSObject
                 $Line1 = $Line.Split('>')[1]
@@ -2588,7 +2635,7 @@ function Get-AzStorageKerberosTicketStatus {
                 Add-Member -InputObject $Ticket -MemberType NoteProperty -Name "Renew Time" -Value $RenewTime
                 Add-Member -InputObject $Ticket -MemberType NoteProperty -Name "Session Key Type" -Value $SessionKey
                 
-                if ($Server -match "cifs" -and $Server -match "file.core.windows.net")
+                if ($Server -match $spnValue)
                 {
                     #
                     # We found a ticket to an Azure storage account.  Check that it has valid encryption type.
@@ -2621,9 +2668,10 @@ function Get-AzStorageKerberosTicketStatus {
             Write-Error "$($HealthyTickets + $UnhealthyTickets) Kerberos service tickets to Azure storage accounts were detected.
         Run the following command: 
             
-            'klist get cifs/<storageaccountname>.file.core.windows.net'
-        to request a ticket and then rerun this status command.
-        "
+            'klist get $spnValue'
+        and examine error code to root-cause the ticket retrieval failure.
+        " -ErrorAction Stop
+
         }
         else 
         {
@@ -2651,9 +2699,243 @@ function Get-AzStorageKerberosTicketStatus {
             $TicketObj | Format-List | Out-String|% {Write-Verbose $_}
         }
 
-        return ,$TicketsObject
+        return ,$TicketsObject;
     }
 }
+
+
+function Get-AadUserForSid {
+
+    [CmdletBinding()]
+
+    param (
+        [Parameter(Mandatory=$True, Position=0, HelpMessage="Sid")]
+        [string]$sid
+    )
+
+    Request-ConnectAzureAD
+
+    $aadUser = Get-AzureADUser -Filter "OnPremisesSecurityIdentifier eq '$sid'"
+
+    if ($aadUser -eq $null)
+    {
+        Write-Error "No Azure Active Directory user exists with OnPremisesSecurityIdentifier of the currently logged on user's SID ($sid). `
+            This means that the AD user object has not synced to the AAD corresponding to the storage account.
+            Mounting to Azure Files using Active Directory authentication is not supported for AD users who have not been synced to `
+            AAD. " -ErrorAction Stop
+    }
+}
+
+
+function Test-Port445Connectivity
+{
+    [CmdletBinding()]
+
+    param (
+        [Parameter(Mandatory=$True, Position=0, HelpMessage="Storage account name")]
+        [string]$storageAccountName,
+
+        [Parameter(Mandatory=$True, Position=1, HelpMessage="Resource group name")]
+        [string]$resourceGroupName
+    )
+
+    process
+    {
+        #
+        # Test-NetConnection -ComputerName <storageAccount>.file.core.windows.net -Port 445
+        #
+
+        $storageAccountObject = Get-AzStorageAccount -ResourceGroup $resourceGroupName -Name $storageAccountName;
+
+        $endpoint = $storageAccountObject.PrimaryEndpoints.File -replace 'https://', ''
+        $endpoint = $endpoint -replace '/', ''
+
+        Write-Verbose "Executing 'Test-NetConnection -ComputerName $endpoint -Port 445'"
+
+        $result = Test-NetConnection -ComputerName $endpoint -Port 445;
+
+        if ($result.TcpTestSucceeded -eq $False)
+        {
+            Write-Error "Unable to reach the storage account file endpoint.  To debug connectivity problems, please refer to `
+                the troubleshooting tool for Azure Files mounting errors on Windows, 'AzFileDiagnostics.ps1' `
+
+                https://gallery.technet.microsoft.com/Troubleshooting-tool-for-a9fa1fe5" -ErrorAction Stop
+        }
+    }
+}
+
+
+function Debug-AzStorageAccountADObject
+{
+    [CmdletBinding()]
+
+    param (
+        [Parameter(Mandatory=$True, Position=0, HelpMessage="Storage account name")]
+        [string]$storageAccountName,
+
+        [Parameter(Mandatory=$True, Position=1, HelpMessage="Resource group name")]
+        [string]$resourceGroupName
+    )
+
+    process
+    {
+        $azureStorageIdentity = Get-AzStorageAccountADObject -storageaccountName $StorageAccountName -ResourceGroupName $ResourceGroupName;
+
+        #
+        # Check if the object exists.
+        #
+
+        if ($azureStorageIdentity -eq $null)
+        {
+            Write-Error "ERROR: `
+                The domain cannot find a computer or user object for this storage account.
+                Please verify that the storage account has been domain-joined through the steps in Microsoft documentation: `
+                `
+                https://docs.microsoft.com/en-us/azure/storage/files/storage-files-identity-auth-active-directory-enable#12-domain-join-your-storage-account " `
+                -ErrorAction Stop
+        }
+
+        #
+        # Check if the object has the correct SPN (Service Principal Name)
+        #
+
+        $expectedSpnValue = Get-ServicePrincipalName `
+            -storageAccountName $storageAccountName `
+            -resourceGroupName $resourceGroupName `
+            -ErrorAction Stop
+
+        $properSpnSet = $azureStorageIdentity.ServicePrincipalNames.Contains($expectedSpnValue);
+
+        if ($properSpnSet -eq $False)
+        {
+            Write-Error "The AD object $($azureStorageIdentity.Name) does not have the proper SPN of '$expectedSpnValue' `
+                Please run the following command to repair the object in AD: 
+
+                'Set-AD$($azureStorageIdentity.ObjectClass) -Identity $($azureStorageIdentity.Name) -ServicePrincipalNames @{Add=`"$expectedSpnValue`"}'" `
+                -ErrorAction Stop
+        }
+    }
+}
+
+
+function Debug-AzStorageAccountAuth {
+    <#
+    .SYNOPSIS
+    Executes a sequence of checks to identify common problems with Azure Files Authentication issues.  
+    
+    .DESCRIPTION
+    This cmdlet will query the client computer for Kerberos service tickets to Azure storage accounts.
+    It will return an array of these objects, each object having a property 'Azure Files Health Status'
+    which tells the health of the ticket.  It will error when there are no ticketsfound or if there are 
+    unhealthy tickets found.
+    .OUTPUTS
+    Object[] of PSCustomObject containing klist ticket output.
+    .EXAMPLE
+    PS> Debug-AzStorageAccountAuth
+    #>
+
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory=$True, Position=0, HelpMessage="Storage account name")]
+        [string]$StorageAccountName,
+
+        [Parameter(Mandatory=$True, Position=1, HelpMessage="Resource group name")]
+        [string]$ResourceGroupName,
+
+        [Parameter(Mandatory=$False, Position=2, HelpMessage="Filter")]
+        [string]$Filter
+    )
+
+    process
+    {
+        $checksExecuted = 0;
+        $filterIsPresent = ![string]::IsNullOrEmpty($Filter);
+
+        #
+        # Port 445 check 
+        #
+        
+        if (!$filterIsPresent -or $Filter -match "CheckPort445Connectivity")
+        {
+            Write-Verbose "CheckPort445Connectivity - START"
+
+            Test-Port445Connectivity -storageaccountName $StorageAccountName -ResourceGroupName $ResourceGroupName;
+
+            Write-Verbose "CheckPort445Connectivity - SUCCESS"
+        }
+
+        #
+        # Domain-Joined Check
+        #
+
+        if (!$filterIsPresent -or $Filter -match "CheckDomainJoined")
+        {
+            $checksExecuted += 1;
+            Write-Verbose "CheckDomainJoined - START"
+        
+            if (!(Get-IsDomainJoined))
+            {
+                Write-Error -Message "Machine is not domain-joined.  Mounting to Azure Files through Active Directory Authentication is `
+                    only supported when the computer is joined to an Active Directory domain." -ErrorAction Stop
+            }
+
+            Write-Verbose "CheckDomainJoined - SUCCESS"
+        }
+
+        if (!$filterIsPresent -or $Filter -match "CheckADObject")
+        {
+            Debug-AzStorageAccountADObject -storageaccountName $StorageAccountName -ResourceGroupName $ResourceGroupName;
+        }
+
+        if (!$filterIsPresent -or $Filter -match "CheckGetKerberosTicket")
+        {
+            $checksExecuted += 1;
+            Write-Verbose "CheckGetKerberosTicket - START"
+
+            $Tickets = Get-AzStorageKerberosTicketStatus -storageaccountName $StorageAccountName -ResourceGroupName $ResourceGroupName;
+
+            Write-Verbose "CheckGetKerberosTicket - SUCCESS"
+        }
+
+        if (!$filterIsPresent -or $Filter -match "CheckADObjectPasswordIsCorrect")
+        {
+            $checksExecuted += 1;
+            Write-Verbose "CheckADObjectPasswordIsCorrec - START"
+
+            $keyMatches = Test-AzStorageAccountADObjectPasswordIsKerbKey -StorageAccountName $StorageAccountName -ResourceGroupName $ResourceGroupName;
+
+            if ($keyMatches.Count -eq 0)
+            {
+                Write-Error `
+                        -Message ("Password for $userName does not match kerb1 or kerb2 of storage account: $StorageAccountName." + `
+                        "Please run the following command to resync the AD password with the kerb key of the storage account and " +  `
+                        "retry: Update-AzStorageAccountADObjectPassword.") -ErrorAction Stop
+
+            }
+
+            Write-Verbose "CheckADObjectPasswordIsCorrect - SUCCESS"
+        }
+
+        if (!$filterIsPresent -or $Filter -match "CheckSidHasAadUser")
+        {
+            $checksExecuted += 1;
+
+            Write-Verbose "CheckSidHasAadUser - START"
+
+            $currentUser = Get-ADUser ($env:UserName)
+
+            Get-AadUserForSid $currentUser.Sid
+
+            Write-Verbose "CheckSidHasAadUser - PASSED"
+        }
+
+        if ($filterIsPresent -and $checksExecuted -eq 0)
+        {
+            Write-Error "Filter '$Filter' provided does not match any options.  No checks were executed." -ErrorAction Stop
+        }
+    }
+}
+
 
 function Set-StorageAccountDomainProperties {
     <#
@@ -2849,7 +3131,7 @@ function Test-AzStorageAccountADObjectPasswordIsKerbKey {
         $keyMatches = [KerbKeyMatch[]]@()
         foreach ($key in $kerbKeys) {
             if ($null -ne (New-Object Directoryservices.DirectoryEntry "", $userName, $key.Value).PsBase.Name) {
-                Write-Verbose "Found that $($key.KeyName) matches password for $Name in AD."
+                Write-Verbose "Found that $($key.KeyName) matches password for $StorageAccount in AD."
                 $oneKeyMatches = $true
                 $keyMatches += [KerbKeyMatch]::new(
                     $ResourceGroupName, 

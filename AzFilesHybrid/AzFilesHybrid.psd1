@@ -96,6 +96,7 @@
         "Update-AzStorageAccountADObjectPassword",
         "Join-AzStorageAccount", 
         "Invoke-AzStorageAccountADObjectPasswordRotation",
+        "Debug-AzStorageAccountAuth",
 
         # General Azure cmdlets
         "Expand-AzResourceId",
