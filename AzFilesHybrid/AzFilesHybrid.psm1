@@ -5261,20 +5261,23 @@ function Invoke-ModuleConfigPopulate {
 Invoke-ModuleConfigPopulate `
         -OverrideModuleConfig $OverrideModuleConfig
 
+if ((Get-OSPlatform) -eq "Windows") {
+    if ($PSVersionTable.PSEdition -eq "Desktop") {
+        if (!$SkipDotNetFrameworkCheck) {
+            Assert-DotNetFrameworkVersion `
+                    -DotNetFrameworkVersion "Framework4.7.2"
+        }
+    }
+
+    [Net.ServicePointManager]::SecurityProtocol = ([Net.SecurityProtocolType]::Tls12 -bor `
+        [Net.SecurityProtocolType]::Tls13)
+}
+
 if (!$SkipPowerShellGetCheck) {
     Request-PowerShellGetModule
 }
 
 if (!$SkipAzPowerShellCheck) {
     Request-AzPowerShellModule
-}
-
-if ((Get-OSPlatform) -eq "Windows") {
-    if ($PSVersionTable.PSEdition -eq "Desktop") {
-        if (!$SkipDotNetFrameworkCheck) {
-            Assert-DotNetFrameworkVersion `
-                    -DotNetFrameworkVersion "Framework4.7.1"
-        }
-    }
 }
 #endregion
