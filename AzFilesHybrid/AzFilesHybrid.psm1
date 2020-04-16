@@ -3090,41 +3090,31 @@ function Test-AzStorageAccountADObjectPasswordIsKerbKey {
         $getObjParams = @{}
         switch ($PSCmdlet.ParameterSetName) {
             "StorageAccountName" {
-                $keys = Get-AzStorageAccountKey -ResourceGroupName $ResourceGroupName -Name $StorageAccountName -ListKerbKey
-                $getObjParams += @{ 
-                    "ResourceGroupName" = $ResourceGroupName; 
-                    "StorageAccountName" = $StorageAccountName 
-                }
+                $StorageAccount = Get-AzStorageAccount `
+                        -ResourceGroupName $ResourceGroupName `
+                        -Name $StorageAccountName `
+                        -ErrorAction Stop
             }
 
-            "StorageAccount" {
-                $keys = $StorageAccount | Get-AzStorageAccountKey -ListKerbKey
+            "StorageAccount" {                
                 $ResourceGroupName = $StorageAccount.ResourceGroupName
                 $StorageAccountName = $StorageAccount.StorageAccountName
-                $getObjParams += @{
-                    "StorageAccount" = $StorageAccount
-                }
             }
 
             default {
                 throw [ArgumentException]::new("Unrecognized parameter set $_")
             }
         }
-        
-        $kerbKeys = $keys | Where-Object { $_.KeyName -like "kerb*" }
-        $adObj = Get-AzStorageAccountADObject @getObjParams
 
-        $domainNameBuilder = [StringBuilder]::new() 
-        $domainArray = $adObj.DistinguishedName.Split(",") | Where-Object { $_ -like "DC=*" }
-        for($i=0; $i -lt $domainArray.Length; $i++) {
-            if ($i -gt 0) {
-                $domainNameBuilder.Append(",") | Out-Null
-            }
+        $kerbKeys = $StorageAccount | `
+            Get-AzStorageAccountKey -ListKerbKey | `
+            Where-Object { $_.KeyName -like "kerb*" }
 
-            $domainNameBuilder.Append($domainArray[$i]) | Out-Null
-        }
+        $adObj = $StorageAccount | Get-AzStorageAccountADObject 
 
-        $domain = Get-ADDomain -Identity $domainNameBuilder.ToString()
+        $domainDns = $StorageAccount.AzureFilesIdentityBasedAuth.ActiveDirectoryProperties.DomainName
+        $domain = Get-ADDomain -Server $domainDns
+
         $userName = $domain.Name + "\" + $adObj.Name
 
         $oneKeyMatches = $false
@@ -3259,6 +3249,7 @@ function Update-AzStorageAccountADObjectPassword {
         }
         
         $adObj = Get-AzStorageAccountADObject -StorageAccount $StorageAccount
+        $domain = $storageAccount.AzureFilesIdentityBasedAuth.ActiveDirectoryProperties.DomainName
 
         $caption = ("Set password on AD object " + $adObj.SamAccountName + `
             " for " + $StorageAccount.StorageAccountName + " to value of $RotateToKerbKey.")
@@ -3304,6 +3295,7 @@ function Update-AzStorageAccountADObjectPassword {
                     -Identity $adObj `
                     -Reset `
                     -NewPassword $newPassword `
+                    -Server $domain `
                     -ErrorAction Stop
             # } else {
             #     Write-Verbose `
@@ -3602,6 +3594,34 @@ function Join-AzStorageAccount {
 
 # Add alias for Join-AzStorageAccountForAuth
 New-Alias -Name "Join-AzStorageAccountForAuth" -Value "Join-AzStorageAccount"
+
+function Get-ADDnsRootFromDistinguishedName {
+    [CmdletBinding()]
+
+    param(
+        [Parameter(Mandatory=$true)]
+        [ValidatePattern("^(CN=([a-z]|[0-9])+)((,OU=([a-z]|[0-9])+)*)((,DC=([a-z]|[0-9])+)+)$")]
+        [string]$DistinguishedName
+    )
+
+    process {
+        $dcPath = $DistinguishedName.Split(",") | `
+            Where-Object { $_.Substring(0, 2) -eq "DC" } | `
+            ForEach-Object { $_.Substring(3, $_.Length - 3) }
+
+        $sb = [StringBuilder]::new()
+
+        for($i = 0; $i -lt $dcPath.Length; $i++) {
+            if ($i -gt 0) {
+                $sb.Append(".") | Out-Null
+            }
+
+            $sb.Append($dcPath[$i])
+        }
+
+        return $sb.ToString()
+    }
+}
 #endregion
 
 #region General Azure cmdlets
@@ -5241,20 +5261,23 @@ function Invoke-ModuleConfigPopulate {
 Invoke-ModuleConfigPopulate `
         -OverrideModuleConfig $OverrideModuleConfig
 
+if ((Get-OSPlatform) -eq "Windows") {
+    if ($PSVersionTable.PSEdition -eq "Desktop") {
+        if (!$SkipDotNetFrameworkCheck) {
+            Assert-DotNetFrameworkVersion `
+                    -DotNetFrameworkVersion "Framework4.7.2"
+        }
+    }
+
+    [Net.ServicePointManager]::SecurityProtocol = ([Net.SecurityProtocolType]::Tls12 -bor `
+        [Net.SecurityProtocolType]::Tls13)
+}
+
 if (!$SkipPowerShellGetCheck) {
     Request-PowerShellGetModule
 }
 
 if (!$SkipAzPowerShellCheck) {
     Request-AzPowerShellModule
-}
-
-if ((Get-OSPlatform) -eq "Windows") {
-    if ($PSVersionTable.PSEdition -eq "Desktop") {
-        if (!$SkipDotNetFrameworkCheck) {
-            Assert-DotNetFrameworkVersion `
-                    -DotNetFrameworkVersion "Framework4.7.1"
-        }
-    }
 }
 #endregion
