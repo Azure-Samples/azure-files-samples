@@ -183,9 +183,9 @@ function Get-IsDomainJoined {
         "Windows" {
             $computer = Get-CimInstance -ClassName "win32_computersystem"
             if ($computer.PartOfDomain) {
-                Write-Verbose -Message "Session is running in a domain-joined environment."
+                Write-Verbose -Verbose -Message "Session is running in a domain-joined environment."
             } else {
-                Write-Verbose -Message "Session is not running in a domain-joined environment."
+                Write-Verbose -Verbose -Message "Session is not running in a domain-joined environment."
             }
 
             return $computer.PartOfDomain
@@ -791,7 +791,7 @@ function Request-PowerShellGetModule {
                 Write-Error -Message "PowerShellGet was not successfully installed, and is a requirement of this module. See https://docs.microsoft.com/powershell/scripting/gallery/installing-psget for information on how to manually troubleshoot the PowerShellGet installation." -ErrorAction Stop
             }             
             
-            Write-Verbose -Message "Installed latest version of PowerShellGet module."
+            Write-Verbose -Verbose -Message "Installed latest version of PowerShellGet module."
             Write-Error -Message "PowerShellGet was successfully installed, however you must close all open PowerShell sessions to use the new version. The next import of this module will be able to use PowerShellGet." -ErrorAction Stop
         }
     }
@@ -899,7 +899,7 @@ function Request-AzPowerShellModule {
             if ($null -eq $azModule) {
                 Get-Module -Name Az.* | Remove-Module
                 Install-Module -Name Az -AllowClobber -Force -ErrorAction Stop
-                Write-Verbose -Message "Installed latest version of Az module."
+                Write-Verbose -Verbose -Message "Installed latest version of Az module."
             }
 
             if ($null -eq $storageModule) {
@@ -2072,7 +2072,7 @@ function Validate-StorageAccount {
         }
 
         # Verify the storage account exists.
-        Write-Verbose "Getting storage account $Name in ResourceGroup $ResourceGroupName"
+        Write-Verbose -Verbose "Getting storage account $Name in ResourceGroup $ResourceGroupName"
         $StorageAccountObject = Get-AzStorageAccount -ResourceGroup $ResourceGroupName -Name $Name
 
         if ($null -eq $StorageAccountObject)
@@ -2080,7 +2080,7 @@ function Validate-StorageAccount {
             throw "Storage account not found: '$StorageAccountName'"
         }
 
-        Write-Verbose "Storage Account: $Name exists in Resource Group: $ResourceGroupName"
+        Write-Verbose -Verbose "Storage Account: $Name exists in Resource Group: $ResourceGroupName"
 
         return $StorageAccountObject
     }
@@ -2113,7 +2113,7 @@ function Ensure-KerbKeyExists {
     )
 
     process {
-        Write-Verbose "Ensure-KerbKeyExists - Checking for kerberos keys for account:$storageAccountName in resource group:$ResourceGroupName"
+        Write-Verbose -Verbose "Ensure-KerbKeyExists - Checking for kerberos keys for account:$storageAccountName in resource group:$ResourceGroupName"
 
         try {
             $keys = Get-AzStorageAccountKey -ResourceGroupName $ResourceGroupName -Name $StorageAccountName `
@@ -2123,7 +2123,7 @@ function Ensure-KerbKeyExists {
             $kerb2Key = $keys | Where-Object { $_.KeyName -eq "kerb2" }
         }
         catch {
-            Write-Verbose "Caught exception: $($_.Exception.Message)"
+            Write-Verbose -Verbose "Caught exception: $($_.Exception.Message)"
         }
 
         if ($null -eq $kerb1Key) {
@@ -2144,9 +2144,9 @@ This might be because the 'Azure Files Authentication with Active Directory' fea
             $kerb1Key = Get-AzStorageAccountKey -ResourceGroupName $ResourceGroupName -Name $StorageAccountName `
                  -ListKerbKey | Where-Object { $_.KeyName -eq "kerb1" }
         
-            Write-Verbose "    Key: $($kerb1Key.KeyName) generated for StorageAccount: $StorageAccountName"
+            Write-Verbose -Verbose "    Key: $($kerb1Key.KeyName) generated for StorageAccount: $StorageAccountName"
         } else {
-            Write-Verbose "    Key: $($kerb1Key.KeyName) exists in Storage Account: $StorageAccountName"
+            Write-Verbose -Verbose "    Key: $($kerb1Key.KeyName) exists in Storage Account: $StorageAccountName"
         }
 
         if ($kerb2Key -eq $null) {
@@ -2159,9 +2159,9 @@ This might be because the 'Azure Files Authentication with Active Directory' fea
             $kerb2Key = Get-AzStorageAccountKey -ResourceGroupName $ResourceGroupName -Name $StorageAccountName `
                  -ListKerbKey | Where-Object { $_.KeyName -eq "kerb2" }
         
-            Write-Verbose "    Key: $($kerb2Key.KeyName) generated for StorageAccount: $StorageAccountName"
+            Write-Verbose -Verbose "    Key: $($kerb2Key.KeyName) generated for StorageAccount: $StorageAccountName"
         } else {
-            Write-Verbose "    Key: $($kerb2Key.KeyName) exists in Storage Account: $StorageAccountName"
+            Write-Verbose -Verbose "    Key: $($kerb2Key.KeyName) exists in Storage Account: $StorageAccountName"
         }
     }
 }
@@ -2195,7 +2195,7 @@ function Get-ServicePrincipalName {
     $servicePrincipalName = $storageAccountObject.PrimaryEndpoints.File -replace 'https://','cifs/'
     $servicePrincipalName = $servicePrincipalName.Substring(0, $servicePrincipalName.Length - 1);
 
-    Write-Verbose "Generating service principal name of $servicePrincipalName"
+    Write-Verbose -Verbose "Generating service principal name of $servicePrincipalName"
     return $servicePrincipalName;
 }
 
@@ -2248,7 +2248,7 @@ function New-ADAccountForStorageAccount {
     Assert-IsDomainJoined
     Request-ADFeature
 
-    Write-Verbose -Message "ObjectType: $ObjectType"
+    Write-Verbose -Verbose -Message "ObjectType: $ObjectType"
 
     if ([System.String]::IsNullOrEmpty($Domain)) {
         $domainInfo = Get-ADDomain
@@ -2292,7 +2292,7 @@ function New-ADAccountForStorageAccount {
         $path = $OrganizationalUnitDistinguishedName
     }
 
-    Write-Verbose "New-ADAccountForStorageAccount: Creating a AD account in domain:$Domain to represent the storage account:$StorageAccountName"
+    Write-Verbose -Verbose "New-ADAccountForStorageAccount: Creating a AD account in domain:$Domain to represent the storage account:$StorageAccountName"
 
     #
     # Get the kerb key and convert it to a secure string password.
@@ -2328,11 +2328,11 @@ function New-ADAccountForStorageAccount {
         if ($null -ne $computerSpnMatch) {
             $ADObjectName = $computerSpnMatch.Name
             $ObjectType = "ComputerAccount"
-            Write-Verbose -Message "Overwriting an existing AD $ObjectType object $ADObjectName with a Service Principal Name of $spnValue in domain $Domain."
+            Write-Verbose -Verbose -Message "Overwriting an existing AD $ObjectType object $ADObjectName with a Service Principal Name of $spnValue in domain $Domain."
         } elseif ($null -ne $userSpnMatch) {
             $ADObjectName = $userSpnMatch.Name
             $ObjectType = "ServiceLogonAccount"
-            Write-Verbose -Message "Overwriting an existing AD $ObjectType object $ADObjectName with a Service Principal Name of $spnValue in domain $Domain."
+            Write-Verbose -Verbose -Message "Overwriting an existing AD $ObjectType object $ADObjectName with a Service Principal Name of $spnValue in domain $Domain."
         } 
     }    
 
@@ -2341,7 +2341,7 @@ function New-ADAccountForStorageAccount {
     {
         switch ($ObjectType) {
             "ServiceLogonAccount" {
-                Write-Verbose -Message "`$ServiceAccountName is $StorageAccountName"
+                Write-Verbose -Verbose -Message "`$ServiceAccountName is $StorageAccountName"
 
                 if ($null -ne $userSpnMatch) {
                     $userSpnMatch.AllowReversiblePasswordEncryption = $false
@@ -2413,7 +2413,7 @@ function New-ADAccountForStorageAccount {
         throw
     }    
 
-    Write-Verbose "New-ADAccountForStorageAccount: Complete"
+    Write-Verbose -Verbose "New-ADAccountForStorageAccount: Complete"
 
     return $ADObjectName
 }
@@ -2509,7 +2509,7 @@ function Get-AzStorageAccountADObject {
             $sid = $StorageAccount.AzureFilesIdentityBasedAuth.ActiveDirectoryProperties.AzureStorageSid
             $Domain = $StorageAccount.AzureFilesIdentityBasedAuth.ActiveDirectoryProperties.DomainName
 
-            Write-Verbose `
+            Write-Verbose -Verbose `
                 -Message ("Object for storage account " + $StorageAccount.StorageAccountName + " has SID=$sid in Domain $Domain")
 
             $obj = Get-ADObject `
@@ -2529,7 +2529,7 @@ function Get-AzStorageAccountADObject {
                 -ErrorAction Stop
         }
 
-        Write-Verbose -Message ("Found AD object: " + $obj.DistinguishedName + " of class " + $obj.ObjectClass + ".")
+        Write-Verbose -Verbose -Message ("Found AD object: " + $obj.DistinguishedName + " of class " + $obj.ObjectClass + ".")
 
         switch ($obj.ObjectClass) {
             "computer" {
@@ -2599,7 +2599,7 @@ function Get-AzStorageKerberosTicketStatus {
             -resourceGroupName $resourceGroupName `
             -ErrorAction Stop
 
-        Write-Verbose "Running command 'klist.exe get $spnValue'"
+        Write-Verbose -Verbose "Running command 'klist.exe get $spnValue'"
 
         $TicketsArray = klist.exe get $spnValue;
         $TicketsObject = @()
@@ -2614,7 +2614,7 @@ function Get-AzStorageKerberosTicketStatus {
 
         foreach ($line in $TicketsArray)
         {   
-            Write-Verbose $line;
+            Write-Verbose -Verbose $line;
 
             if ($line -match "0xc000018b")
             {
@@ -2695,7 +2695,7 @@ function Get-AzStorageKerberosTicketStatus {
             $Counter++
         }
 
-        Write-Verbose "Azure Files Kerberos Ticket Health Check Summary:"
+        Write-Verbose -Verbose "Azure Files Kerberos Ticket Health Check Summary:"
 
         if (($HealthyTickets + $UnhealthyTickets) -eq 0)
         {
@@ -2709,7 +2709,7 @@ function Get-AzStorageKerberosTicketStatus {
         }
         else 
         {
-            Write-Verbose "$($HealthyTickets + $UnhealthyTickets) Kerberos service tickets to Azure storage accounts were detected."
+            Write-Verbose -Verbose "$($HealthyTickets + $UnhealthyTickets) Kerberos service tickets to Azure storage accounts were detected."
         }
         
         if ($UnhealthyTickets -ne 0)
@@ -2720,7 +2720,7 @@ function Get-AzStorageKerberosTicketStatus {
         $Counter = 1;
         foreach ($TicketObj in ,$TicketsObject)
         {
-            Write-Verbose "Ticket #$Counter : $($TicketObj.'Azure Files Health Status')"
+            Write-Verbose -Verbose "Ticket #$Counter : $($TicketObj.'Azure Files Health Status')"
 
             if ($TicketObj.'Azure Files Health Status' -match "Unhealthy")
             {
@@ -2730,7 +2730,7 @@ function Get-AzStorageKerberosTicketStatus {
 
             }
 
-            $TicketObj | Format-List | Out-String|% {Write-Verbose $_}
+            $TicketObj | Format-List | Out-String|% {Write-Verbose -Verbose $_}
         }
 
         return ,$TicketsObject;
@@ -2784,7 +2784,7 @@ function Test-Port445Connectivity
         $endpoint = $storageAccountObject.PrimaryEndpoints.File -replace 'https://', ''
         $endpoint = $endpoint -replace '/', ''
 
-        Write-Verbose "Executing 'Test-NetConnection -ComputerName $endpoint -Port 445'"
+        Write-Verbose -Verbose "Executing 'Test-NetConnection -ComputerName $endpoint -Port 445'"
 
         $result = Test-NetConnection -ComputerName $endpoint -Port 445;
 
@@ -2891,11 +2891,11 @@ function Debug-AzStorageAccountAuth {
         
         if (!$filterIsPresent -or $Filter -match "CheckPort445Connectivity")
         {
-            Write-Verbose "CheckPort445Connectivity - START"
+            Write-Verbose -Verbose "CheckPort445Connectivity - START"
 
             Test-Port445Connectivity -storageaccountName $StorageAccountName -ResourceGroupName $ResourceGroupName;
 
-            Write-Verbose "CheckPort445Connectivity - SUCCESS"
+            Write-Verbose -Verbose "CheckPort445Connectivity - SUCCESS"
         }
 
         #
@@ -2905,7 +2905,7 @@ function Debug-AzStorageAccountAuth {
         if (!$filterIsPresent -or $Filter -match "CheckDomainJoined")
         {
             $checksExecuted += 1;
-            Write-Verbose "CheckDomainJoined - START"
+            Write-Verbose -Verbose "CheckDomainJoined - START"
         
             if (!(Get-IsDomainJoined))
             {
@@ -2913,28 +2913,31 @@ function Debug-AzStorageAccountAuth {
                     only supported when the computer is joined to an Active Directory domain." -ErrorAction Stop
             }
 
-            Write-Verbose "CheckDomainJoined - SUCCESS"
+            Write-Verbose -Verbose "CheckDomainJoined - SUCCESS"
         }
 
         if (!$filterIsPresent -or $Filter -match "CheckADObject")
         {
+            $checksExecuted += 1;
             Debug-AzStorageAccountADObject -storageaccountName $StorageAccountName -ResourceGroupName $ResourceGroupName;
+
+            Write-Verbose -Verbose "CheckADObject - SUCCESS"
         }
 
         if (!$filterIsPresent -or $Filter -match "CheckGetKerberosTicket")
         {
             $checksExecuted += 1;
-            Write-Verbose "CheckGetKerberosTicket - START"
+            Write-Verbose -Verbose "CheckGetKerberosTicket - START"
 
             $Tickets = Get-AzStorageKerberosTicketStatus -storageaccountName $StorageAccountName -ResourceGroupName $ResourceGroupName;
 
-            Write-Verbose "CheckGetKerberosTicket - SUCCESS"
+            Write-Verbose -Verbose "CheckGetKerberosTicket - SUCCESS"
         }
 
         if (!$filterIsPresent -or $Filter -match "CheckADObjectPasswordIsCorrect")
         {
             $checksExecuted += 1;
-            Write-Verbose "CheckADObjectPasswordIsCorrec - START"
+            Write-Verbose -Verbose "CheckADObjectPasswordIsCorrec - START"
 
             $keyMatches = Test-AzStorageAccountADObjectPasswordIsKerbKey -StorageAccountName $StorageAccountName -ResourceGroupName $ResourceGroupName;
 
@@ -2947,20 +2950,20 @@ function Debug-AzStorageAccountAuth {
 
             }
 
-            Write-Verbose "CheckADObjectPasswordIsCorrect - SUCCESS"
+            Write-Verbose -Verbose "CheckADObjectPasswordIsCorrect - SUCCESS"
         }
 
         if (!$filterIsPresent -or $Filter -match "CheckSidHasAadUser")
         {
             $checksExecuted += 1;
 
-            Write-Verbose "CheckSidHasAadUser - START"
+            Write-Verbose -Verbose "CheckSidHasAadUser - START"
 
             $currentUser = Get-ADUser ($env:UserName)
 
             Get-AadUserForSid $currentUser.Sid
 
-            Write-Verbose "CheckSidHasAadUser - PASSED"
+            Write-Verbose -Verbose "CheckSidHasAadUser - PASSED"
         }
 
         if ($filterIsPresent -and $checksExecuted -eq 0)
@@ -3016,7 +3019,7 @@ function Set-StorageAccountDomainProperties {
     Assert-IsDomainJoined
     Request-ADFeature
 
-    Write-Verbose "Set-StorageAccountDomainProperties: Enabling the feature on the storage account and providing the required properties to the storage service"
+    Write-Verbose -Verbose "Set-StorageAccountDomainProperties: Enabling the feature on the storage account and providing the required properties to the storage service"
 
     if ([System.String]::IsNullOrEmpty($Domain)) {
         $domainInformation = Get-ADDomain
@@ -3037,7 +3040,7 @@ function Set-StorageAccountDomainProperties {
     $forestName = $domainInformation.Forest
     $netBiosDomainName = $domainInformation.DnsRoot
 
-    Write-Verbose "Setting AD properties on $StorageAccountName in $ResourceGroupName : ActiveDirectoryDomainName=$domainName, `
+    Write-Verbose -Verbose "Setting AD properties on $StorageAccountName in $ResourceGroupName : ActiveDirectoryDomainName=$domainName, `
         ActiveDirectoryNetBiosDomainName=$netBiosDomainName, ActiveDirectoryForestName=$($domainInformation.Forest) `
         ActiveDirectoryDomainGuid=$domainGuid, ActiveDirectoryDomainSid=$domainSid, `
         ActiveDirectoryAzureStorageSid=$azureStorageSid"
@@ -3048,7 +3051,7 @@ function Set-StorageAccountDomainProperties {
          -ActiveDirectoryDomainGuid $domainGuid -ActiveDirectoryDomainSid $domainSid `
          -ActiveDirectoryAzureStorageSid $azureStorageSid
 
-    Write-Verbose "Set-StorageAccountDomainProperties: Complete"
+    Write-Verbose -Verbose "Set-StorageAccountDomainProperties: Complete"
 }
 
 # A class for structuring the results of the Test-AzStorageAccountADObjectPasswordIsKerbKey cmdlet.
@@ -3155,7 +3158,7 @@ function Test-AzStorageAccountADObjectPasswordIsKerbKey {
         $keyMatches = [KerbKeyMatch[]]@()
         foreach ($key in $kerbKeys) {
             if ($null -ne (New-Object Directoryservices.DirectoryEntry "", $userName, $key.Value).PsBase.Name) {
-                Write-Verbose "Found that $($key.KeyName) matches password for $StorageAccount in AD."
+                Write-Verbose -Verbose "Found that $($key.KeyName) matches password for $StorageAccount in AD."
                 $oneKeyMatches = $true
                 $keyMatches += [KerbKeyMatch]::new(
                     $ResourceGroupName, 
@@ -3259,7 +3262,7 @@ function Update-AzStorageAccountADObjectPassword {
 
     process {
         if ($PSCmdlet.ParameterSetName -eq "StorageAccountName") {
-            Write-Verbose -Message "Get storage account object for StorageAccountName=$StorageAccountName."
+            Write-Verbose -Verbose -Message "Get storage account object for StorageAccountName=$StorageAccountName."
             $StorageAccount = Get-AzStorageAccount `
                 -ResourceGroupName $ResourceGroupName `
                 -Name $StorageAccountName `
@@ -3294,9 +3297,9 @@ function Update-AzStorageAccountADObjectPassword {
             "(this cmdlet will likewise regenerate kerb1).")
 
         if ($PSCmdlet.ShouldProcess($verboseConfirmMessage, $verboseConfirmMessage, $caption)) {
-            Write-Verbose -Message "Desire to rotate password confirmed."
+            Write-Verbose -Verbose -Message "Desire to rotate password confirmed."
             
-            Write-Verbose -Message ("Regenerate $RotateToKerbKey on " + $StorageAccount.StorageAccountName)
+            Write-Verbose -Verbose -Message ("Regenerate $RotateToKerbKey on " + $StorageAccount.StorageAccountName)
             if (!$SkipKeyRegeneration.ToBool()) {
                 $kerbKeys = New-AzStorageAccountKey `
                     -ResourceGroupName $StorageAccount.ResourceGroupName `
@@ -3324,7 +3327,7 @@ function Update-AzStorageAccountADObjectPassword {
             $newPassword = ConvertTo-SecureString -String $kerbKey -AsPlainText -Force
     
             # if ($Force.ToBool()) {
-                Write-Verbose -Message ("Attempt reset on " + $adObj.SamAccountName + " to $RotateToKerbKey")
+                Write-Verbose -Verbose -Message ("Attempt reset on " + $adObj.SamAccountName + " to $RotateToKerbKey")
                 Set-ADAccountPassword `
                     -Identity $adObj `
                     -Reset `
@@ -3332,7 +3335,7 @@ function Update-AzStorageAccountADObjectPassword {
                     -Server $domain `
                     -ErrorAction Stop
             # } else {
-            #     Write-Verbose `
+            #     Write-Verbose -Verbose `
             #         -Message ("Change password on " + $adObj.SamAccountName + " from $otherKerbKeyName to $RotateToKerbKey.")
             #     Set-ADAccountPassword `
             #         -Identity $adObj `
@@ -3341,9 +3344,9 @@ function Update-AzStorageAccountADObjectPassword {
             #         -ErrorAction Stop
             # }
 
-            Write-Verbose -Message "Password changed successfully."
+            Write-Verbose -Verbose -Message "Password changed successfully."
         } else {
-            Write-Verbose -Message ("Password for " + $adObj.SamAccountName + " for storage account " + `
+            Write-Verbose -Verbose -Message ("Password for " + $adObj.SamAccountName + " for storage account " + `
                 $StorageAccount.StorageAccountName + " not changed.")
         }        
     }
@@ -3462,7 +3465,7 @@ function Invoke-AzStorageAccountADObjectPasswordRotation {
         if ($PSCmdlet.ShouldProcess($verboseConfirmMessage, $verboseConfirmMessage, $caption)) {
             Update-AzStorageAccountADObjectPassword @updateParams
         } else {
-            Write-Verbose -Message "No password rotation performed."
+            Write-Verbose -Verbose -Message "No password rotation performed."
         }
     }
 }
@@ -3578,7 +3581,7 @@ function Join-AzStorageAccount {
             }
         }
         
-        Write-Verbose -Message "Using $ADObjectNameOverride as the name for the ADObject."
+        Write-Verbose -Verbose -Message "Using $ADObjectNameOverride as the name for the ADObject."
 
         $caption = "Domain join $StorageAccountName"
         $verboseConfirmMessage = ("This action will domain join the requested storage account to the requested domain.")
@@ -3593,7 +3596,7 @@ function Join-AzStorageAccount {
             }
 
             if ($null -ne $StorageAccount.AzureFilesIdentityBasedAuth.ActiveDirectoryProperties) {
-                Write-Verbose "Storage account $StorageAccountName is already domain joined."
+                Write-Verbose -Verbose "Storage account $StorageAccountName is already domain joined."
                 return
             }
                 
@@ -3626,7 +3629,7 @@ function Join-AzStorageAccount {
 
             $ADObjectNameOverride = New-ADAccountForStorageAccount @newParams -ErrorAction Stop
 
-            Write-Verbose "Created AD object $ADObjectNameOverride"
+            Write-Verbose -Verbose "Created AD object $ADObjectNameOverride"
 
             # Set domain properties on the storage account.
             Set-StorageAccountDomainProperties `
@@ -4887,8 +4890,8 @@ function Assert-DnsForwarderArmTemplateVersion {
     ) {
         Write-Error -Message "The template for deploying DNS forwarders in the Azure repository is a newer version than the AzureFilesHybrid module expects. This likely indicates that you are using an older version of the AzureFilesHybrid module and should upgrade. This can be done by getting the newest version of the module from https://github.com/Azure-Samples/azure-files-samples/releases." -ErrorAction Stop
     } else {
-        Write-Verbose -Message "DNS forwarder ARM template version is $($templateVersion.ToString())."
-        Write-Verbose -Message "Expected DnsForwarderTemplateVersion version is $($DnsForwarderTemplateVersion.ToString())."
+        Write-Verbose -Verbose -Message "DNS forwarder ARM template version is $($templateVersion.ToString())."
+        Write-Verbose -Verbose -Message "Expected DnsForwarderTemplateVersion version is $($DnsForwarderTemplateVersion.ToString())."
     }
 }
 
