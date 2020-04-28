@@ -2891,6 +2891,7 @@ function Debug-AzStorageAccountAuth {
         
         if (!$filterIsPresent -or $Filter -match "CheckPort445Connectivity")
         {
+            $checksExecuted += 1;
             Write-Verbose -Verbose "CheckPort445Connectivity - START"
 
             Test-Port445Connectivity -storageaccountName $StorageAccountName -ResourceGroupName $ResourceGroupName;
