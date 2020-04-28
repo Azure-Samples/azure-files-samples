@@ -3614,11 +3614,6 @@ function Join-AzStorageAccount {
                     -ErrorAction Stop
             }
 
-            if ($null -ne $StorageAccount.AzureFilesIdentityBasedAuth.ActiveDirectoryProperties) {
-                Write-Verbose -Verbose "Storage account $StorageAccountName is already domain joined."
-                return
-            }
-                
             # Ensure the storage account has a "kerb1" key.
             Ensure-KerbKeyExists -ResourceGroupName $ResourceGroupName -StorageAccountName $StorageAccountName -ErrorAction Stop
 
