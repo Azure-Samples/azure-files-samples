@@ -2918,6 +2918,8 @@ function Debug-AzStorageAccountAuth {
 
         if (!$filterIsPresent -or $Filter -match "CheckADObject")
         {
+            Write-Verbose -Verbose "CheckADObject - START"
+
             $checksExecuted += 1;
             Debug-AzStorageAccountADObject -storageaccountName $StorageAccountName -ResourceGroupName $ResourceGroupName;
 
@@ -2964,6 +2966,23 @@ function Debug-AzStorageAccountAuth {
             Get-AadUserForSid $currentUser.Sid
 
             Write-Verbose -Verbose "CheckSidHasAadUser - PASSED"
+        }
+
+        if (!$filterIsPresent -or ($Filter -match "CheckStorageAccountDomainJoined"))
+        {
+            $checksExecuted += 1
+
+            Write-Verbose -Verbose "CheckStorageAccountDomainJoined - START"
+
+            $storageAccount = Validate-StorageAccount -ResourceGroup $ResourceGroupName -Name $StorageAccountName
+
+            if ($StorageAccount.AzureFilesIdentityBasedAuth.ActiveDirectoryProperties -ne $null) {
+                Write-Verbose -Verbose "Storage account $StorageAccountName is already joined in domain $($StorageAccount.AzureFilesIdentityBasedAuth.ActiveDirectoryProperties.DomainName)."
+            } else {
+                Write-Error -Message "Storage account $StorageAccountName is not domain joined." -ErrorAction Stop
+            }
+
+            Write-Verbose -Verbose "CheckStorageAccountDomainJoined - PASSED"
         }
 
         if ($filterIsPresent -and $checksExecuted -eq 0)
