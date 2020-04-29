@@ -2267,7 +2267,19 @@ function New-ADAccountForStorageAccount {
         }
     }
 
-    if ($PSBoundParameters.ContainsKey("OrganizationalUnit")) {
+    if (-not ($PSBoundParameters.ContainsKey("OrganizationalUnit") -or $PSBoundParameters.ContainsKey("OrganizationalUnitDistinguishedName"))) {
+        $currentUser = Get-ADUser -Identity $($Env:USERNAME) -Server $Domain
+
+        if ($null -eq $currentUser) {
+            Write-Error -Message "Could not find user '$($Env:USERNAME)' in domain '$Domain'" -ErrorAction Stop
+        }
+
+        $OrganizationalUnit = $currentUser.DistinguishedName.Split(",") | `
+            Where-Object { $_.Substring(0, 2) -eq "OU" } | `
+            ForEach-Object { $_.Substring(3, $_.Length - 3) }
+    }
+
+    if (-not [System.String]::IsNullOrEmpty($OrganizationalUnit)) {
         $ou = Get-ADOrganizationalUnit -Filter { Name -eq $OrganizationalUnit } -Server $Domain
 
         #
@@ -2286,13 +2298,13 @@ function New-ADAccountForStorageAccount {
 
         $path = $ou.DistinguishedName
     }
-
+    
     if ($PSBoundParameters.ContainsKey("OrganizationalUnitDistinguishedName")) {
         $ou = Get-ADOrganizationalUnit -Identity $OrganizationalUnitDistinguishedName -Server $Domain -ErrorAction Stop
         $path = $OrganizationalUnitDistinguishedName
     }
 
-    Write-Verbose -Verbose "New-ADAccountForStorageAccount: Creating a AD account in domain:$Domain to represent the storage account:$StorageAccountName"
+    Write-Verbose -Verbose "New-ADAccountForStorageAccount: Creating a AD account under $path in domain:$Domain to represent the storage account:$StorageAccountName"
 
     #
     # Get the kerb key and convert it to a secure string password.
