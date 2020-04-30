@@ -2896,6 +2896,15 @@ function Debug-AzStorageAccountAuth {
     {
         $checksExecuted = 0;
         $filterIsPresent = ![string]::IsNullOrEmpty($Filter);
+        $checks = @{
+            "CheckPort445Connectivity" = "Skipped";
+            "CheckDomainJoined" = "Skipped";
+            "CheckADObject" = "Skipped";
+            "CheckGetKerberosTicket" = "Skipped";
+            "CheckADObjectPasswordIsCorrect" = "Skipped";
+            "CheckSidHasAadUser" = "Skipped";
+            "CheckStorageAccountDomainJoined" = "Skipped";
+        }
 
         #
         # Port 445 check 
@@ -2903,12 +2912,19 @@ function Debug-AzStorageAccountAuth {
         
         if (!$filterIsPresent -or $Filter -match "CheckPort445Connectivity")
         {
-            $checksExecuted += 1;
-            Write-Verbose -Verbose "CheckPort445Connectivity - START"
+            try {
+                $checksExecuted += 1;
+                Write-Verbose -Verbose "CheckPort445Connectivity - START"
 
-            Test-Port445Connectivity -storageaccountName $StorageAccountName -ResourceGroupName $ResourceGroupName;
+                Test-Port445Connectivity -storageaccountName $StorageAccountName -ResourceGroupName $ResourceGroupName;
 
-            Write-Verbose -Verbose "CheckPort445Connectivity - SUCCESS"
+                $checks["CheckPort445Connectivity"] = "Passed"
+                Write-Verbose -Verbose "CheckPort445Connectivity - SUCCESS"
+            } catch {
+                $checks["CheckPort445Connectivity"] = "Failed"
+                Write-Error "CheckPort445Connectivity - FAILED"
+                Write-Error $_
+            }
         }
 
         #
@@ -2917,90 +2933,148 @@ function Debug-AzStorageAccountAuth {
 
         if (!$filterIsPresent -or $Filter -match "CheckDomainJoined")
         {
-            $checksExecuted += 1;
-            Write-Verbose -Verbose "CheckDomainJoined - START"
+            try {
+                $checksExecuted += 1;
+                Write-Verbose -Verbose "CheckDomainJoined - START"
         
-            if (!(Get-IsDomainJoined))
-            {
-                Write-Error -Message "Machine is not domain-joined.  Mounting to Azure Files through Active Directory Authentication is `
-                    only supported when the computer is joined to an Active Directory domain." -ErrorAction Stop
-            }
+                if (!(Get-IsDomainJoined))
+                {
+                    Write-Error -Message "Machine is not domain-joined.  Mounting to Azure Files through Active Directory Authentication is `
+                        only supported when the computer is joined to an Active Directory domain." -ErrorAction Stop
+                }
 
-            Write-Verbose -Verbose "CheckDomainJoined - SUCCESS"
+                $checks["CheckDomainJoined"] = "Passed"
+                Write-Verbose -Verbose "CheckDomainJoined - SUCCESS"
+            } catch {
+                $checks["CheckDomainJoined"] = "Failed"
+                Write-Error "CheckDomainJoined - FAILED"
+                Write-Error $_
+            }
         }
 
         if (!$filterIsPresent -or $Filter -match "CheckADObject")
         {
-            Write-Verbose -Verbose "CheckADObject - START"
+            try {
+                $checksExecuted += 1;
+                Write-Verbose -Verbose "CheckADObject - START"
 
-            $checksExecuted += 1;
-            Debug-AzStorageAccountADObject -storageaccountName $StorageAccountName -ResourceGroupName $ResourceGroupName;
+                Debug-AzStorageAccountADObject -storageaccountName $StorageAccountName -ResourceGroupName $ResourceGroupName;
 
-            Write-Verbose -Verbose "CheckADObject - SUCCESS"
+                $checks["CheckADObject"] = "Passed"
+                Write-Verbose -Verbose "CheckADObject - SUCCESS"
+            } catch {
+                $checks["CheckADObject"] = "Failed"
+                Write-Error "CheckADObject - FAILED"
+                Write-Error $_
+            }
         }
 
         if (!$filterIsPresent -or $Filter -match "CheckGetKerberosTicket")
         {
-            $checksExecuted += 1;
-            Write-Verbose -Verbose "CheckGetKerberosTicket - START"
+            try {
+                $checksExecuted += 1;
+                Write-Verbose -Verbose "CheckGetKerberosTicket - START"
 
-            $Tickets = Get-AzStorageKerberosTicketStatus -storageaccountName $StorageAccountName -ResourceGroupName $ResourceGroupName;
+                Get-AzStorageKerberosTicketStatus -storageaccountName $StorageAccountName -ResourceGroupName $ResourceGroupName;
 
-            Write-Verbose -Verbose "CheckGetKerberosTicket - SUCCESS"
+                $checks["CheckGetKerberosTicket"] = "Passed"
+                Write-Verbose -Verbose "CheckGetKerberosTicket - SUCCESS"
+            } catch {
+                $checks["CheckGetKerberosTicket"] = "Failed"
+                Write-Error "CheckGetKerberosTicket - FAILED"
+                Write-Error $_
+            }
         }
 
         if (!$filterIsPresent -or $Filter -match "CheckADObjectPasswordIsCorrect")
         {
-            $checksExecuted += 1;
-            Write-Verbose -Verbose "CheckADObjectPasswordIsCorrec - START"
+            try {
+                $checksExecuted += 1;
+                Write-Verbose -Verbose "CheckADObjectPasswordIsCorrect - START"
 
-            $keyMatches = Test-AzStorageAccountADObjectPasswordIsKerbKey -StorageAccountName $StorageAccountName -ResourceGroupName $ResourceGroupName;
+                $keyMatches = Test-AzStorageAccountADObjectPasswordIsKerbKey -StorageAccountName $StorageAccountName -ResourceGroupName $ResourceGroupName;
 
-            if ($keyMatches.Count -eq 0)
-            {
-                Write-Error `
+                if ($keyMatches.Count -eq 0)
+                {
+                    Write-Error `
                         -Message ("Password for $userName does not match kerb1 or kerb2 of storage account: $StorageAccountName." + `
                         "Please run the following command to resync the AD password with the kerb key of the storage account and " +  `
                         "retry: Update-AzStorageAccountADObjectPassword.") -ErrorAction Stop
 
-            }
+                }
 
-            Write-Verbose -Verbose "CheckADObjectPasswordIsCorrect - SUCCESS"
+                $checks["CheckADObjectPasswordIsCorrect"] = "Passed"
+                Write-Verbose -Verbose "CheckADObjectPasswordIsCorrect - SUCCESS"
+            } catch {
+                $checks["CheckADObjectPasswordIsCorrect"] = "Failed"
+                Write-Error "CheckADObjectPasswordIsCorrect - FAILED"
+                Write-Error $_
+            }
         }
 
         if (!$filterIsPresent -or $Filter -match "CheckSidHasAadUser")
         {
-            $checksExecuted += 1;
+            try {
+                $checksExecuted += 1;
+                Write-Verbose -Verbose "CheckSidHasAadUser - START"
 
-            Write-Verbose -Verbose "CheckSidHasAadUser - START"
+                $currentUser = Get-ADUser ($env:UserName)
 
-            $currentUser = Get-ADUser ($env:UserName)
+                Get-AadUserForSid $currentUser.Sid
 
-            Get-AadUserForSid $currentUser.Sid
-
-            Write-Verbose -Verbose "CheckSidHasAadUser - PASSED"
+                $checks["CheckSidHasAadUser"] = "Passed"
+                Write-Verbose -Verbose "CheckSidHasAadUser - SUCCESS"
+            } catch {
+                $checks["CheckSidHasAadUser"] = "Failed"
+                Write-Error "CheckSidHasAadUser - FAILED"
+                Write-Error $_
+            }
         }
 
         if (!$filterIsPresent -or ($Filter -match "CheckStorageAccountDomainJoined"))
         {
-            $checksExecuted += 1
+            try {
+                $checksExecuted += 1
+                Write-Verbose -Verbose "CheckStorageAccountDomainJoined - START"
 
-            Write-Verbose -Verbose "CheckStorageAccountDomainJoined - START"
+                $storageAccount = Validate-StorageAccount -ResourceGroup $ResourceGroupName -Name $StorageAccountName
 
-            $storageAccount = Validate-StorageAccount -ResourceGroup $ResourceGroupName -Name $StorageAccountName
+                if ($null -ne $StorageAccount.AzureFilesIdentityBasedAuth.ActiveDirectoryProperties) {
+                    Write-Verbose -Verbose "Storage account $StorageAccountName is already joined in domain $($StorageAccount.AzureFilesIdentityBasedAuth.ActiveDirectoryProperties.DomainName)."
+                } else {
+                    Write-Error -Message "Storage account $StorageAccountName is not domain joined." -ErrorAction Stop
+                }
 
-            if ($StorageAccount.AzureFilesIdentityBasedAuth.ActiveDirectoryProperties -ne $null) {
-                Write-Verbose -Verbose "Storage account $StorageAccountName is already joined in domain $($StorageAccount.AzureFilesIdentityBasedAuth.ActiveDirectoryProperties.DomainName)."
-            } else {
-                Write-Error -Message "Storage account $StorageAccountName is not domain joined." -ErrorAction Stop
+                $checks["CheckStorageAccountDomainJoined"] = "Passed"
+                Write-Verbose -Verbose "CheckStorageAccountDomainJoined - SUCCESS"
+            } catch {
+                $checks["CheckStorageAccountDomainJoined"] = "Failed"
+                Write-Error "CheckStorageAccountDomainJoined - FAILED"
+                Write-Error $_
             }
-
-            Write-Verbose -Verbose "CheckStorageAccountDomainJoined - PASSED"
         }
 
         if ($filterIsPresent -and $checksExecuted -eq 0)
         {
-            Write-Error "Filter '$Filter' provided does not match any options.  No checks were executed." -ErrorAction Stop
+            Write-Error "Filter '$Filter' provided does not match any options.  No checks were executed. Available filters are {$($checks.Keys -join ', ')}" -ErrorAction Stop
+        }
+        else
+        {
+            Write-Verbose -Verbose "Summary of checks:"
+            foreach ($k in $checks.GetEnumerator()) {
+                $resultString = "{0,-40}`t{1,10}" -f $($k.Name),$($k.Value)
+                switch ($($k.Value)) {
+                    "Passed" {
+                        Write-Host -ForegroundColor Green $resultString
+                    }
+                    "Failed" {
+                        Write-Host -ForegroundColor Red $resultString
+                    }
+                    default {
+                        Write-Host $resultString
+                    }
+                }
+            }
         }
     }
 }
