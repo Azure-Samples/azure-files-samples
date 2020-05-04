@@ -912,7 +912,7 @@ function Request-AzPowerShellModule {
                     Uninstall-Module `
                             -Name Az.Storage `
                             -Force `
-                            -ErrorAction Stop
+                            -ErrorAction SilentlyContinue
                 } catch {
                     Write-Error `
                             -Message "Unable to uninstall the GA version of the Az.Storage module in favor of the preview version (1.11.1-preview)." `
