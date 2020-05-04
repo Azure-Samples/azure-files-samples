@@ -3083,8 +3083,8 @@ function Debug-AzStorageAccountAuth {
 function Set-StorageAccountDomainProperties {
     <#
     .SYNOPSIS
-       This sets the storage account's ActiveDirectoryProperties - information needed to support the UI
-       experience for getting and setting file and directory permissions.
+        This sets the storage account's ActiveDirectoryProperties - information needed to support the UI
+        experience for getting and setting file and directory permissions.
     
     .DESCRIPTION
         Creates the identity for the storage account in Active Directory
@@ -3103,59 +3103,90 @@ function Set-StorageAccountDomainProperties {
                 - ActiveDirectoryNetBiosDomainName
             - Sets these properties on the storage account.
     .EXAMPLE
-        PS C:\> Create-ServiceAccount -StorageAccountName "storageAccount" -ResourceGroupName "resourceGroup"
+        PS C:\> Set-StorageAccountDomainProperties -StorageAccountName "storageAccount" -ResourceGroupName "resourceGroup" -ADObjectName "adObjectName" -Domain "domain" -Force
+    .EXAMPLE
+        PS C:\> Set-StorageAccountDomainProperties -StorageAccountName "storageAccount" -ResourceGroupName "resourceGroup" -DisableADDS
     #>
 
     [CmdletBinding()]
     param(
         [Parameter(Mandatory=$true, Position=0)]
-        [string]$ADObjectName,
-
-        [Parameter(Mandatory=$true, Position=1)]
         [string]$ResourceGroupName,
 
-        [Parameter(Mandatory=$true, Position=2)]
+        [Parameter(Mandatory=$true, Position=1)]
         [string]$StorageAccountName,
 
+        [Parameter(Mandatory=$false, Position=2)]
+        [string]$ADObjectName,
+
         [Parameter(Mandatory=$false, Position=3)]
-        [string]$Domain
+        [string]$Domain,
+
+        [Parameter(Mandatory=$false, Position=4)]
+        [switch]$DisableADDS,
+
+        [Parameter(Mandatory=$false, Position=5)]
+        [switch]$Force
     )
 
-    Assert-IsWindows
-    Assert-IsDomainJoined
-    Request-ADFeature
+    if ($DisableADDS) {
+        Write-Verbose -Verbose "Setting AD properties on $StorageAccountName in $ResourceGroupName : `
+            EnableActiveDirectoryDomainServicesForFile=$false"
 
-    Write-Verbose -Verbose "Set-StorageAccountDomainProperties: Enabling the feature on the storage account and providing the required properties to the storage service"
-
-    if ([System.String]::IsNullOrEmpty($Domain)) {
-        $domainInformation = Get-ADDomain
-        $Domain = $domainInformation.DnsRoot
+        Set-AzStorageAccount -ResourceGroupName $ResourceGroupName -AccountName $StorageAccountName `
+            -EnableActiveDirectoryDomainServicesForFile $false
     } else {
-        $domainInformation = Get-ADDomain -Server $Domain
+
+        $storageAccount = Get-AzStorageAccount -ResourceGroupName $ResourceGroupName -AccountName $StorageAccountName
+
+        if (($null -ne $storageAccount.AzureFilesIdentityBasedAuth.ActiveDirectoryProperties) -and (-not $Force)) {
+            Write-Error "ActiveDirectoryDomainService is already enabled on storage account $StorageAccountName in resource group $($ResourceGroupName): `
+                DomainName=$($storageAccount.AzureFilesIdentityBasedAuth.ActiveDirectoryProperties.DomainName) `
+                NetBiosDomainName=$($storageAccount.AzureFilesIdentityBasedAuth.ActiveDirectoryProperties.NetBiosDomainName) `
+                ForestName=$($storageAccount.AzureFilesIdentityBasedAuth.ActiveDirectoryProperties.ForestName) `
+                DomainGuid=$($storageAccount.AzureFilesIdentityBasedAuth.ActiveDirectoryProperties.DomainGuid) `
+                DomainSid=$($storageAccount.AzureFilesIdentityBasedAuth.ActiveDirectoryProperties.DomainSid) `
+                AzureStorageSid=$($storageAccount.AzureFilesIdentityBasedAuth.ActiveDirectoryProperties.AzureStorageSid)" `
+                -ErrorAction Stop
+        }
+
+        Assert-IsWindows
+        Assert-IsDomainJoined
+        Request-ADFeature
+        
+        Write-Verbose -Verbose "Set-StorageAccountDomainProperties: Enabling the feature on the storage account and providing the required properties to the storage service"
+
+        if ([System.String]::IsNullOrEmpty($Domain)) {
+            $domainInformation = Get-ADDomain
+            $Domain = $domainInformation.DnsRoot
+        } else {
+            $domainInformation = Get-ADDomain -Server $Domain
+        }
+
+        $azureStorageIdentity = Get-AzStorageAccountADObject `
+            -ADObjectName $ADObjectName `
+            -Domain $Domain `
+            -ErrorAction Stop
+        $azureStorageSid = $azureStorageIdentity.SID.Value
+
+        $domainGuid = $domainInformation.ObjectGUID.ToString()
+        $domainName = $domainInformation.DnsRoot
+        $domainSid = $domainInformation.DomainSID.Value
+        $forestName = $domainInformation.Forest
+        $netBiosDomainName = $domainInformation.DnsRoot
+
+        Write-Verbose -Verbose "Setting AD properties on $StorageAccountName in $ResourceGroupName : `
+            EnableActiveDirectoryDomainServicesForFile=$true, ActiveDirectoryDomainName=$domainName, `
+            ActiveDirectoryNetBiosDomainName=$netBiosDomainName, ActiveDirectoryForestName=$($domainInformation.Forest) `
+            ActiveDirectoryDomainGuid=$domainGuid, ActiveDirectoryDomainSid=$domainSid, `
+            ActiveDirectoryAzureStorageSid=$azureStorageSid"
+
+        Set-AzStorageAccount -ResourceGroupName $ResourceGroupName -AccountName $StorageAccountName `
+             -EnableActiveDirectoryDomainServicesForFile $true -ActiveDirectoryDomainName $domainName `
+             -ActiveDirectoryNetBiosDomainName $netBiosDomainName -ActiveDirectoryForestName $forestName `
+             -ActiveDirectoryDomainGuid $domainGuid -ActiveDirectoryDomainSid $domainSid `
+             -ActiveDirectoryAzureStorageSid $azureStorageSid
     }
-
-    $azureStorageIdentity = Get-AzStorageAccountADObject `
-        -ADObjectName $ADObjectName `
-        -Domain $Domain `
-        -ErrorAction Stop
-    $azureStorageSid = $azureStorageIdentity.SID.Value
-
-    $domainGuid = $domainInformation.ObjectGUID.ToString()
-    $domainName = $domainInformation.DnsRoot
-    $domainSid = $domainInformation.DomainSID.Value
-    $forestName = $domainInformation.Forest
-    $netBiosDomainName = $domainInformation.DnsRoot
-
-    Write-Verbose -Verbose "Setting AD properties on $StorageAccountName in $ResourceGroupName : ActiveDirectoryDomainName=$domainName, `
-        ActiveDirectoryNetBiosDomainName=$netBiosDomainName, ActiveDirectoryForestName=$($domainInformation.Forest) `
-        ActiveDirectoryDomainGuid=$domainGuid, ActiveDirectoryDomainSid=$domainSid, `
-        ActiveDirectoryAzureStorageSid=$azureStorageSid"
-
-    Set-AzStorageAccount -ResourceGroupName $ResourceGroupName -AccountName $StorageAccountName `
-         -EnableActiveDirectoryDomainServicesForFile $true -ActiveDirectoryDomainName $domainName `
-         -ActiveDirectoryNetBiosDomainName $netBiosDomainName -ActiveDirectoryForestName $forestName `
-         -ActiveDirectoryDomainGuid $domainGuid -ActiveDirectoryDomainSid $domainSid `
-         -ActiveDirectoryAzureStorageSid $azureStorageSid
 
     Write-Verbose -Verbose "Set-StorageAccountDomainProperties: Complete"
 }
@@ -3737,7 +3768,8 @@ function Join-AzStorageAccount {
                 -ADObjectName $ADObjectNameOverride `
                 -ResourceGroupName $ResourceGroupName `
                 -StorageAccountName $StorageAccountName `
-                -Domain $Domain
+                -Domain $Domain `
+                -Force
         }
     }
 }
