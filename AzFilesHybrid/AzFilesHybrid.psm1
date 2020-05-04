@@ -2276,7 +2276,8 @@ function New-ADAccountForStorageAccount {
 
         $OrganizationalUnit = $currentUser.DistinguishedName.Split(",") | `
             Where-Object { $_.Substring(0, 2) -eq "OU" } | `
-            ForEach-Object { $_.Substring(3, $_.Length - 3) }
+            ForEach-Object { $_.Substring(3, $_.Length - 3) } | `
+            Select-Object -First 1
     }
 
     if (-not [System.String]::IsNullOrEmpty($OrganizationalUnit)) {
