@@ -2388,6 +2388,7 @@ function New-ADAccountForStorageAccount {
             "ComputerAccount" {
                 if ($null -ne $computerSpnMatch) {
                     $computerSpnMatch.AllowReversiblePasswordEncryption = $false
+                    $computerSpnMatch.PasswordNeverExpires = $true
                     $computerSpnMatch.Description = "Computer account object for Azure storage account $StorageAccountName."
                     $computerSpnMatch.Enabled = $true
                     Set-ADComputer -Instance $computerSpnMatch -ErrorAction Stop
@@ -2398,6 +2399,7 @@ function New-ADAccountForStorageAccount {
                         -Name $ADObjectName `
                         -AccountPassword $fileServiceAccountPwdSecureString `
                         -AllowReversiblePasswordEncryption $false `
+                        -PasswordNeverExpires $true `
                         -Description "Computer account object for Azure storage account $StorageAccountName." `
                         -ServicePrincipalNames $spnValue `
                         -Server $Domain `
