@@ -3456,11 +3456,11 @@ function Update-AzStorageAccountADObjectPassword {
                 Where-Object { $_.KeyName -eq $RotateToKerbKey } | `
                 Select-Object -ExpandProperty Value  
     
-            $otherKerbKey = $kerbKeys | `
-                Where-Object { $_.KeyName -eq $otherKerbKeyName } | `
-                Select-Object -ExpandProperty Value
+            # $otherKerbKey = $kerbKeys | `
+            #     Where-Object { $_.KeyName -eq $otherKerbKeyName } | `
+            #     Select-Object -ExpandProperty Value
     
-            $oldPassword = ConvertTo-SecureString -String $otherKerbKey -AsPlainText -Force
+            # $oldPassword = ConvertTo-SecureString -String $otherKerbKey -AsPlainText -Force
             $newPassword = ConvertTo-SecureString -String $kerbKey -AsPlainText -Force
     
             # if ($Force.ToBool()) {
