@@ -741,7 +741,8 @@ function Request-ADFeature {
     Assert-IsWindows
 
     $adModule = Get-Module -Name ActiveDirectory -ListAvailable
-    if ($null -eq $adModule) {
+    $gpModule = Get-Module -Name GroupPolicy -ListAvailable
+    if (($null -eq $adModule) -or ($null -eq $gpModule)) {
         # OSVersion 10.0.18362 is Windows 10, version 1903. All releases below, such as 17763.x, where x is some 
         # OS build revision number, require manual installation of the RSAT package as indicated in the error message.
         if ((Get-WindowsInstallationType) -eq "Client" -and (Get-OSVersion) -lt [Version]::new(10, 0, 18362, 0)) {
@@ -751,13 +752,18 @@ function Request-ADFeature {
         }
 
         Request-OSFeature `
-            -WindowsClientCapability "Rsat.ActiveDirectory.DS-LDS.Tools" `
-            -WindowsServerFeature "RSAT-AD-PowerShell"
+            -WindowsClientCapability "Rsat.ActiveDirectory.DS-LDS.Tools","Rsat.GroupPolicy.Management.Tools" `
+            -WindowsServerFeature "RSAT-AD-PowerShell","GPMC"
     }
 
     $adModule = Get-Module -Name ActiveDirectory 
     if ($null -eq $adModule) {
         Import-Module -Name ActiveDirectory
+    }
+
+    $gpModule = Get-Module -Name GroupPolicy
+    if ($null -eq $gpModule) {
+        Import-Module -Name GroupPolicy
     }
 }
 
