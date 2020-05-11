@@ -2766,13 +2766,15 @@ function Get-AadUserForSid {
 
     $aadUser = Get-AzureADUser -Filter "OnPremisesSecurityIdentifier eq '$sid'"
 
-    if ($aadUser -eq $null)
+    if ($null -eq $aadUser)
     {
         Write-Error "No Azure Active Directory user exists with OnPremisesSecurityIdentifier of the currently logged on user's SID ($sid). `
             This means that the AD user object has not synced to the AAD corresponding to the storage account.
             Mounting to Azure Files using Active Directory authentication is not supported for AD users who have not been synced to `
             AAD. " -ErrorAction Stop
     }
+
+    return $aadUser
 }
 
 
@@ -2892,7 +2894,13 @@ function Debug-AzStorageAccountAuth {
         [string]$ResourceGroupName,
 
         [Parameter(Mandatory=$False, Position=2, HelpMessage="Filter")]
-        [string]$Filter
+        [string]$Filter,
+
+        [Parameter(Mandatory=$False, Position=3, HelpMessage="Optional parameter for filter 'CheckSidHasAadUser'. The user name to check.")]
+        [string]$UserName,
+
+        [Parameter(Mandatory=$False, Position=4, HelpMessage="Optional parameter for filter 'CheckSidHasAadUser'. The domain name to look up the user.")]
+        [string]$Domain
     )
 
     process
@@ -3021,9 +3029,23 @@ function Debug-AzStorageAccountAuth {
                 $checksExecuted += 1;
                 Write-Verbose -Verbose "CheckSidHasAadUser - START"
 
-                $currentUser = Get-ADUser ($env:UserName)
+                if ([string]::IsNullOrEmpty($UserName)) {
+                    $UserName = $($env:UserName)
+                }
 
-                Get-AadUserForSid $currentUser.Sid
+                if ([string]::IsNullOrEmpty($Domain)) {
+                    $Domain = (Get-ADDomain).DnsRoot
+                }
+
+                Write-Verbose -Verbose "CheckSidHasAadUser for user $UserName in domain $Domain"
+
+                $currentUser = Get-ADUser -Identity $UserName -Server $Domain
+
+                Write-Verbose -Verbose "User $UserName in domain $Domain has SID = $($currentUser.Sid)"
+
+                $aadUser = Get-AadUserForSid $currentUser.Sid
+
+                Write-Verbose -Verbose "Found AAD user '$($aadUser.UserPrincipalName)' for SID $($currentUser.Sid)"
 
                 $checks["CheckSidHasAadUser"] = "Passed"
                 Write-Verbose -Verbose "CheckSidHasAadUser - SUCCESS"
