@@ -2341,7 +2341,7 @@ function New-ADAccountForStorageAccount {
         Write-Error -Message "There are already two AD objects with a Service Principal Name of $spnValue in domain $Domain." -ErrorAction Stop
     } elseif (($null -ne $computerSpnMatch) -or ($null -ne $userSpnMatch)) {
         if (-not $OverwriteExistingADObject) {
-            Write-Error -Message "An AD object with a Service Principal Name of $spnValue already exists within AD. This might happen because you are rejoining a new storage account that shares names with an existing storage account, or if the domain join operation for a storage account failed in an incomplete state. Delete this AD object (or remove the SPN) to continue. See https://docs.microsoft.com/azure/storage/files/storage-troubleshoot-windows-file-connection-problems for more information." -ErrorAction Stop
+            Write-Error -Message "An AD object with a Service Principal Name of $spnValue already exists within AD. This might happen because you are rejoining a new storage account that shares names with an existing storage account, or if the domain join operation for a storage account failed in an incomplete state. Delete this AD object (or remove the SPN) to continue or specify a switch -OverwriteExistingADObject when calling this cmdlet. See https://docs.microsoft.com/azure/storage/files/storage-troubleshoot-windows-file-connection-problems for more information." -ErrorAction Stop
         }
 
         if ($null -ne $computerSpnMatch) {
