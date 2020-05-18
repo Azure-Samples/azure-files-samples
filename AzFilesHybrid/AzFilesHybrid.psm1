@@ -2312,6 +2312,18 @@ function New-ADAccountForStorageAccount {
     
     if ($PSBoundParameters.ContainsKey("OrganizationalUnitDistinguishedName")) {
         $ou = Get-ADOrganizationalUnit -Identity $OrganizationalUnitDistinguishedName -Server $Domain -ErrorAction Stop
+
+        #
+        # Check to see if the OU exists before proceeding.
+        #
+
+        if ($null -eq $ou)
+        {
+            Write-Error `
+                    -Message "Could not find an organizational unit with name '$OrganizationalUnitDistinguishedName' in the $Domain domain" `
+                    -ErrorAction Stop
+        }
+
         $path = $OrganizationalUnitDistinguishedName
     }
 
