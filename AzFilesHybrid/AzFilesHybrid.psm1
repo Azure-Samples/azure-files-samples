@@ -2142,9 +2142,7 @@ function Ensure-KerbKeyExists {
                 $keys = New-AzStorageAccountKey -ResourceGroupName $ResourceGroupName -Name $StorageAccountName -KeyName kerb1 -ErrorAction Stop
             }
             catch {
-                Write-Error -Message "Caught exception: $_"
-                Write-Error -Message "Unable to generate a Kerberos key for storage account: $($storageAccount.StorageAccountName).
-This might be because the 'Azure Files Authentication with Active Directory' feature is not yet available in this location ($($storageAccount.Location))." -ErrorAction Stop
+                Write-Error -Message "Caught exception: $_" -ErrorAction Stop
             }
 
             $kerb1Key = Get-AzStorageAccountKey -ResourceGroupName $ResourceGroupName -Name $StorageAccountName `
