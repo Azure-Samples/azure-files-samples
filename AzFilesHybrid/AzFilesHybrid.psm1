@@ -879,15 +879,13 @@ function Request-AzPowerShellModule {
 
     $storageModule = Get-Module -Name Az.Storage -ListAvailable | `
         Where-Object { 
-            $_.Version -eq [Version]::new(1,8,2) -or 
-            $_.Version -eq [Version]::new(1,11,1) 
-        } | `
-        Sort-Object -Property Version -Descending
+            $_.Version -eq [Version]::new(2,0,0) 
+        }
 
     # Do should process if modules must be installed
     if ($null -eq $azModule -or $null -eq $storageModule) {
         $caption = "Install Azure PowerShell modules"
-        $verboseConfirmMessage = "This module requires Azure PowerShell (`"Az`" module) 2.8.0+ and Az.Storage 1.8.2-preview+. This can be installed now if you are running as an administrator."
+        $verboseConfirmMessage = "This module requires Azure PowerShell (`"Az`" module) 2.8.0+ and Az.Storage 2.0.0. This can be installed now if you are running as an administrator."
         
         if ($PSCmdlet.ShouldProcess($verboseConfirmMessage, $verboseConfirmMessage, $caption)) {
             if (!(Get-IsElevatedSession)) {
@@ -915,7 +913,7 @@ function Request-AzPowerShellModule {
                             -ErrorAction SilentlyContinue
                 } catch {
                     Write-Error `
-                            -Message "Unable to uninstall the GA version of the Az.Storage module in favor of the preview version (1.11.1-preview)." `
+                            -Message "Unable to uninstall the pre-GA version of the Az.Storage module in favor of the GA version (2.0.0)." `
                             -ErrorAction Stop
                 }
 
@@ -924,7 +922,7 @@ function Request-AzPowerShellModule {
                         -AllowClobber `
                         -AllowPrerelease `
                         -Force `
-                        -RequiredVersion "1.11.1-preview" `
+                        -RequiredVersion "2.0.0" `
                         -SkipPublisherCheck `
                         -ErrorAction Stop
             }       
@@ -937,14 +935,12 @@ function Request-AzPowerShellModule {
     Remove-Module -Name Az.Accounts -Force -ErrorAction SilentlyContinue
     Remove-Module -Name Az.Network -Force -ErrorAction SilentlyContinue
 
-    $storageModule = ,(Get-Module -Name Az.Storage -ListAvailable | `
+    $storageModule = Get-Module -Name Az.Storage -ListAvailable | `
         Where-Object { 
-            $_.Version -eq [Version]::new(1,8,2) -or 
-            $_.Version -eq [Version]::new(1,11,1) 
-        } | `
-        Sort-Object -Property Version -Descending)
+            $_.Version -eq [Version]::new(2,0,0) 
+        }
 
-    Import-Module -ModuleInfo $storageModule[0] -Global -ErrorAction Stop
+    Import-Module -ModuleInfo $storageModule -Global -ErrorAction Stop
     Import-Module -Name Az.Network -Global -ErrorAction Stop
 }
 
