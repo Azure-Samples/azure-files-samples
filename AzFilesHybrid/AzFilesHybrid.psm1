@@ -3854,7 +3854,7 @@ function Get-ADDnsRootFromDistinguishedName {
 
     param(
         [Parameter(Mandatory=$true)]
-        [ValidatePattern("^(CN=([a-z]|[0-9])+)((,OU=([a-z]|[0-9])+)*)((,DC=([a-z]|[0-9])+)+)$")]
+        [ValidatePattern("^(CN=([a-z]|[0-9]|[ .])+)((,OU=([a-z]|[0-9]|[ .])+)*)((,DC=([a-z]|[0-9]|[ .])+)+)$")]
         [string]$DistinguishedName
     )
 
@@ -3863,7 +3863,7 @@ function Get-ADDnsRootFromDistinguishedName {
             Where-Object { $_.Substring(0, 2) -eq "DC" } | `
             ForEach-Object { $_.Substring(3, $_.Length - 3) }
 
-        $sb = [StringBuilder]::new()
+        $sb = [System.Text.StringBuilder]::new()
 
         for($i = 0; $i -lt $dcPath.Length; $i++) {
             if ($i -gt 0) {
