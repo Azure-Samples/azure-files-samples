@@ -832,6 +832,7 @@ function Request-AzureADModule {
             if ($PSVersionTable.PSVersion -gt [Version]::new(6,0,0) -and $null -eq $winCompat) {
                 Install-Module `
                         -Name WindowsCompatibility `
+                        -Repository PSGallery `
                         -AllowClobber `
                         -Force `
                         -ErrorAction Stop
@@ -844,6 +845,7 @@ function Request-AzureADModule {
                 if ($null -eq $azureADModule) {
                     Install-Module `
                             -Name AzureAD `
+                            -Repository PSGallery `
                             -AllowClobber `
                             -Force `
                             -ErrorAction Stop
@@ -896,7 +898,7 @@ function Request-AzPowerShellModule {
 
             if ($null -eq $azModule) {
                 Get-Module -Name Az.* | Remove-Module
-                Install-Module -Name Az -AllowClobber -Force -ErrorAction Stop
+                Install-Module -Name Az -Repository PSGallery -AllowClobber -Force -ErrorAction Stop
                 Write-Verbose -Message "Installed latest version of Az module."
             }
 
@@ -919,6 +921,7 @@ function Request-AzPowerShellModule {
 
                 Install-Module `
                         -Name Az.Storage `
+                        -Repository PSGallery `
                         -AllowClobber `
                         -AllowPrerelease `
                         -Force `
