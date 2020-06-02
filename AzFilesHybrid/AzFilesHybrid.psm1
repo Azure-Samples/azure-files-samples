@@ -2935,16 +2935,8 @@ function Debug-AzStorageAccountAuth {
 
     process
     {
-        $filterIsPresent = ![string]::IsNullOrEmpty($Filter);
-
-        if (!$filterIsPresent -or $Filter -match "CheckAadUserHasSid")
-        {
-            if ([string]::IsNullOrEmpty($ObjectId)) {
-                Write-Error -Message "Missing parameter ObjectId, which is required if -Filter is not set or -Filter is 'CheckAadUserHasSid'" -ErrorAction Stop
-            }
-        }
-
         $checksExecuted = 0;
+        $filterIsPresent = ![string]::IsNullOrEmpty($Filter);
         $checks = @{
             "CheckPort445Connectivity" = "Skipped";
             "CheckDomainJoined" = "Skipped";
@@ -3100,6 +3092,10 @@ function Debug-AzStorageAccountAuth {
             try {
                 $checksExecuted += 1;
                 Write-Verbose "CheckAadUserHasSid - START"
+
+                if ([string]::IsNullOrEmpty($ObjectId)) {
+                    Write-Error -Message "Missing required parameter ObjectId" -ErrorAction Stop
+                }
 
                 if ([string]::IsNullOrEmpty($Domain)) {
                     $Domain = (Get-ADDomain).DnsRoot
