@@ -3070,37 +3070,37 @@ function Debug-AzStorageAccountAuth {
 
                 if ([string]::IsNullOrEmpty($ObjectId)) {
                     Write-Verbose -Message "Missing required parameter ObjectId for CheckAadUserHasSid requires ObjectId parameter to be present, skipping CheckAadUserHasSid"
-					$checks["CheckAadUserHasSid"] = "Skipped"
+                    $checks["CheckAadUserHasSid"] = "Skipped"
                 }
-				else {
-				
-					if ([string]::IsNullOrEmpty($Domain)) {
-						$Domain = (Get-ADDomain).DnsRoot
-					}
+                else {
+                
+                    if ([string]::IsNullOrEmpty($Domain)) {
+                        $Domain = (Get-ADDomain).DnsRoot
+                    }
 
-					Write-Verbose "CheckAadUserHasSid for object ID $ObjectId in domain $Domain"
+                    Write-Verbose "CheckAadUserHasSid for object ID $ObjectId in domain $Domain"
 
-					$aadUser = Get-AzureADUser -ObjectId $ObjectId
+                    $aadUser = Get-AzureADUser -ObjectId $ObjectId
 
-					if ($null -eq $aadUser) {
-						Write-Error -Message "Cannot find Azure AD user $ObjectId" -ErrorAction Stop
-					}
+                    if ($null -eq $aadUser) {
+                        Write-Error -Message "Cannot find Azure AD user $ObjectId" -ErrorAction Stop
+                    }
 
-					if ([string]::IsNullOrEmpty($aadUser.OnPremisesSecurityIdentifier)) {
-						Write-Error -Message "Azure AD user $ObjectId has no OnPremisesSecurityIdentifier" -ErrorAction Stop
-					}
+                    if ([string]::IsNullOrEmpty($aadUser.OnPremisesSecurityIdentifier)) {
+                        Write-Error -Message "Azure AD user $ObjectId has no OnPremisesSecurityIdentifier" -ErrorAction Stop
+                    }
 
-					$user = Get-ADUser -Identity $aadUser.OnPremisesSecurityIdentifier -Server $Domain
+                    $user = Get-ADUser -Identity $aadUser.OnPremisesSecurityIdentifier -Server $Domain
 
-					if ($null -eq $user) {
-						Write-Error -Message "Azure AD user $ObjectId's SID $($aadUser.OnPremisesSecurityIdentifier) is not found in domain $Domain" -ErrorAction Stop
-					}
+                    if ($null -eq $user) {
+                        Write-Error -Message "Azure AD user $ObjectId's SID $($aadUser.OnPremisesSecurityIdentifier) is not found in domain $Domain" -ErrorAction Stop
+                    }
 
-					Write-Verbose "Azure AD user $ObjectId has SID $($aadUser.OnPremisesSecurityIdentifier) in domain $Domain"
+                    Write-Verbose "Azure AD user $ObjectId has SID $($aadUser.OnPremisesSecurityIdentifier) in domain $Domain"
 
-					$checks["CheckAadUserHasSid"] = "Passed"
-					Write-Verbose "CheckAadUserHasSid - SUCCESS"
-				}
+                    $checks["CheckAadUserHasSid"] = "Passed"
+                    Write-Verbose "CheckAadUserHasSid - SUCCESS"
+                }
 
             } catch {
                 $checks["CheckAadUserHasSid"] = "Failed"
