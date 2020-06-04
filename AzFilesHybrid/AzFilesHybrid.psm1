@@ -881,13 +881,13 @@ function Request-AzPowerShellModule {
 
     $storageModule = Get-Module -Name Az.Storage -ListAvailable | `
         Where-Object { 
-            $_.Version -eq [Version]::new(2,0,0) 
+            $_.Version -ge [Version]::new(2,0,0) 
         }
 
     # Do should process if modules must be installed
     if ($null -eq $azModule -or $null -eq $storageModule) {
         $caption = "Install Azure PowerShell modules"
-        $verboseConfirmMessage = "This module requires Azure PowerShell (`"Az`" module) 2.8.0+ and Az.Storage 2.0.0. This can be installed now if you are running as an administrator."
+        $verboseConfirmMessage = "This module requires Azure PowerShell (`"Az`" module) 2.8.0+ and Az.Storage 2.0.0+. This can be installed now if you are running as an administrator."
         
         if ($PSCmdlet.ShouldProcess($verboseConfirmMessage, $verboseConfirmMessage, $caption)) {
             if (!(Get-IsElevatedSession)) {
@@ -915,7 +915,7 @@ function Request-AzPowerShellModule {
                             -ErrorAction SilentlyContinue
                 } catch {
                     Write-Error `
-                            -Message "Unable to uninstall the pre-GA version of the Az.Storage module in favor of the GA version (2.0.0)." `
+                            -Message "Unable to uninstall the existing Az.Storage module which has a version lower than 2.0.0." `
                             -ErrorAction Stop
                 }
 
@@ -923,9 +923,8 @@ function Request-AzPowerShellModule {
                         -Name Az.Storage `
                         -Repository PSGallery `
                         -AllowClobber `
-                        -AllowPrerelease `
                         -Force `
-                        -RequiredVersion "2.0.0" `
+                        -MinimumVersion "2.0.0" `
                         -SkipPublisherCheck `
                         -ErrorAction Stop
             }       
@@ -2352,7 +2351,7 @@ function New-ADAccountForStorageAccount {
         $message.AppendLine("There are already two AD objects with a Service Principal Name of $spnValue in domain $($Domain):")
         $message.AppendLine($computerSpnMatch.DistinguishedName)
         $message.AppendLine($userSpnMatch.DistinguishedName)
-        $message.AppendLine("It is not supported to have more than on AD object for a given Service Principal Name. Please delete the duplicated object that are not needed and retry this cmdlet.")
+        $message.AppendLine("It is not supported to have more than one AD object for a given Service Principal Name. Please delete the duplicated object that is not needed and retry this cmdlet.")
         Write-Error -Message $message.ToString() -ErrorAction Stop
     } elseif ($null -ne $computerSpnMatch) {
         if ($ObjectType -ieq "ServiceLogonAccount") {
