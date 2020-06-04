@@ -937,12 +937,12 @@ function Request-AzPowerShellModule {
     Remove-Module -Name Az.Accounts -Force -ErrorAction SilentlyContinue
     Remove-Module -Name Az.Network -Force -ErrorAction SilentlyContinue
 
-    $storageModule = Get-Module -Name Az.Storage -ListAvailable | `
+    $storageModule = ,(Get-Module -Name Az.Storage -ListAvailable | `
         Where-Object { 
-            $_.Version -eq [Version]::new(2,0,0) 
-        }
+            $_.Version -ge [Version]::new(2,0,0) 
+        })
 
-    Import-Module -ModuleInfo $storageModule -Global -ErrorAction Stop
+    Import-Module -ModuleInfo $storageModule[0] -Global -ErrorAction Stop
     Import-Module -Name Az.Network -Global -ErrorAction Stop
 }
 
