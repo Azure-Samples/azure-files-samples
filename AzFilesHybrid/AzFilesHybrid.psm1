@@ -940,7 +940,8 @@ function Request-AzPowerShellModule {
     $storageModule = ,(Get-Module -Name Az.Storage -ListAvailable | `
         Where-Object { 
             $_.Version -ge [Version]::new(2,0,0) 
-        })
+        } | `
+        Sort-Object -Property Version -Descending)
 
     Import-Module -ModuleInfo $storageModule[0] -Global -ErrorAction Stop
     Import-Module -Name Az.Network -Global -ErrorAction Stop
