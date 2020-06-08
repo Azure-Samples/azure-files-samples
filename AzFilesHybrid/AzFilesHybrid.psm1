@@ -832,6 +832,7 @@ function Request-AzureADModule {
             if ($PSVersionTable.PSVersion -gt [Version]::new(6,0,0) -and $null -eq $winCompat) {
                 Install-Module `
                         -Name WindowsCompatibility `
+                        -Repository PSGallery `
                         -AllowClobber `
                         -Force `
                         -ErrorAction Stop
@@ -844,6 +845,7 @@ function Request-AzureADModule {
                 if ($null -eq $azureADModule) {
                     Install-Module `
                             -Name AzureAD `
+                            -Repository PSGallery `
                             -AllowClobber `
                             -Force `
                             -ErrorAction Stop
@@ -879,15 +881,13 @@ function Request-AzPowerShellModule {
 
     $storageModule = Get-Module -Name Az.Storage -ListAvailable | `
         Where-Object { 
-            $_.Version -eq [Version]::new(1,8,2) -or 
-            $_.Version -eq [Version]::new(1,11,1) 
-        } | `
-        Sort-Object -Property Version -Descending
+            $_.Version -ge [Version]::new(2,0,0) 
+        }
 
     # Do should process if modules must be installed
     if ($null -eq $azModule -or $null -eq $storageModule) {
         $caption = "Install Azure PowerShell modules"
-        $verboseConfirmMessage = "This module requires Azure PowerShell (`"Az`" module) 2.8.0+ and Az.Storage 1.8.2-preview+. This can be installed now if you are running as an administrator."
+        $verboseConfirmMessage = "This module requires Azure PowerShell (`"Az`" module) 2.8.0+ and Az.Storage 2.0.0+. This can be installed now if you are running as an administrator."
         
         if ($PSCmdlet.ShouldProcess($verboseConfirmMessage, $verboseConfirmMessage, $caption)) {
             if (!(Get-IsElevatedSession)) {
@@ -898,7 +898,7 @@ function Request-AzPowerShellModule {
 
             if ($null -eq $azModule) {
                 Get-Module -Name Az.* | Remove-Module
-                Install-Module -Name Az -AllowClobber -Force -ErrorAction Stop
+                Install-Module -Name Az -Repository PSGallery -AllowClobber -Force -ErrorAction Stop
                 Write-Verbose -Message "Installed latest version of Az module."
             }
 
@@ -915,16 +915,16 @@ function Request-AzPowerShellModule {
                             -ErrorAction SilentlyContinue
                 } catch {
                     Write-Error `
-                            -Message "Unable to uninstall the GA version of the Az.Storage module in favor of the preview version (1.11.1-preview)." `
+                            -Message "Unable to uninstall the existing Az.Storage module which has a version lower than 2.0.0." `
                             -ErrorAction Stop
                 }
 
                 Install-Module `
                         -Name Az.Storage `
+                        -Repository PSGallery `
                         -AllowClobber `
-                        -AllowPrerelease `
                         -Force `
-                        -RequiredVersion "1.11.1-preview" `
+                        -MinimumVersion "2.0.0" `
                         -SkipPublisherCheck `
                         -ErrorAction Stop
             }       
@@ -939,10 +939,8 @@ function Request-AzPowerShellModule {
 
     $storageModule = ,(Get-Module -Name Az.Storage -ListAvailable | `
         Where-Object { 
-            $_.Version -eq [Version]::new(1,8,2) -or 
-            $_.Version -eq [Version]::new(1,11,1) 
-        } | `
-        Sort-Object -Property Version -Descending)
+            $_.Version -ge [Version]::new(2,0,0) 
+        })
 
     Import-Module -ModuleInfo $storageModule[0] -Global -ErrorAction Stop
     Import-Module -Name Az.Network -Global -ErrorAction Stop
@@ -2255,7 +2253,11 @@ function New-ADAccountForStorageAccount {
     Write-Verbose -Message "ObjectType: $ObjectType"
 
     if ([System.String]::IsNullOrEmpty($Domain)) {
-        $domainInfo = Get-ADDomain
+        if ($ObjectType -ieq "ComputerAccount") {
+            $domainInfo = Get-ADDomain -Current LocalComputer
+        } else { # "ServiceLogonAccount"
+            $domainInfo = Get-ADDomain -Current LoggedOnUser
+        }
 
         $Domain = $domainInfo.DnsRoot
         $path = $domainInfo.DistinguishedName
@@ -2272,42 +2274,51 @@ function New-ADAccountForStorageAccount {
     }
 
     if (-not ($PSBoundParameters.ContainsKey("OrganizationalUnit") -or $PSBoundParameters.ContainsKey("OrganizationalUnitDistinguishedName"))) {
-        $currentUser = Get-ADUser -Identity $($Env:USERNAME) -Server $Domain
+        if ($ObjectType -ieq "ComputerAccount") {
+            $currentComputer = Get-ADComputer -Identity $($Env:COMPUTERNAME) -Server $Domain
 
-        if ($null -eq $currentUser) {
-            Write-Error -Message "Could not find user '$($Env:USERNAME)' in domain '$Domain'" -ErrorAction Stop
+            if ($null -eq $currentComputer) {
+                Write-Error -Message "Could not find computer '$($Env:COMPUTERNAME)' in domain '$Domain'" -ErrorAction Stop
+            }
+
+            $OrganizationalUnitDistinguishedName = $currentComputer.DistinguishedName.Substring($currentComputer.DistinguishedName.IndexOf(',') + 1)
+        } else { # "ServiceLogonAccount"
+            $currentUser = Get-ADUser -Identity $($Env:USERNAME) -Server $Domain
+
+            if ($null -eq $currentUser) {
+                Write-Error -Message "Could not find user '$($Env:USERNAME)' in domain '$Domain'" -ErrorAction Stop
+            }
+
+            $OrganizationalUnitDistinguishedName = $currentUser.DistinguishedName.Substring($currentUser.DistinguishedName.IndexOf(',') + 1)
         }
-
-        $OrganizationalUnit = $currentUser.DistinguishedName.Split(",") | `
-            Where-Object { $_.Substring(0, 2) -eq "OU" } | `
-            ForEach-Object { $_.Substring(3, $_.Length - 3) } | `
-            Select-Object -First 1
     }
 
-    if (-not [System.String]::IsNullOrEmpty($OrganizationalUnit)) {
+    if (-not [System.String]::IsNullOrEmpty($OrganizationalUnitDistinguishedName)) {
+        $ou = Get-ADOrganizationalUnit -Identity $OrganizationalUnitDistinguishedName -Server $Domain
+
+        if ($null -eq $ou) {
+            Write-Error -Message "Could not find an organizational unit with name '$OrganizationalUnitDistinguishedName' in the $Domain domain" -ErrorAction Stop
+        }
+    } elseif (-not [System.String]::IsNullOrEmpty($OrganizationalUnit)) {
         $ou = Get-ADOrganizationalUnit -Filter { Name -eq $OrganizationalUnit } -Server $Domain
 
-        #
-        # Check to see if the OU exists before proceeding.
-        #
-
-        if ($null -eq $ou)
-        {
-            Write-Error `
-                    -Message "Could not find an organizational unit with name '$OrganizationalUnit' in the $Domain domain" `
-                    -ErrorAction Stop
-        } elseif ($ou -is ([object[]])) {
-            Write-Error `
-                    -Message "Multiple OrganizationalUnits were found matching the name $OrganizationalUnit. To disambiguate the OU you want to join the storage account to, use the OrganizationalUnitDistinguishedName parameter." -ErrorAction Stop
+        if ($null -eq $ou) {
+            Write-Error -Message "Could not find an organizational unit with name '$OrganizationalUnit' in the $Domain domain" -ErrorAction Stop
         }
 
-        $path = $ou.DistinguishedName
+        if ($ou -is ([object[]])) {
+            $ouNames = $ou | Select-Object -Property DistinguishedName -ExpandProperty DistinguishedName
+            $message = [System.Text.StringBuilder]::new()
+            $message.AppendLine("Multiple OrganizationalUnits were found matching the name '$OrganizationalUnit':")
+            $ouNames | ForEach-Object { $message.AppendLine($_) }
+            $message.AppendLine("To disambiguate the OU you want to join the storage account to, use the OrganizationalUnitDistinguishedName parameter.")
+            Write-Error -Message $message.ToString() -ErrorAction Stop
+        }
+    } else {
+        Write-Error -Message "Missing parameter OrganizationalUnit or OrganizationalUnitDistinguishedName" -ErrorAction Stop
     }
     
-    if ($PSBoundParameters.ContainsKey("OrganizationalUnitDistinguishedName")) {
-        $ou = Get-ADOrganizationalUnit -Identity $OrganizationalUnitDistinguishedName -Server $Domain -ErrorAction Stop
-        $path = $OrganizationalUnitDistinguishedName
-    }
+    $path = $ou.DistinguishedName
 
     Write-Verbose "New-ADAccountForStorageAccount: Creating a AD account under $path in domain:$Domain to represent the storage account:$StorageAccountName"
 
@@ -2336,22 +2347,35 @@ function New-ADAccountForStorageAccount {
             -Server $Domain
 
     if (($null -ne $computerSpnMatch) -and ($null -ne $userSpnMatch)) {
-        Write-Error -Message "There are already two AD objects with a Service Principal Name of $spnValue in domain $Domain." -ErrorAction Stop
-    } elseif (($null -ne $computerSpnMatch) -or ($null -ne $userSpnMatch)) {
-        if (-not $OverwriteExistingADObject) {
-            Write-Error -Message "An AD object with a Service Principal Name of $spnValue already exists within AD. This might happen because you are rejoining a new storage account that shares names with an existing storage account, or if the domain join operation for a storage account failed in an incomplete state. Delete this AD object (or remove the SPN) to continue or specify a switch -OverwriteExistingADObject when calling this cmdlet. See https://docs.microsoft.com/azure/storage/files/storage-troubleshoot-windows-file-connection-problems for more information." -ErrorAction Stop
+        $message = [System.Text.StringBuilder]::new()
+        $message.AppendLine("There are already two AD objects with a Service Principal Name of $spnValue in domain $($Domain):")
+        $message.AppendLine($computerSpnMatch.DistinguishedName)
+        $message.AppendLine($userSpnMatch.DistinguishedName)
+        $message.AppendLine("It is not supported to have more than one AD object for a given Service Principal Name. Please delete the duplicated object that is not needed and retry this cmdlet.")
+        Write-Error -Message $message.ToString() -ErrorAction Stop
+    } elseif ($null -ne $computerSpnMatch) {
+        if ($ObjectType -ieq "ServiceLogonAccount") {
+            Write-Error -Message "It is not supported to create an AD object of type 'ServiceLogonAccount' when there is already an AD object '$($computerSpnMatch.DistinguishedName)' of type 'ComputerAccount'." -ErrorAction Stop
         }
 
-        if ($null -ne $computerSpnMatch) {
-            $ADObjectName = $computerSpnMatch.Name
-            $ObjectType = "ComputerAccount"
-            Write-Verbose -Message "Overwriting an existing AD $ObjectType object $ADObjectName with a Service Principal Name of $spnValue in domain $Domain."
-        } elseif ($null -ne $userSpnMatch) {
-            $ADObjectName = $userSpnMatch.Name
-            $ObjectType = "ServiceLogonAccount"
-            Write-Verbose -Message "Overwriting an existing AD $ObjectType object $ADObjectName with a Service Principal Name of $spnValue in domain $Domain."
-        } 
-    }    
+        if (-not $OverwriteExistingADObject) {
+            Write-Error -Message "An AD object '$($computerSpnMatch.DistinguishedName)' with a Service Principal Name of $spnValue already exists within AD. This might happen because you are rejoining a new storage account that shares names with an existing storage account, or if the domain join operation for a storage account failed in an incomplete state. Delete this AD object (or remove the SPN) to continue or specify a switch -OverwriteExistingADObject when calling this cmdlet. See https://docs.microsoft.com/azure/storage/files/storage-troubleshoot-windows-file-connection-problems for more information." -ErrorAction Stop
+        }
+
+        $ADObjectName = $computerSpnMatch.Name
+        Write-Verbose -Message "Overwriting an existing AD $ObjectType object $ADObjectName with a Service Principal Name of $spnValue in domain $Domain."
+    } elseif ($null -ne $userSpnMatch) {
+        if ($ObjectType -ieq "ComputerAccount") {
+            Write-Error -Message "It is not supported to create an AD object of type 'ComputerAccount' when there is already an AD object '$($userSpnMatch.DistinguishedName)' of type 'ServiceLogonAccount'." -ErrorAction Stop
+        }
+
+        if (-not $OverwriteExistingADObject) {
+            Write-Error -Message "An AD object '$($userSpnMatch.DistinguishedName)' with a Service Principal Name of $spnValue already exists within AD. This might happen because you are rejoining a new storage account that shares names with an existing storage account, or if the domain join operation for a storage account failed in an incomplete state. Delete this AD object (or remove the SPN) to continue or specify a switch -OverwriteExistingADObject when calling this cmdlet. See https://docs.microsoft.com/azure/storage/files/storage-troubleshoot-windows-file-connection-problems for more information." -ErrorAction Stop
+        }
+
+        $ADObjectName = $userSpnMatch.Name
+        Write-Verbose -Message "Overwriting an existing AD $ObjectType object $ADObjectName with a Service Principal Name of $spnValue in domain $Domain."
+    }
 
     # Create the identity in Active Directory.    
     try
@@ -3856,7 +3880,7 @@ function Get-ADDnsRootFromDistinguishedName {
 
     param(
         [Parameter(Mandatory=$true)]
-        [ValidatePattern("^(CN=([a-z]|[0-9])+)((,OU=([a-z]|[0-9])+)*)((,DC=([a-z]|[0-9])+)+)$")]
+        [ValidatePattern("^(CN=([a-z]|[0-9]|[ .])+)((,OU=([a-z]|[0-9]|[ .])+)*)((,DC=([a-z]|[0-9]|[ .])+)+)$")]
         [string]$DistinguishedName
     )
 
@@ -3865,7 +3889,7 @@ function Get-ADDnsRootFromDistinguishedName {
             Where-Object { $_.Substring(0, 2) -eq "DC" } | `
             ForEach-Object { $_.Substring(3, $_.Length - 3) }
 
-        $sb = [StringBuilder]::new()
+        $sb = [System.Text.StringBuilder]::new()
 
         for($i = 0; $i -lt $dcPath.Length; $i++) {
             if ($i -gt 0) {
