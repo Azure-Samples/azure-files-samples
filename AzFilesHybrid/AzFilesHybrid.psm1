@@ -2195,8 +2195,17 @@ function Get-ServicePrincipalName {
     )
 
     $storageAccountObject = Get-AzStorageAccount -ResourceGroup $resourceGroupName -Name $storageAccountName
+
+    if ($null -eq $storageAccountObject) {
+        Write-Error "Cannot find storage account '$storageAccountName' in resource group '$resourceGroupName'" -ErrorAction Stop
+    }
+
     $servicePrincipalName = $storageAccountObject.PrimaryEndpoints.File -replace 'https://','cifs/'
-    $servicePrincipalName = $servicePrincipalName.Substring(0, $servicePrincipalName.Length - 1);
+    $servicePrincipalName = $servicePrincipalName.TrimEnd('/')
+
+    if ([string]::IsNullOrEmpty($servicePrincipalName)) {
+        Write-Error "Unable to generate the service principal name from the storage account's file endpoint '$($storageAccountObject.PrimaryEndpoints.File)'" -ErrorAction Stop
+    }
 
     Write-Verbose "Generating service principal name of $servicePrincipalName"
     return $servicePrincipalName;
