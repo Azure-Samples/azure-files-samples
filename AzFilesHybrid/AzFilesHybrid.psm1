@@ -2628,8 +2628,6 @@ function Get-CmdKeyTarget {
 
         $output = cmdkey.exe /list
 
-        Write-Verbose "cmdkey output $($output.Length) lines"
-
         $target = New-Object PSObject
 
         $targetFound = $false
@@ -2639,6 +2637,7 @@ function Get-CmdKeyTarget {
         foreach ($line in $output)
         {
             Write-Verbose $line
+            $line = $line.Trim()
 
             #
             # Target: Domain:target=account.file.core.windows.net
@@ -2648,24 +2647,27 @@ function Get-CmdKeyTarget {
 
             if ($line.StartsWith("Target:") -and $line.EndsWith("target=$TargetName"))
             {
+                Write-Verbose "Found target $line"
                 $propName = "Target"
                 $propValue = $line.Substring($propName.Length + 1).Trim()
 
-                Add-Member -InputObject $target -MemberType NoteProperty -Name propName -Value $propValue
+                Add-Member -InputObject $target -MemberType NoteProperty -Name $propName -Value $propValue -ErrorAction Stop
                 $targetFound = $True
             }
             elseif ($targetFound -and $line.StartsWith("Type:"))
             {
+                Write-Verbose "Found type $line"
                 $propName = "Type"
                 $propValue = $line.Substring($propName.Length + 1).Trim()
-                Add-Member -InputObject $target -MemberType NoteProperty -Name propName -Value $propValue
+                Add-Member -InputObject $target -MemberType NoteProperty -Name $propName -Value $propValue -ErrorAction Stop
                 $typeFound = $True
             }
             elseif ($targetFound -and $typeFound -and $line.StartsWith("User:"))
             {
+                Write-Verbose "Found user $line"
                 $propName = "User"
                 $propValue = $line.Substring($propName.Length + 1).Trim()
-                Add-Member -InputObject $target -MemberType NoteProperty -Name propName -Value $propValue
+                Add-Member -InputObject $target -MemberType NoteProperty -Name $propName -Value $propValue -ErrorAction Stop
                 $userFound = $True
                 break
             }
@@ -2674,6 +2676,13 @@ function Get-CmdKeyTarget {
         if (-not $userFound)
         {
             $target = $null
+        }
+        else
+        {
+            Write-Verbose "Found target object"
+            Write-Verbose "Target: $($target.Target)"
+            Write-Verbose "Type: $($target.Type)"
+            Write-Verbose "User: $($target.User)"
         }
 
         return $target
@@ -2783,7 +2792,7 @@ function Get-AzStorageKerberosTicketStatus {
                 }
                 else
                 {
-                    Write-Verbose "Will delete the cached credential for $($target.Target)"
+                    Write-Verbose "Executing 'cmdkey.exe /delete:$($target.Target)'"
 
                     cmdkey.exe /delete:$($target.Target)
                     
