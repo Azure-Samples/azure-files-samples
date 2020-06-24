@@ -2612,6 +2612,73 @@ function Get-AzStorageAccountADObject {
     }
 }
 
+function Get-CmdKeyTarget {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$True, Position=0, HelpMessage="CmdKey target name to search, e.g., account.file.core.windows.net")]
+        [string]$TargetName
+    )
+
+    begin {
+        Assert-IsWindows
+    }
+
+    Process {
+        Write-Verbose "Looking for cached credential for $TargetName"
+
+        $output = cmdkey.exe /list
+
+        Write-Verbose "cmdkey output $($output.Length) lines"
+
+        $target = New-Object PSObject
+
+        $targetFound = $false
+        $typeFound = $false
+        $userFound = $false
+
+        foreach ($line in $output)
+        {
+            Write-Verbose $line
+
+            #
+            # Target: Domain:target=account.file.core.windows.net
+            # Type: Domain Password
+            # User: Azure\account
+            #
+
+            if ($line.StartsWith("Target:") -and $line.EndsWith("target=$TargetName"))
+            {
+                $propName = "Target"
+                $propValue = $line.Substring($propName.Length + 1).Trim()
+
+                Add-Member -InputObject $target -MemberType NoteProperty -Name propName -Value $propValue
+                $targetFound = $True
+            }
+            elseif ($targetFound -and $line.StartsWith("Type:"))
+            {
+                $propName = "Type"
+                $propValue = $line.Substring($propName.Length + 1).Trim()
+                Add-Member -InputObject $target -MemberType NoteProperty -Name propName -Value $propValue
+                $typeFound = $True
+            }
+            elseif ($targetFound -and $typeFound -and $line.StartsWith("User:"))
+            {
+                $propName = "User"
+                $propValue = $line.Substring($propName.Length + 1).Trim()
+                Add-Member -InputObject $target -MemberType NoteProperty -Name propName -Value $propValue
+                $userFound = $True
+                break
+            }
+        }
+
+        if (-not $userFound)
+        {
+            $target = $null
+        }
+
+        return $target
+    }
+}
 
 function Get-AzStorageKerberosTicketStatus {
     <#
@@ -2696,6 +2763,41 @@ function Get-AzStorageKerberosTicketStatus {
                     https://docs.microsoft.com/en-us/windows/security/threat-protection/security-policy-settings/network-security-configure-encryption-types-allowed-for-kerberos" `
                     -ErrorAction Stop
 
+            }
+            elseif ($line -match "0x80090303")
+            {
+                #
+                # SEC_E_TARGET_UNKNOWN
+                # klist failed with 0x80090303/-2146893053: The specified target is unknown or unreachable
+                #
+
+                Write-Verbose "ERROR: $line"
+
+                $targetName = $spnValue.Split('/')[1]
+
+                $target = Get-CmdKeyTarget -TargetName $targetName
+
+                if ($null -eq $target)
+                {
+                    Write-Error "Unable to find the cached credential for $targetName. Original klist error 0x80090303 is unexpected." -ErrorAction Stop
+                }
+                else
+                {
+                    Write-Verbose "Will delete the cached credential for $($target.Target)"
+
+                    cmdkey.exe /delete:$($target.Target)
+                    
+                    $target = Get-CmdKeyTarget -TargetName $targetName
+
+                    if ($null -ne $target)
+                    {
+                        Write-Error "Unable to delete the cached credential for $($target.Target). Please manually delete it and retry this cmdlet." -ErrorAction Stop
+                    }
+
+                    Write-Verbose "Retrying Get-AzStorageKerberosTicketStatus with storageAccountName $storageAccountName and resourceGroupName $resourceGroupName"
+
+                    return Get-AzStorageKerberosTicketStatus -storageAccountName $storageAccountName -resourceGroupName $resourceGroupName
+                }
             }
             elseif ($line -match "^#\d")
             {
