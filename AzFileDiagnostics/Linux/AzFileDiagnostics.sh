@@ -154,8 +154,6 @@ KERVER=''
 command -v lsb_release >/dev/null 2>&1  && DISTNAME=$(lsb_release -i | cut -d : -f 2) || DISTNAME=$(cat /etc/*release | grep \\bNAME= | cut -d = -f 2)
 command -v lsb_release >/dev/null 2>&1  && DISTVER=$(lsb_release -r |  grep -o  [0-9\\.]\\+ )  || DISTVER=$(cat /etc/*release | grep \\bVERSION_ID= | grep -o  [0-9\\.]\\+)
 
-#DISTNAME=$(cat /etc/*release | grep \\bNAME= | cut -d = -f 2)
-#DISTVER=$(cat /etc/*release | grep \\bVERSION_ID= | grep -o  [0-9\\.]\\+)
 KERVER=$(uname -r | cut -d - -f 1)
 KERVEREXTRA=$(uname -r)
 
@@ -172,7 +170,7 @@ case $DISTNAME  in
 		if ( ver_lt $DISTVER '8' ); then
 			print_log "We recommend running following Linux Distributions: Ubuntu Server 18.04+ | RHEL 8+ | CentOS 7.6+ | Debian 9 | openSUSE 15+ | SUSE Linux Enterprise Server 15, please refer to https://docs.microsoft.com/en-us/azure/storage/files/storage-how-to-use-files-linux for more information" "warning"
 		fi
-		#kernle version check
+		#kernel version check
 		if ( ! ver_lt $DISTVER '8' ); then
 			if ( ver_lt $KERVER '4.18.0'); then
 				print_log "For RHEL 8, we recommend running Kernel with version 4.18.0+" "warning"
@@ -185,7 +183,7 @@ case $DISTNAME  in
 			print_log "We recommend running following Linux Distributions: Ubuntu Server 18.04+ | RHEL 8+ | CentOS 7.6+ | Debian 9 | openSUSE 15+ | SUSE Linux Enterprise Server 15, please refer to https://docs.microsoft.com/en-us/azure/storage/files/storage-how-to-use-files-linux for more information" "warning"
 		fi
 
-		#kernle version check
+		#kernel version check
 		if ( ver_gt $DISTVER '7.5' ); then
 			if ( ver_lt $DISTVER '7.7' ); then
 				if ( ver_lt $KERVER '3.10.0'); then
@@ -201,20 +199,20 @@ case $DISTNAME  in
 			print_log "We recommend running following Linux Distributions: Ubuntu Server 18.04+ | RHEL 8+ | CentOS 7.6+ | Debian 9 | openSUSE 15+ | SUSE Linux Enterprise Server 15, please refer to https://docs.microsoft.com/en-us/azure/storage/files/storage-how-to-use-files-linux for more information" "warning"
 		fi
 
-		# kernle version check for ubuntu 18.04
+		# kernel version check for ubuntu 18.04
 		if ( ver_gt $DISTVER '18.03' ); then
 			if ( ver_lt $DISTVER '18.05' ); then
 				echo "Current Kernel version is: $KERVER"
-				if ( ver_lt $KERVER '4.18.0'); then
+				if ( ver_lt $KERVER '5.0.0'); then
 					print_log "For Ubuntu 18.04, We recommend running Ubuntu Kernel with version 4.18.0+" "warning"
 				fi
 			fi
 		fi
 
-		#kernle version check for ubuntu 19.04
+		#kernel version check for ubuntu 19.04
 		if ( ver_gt $DISTVER '19.03' ); then
 			if ( ver_lt $DISTVER '19.05' ); then
-				if ( ver_lt $KERVER '5.0.1'); then
+				if ( ver_lt $KERVER '5.0.0'); then
 					print_log "For Ubuntu 19.04, we recommend running Ubuntu Kernel with version 5.0.0+" "warning"
 				fi
 			fi
@@ -226,7 +224,7 @@ case $DISTNAME  in
 			print_log "We recommend running following Linux Distributions: Ubuntu Server 18.04+ | RHEL 8+ | CentOS 7.6+ | Debian 9 | openSUSE 15+ | SUSE Linux Enterprise Server 15, please refer to https://docs.microsoft.com/en-us/azure/storage/files/storage-how-to-use-files-linux for more information" "warning"
 		fi
 
-		#kernle version check
+		#kernel version check
 		if ( ! ver_lt $DISTVER '15' ); then
 			if ( ver_lt $KERVER '4.12.14'); then
 				print_log "For SUSE 15, we recommend running Kernel with version 4.12.14+" "warning"
@@ -245,7 +243,7 @@ case $DISTNAME  in
 			print_log "We recommend running following Linux Distributions: Ubuntu Server 18.04+ | RHEL 8+ | CentOS 7.6+ | Debian 9 | openSUSE 15+ | SUSE Linux Enterprise Server 15, please refer to https://docs.microsoft.com/en-us/azure/storage/files/storage-how-to-use-files-linux for more information" "warning"
 		fi
 
-		#kernle version check
+		#kernel version check
 		if ( ver_gt $DISTVER '8' ); then
 			if ( ver_lt $DISTVER '10' ); then
 				if ( ver_lt $KERVER '4.19.0'); then
@@ -355,7 +353,7 @@ fi
 
 ## Check if system has fix for known idle timeout/reconnect issues, not terminate error though.
 print_log "Check if client has been patched with the recommended kernel update for idle timeout issue"
-if ( ( [[  "$KERVER" == "4.9" ]] ) && ( ver_gt "$KERVER"  "4.9" ) ) || ( ( ver_gt "$KERVER"  "4.8.16" ) &&  ( [[  "$KERVER" ==  "4.8.16" ]] ) ) || ( ( ver_gt "$KERVER"  "4.4.40" )  &&  ( [[  "$KERVER" ==  "4.4.40"  ]]) )  || ( ver_gt "$KERVER" "4.10.0" ); then
+if ( ver_gt "$KERVER" "4.9.99" ); then
 	print_log "Kernel has been patched with the fixes that prevent idle timeout issues" "info"
 else
 	print_log "Kernel has not been patched with the fixes that prevent idle timeout issues, more information, please refer to https://docs.microsoft.com/en-us/azure/storage/storage-troubleshoot-linux-file-connection-problems#mount-error112-host-is-down-because-of-a-reconnection-time-out" "warning"
@@ -462,7 +460,7 @@ if [ "$SMB3" -eq 1 ]; then
 			wget -U firefox -qO "./$LOGDIR/$xmlfile"  "$RET"
 		fi
 
-		## some Linuux distributions do no have GNU version AWK installed. MAWK does not support bitwise operation. Use a bash version as a workaround although it is a bit slower than gawk.     
+		## some Linux distributions do no have GNU version AWK installed. MAWK does not support bitwise operation. Use a bash version as a workaround although it is a bit slower than gawk.     
 		IPREGION=''
 		awk -V >/dev/null 2>&1 
 
@@ -702,13 +700,14 @@ command="mount -t cifs "$UNCPATH"  "$mountpoint" -o vers=3.0,username="$username
 print_log "Try with mounting share using SMB3.0"
 print_log "$command" "info"
 sudo sh -c "$command" 2>/tmp/mount.error
+cat /tmp/mount.error
 
 if [[ $? -gt 0 ]] ;then
 	echo "Fail to mount with SMB3.0"
 
 	grep "Permission denied" /tmp/mount.error >/dev/null 2>&1
 	if [ $? -eq 0 ]; then
-		#SMB 3.0, provilde hints to Cx
+		#SMB 3.0, provide hints to Cx
 		echo "The Azure file share failed to mount with mount error (13): Permission denied"
 		echo "This could be due to a number of reasons."
 		echo "To resolve this issue, follow the steps in the Azure Files troubleshooting guide: https://docs.microsoft.com/en-us/azure/storage/files/storage-troubleshoot-linux-file-connection-problems#mount-error13-permission-denied-when-you-mount-an-azure-file-share"
@@ -726,7 +725,7 @@ if [[ $? -gt 0 ]];then
 
 	grep "Permission denied" /tmp/mount.error >/dev/null 2>&1
 	if [ $? -eq 0 ]; then
-		#SMB 2.1, provilde hints to Cx
+		#SMB 2.1, provide hints to Cx
 		echo "The Azure file share failed to mount with mount error (13): Permission denied"
 		echo "This could be due to a number of reasons."
 		echo "To resolve this issue, follow the steps in the Azure Files troubleshooting guide: https://docs.microsoft.com/en-us/azure/storage/files/storage-troubleshoot-linux-file-connection-problems#mount-error13-permission-denied-when-you-mount-an-azure-file-share"
