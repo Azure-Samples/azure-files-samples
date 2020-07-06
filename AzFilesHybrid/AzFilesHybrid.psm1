@@ -2304,16 +2304,16 @@ function New-ADAccountForStorageAccount {
     }
 
     if (-not [System.String]::IsNullOrEmpty($OrganizationalUnitDistinguishedName)) {
-        $ou = Get-ADOrganizationalUnit -Identity $OrganizationalUnitDistinguishedName -Server $Domain
+        $ou = Get-ADObject -Identity $OrganizationalUnitDistinguishedName -Server $Domain
 
         if ($null -eq $ou) {
-            Write-Error -Message "Could not find an organizational unit with name '$OrganizationalUnitDistinguishedName' in the $Domain domain" -ErrorAction Stop
+            Write-Error -Message "Could not find an object with name '$OrganizationalUnitDistinguishedName' in the $Domain domain" -ErrorAction Stop
         }
     } elseif (-not [System.String]::IsNullOrEmpty($OrganizationalUnit)) {
-        $ou = Get-ADOrganizationalUnit -Filter "Name -eq '$OrganizationalUnit'" -Server $Domain
+        $ou = Get-ADObject -Filter "Name -eq '$OrganizationalUnit'" -Server $Domain
 
         if ($null -eq $ou) {
-            Write-Error -Message "Could not find an organizational unit with name '$OrganizationalUnit' in the $Domain domain" -ErrorAction Stop
+            Write-Error -Message "Could not find an object with name '$OrganizationalUnit' in the $Domain domain" -ErrorAction Stop
         }
 
         if ($ou -is ([object[]])) {
