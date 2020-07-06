@@ -1438,7 +1438,7 @@ function Register-OfflineMachine {
 
         if (![string]::IsNullOrEmpty($MachineName)) {
             $computer = Get-ADComputerInternal `
-                    -Filter "Name -eq `"$MachineName`"" `
+                    -Filter "Name -eq '$MachineName'" `
                     -Server $Domain
 
             if ($null -ne $computer) {
@@ -2310,7 +2310,7 @@ function New-ADAccountForStorageAccount {
             Write-Error -Message "Could not find an organizational unit with name '$OrganizationalUnitDistinguishedName' in the $Domain domain" -ErrorAction Stop
         }
     } elseif (-not [System.String]::IsNullOrEmpty($OrganizationalUnit)) {
-        $ou = Get-ADOrganizationalUnit -Filter { Name -eq $OrganizationalUnit } -Server $Domain
+        $ou = Get-ADOrganizationalUnit -Filter "Name -eq '$OrganizationalUnit'" -Server $Domain
 
         if ($null -eq $ou) {
             Write-Error -Message "Could not find an organizational unit with name '$OrganizationalUnit' in the $Domain domain" -ErrorAction Stop
@@ -2349,11 +2349,11 @@ function New-ADAccountForStorageAccount {
 
     # Check to see if SPN already exists
     $computerSpnMatch = Get-ADComputer `
-            -Filter { ServicePrincipalNames -eq $spnValue } `
+            -Filter "ServicePrincipalNames -eq '$spnValue'" `
             -Server $Domain
 
     $userSpnMatch = Get-ADUser `
-            -Filter { ServicePrincipalNames -eq $spnValue } `
+            -Filter "ServicePrincipalNames -eq '$spnValue'" `
             -Server $Domain
 
     if (($null -ne $computerSpnMatch) -and ($null -ne $userSpnMatch)) {
@@ -2565,12 +2565,12 @@ function Get-AzStorageAccountADObject {
 
             $obj = Get-ADObject `
                 -Server $Domain `
-                -Filter { objectSID -eq $sid } `
+                -Filter "objectSID -eq '$sid'" `
                 -ErrorAction Stop
         } else {
             $obj = Get-ADObject `
                 -Server $Domain `
-                -Filter { Name -eq $ADObjectName } `
+                -Filter "Name -eq '$ADObjectName'" `
                 -ErrorAction Stop
         }
 
@@ -5002,7 +5002,7 @@ function Confirm-AzDnsForwarderPreReqs {
     # Check computer names
     # not sure that the actual boundary conditions (greater than 999) being tested.
     $filterCriteria = ($DnsForwarderRootName + "-*")
-    $incrementorSeed = Get-ADComputerInternal -Filter { Name -like $filterCriteria } | 
+    $incrementorSeed = Get-ADComputerInternal -Filter "Name -like '$filterCriteria'" | 
         Select-Object Name, 
             @{ 
                 Name = "Incrementor"; 
