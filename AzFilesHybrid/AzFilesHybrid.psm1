@@ -2169,6 +2169,42 @@ function Ensure-KerbKeyExists {
     }
 }
 
+function Get-AzStorageAccountFileEndpoint {
+    <#
+    .SYNOPSIS
+        Gets the file service endpoint for the storage account.
+    
+    .DESCRIPTION
+        Gets the file service endpoint for the storage account.
+        Notably, this command queries the storage account's file endpoint URL
+        (i.e. "https://<storageAccount>.file.core.windows.net/") and returns it.
+    .EXAMPLE
+        PS C:\> Get-AzStorageAccountFileEndpoint -storageAccountName "storageAccount" -resourceGroupName "resourceGroup"
+        https://<storageAccount>.file.core.windows.net/
+    #>
+
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory=$True, Position=0, HelpMessage="Storage account name")]
+        [string]$StorageAccountName,
+
+        [Parameter(Mandatory=$True, Position=1, HelpMessage="Resource group name")]
+        [string]$ResourceGroupName
+    )
+
+    $storageAccountObject = Get-AzStorageAccount -ResourceGroup $resourceGroupName -Name $storageAccountName
+
+    if ($null -eq $storageAccountObject) {
+        Write-Error "Cannot find storage account '$storageAccountName' in resource group '$resourceGroupName'" -ErrorAction Stop
+    }
+
+    if ([string]::IsNullOrEmpty($storageAccountObject.PrimaryEndpoints.File)) {
+        Write-Error "Cannot find the file service endpoint for storage account '$storageAccountName' in resource group '$resourceGroupName'. This may happen if the storage account type does not support file service (https://docs.microsoft.com/en-us/azure/storage/common/storage-account-overview#types-of-storage-accounts)." -ErrorAction Stop
+    }
+
+    return $storageAccountObject.PrimaryEndpoints.File
+}
+
 function Get-ServicePrincipalName {
     <#
     .SYNOPSIS
@@ -2194,20 +2230,16 @@ function Get-ServicePrincipalName {
         [string]$resourceGroupName
     )
 
-    $storageAccountObject = Get-AzStorageAccount -ResourceGroup $resourceGroupName -Name $storageAccountName
+    $fileEndpoint = Get-AzStorageAccountFileEndpoint -ResourceGroupName $resourceGroupName -StorageAccountName $storageAccountName -ErrorAction Stop
 
-    if ($null -eq $storageAccountObject) {
-        Write-Error "Cannot find storage account '$storageAccountName' in resource group '$resourceGroupName'" -ErrorAction Stop
-    }
-
-    $servicePrincipalName = $storageAccountObject.PrimaryEndpoints.File -replace 'https://','cifs/'
+    $servicePrincipalName = $fileEndpoint -replace 'https://','cifs/'
     $servicePrincipalName = $servicePrincipalName.TrimEnd('/')
 
     if ([string]::IsNullOrEmpty($servicePrincipalName)) {
-        Write-Error "Unable to generate the service principal name from the storage account's file endpoint '$($storageAccountObject.PrimaryEndpoints.File)'" -ErrorAction Stop
+        Write-Error "Unable to generate the service principal name from the storage account's file endpoint '$fileEndpoint'" -ErrorAction Stop
     }
 
-    Write-Verbose "Generating service principal name of $servicePrincipalName"
+    Write-Verbose "Generated service principal name of $servicePrincipalName"
     return $servicePrincipalName;
 }
 
@@ -2832,9 +2864,9 @@ function Test-Port445Connectivity
         # Test-NetConnection -ComputerName <storageAccount>.file.core.windows.net -Port 445
         #
 
-        $storageAccountObject = Get-AzStorageAccount -ResourceGroup $resourceGroupName -Name $storageAccountName;
+        $fileEndpoint = Get-AzStorageAccountFileEndpoint -ResourceGroupName $resourceGroupName -StorageAccountName $storageAccountName -ErrorAction Stop
 
-        $endpoint = $storageAccountObject.PrimaryEndpoints.File -replace 'https://', ''
+        $endpoint = $fileEndpoint -replace 'https://', ''
         $endpoint = $endpoint -replace '/', ''
 
         Write-Verbose "Executing 'Test-NetConnection -ComputerName $endpoint -Port 445'"
