@@ -2,6 +2,11 @@
 
 The AzFileDiagnostics script automates detection of most of the common symptoms mentioned in the [Azure Files troubleshooting guide](https://docs.microsoft.com/azure/storage/files/storage-troubleshoot-linux-file-connection-problems) and helps set up your environment to get optimal performance. 
 
+# How to download the script
+
+- Go to: https://github.com/Azure-Samples/azure-files-samples
+- Click **Code** and then click **Download ZIP.**
+
 # How to run the script
 
 Script can run without any parameter and it will perform basic validations without needing Storage account information:
