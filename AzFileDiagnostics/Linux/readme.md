@@ -4,12 +4,12 @@ The AzFileDiagnostics script automates detection of most of the common symptoms 
 
 # How to run the script
 
-Script can run without any parameter and it will perform basic validations without needing Storage account information
+Script can run without any parameter and it will perform basic validations without needing Storage account information:
 
 | Bash AzFileDiagnostics.sh. ./ AzFileDiagnostics.sh |
 | --- |
 
-Alternatively, you can specify optional parameters when running the script if you wish to perform validations against a specific storage account
+Alternatively, you can specify optional parameters when running the script if you wish to perform validations against a specific storage account:
 
 Example 1:
 
