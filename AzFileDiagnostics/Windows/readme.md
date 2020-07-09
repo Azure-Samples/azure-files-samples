@@ -1,1 +1,2 @@
+#  AzFileDiagnostics script for Windows
 
