@@ -2,6 +2,13 @@
 
 The AzFileDiagnostics script automates detection of most of the common symptoms mentioned in the [Azure Files troubleshooting guide](https://docs.microsoft.com/azure/storage/files/storage-troubleshoot-windows-file-connection-problems) and helps set up your environment to get optimal performance. 
 
+# How to run the script
+
+Script can run without any parameter and it will perform basic validations without needing Storage account information
+
+| .\AzFileDiagnostics.ps1 |
+| --- |
+
 Alternatively, you can specify optional parameters when running the script if you wish to perform validations against a specific storage account
 
 Example 1:
