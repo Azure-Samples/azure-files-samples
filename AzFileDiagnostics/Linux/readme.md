@@ -1,4 +1,4 @@
-#  Azure File Storage is Microsoft Azure&#39;s fully managed file share solution in the cloud.
+#  AzFileDiagnostics script for Linux
 
 _This Script validates most of the known issues as described in Azure File service troubleshooter _[https://docs.microsoft.com/en-us/azure/storage/files/storage-troubleshoot-linux-file-connection-problems](https://docs.microsoft.com/en-us/azure/storage/files/storage-troubleshoot-linux-file-connection-problems)_. alongside other client configuration issues which would cause access failure for Azure Files and give prescriptive guidance on fixing these issues. It can also map drive if you prefer to do so and collect in-depth diagnostics trace if it is turned on._
 
