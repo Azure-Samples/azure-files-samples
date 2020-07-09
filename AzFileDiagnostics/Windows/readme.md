@@ -37,7 +37,7 @@ _NOTE: EnvironmentName specifies the Azure environment. Valid values are: AzureC
 | -FileShareName | Specify the file share name and script will validate the file share name convention. |
 | -Environmentname | Specifies the Azure environment. Valid values are AzureCloud, AzureChinaCloud, AzureUSGovernment. The default is AzureCloud. |
 
-## Validations Preformed:
+## Validations Preformed
 
 - Validation of OS version: OS version is Windows 7 and Windows Server 2008 R2 and above versions of Windows
 
@@ -55,11 +55,11 @@ _NOTE: EnvironmentName specifies the Azure environment. Valid values are: AzureC
 
 - Firewall: Validates if local firewall rules are not blocking the connectivity to Azure Files
 
-## Sample Output:
+## Sample Output
 
   ![](./images/img1.png)
 
-## Feedback:
+## Feedback
 
 If there are additional troubleshooting topics for Azure Files that you would like to see, please reach out to our [MSDN forum](http://social.msdn.microsoft.com/Forums/windowsazure/en-US/home?forum=windowsazuredata).
 
