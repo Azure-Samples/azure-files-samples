@@ -6,6 +6,7 @@ The AzFileDiagnostics script automates detection of most of the common symptoms 
 
 - Go to: https://github.com/Azure-Samples/azure-files-samples
 - Click **Code** and then click **Download ZIP.**
+- Open the **azure-files-samples-master.zip** file and the script is located in the **AzFileDiagnostics\Linux** directory.
 
 ## How to run the script
 
