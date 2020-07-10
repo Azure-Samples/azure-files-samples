@@ -38,8 +38,8 @@ Example 1:
 
 | Parameter | Description |
 |-|-|
-| -UNCPath | Azure File share UNC path like storageaccount.file.core.windows.net\sharename. |
-| -StorageAccountName | Storage Account name where the Azure file share is located. Script will validate the storage naming convention. |
+| -UNCPath | Azure file share UNC path like storageaccount.file.core.windows.net\sharename. |
+| -StorageAccountName | Storage account name where the Azure file share is located. Script will validate the storage naming convention. |
 | -FileShareName | Specify the file share name and script will validate the file share name convention. |
 | -Environmentname | Specifies the Azure environment. Valid values are AzureCloud, AzureChinaCloud, AzureUSGovernment. The default is AzureCloud. |
 
