@@ -27,7 +27,7 @@ Example 1:
 | sudo bash AzFileDiagnostics.sh -a storageaccountname -s sharename -e AzureCloud |
 | --- |
 
-_NOTE: EnvironmentName specifies the Azure environment. Valid values are: AzureCloud, AzureChinaCloud, AzureUSGovernment. The default is AzureCloud._
+**Note:** EnvironmentName specifies the Azure environment. Valid values are: AzureCloud, AzureChinaCloud, AzureUSGovernment. The default is AzureCloud.
 
 ## Parameters
 
