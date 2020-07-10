@@ -19,12 +19,12 @@ Alternatively, you can specify optional parameters when running the script if yo
 
 Example 1:
 
-| bash AzFileDiagnostics.sh -u //filediag.file.core.windows.net/fileshare |
+| bash AzFileDiagnostics.sh -u //storageaccountname.file.core.windows.net/sharename |
 | --- |
 
  Example 2:
 
-| bash AzFileDiagnostics.sh -a filediag -s dir -e AzureCloud |
+| bash AzFileDiagnostics.sh -a storageaccountname -s sharename -e AzureCloud |
 | --- |
 
 _NOTE: EnvironmentName specifies the Azure environment. Valid values are: AzureCloud, AzureChinaCloud, AzureUSGovernment. The default is AzureCloud._
@@ -33,14 +33,14 @@ _NOTE: EnvironmentName specifies the Azure environment. Valid values are: AzureC
 
 | Parameter | Description |
 |-|-|
-| -u | Azure File share UNC path like storageaccount.file.core.windows.net\sharename.  |
+| -u | Azure File share UNC path like //storageaccountname.file.core.windows.net/sharename. |
 | -a | Storage Account name where the Azure file share is located. Script will validate the storage naming convention. |
 | -s | Specify the file share name and script will validate the file share name convention. |
 | -e | Specifies the Azure environment. Valid values are AzureCloud, AzureChinaCloud, AzureUSGovernment. The default is AzureCloud. |
 
 ## Validations Preformed
 
-- Verify of Linux distributions: We recommend running following Linux Distributions: Ubuntu Server 14.04+ | RHEL 7+ | CentOS 7+ | Debian 8 | openSUSE 13.2+ | SUSE Linux Enterprise Server 12.
+- Verify Linux distributions. We recommend running the following Linux distributions: Ubuntu Server 14.04+ | RHEL 7+ | CentOS 7+ | Debian 8 | openSUSE 13.2+ | SUSE Linux Enterprise Server 12.
 
 - Verify CIFS utils is installed.
 
