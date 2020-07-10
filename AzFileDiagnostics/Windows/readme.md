@@ -2,32 +2,38 @@
 
 The AzFileDiagnostics script automates detection of most of the common symptoms mentioned in the [Azure Files troubleshooting guide](https://docs.microsoft.com/azure/storage/files/storage-troubleshoot-windows-file-connection-problems) and mounts the file share on the client machine. 
 
-## How to download the script
+## How to download the PowerShell script
 
 - Go to: https://github.com/Azure-Samples/azure-files-samples
 - Click **Code** and then click **Download ZIP.**
 - Open the **azure-files-samples-master.zip** file and the script is located in the **AzFileDiagnostics\Windows** directory.
 
-## How to run the script
+## How to run the PowerShell script
+
+> [!Note]  
+> To run the AzFileDiagnostics script, launch PowerShell as an administrator. 
 
 The script can run without any parameter and it will perform basic validations without needing storage account information:
 
-| .\AzFileDiagnostics.ps1 |
-| --- |
+```powershell
+.\AzFileDiagnostics.ps1
+```
 
 Alternatively, you can specify optional parameters when running the script if you wish to perform validations against a specific storage account:
 
 Example 1:
 
-| .\AzFileDiagnostics.ps1 -UNCPath \\\\storageaccountname.file.core.windows.net\sharename  |
-| --- |
+```powershell
+.\AzFileDiagnostics.ps1 -UNCPath \\storageaccountname.file.core.windows.net\sharename
+```
 
  Example 2:
 
-| .\AzFileDiagnostics.ps1 -StorageAccountName <SA name> -FileShareName <share name> -Environmentname <AzureCloud> |
-| --- |
+```powershell
+.\AzFileDiagnostics.ps1 -StorageAccountName <name> -FileShareName <name> -Environmentname AzureCloud
+```
 
-_NOTE: EnvironmentName specifies the Azure environment. Valid values are: AzureCloud, AzureChinaCloud, AzureUSGovernment. The default is AzureCloud._
+_NOTE: Environmentname specifies the Azure environment. Valid values are: AzureCloud, AzureChinaCloud, AzureUSGovernment. The default is AzureCloud._
 
 ## Parameters
 
