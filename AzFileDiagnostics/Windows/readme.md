@@ -1,11 +1,12 @@
 #  AzFileDiagnostics script for Windows
 
-The AzFileDiagnostics script automates detection of most of the common symptoms mentioned in the [Azure Files troubleshooting guide](https://docs.microsoft.com/azure/storage/files/storage-troubleshoot-windows-file-connection-problems) and helps set up your environment to get optimal performance. 
+The AzFileDiagnostics script automates detection of most of the common symptoms mentioned in the [Azure Files troubleshooting guide](https://docs.microsoft.com/azure/storage/files/storage-troubleshoot-windows-file-connection-problems) and mounts the file share on the client machine. 
 
 ## How to download the script
 
 - Go to: https://github.com/Azure-Samples/azure-files-samples
 - Click **Code** and then click **Download ZIP.**
+- Open the **azure-files-samples-master.zip** file and the script is located in the **AzFileDiagnostics\Windows** directory.
 
 ## How to run the script
 
