@@ -19,7 +19,7 @@ Alternatively, you can specify optional parameters when running the script if yo
 
 Example 1:
 
-| bash AzFileDiagnostics.sh -u //filediag.file.core.windows.net/dir |
+| bash AzFileDiagnostics.sh -u //filediag.file.core.windows.net/fileshare |
 | --- |
 
  Example 2:
