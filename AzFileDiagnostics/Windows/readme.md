@@ -19,7 +19,7 @@ Alternatively, you can specify optional parameters when running the script if yo
 
 Example 1:
 
-| .\AzFileDiagnostics.ps1 -UncPath \\storageaccountname.file.core.windows.net\sharename  |
+| .\AzFileDiagnostics.ps1 -UNCPath \\storageaccountname.file.core.windows.net\sharename  |
 | --- |
 
  Example 2:
@@ -40,21 +40,21 @@ _NOTE: EnvironmentName specifies the Azure environment. Valid values are: AzureC
 
 ## Validations Preformed
 
-- Validation of OS version: OS version is Windows 7 and Windows Server 2008 R2 and above versions of Windows
+- OS version: Validate OS version is Windows 7, Windows Server 2008 R2 or later. 
 
-- Validation of client SMB version: OS is running SMB 2.1 or 3.0.   
+- SMB version: Validate client supports SMB version 2.1 or 3.0.   
 
-- Validate installation of KB3114025: For clients who are running Windows 8.1 or Windows Server 2012 R2, make sure that the hotfix KB3114025 is installed.
+- Hotfix KB3114025: For Windows 8.1 or Windows Server 2012 R2 clients, check if hotfix KB3114025 is installed.
 
-- LmCompatibilityLevel setting validation: Having NTLMv1 enabled creates a less-secure client.
+- NTLM: Validate LmCompatibilityLevel registy setting is set to a value of 3. NTLMv1 is not supported.
 
-- Storage account validation: Validate that the storage account name or the complete UNC path exists.
+- Storage account: Verify the storage account name or UNC path exists.
 
-- Azure VM: If client machine is using SMB 2.x, validate client is Azure VM in the same region as storage account.
+- Azure VM: If client is using SMB 2.x, verify client is Azure VM in the same region as storage account.
 
-- For mounting from on-Prem: For mounting from on-prem client, TCP port 445 should be open in addition to having a client with SMB 3.0
+- Port 445: When mounting the Azure file share, verify TCP port 445 is not blocked.
 
-- Firewall: Validates if local firewall rules are not blocking the connectivity to Azure Files
+- Firewall: Validate local firewall rules are not blocking connectivity to Azure file share.
 
 ## Sample Output
 
