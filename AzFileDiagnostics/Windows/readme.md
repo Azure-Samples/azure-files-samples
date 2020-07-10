@@ -40,13 +40,13 @@ _NOTE: EnvironmentName specifies the Azure environment. Valid values are: AzureC
 
 ## Validations Preformed
 
-- OS version: Validate OS version is Windows 7, Windows Server 2008 R2 or later. 
+- OS version: Verify OS version is Windows 7, Windows Server 2008 R2 or later. 
 
-- SMB version: Validate client supports SMB version 2.1 or 3.0.   
+- SMB version: Verify client supports SMB version 2.1 or 3.0.   
 
-- Hotfix KB3114025: For Windows 8.1 or Windows Server 2012 R2 clients, check if hotfix KB3114025 is installed.
+- Hotfix KB3114025: For Windows 8.1 or Windows Server 2012 R2 clients, verify hotfix KB3114025 is installed.
 
-- NTLM: Validate LmCompatibilityLevel registy setting is set to a value of 3. NTLMv1 is not supported.
+- NTLM: Verify LmCompatibilityLevel registy setting is set to a value of 3. NTLMv1 is not supported.
 
 - Storage account: Verify the storage account name or UNC path exists.
 
@@ -54,15 +54,13 @@ _NOTE: EnvironmentName specifies the Azure environment. Valid values are: AzureC
 
 - Port 445: When mounting the Azure file share, verify TCP port 445 is not blocked.
 
-- Firewall: Validate local firewall rules are not blocking connectivity to Azure file share.
+- Firewall: Verify local firewall rules are not blocking connectivity to Azure file share.
+
+- If all validations pass, map the drive on behalf of the user. User can also choose turn on the diagnostics to collect more logs.
 
 ## Sample Output
 
   ![](./images/img1.png)
-
-## Feedback
-
-If there are additional troubleshooting topics for Azure Files that you would like to see, please reach out to our [MSDN forum](http://social.msdn.microsoft.com/Forums/windowsazure/en-US/home?forum=windowsazuredata).
 
 ## Disclaimer
 
