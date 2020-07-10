@@ -32,7 +32,7 @@ Example 1:
 .\AzFileDiagnostics.ps1 -StorageAccountName <name> -FileShareName <name> -Environmentname AzureCloud
 ```
 
-_NOTE: Environmentname specifies the Azure environment. Valid values are: AzureCloud, AzureChinaCloud, AzureUSGovernment. The default is AzureCloud._
+**Note:** Environmentname specifies the Azure environment. Valid values are: AzureCloud, AzureChinaCloud, AzureUSGovernment. The default is AzureCloud.
 
 ## Parameters
 
