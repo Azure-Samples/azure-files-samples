@@ -40,21 +40,21 @@ _NOTE: EnvironmentName specifies the Azure environment. Valid values are: AzureC
 
 ## Validations Preformed
 
-•             Verify of Linux distributions: We recommend running following Linux Distributions: Ubuntu Server 14.04+ | RHEL 7+ | CentOS 7+ | Debian 8 | openSUSE 13.2+ | SUSE Linux Enterprise Server 12.
+- Verify of Linux distributions: We recommend running following Linux Distributions: Ubuntu Server 14.04+ | RHEL 7+ | CentOS 7+ | Debian 8 | openSUSE 13.2+ | SUSE Linux Enterprise Server 12.
 
-•             Verify of CIFS utils is installed.
+- Verify CIFS utils is installed.
 
-•             Verify the minimum SMB/CIFS version 2.1 support on the client.
+- Verify the minimum SMB/CIFS version 2.1 is supported on the client.
 
-•             Check if SMB3 Encryption is supported or not. We have backported SMB3.0 Encryption to Ubuntu 16.4+ and SUSE 12.3+. Other distributions require kernel 4.11+
+- Check if SMB3 Encryption is supported or not. We have backported SMB3.0 Encryption to Ubuntu 16.4+ and SUSE 12.3+. Other distributions require kernel 4.11+
 
-•             Check if kernel patches for the known Idle time out issue has been installed.
+- Check if kernel patches for the known Idle time out issue has been installed.
 
-•             Verify the connectivity to storage account over TCP port 445. We dump the IPTABLES output to check if any firewall rule blocks traffic.
+- Verify the connectivity to storage account over TCP port 445. We dump the IPTABLES output to check if any firewall rule blocks traffic.
 
-•             if client does not support SMB3.0 Encryption, verify if client runs in Azure VM and is located in the same region as Storage account.
+- If client does not support SMB3.0 Encryption, verify if client runs in Azure VM and is located in the same region as Storage account.
 
-•             if all validation passes, map the drive on behalf of the user. User can choose turn on the diagnostics to collect more logs (including CIFS traces/packet traces, which are saved into MSFileMountDiagLog subfolder)
+- If all validation passes, map the drive on behalf of the user. User can choose turn on the diagnostics to collect more logs (including CIFS traces/packet traces, which are saved into MSFileMountDiagLog subfolder)
 
 ## Sample Output
 
