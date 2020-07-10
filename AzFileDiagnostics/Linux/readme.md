@@ -12,19 +12,19 @@ The AzFileDiagnostics script automates detection of most of the common symptoms 
 
 The script can run without any parameter and it will perform basic validations without needing the storage account information:
 
-| bash AzFileDiagnostics.sh |
+| sudo bash AzFileDiagnostics.sh |
 | --- |
 
 Alternatively, you can specify optional parameters when running the script if you wish to perform validations against a specific storage account:
 
 Example 1:
 
-| bash AzFileDiagnostics.sh -u //storageaccountname.file.core.windows.net/sharename |
+| sudo bash AzFileDiagnostics.sh -u //storageaccountname.file.core.windows.net/sharename |
 | --- |
 
  Example 2:
 
-| bash AzFileDiagnostics.sh -a storageaccountname -s sharename -e AzureCloud |
+| sudo bash AzFileDiagnostics.sh -a storageaccountname -s sharename -e AzureCloud |
 | --- |
 
 _NOTE: EnvironmentName specifies the Azure environment. Valid values are: AzureCloud, AzureChinaCloud, AzureUSGovernment. The default is AzureCloud._
