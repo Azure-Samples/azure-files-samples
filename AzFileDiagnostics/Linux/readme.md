@@ -34,7 +34,7 @@ _NOTE: EnvironmentName specifies the Azure environment. Valid values are: AzureC
 | Parameter | Description |
 |-|-|
 | -u | Azure File share UNC path like storageaccount.file.core.windows.net\sharename.  |
-| -a | Storage Account name providing the Azure File service. Script will validate the storage naming convention. |
+| -a | Storage Account name where the Azure file share is located. Script will validate the storage naming convention. |
 | -s | Specify the file share name and script will validate the file share name convention. |
 | -e | Specifies the Azure environment. Valid values are AzureCloud, AzureChinaCloud, AzureUSGovernment. The default is AzureCloud. |
 
