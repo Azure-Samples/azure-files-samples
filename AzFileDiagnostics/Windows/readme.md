@@ -10,8 +10,7 @@ The AzFileDiagnostics script automates detection of most of the common symptoms 
 
 ## How to run the PowerShell script
 
-> [!Note]  
-> To run the AzFileDiagnostics script, launch PowerShell as an administrator. 
+**Note:** To run the AzFileDiagnostics script, launch PowerShell as an administrator. 
 
 The script can run without any parameter and it will perform basic validations without needing storage account information:
 
