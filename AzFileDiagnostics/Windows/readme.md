@@ -19,7 +19,7 @@ Alternatively, you can specify optional parameters when running the script if yo
 
 Example 1:
 
-| .\AzFileDiagnostics.ps1 -UNCPath \\storageaccountname.file.core.windows.net\sharename  |
+| .\AzFileDiagnostics.ps1 -UNCPath \\\\storageaccountname.file.core.windows.net\sharename  |
 | --- |
 
  Example 2:
