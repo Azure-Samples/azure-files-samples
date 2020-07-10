@@ -10,7 +10,7 @@ The AzFileDiagnostics script automates detection of most of the common symptoms 
 
 ## How to run the script
 
-Script can run without any parameter and it will perform basic validations without needing Storage account information:
+The script can run without any parameter and it will perform basic validations without needing storage account information:
 
 | .\AzFileDiagnostics.ps1 |
 | --- |
@@ -34,7 +34,7 @@ _NOTE: EnvironmentName specifies the Azure environment. Valid values are: AzureC
 | Parameter | Description |
 |-|-|
 | -UNCPath | Azure File share UNC path like storageaccount.file.core.windows.net\sharename. |
-| -StorageAccountName | Storage Account name providing the Azure File service. Script will validate the storage naming convention. |
+| -StorageAccountName | Storage Account name where the Azure File share is located. Script will validate the storage naming convention. |
 | -FileShareName | Specify the file share name and script will validate the file share name convention. |
 | -Environmentname | Specifies the Azure environment. Valid values are AzureCloud, AzureChinaCloud, AzureUSGovernment. The default is AzureCloud. |
 
