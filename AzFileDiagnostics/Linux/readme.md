@@ -10,7 +10,7 @@ The AzFileDiagnostics script automates detection of most of the common symptoms 
 
 ## How to run the script
 
-Script can run without any parameter and it will perform basic validations without needing Storage account information:
+The script can run without any parameter and it will perform basic validations without needing the storage account information:
 
 | bash AzFileDiagnostics.sh |
 | --- |
@@ -19,12 +19,12 @@ Alternatively, you can specify optional parameters when running the script if yo
 
 Example 1:
 
-| bash AzFilesDiagnostics.sh -u //filediag.file.core.windows.net/dir |
+| bash AzFileDiagnostics.sh -u //filediag.file.core.windows.net/dir |
 | --- |
 
  Example 2:
 
-| bash AzFilesDiagnostics.sh -a filediag -s dir -e AzureCloud |
+| bash AzFileDiagnostics.sh -a filediag -s dir -e AzureCloud |
 | --- |
 
 _NOTE: EnvironmentName specifies the Azure environment. Valid values are: AzureCloud, AzureChinaCloud, AzureUSGovernment. The default is AzureCloud._
@@ -48,7 +48,7 @@ _NOTE: EnvironmentName specifies the Azure environment. Valid values are: AzureC
 
 - Check if SMB3 Encryption is supported or not. We have backported SMB3.0 Encryption to Ubuntu 16.4+ and SUSE 12.3+. Other distributions require kernel 4.11+
 
-- Check if kernel patches for the known Idle time out issue has been installed.
+- Check if kernel patches for the known idle time out issue has been installed.
 
 - Verify the connectivity to storage account over TCP port 445. We dump the IPTABLES output to check if any firewall rule blocks traffic.
 
@@ -59,10 +59,6 @@ _NOTE: EnvironmentName specifies the Azure environment. Valid values are: AzureC
 ## Sample Output
 
   ![](./images/img1.png)
-
-## Feedback
-
-If there are additional troubleshooting topics for Azure Files that you would like to see, please reach out to our [MSDN forum](http://social.msdn.microsoft.com/Forums/windowsazure/en-US/home?forum=windowsazuredata).
 
 ## Disclaimer
 
