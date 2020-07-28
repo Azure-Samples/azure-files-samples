@@ -2050,38 +2050,36 @@ function Validate-StorageAccount {
          [Parameter(Mandatory=$true, Position=0)]
          [string]$ResourceGroupName,
          [Parameter(Mandatory=$true, Position=1)]
-         [string]$Name
+         [string]$StorageAccountName
     )
 
     process
     {
-        # Verify the resource group exists.
-        try
-        {
-            $ResourceGroupObject = Get-AzResourceGroup -Name $ResourceGroupName -ErrorAction Stop
-        }
-        catch 
-        {
-            throw
-        }
+        $resourceGroupObject = Get-AzResourceGroup -Name $ResourceGroupName
 
-        if ($null -eq $ResourceGroupObject)
+        if ($null -eq $resourceGroupObject)
         {
-            throw "Resource group not found: '$ResourceGroup'"
+            Write-Error -Message "Resource group not found: '$ResourceGroupName'. `
+                Please check whether the provided name '$ResourceGroupName' is valid or `
+                whether the resource group exists by running 'Get-AzResourceGroup -Name <ResourceGroupName>' `
+                (https://docs.microsoft.com/en-us/azure/azure-resource-manager/management/manage-resource-groups-powershell)" `
+                -ErrorAction Stop
         }
 
-        # Verify the storage account exists.
-        Write-Verbose "Getting storage account $Name in ResourceGroup $ResourceGroupName"
-        $StorageAccountObject = Get-AzStorageAccount -ResourceGroup $ResourceGroupName -Name $Name
+        $storageAccountObject = Get-AzStorageAccount -ResourceGroup $ResourceGroupName -Name $StorageAccountName
 
-        if ($null -eq $StorageAccountObject)
+        if ($null -eq $storageAccountObject)
         {
-            throw "Storage account not found: '$StorageAccountName'"
+            Write-Error -Message "Storage account not found: '$StorageAccountName'. `
+                Please check whether the provided name '$StorageAccountName' is valid or `
+                whether the storage account exists by running 'Get-AzStorageAccount -ResourceGroup <ResourceGroupName> -Name <StorageAccountName>' `
+                (https://docs.microsoft.com/en-us/powershell/module/az.storage/get-azstorageaccount?view=azps-4.4.0)" `
+                -ErrorAction Stop
         }
 
-        Write-Verbose "Storage Account: $Name exists in Resource Group: $ResourceGroupName"
+        Write-Verbose "Found storage Account '$StorageAccountName' in Resource Group '$ResourceGroupName'"
 
-        return $StorageAccountObject
+        return $storageAccountObject
     }
 }
 
@@ -2122,9 +2120,7 @@ function Ensure-KerbKeyExists {
         }
 
         try {
-            $keys = Get-AzStorageAccountKey -ResourceGroupName $ResourceGroupName -Name $StorageAccountName `
-                 -ListKerbKey
-
+            $keys = Get-AzStorageAccountKerbKeys -ResourceGroupName $ResourceGroupName -StorageAccountName $StorageAccountName
             $kerb1Key = $keys | Where-Object { $_.KeyName -eq "kerb1" }
             $kerb2Key = $keys | Where-Object { $_.KeyName -eq "kerb2" }
         }
@@ -2144,8 +2140,8 @@ function Ensure-KerbKeyExists {
                 Write-Error -Message "Caught exception: $_" -ErrorAction Stop
             }
 
-            $kerb1Key = Get-AzStorageAccountKey -ResourceGroupName $ResourceGroupName -Name $StorageAccountName `
-                 -ListKerbKey | Where-Object { $_.KeyName -eq "kerb1" }
+            $kerb1Key = Get-AzStorageAccountKerbKeys -ResourceGroupName $ResourceGroupName -StorageAccountName $StorageAccountName `
+                        | Where-Object { $_.KeyName -eq "kerb1" }
         
             Write-Verbose "    Key: $($kerb1Key.KeyName) generated for StorageAccount: $StorageAccountName"
         } else {
@@ -2159,8 +2155,8 @@ function Ensure-KerbKeyExists {
 
             $keys = New-AzStorageAccountKey -ResourceGroupName $ResourceGroupName -Name $StorageAccountName -KeyName kerb2 -ErrorAction Stop
 
-            $kerb2Key = Get-AzStorageAccountKey -ResourceGroupName $ResourceGroupName -Name $StorageAccountName `
-                 -ListKerbKey | Where-Object { $_.KeyName -eq "kerb2" }
+            $kerb2Key = Get-AzStorageAccountKerbKeys -ResourceGroupName $ResourceGroupName -StorageAccountName $StorageAccountName `
+                        | Where-Object { $_.KeyName -eq "kerb2" }
         
             Write-Verbose "    Key: $($kerb2Key.KeyName) generated for StorageAccount: $StorageAccountName"
         } else {
@@ -2192,17 +2188,108 @@ function Get-AzStorageAccountFileEndpoint {
         [string]$ResourceGroupName
     )
 
-    $storageAccountObject = Get-AzStorageAccount -ResourceGroup $resourceGroupName -Name $storageAccountName
-
-    if ($null -eq $storageAccountObject) {
-        Write-Error "Cannot find storage account '$storageAccountName' in resource group '$resourceGroupName'" -ErrorAction Stop
-    }
+    $storageAccountObject = Validate-StorageAccount -ResourceGroupName $ResourceGroupName `
+        -StorageAccountName $StorageAccountName -ErrorAction Stop
 
     if ([string]::IsNullOrEmpty($storageAccountObject.PrimaryEndpoints.File)) {
-        Write-Error "Cannot find the file service endpoint for storage account '$storageAccountName' in resource group '$resourceGroupName'. This may happen if the storage account type does not support file service (https://docs.microsoft.com/en-us/azure/storage/common/storage-account-overview#types-of-storage-accounts)." -ErrorAction Stop
+        Write-Error -Message "Cannot find the file service endpoint for storage account `
+            '$StorageAccountName' in resource group '$ResourceGroupName'. This may happen `
+            if the storage account type does not support file service `
+            (https://docs.microsoft.com/en-us/azure/storage/common/storage-account-overview#types-of-storage-accounts)." `
+            -ErrorAction Stop
     }
 
     return $storageAccountObject.PrimaryEndpoints.File
+}
+
+function Get-AzStorageAccountActiveDirectoryProperties {
+    <#
+    .SYNOPSIS
+        Gets the active directory properties for the storage account.
+    
+    .DESCRIPTION
+        Gets the active directory properties for the storage account.
+        Notably, this command queries the storage account's AzureFilesIdentityBasedAuth.ActiveDirectoryProperties and returns it.
+    .EXAMPLE
+        PS C:\> Get-AzStorageAccountActiveDirectoryProperties -StorageAccountName "storageAccount" -ResourceGroupName "resourceGroup"
+    #>
+
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory=$true, Position=0, ParameterSetName="StorageAccountName")]
+        [string]$ResourceGroupName,
+
+        [Parameter(Mandatory=$true, Position=1, ParameterSetName="StorageAccountName")]
+        [string]$StorageAccountName,
+
+        [Parameter(
+            Mandatory=$true, 
+            Position=0, 
+            ParameterSetName="StorageAccount", 
+            ValueFromPipeline=$true)]
+        [Microsoft.Azure.Commands.Management.Storage.Models.PSStorageAccount]$StorageAccount
+    )
+
+    switch ($PSCmdlet.ParameterSetName) {
+        "StorageAccountName" {
+            $StorageAccount = Validate-StorageAccount -ResourceGroupName $ResourceGroupName `
+                -StorageAccountName $StorageAccountName -ErrorAction Stop
+        }
+
+        "StorageAccount" {                
+            $ResourceGroupName = $StorageAccount.ResourceGroupName
+            $StorageAccountName = $StorageAccount.StorageAccountName
+        }
+
+        default {
+            throw [ArgumentException]::new("Unrecognized parameter set $_")
+        }
+    }
+
+    if ($null -eq $StorageAccount.AzureFilesIdentityBasedAuth.ActiveDirectoryProperties) {
+        Write-Error -Message "ActiveDirectoryProperties is not set for storage account '$StorageAccountName' `
+            in resource group '$ResourceGroupName'. To set the properties, please use cmdlet `
+            Set-AzStorageAccount if the account is already associated with an Active Directory, `
+            or use cmdlet Join-AzStorageAccountForAuth to join the account to an Active Directory `
+            (https://docs.microsoft.com/en-us/azure/storage/files/storage-files-identity-ad-ds-enable)" `
+            -ErrorAction Stop
+    }
+
+    return $StorageAccount.AzureFilesIdentityBasedAuth.ActiveDirectoryProperties
+}
+
+function Get-AzStorageAccountKerbKeys {
+    <#
+    .SYNOPSIS
+        Gets the kerb keys for the storage account.
+    
+    .DESCRIPTION
+        Gets the kerb keys for the storage account.
+    .EXAMPLE
+        PS C:\> Get-AzStorageAccountKerbKeys -StorageAccountName "storageAccount" -ResourceGroupName "resourceGroup"
+    #>
+
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory=$true, Position=0)]
+        [string]$ResourceGroupName,
+        [Parameter(Mandatory=$true, Position=1)]
+        [string]$StorageAccountName
+    )
+
+    Validate-StorageAccount -ResourceGroupName $ResourceGroupName -StorageAccountName $StorageAccountName -ErrorAction Stop
+    
+    $keys = Get-AzStorageAccountKey -ResourceGroupName $ResourceGroupName -Name $StorageAccountName -ListKerbKey `
+            | Where-Object { $_.KeyName -like "kerb*" }
+
+    if (($null -eq $keys) -or (($keys -is [System.Array]) -and ($keys.Length -eq 0))) {
+        Write-Error -Message "Cannot find kerb keys for storage account '$StorageAccountName' in `
+            resource group '$ResourceGroupName'. Please ensure kerb keys are configured`
+            (https://docs.microsoft.com/en-us/azure/storage/files/storage-files-identity-ad-ds-enable#creating-an-identity-representing-the-storage-account-in-your-ad-manually)" `
+            -ErrorAction Stop
+    }
+
+    return $keys
 }
 
 function Get-ServicePrincipalName {
@@ -2217,30 +2304,33 @@ function Get-ServicePrincipalName {
             - Transforms that URL string into a SMB server service principal name 
                 (i.e. "cifs\<storageaccount>.file.core.windows.net")
     .EXAMPLE
-        PS C:\> Get-ServicePrincipalName -storageAccountName "storageAccount" -resourceGroupName "resourceGroup"
+        PS C:\> Get-ServicePrincipalName -StorageAccountName "storageAccount" -ResourceGroupName "resourceGroup"
         cifs\storageAccount.file.core.windows.net
     #>
 
     [CmdletBinding()]
     param (
         [Parameter(Mandatory=$True, Position=0, HelpMessage="Storage account name")]
-        [string]$storageAccountName,
+        [string]$StorageAccountName,
 
         [Parameter(Mandatory=$True, Position=1, HelpMessage="Resource group name")]
-        [string]$resourceGroupName
+        [string]$ResourceGroupName
     )
 
-    $fileEndpoint = Get-AzStorageAccountFileEndpoint -ResourceGroupName $resourceGroupName -StorageAccountName $storageAccountName -ErrorAction Stop
+    $fileEndpoint = Get-AzStorageAccountFileEndpoint -ResourceGroupName $ResourceGroupName `
+        -StorageAccountName $StorageAccountName -ErrorAction Stop
 
     $servicePrincipalName = $fileEndpoint -replace 'https://','cifs/'
     $servicePrincipalName = $servicePrincipalName.TrimEnd('/')
 
     if ([string]::IsNullOrEmpty($servicePrincipalName)) {
-        Write-Error "Unable to generate the service principal name from the storage account's file endpoint '$fileEndpoint'" -ErrorAction Stop
+        Write-Error -Message "Unable to generate the service principal name from the `
+            storage account's file endpoint '$fileEndpoint'" `
+            -ErrorAction Stop
     }
 
     Write-Verbose "Generated service principal name of $servicePrincipalName"
-    return $servicePrincipalName;
+    return $servicePrincipalName
 }
 
 function New-ADAccountForStorageAccount {
@@ -2368,15 +2458,15 @@ function New-ADAccountForStorageAccount {
     # Get the kerb key and convert it to a secure string password.
     #
 
-    $kerb1Key = Get-AzStorageAccountKey -ResourceGroupName $ResourceGroupName -Name $StorageAccountName -ListKerbKey `
+    $kerb1Key = Get-AzStorageAccountKerbKeys -ResourceGroupName $ResourceGroupName -StorageAccountName $StorageAccountName `
         -ErrorAction Stop | Where-Object { $_.KeyName -eq "kerb1" };
 
     $fileServiceAccountPwdSecureString = ConvertTo-SecureString -String $kerb1Key.Value -AsPlainText -Force
 
     # Get SPN
     $spnValue = Get-ServicePrincipalName `
-            -storageAccountName $StorageAccountName `
-            -resourceGroupName $ResourceGroupName `
+            -StorageAccountName $StorageAccountName `
+            -ResourceGroupName $ResourceGroupName `
             -ErrorAction Stop
 
     # Check to see if SPN already exists
@@ -2578,38 +2668,46 @@ function Get-AzStorageAccountADObject {
     }
 
     process {
+        
         if ($PSCmdlet.ParameterSetName -eq "StorageAccountName" -or 
             $PSCmdlet.ParameterSetName -eq "StorageAccount") {
 
             if ($PSCmdlet.ParameterSetName -eq "StorageAccountName") {
-                $StorageAccount = Get-AzStorageAccount -ResourceGroupName $ResourceGroupName -Name $StorageAccountName
+                $activeDirectoryProperties = Get-AzStorageAccountActiveDirectoryProperties `
+                    -ResourceGroupName $ResourceGroupName -StorageAccountName $StorageAccountName -ErrorAction Stop
+            } else {
+                $activeDirectoryProperties = Get-AzStorageAccountActiveDirectoryProperties `
+                    -StorageAccount $StorageAccount -ErrorAction Stop
+
+                $ResourceGroupName = $StorageAccount.ResourceGroupName
+                $StorageAccountName = $StorageAccount.StorageAccountName    
             }
 
-            if ($null -eq $StorageAccount.AzureFilesIdentityBasedAuth.ActiveDirectoryProperties) {
-                return
-            }
+            $sid = $activeDirectoryProperties.AzureStorageSid
+            $Domain = $activeDirectoryProperties.DomainName
 
-            $sid = $StorageAccount.AzureFilesIdentityBasedAuth.ActiveDirectoryProperties.AzureStorageSid
-            $Domain = $StorageAccount.AzureFilesIdentityBasedAuth.ActiveDirectoryProperties.DomainName
+            Write-Verbose -Message "Looking for an object with SID '$sid' in domain '$Domain' for storage account '$StorageAccountName'"
+            $obj = Get-ADObject -Server $Domain -Filter "objectSID -eq '$sid'" -ErrorAction Stop
 
-            Write-Verbose `
-                -Message ("Object for storage account " + $StorageAccount.StorageAccountName + " has SID=$sid in Domain $Domain")
-
-            $obj = Get-ADObject `
-                -Server $Domain `
-                -Filter "objectSID -eq '$sid'" `
-                -ErrorAction Stop
+            if ($null -eq $obj) {
+                Write-Error -Message "Cannot find an object with a SID '$sid' in domain '$Domain' for `
+                    storage account '$StorageAccountName' in resource group '$ResourceGroupName'. `
+                    Please verify that the storage account has been domain-joined through the steps `
+                    in Microsoft documentation: `
+                    https://docs.microsoft.com/en-us/azure/storage/files/storage-files-identity-auth-active-directory-enable#12-domain-join-your-storage-account " `
+                    -ErrorAction Stop
+            }    
         } else {
-            $obj = Get-ADObject `
-                -Server $Domain `
-                -Filter "Name -eq '$ADObjectName'" `
-                -ErrorAction Stop
-        }
+            Write-Verbose -Message "Looking for an object with name '$ADObjectName' in domain '$Domain'"
+            $obj = Get-ADObject -Server $Domain -Filter "Name -eq '$ADObjectName'" -ErrorAction Stop
 
-        if ($null -eq $obj) {
-            Write-Error `
-                -Message "AD object not found in $Domain" `
-                -ErrorAction Stop
+            if ($null -eq $obj) {
+                Write-Error -Message "Cannot find an object with a '$ADObjectname' in domain '$Domain'. `
+                    Please verify that the storage account has been domain-joined through the steps `
+                    in Microsoft documentation: `
+                    https://docs.microsoft.com/en-us/azure/storage/files/storage-files-identity-auth-active-directory-enable#12-domain-join-your-storage-account " `
+                    -ErrorAction Stop
+            }    
         }
 
         Write-Verbose -Message ("Found AD object: " + $obj.DistinguishedName + " of class " + $obj.ObjectClass + ".")
@@ -2741,10 +2839,10 @@ function Get-AzStorageKerberosTicketStatus {
 
     param (
         [Parameter(Mandatory=$True, Position=0, HelpMessage="Storage account name")]
-        [string]$storageAccountName,
+        [string]$StorageAccountName,
 
         [Parameter(Mandatory=$True, Position=1, HelpMessage="Resource group name")]
-        [string]$resourceGroupName
+        [string]$ResourceGroupName
     )
 
     begin {
@@ -2753,10 +2851,8 @@ function Get-AzStorageKerberosTicketStatus {
 
     process 
     {
-        $spnValue = Get-ServicePrincipalName `
-            -storageAccountName $storageAccountName `
-            -resourceGroupName $resourceGroupName `
-            -ErrorAction Stop
+        $spnValue = Get-ServicePrincipalName -StorageAccountName $StorageAccountName `
+            -ResourceGroupName $ResourceGroupName -ErrorAction Stop
 
         Write-Verbose "Running command 'klist.exe get $spnValue'"
 
@@ -2782,12 +2878,11 @@ function Get-AzStorageKerberosTicketStatus {
                 # The SAM database on the Windows Server does not have a computer account for this workstation trust relationship.
                 #
 
-                Write-Error "ERROR: `
-                    The domain cannot find a computer or user object for this storage account.
-                    Please verify that the storage account has been domain-joined through the steps in Microsoft documentation: `
-                    `
-                    https://docs.microsoft.com/en-us/azure/storage/files/storage-files-identity-auth-active-directory-enable#12-domain-join-your-storage-account " `
-                     -ErrorAction Stop
+                Write-Error -Message "ERROR: The domain cannot find a computer or user object for `
+                    this storage account. Please verify that the storage account has been domain-joined `
+                    through the steps in Microsoft documentation: `
+                    https://docs.microsoft.com/en-us/azure/storage/files/storage-files-identity-auth-active-directory-enable#12-domain-join-your-storage-account" `
+                    -ErrorAction Stop
             }
             elseif ($line -match "0x80090342")
             {
@@ -2796,14 +2891,14 @@ function Get-AzStorageKerberosTicketStatus {
                 # The encryption type requested is not supported by the KDC.
                 #
 
-                Write-Error "ERROR: `
-                    Azure Files only supports Kerberos authentication with AD with RC4-HMAC encryption - which is being blocked by the KDC (Kerberos Key Distribution Center). `
-                    AES Kerberos encryption is not yet supported by Azure Files at this time.  To unblock authentication with RC4-HMAC encryption, please examine your group policy for `
-                    'Network security: Configure encryption types allowed for Kerberos' and add RC4-HMAC as an allowed encryption type.
-                    `
+                Write-Error -Message "ERROR: Azure Files only supports Kerberos authentication with `
+                    AD with RC4-HMAC encryption - which is being blocked by the KDC (Kerberos Key `
+                    Distribution Center). AES Kerberos encryption is not yet supported by Azure Files `
+                    at this time. To unblock authentication with RC4-HMAC encryption, please examine `
+                    your group policy for 'Network security: Configure encryption types allowed for Kerberos' `
+                    and add RC4-HMAC as an allowed encryption type. `
                     https://docs.microsoft.com/en-us/windows/security/threat-protection/security-policy-settings/network-security-configure-encryption-types-allowed-for-kerberos" `
                     -ErrorAction Stop
-
             }
             elseif ($line -match "0x80090303")
             {
@@ -2820,7 +2915,9 @@ function Get-AzStorageKerberosTicketStatus {
 
                 if ($null -eq $target)
                 {
-                    Write-Error "Unable to find the cached credential for $targetName. Original klist error 0x80090303 is unexpected." -ErrorAction Stop
+                    Write-Error -Message "Unable to find the cached credential for '$targetName'. `
+                        Original klist error 0x80090303 is unexpected." `
+                        -ErrorAction Stop
                 }
                 else
                 {
@@ -2832,12 +2929,15 @@ function Get-AzStorageKerberosTicketStatus {
 
                     if ($null -ne $target)
                     {
-                        Write-Error "Unable to delete the cached credential for $($target.Target). Please manually delete it and retry this cmdlet." -ErrorAction Stop
+                        Write-Error -Message "Unable to delete the cached credential for $($target.Target). `
+                            Please manually delete it and retry this cmdlet." `
+                            -ErrorAction Stop
                     }
 
-                    Write-Verbose "Retrying Get-AzStorageKerberosTicketStatus with storageAccountName $storageAccountName and resourceGroupName $resourceGroupName"
+                    Write-Verbose -Message "Retrying Get-AzStorageKerberosTicketStatus with storageAccountName $StorageAccountName and resourceGroupName $ResourceGroupName"
 
-                    return Get-AzStorageKerberosTicketStatus -storageAccountName $storageAccountName -resourceGroupName $resourceGroupName
+                    return Get-AzStorageKerberosTicketStatus -StorageAccountName $StorageAccountName `
+                        -ResourceGroupName $ResourceGroupName -ErrorAction Stop
                 }
             }
             elseif ($line -match "^#\d")
@@ -2963,10 +3063,10 @@ function Test-Port445Connectivity
 
     param (
         [Parameter(Mandatory=$True, Position=0, HelpMessage="Storage account name")]
-        [string]$storageAccountName,
+        [string]$StorageAccountName,
 
         [Parameter(Mandatory=$True, Position=1, HelpMessage="Resource group name")]
-        [string]$resourceGroupName
+        [string]$ResourceGroupName
     )
 
     process
@@ -2975,21 +3075,25 @@ function Test-Port445Connectivity
         # Test-NetConnection -ComputerName <storageAccount>.file.core.windows.net -Port 445
         #
 
-        $fileEndpoint = Get-AzStorageAccountFileEndpoint -ResourceGroupName $resourceGroupName -StorageAccountName $storageAccountName -ErrorAction Stop
+        $fileEndpoint = Get-AzStorageAccountFileEndpoint -ResourceGroupName $ResourceGroupName `
+            -StorageAccountName $StorageAccountName -ErrorAction Stop
 
         $endpoint = $fileEndpoint -replace 'https://', ''
         $endpoint = $endpoint -replace '/', ''
 
         Write-Verbose "Executing 'Test-NetConnection -ComputerName $endpoint -Port 445'"
 
-        $result = Test-NetConnection -ComputerName $endpoint -Port 445;
+        $result = Test-NetConnection -ComputerName $endpoint -Port 445
 
         if ($result.TcpTestSucceeded -eq $False)
         {
-            Write-Error "Unable to reach the storage account file endpoint.  To debug connectivity problems, please refer to `
-                the troubleshooting tool for Azure Files mounting errors on Windows, 'AzFileDiagnostics.ps1' `
-
-                https://gallery.technet.microsoft.com/Troubleshooting-tool-for-a9fa1fe5" -ErrorAction Stop
+            Write-Error -Message "Unable to reach the storage account file endpoint. `
+                To debug connectivity problems, please refer to the troubleshooting tool for Azure `
+                Files mounting errors on Windows, 'AzFileDiagnostics.ps1' `
+                (https://gallery.technet.microsoft.com/Troubleshooting-tool-for-a9fa1fe5). `
+                For possible solutions please refer to `
+                https://docs.microsoft.com/en-us/azure/storage/files/storage-troubleshoot-windows-file-connection-problems#cause-1-port-445-is-blocked" `
+                -ErrorAction Stop
         }
     }
 }
@@ -3001,46 +3105,32 @@ function Debug-AzStorageAccountADObject
 
     param (
         [Parameter(Mandatory=$True, Position=0, HelpMessage="Storage account name")]
-        [string]$storageAccountName,
+        [string]$StorageAccountName,
 
         [Parameter(Mandatory=$True, Position=1, HelpMessage="Resource group name")]
-        [string]$resourceGroupName
+        [string]$ResourceGroupName
     )
 
     process
     {
-        $azureStorageIdentity = Get-AzStorageAccountADObject -storageaccountName $StorageAccountName -ResourceGroupName $ResourceGroupName;
-
         #
         # Check if the object exists.
         #
-
-        if ($azureStorageIdentity -eq $null)
-        {
-            Write-Error "ERROR: `
-                The domain cannot find a computer or user object for this storage account.
-                Please verify that the storage account has been domain-joined through the steps in Microsoft documentation: `
-                `
-                https://docs.microsoft.com/en-us/azure/storage/files/storage-files-identity-auth-active-directory-enable#12-domain-join-your-storage-account " `
-                -ErrorAction Stop
-        }
-
+    
+        $azureStorageIdentity = Get-AzStorageAccountADObject -StorageAccountName $StorageAccountName `
+            -ResourceGroupName $ResourceGroupName -ErrorAction Stop
         #
         # Check if the object has the correct SPN (Service Principal Name)
         #
 
-        $expectedSpnValue = Get-ServicePrincipalName `
-            -storageAccountName $storageAccountName `
-            -resourceGroupName $resourceGroupName `
-            -ErrorAction Stop
+        $expectedSpnValue = Get-ServicePrincipalName -StorageAccountName $StorageAccountName `
+            -ResourceGroupName $ResourceGroupName -ErrorAction Stop
 
-        $properSpnSet = $azureStorageIdentity.ServicePrincipalNames.Contains($expectedSpnValue);
+        $properSpnSet = $azureStorageIdentity.ServicePrincipalNames.Contains($expectedSpnValue)
 
-        if ($properSpnSet -eq $False)
-        {
-            Write-Error "The AD object $($azureStorageIdentity.Name) does not have the proper SPN of '$expectedSpnValue' `
-                Please run the following command to repair the object in AD: 
-
+        if ($properSpnSet -eq $False) {
+            Write-Error -Message "The AD object $($azureStorageIdentity.Name) does not have the proper SPN `
+                of '$expectedSpnValue'. Please run the following command to repair the object in AD: `
                 'Set-AD$($azureStorageIdentity.ObjectClass) -Identity $($azureStorageIdentity.Name) -ServicePrincipalNames @{Add=`"$expectedSpnValue`"}'" `
                 -ErrorAction Stop
         }
@@ -3110,7 +3200,8 @@ function Debug-AzStorageAccountAuth {
                 $checksExecuted += 1;
                 Write-Verbose "CheckPort445Connectivity - START"
 
-                Test-Port445Connectivity -storageaccountName $StorageAccountName -ResourceGroupName $ResourceGroupName;
+                Test-Port445Connectivity -StorageAccountName $StorageAccountName `
+                    -ResourceGroupName $ResourceGroupName -ErrorAction Stop
 
                 $checks["CheckPort445Connectivity"] = "Passed"
                 Write-Verbose "CheckPort445Connectivity - SUCCESS"
@@ -3133,8 +3224,11 @@ function Debug-AzStorageAccountAuth {
         
                 if (!(Get-IsDomainJoined))
                 {
-                    Write-Error -Message "Machine is not domain-joined.  Mounting to Azure Files through Active Directory Authentication is `
-                        only supported when the computer is joined to an Active Directory domain." -ErrorAction Stop
+                    Write-Error -Message "Machine is not domain-joined. Mounting to Azure Files through `
+                        Active Directory Authentication is only supported when the computer is joined to `
+                        an Active Directory domain, which is synced to Azure AD with Azure AD Connect `
+                        (https://docs.microsoft.com/en-us/azure/storage/files/storage-files-identity-auth-active-directory-enable#prerequisites)" `
+                        -ErrorAction Stop
                 }
 
                 $checks["CheckDomainJoined"] = "Passed"
@@ -3152,7 +3246,8 @@ function Debug-AzStorageAccountAuth {
                 $checksExecuted += 1;
                 Write-Verbose "CheckADObject - START"
 
-                Debug-AzStorageAccountADObject -storageaccountName $StorageAccountName -ResourceGroupName $ResourceGroupName;
+                Debug-AzStorageAccountADObject -StorageAccountName $StorageAccountName `
+                    -ResourceGroupName $ResourceGroupName -ErrorAction Stop
 
                 $checks["CheckADObject"] = "Passed"
                 Write-Verbose "CheckADObject - SUCCESS"
@@ -3169,7 +3264,8 @@ function Debug-AzStorageAccountAuth {
                 $checksExecuted += 1;
                 Write-Verbose "CheckGetKerberosTicket - START"
 
-                Get-AzStorageKerberosTicketStatus -storageaccountName $StorageAccountName -ResourceGroupName $ResourceGroupName;
+                Get-AzStorageKerberosTicketStatus -StorageaccountName $StorageAccountName `
+                    -ResourceGroupName $ResourceGroupName -ErrorAction Stop
 
                 $checks["CheckGetKerberosTicket"] = "Passed"
                 Write-Verbose "CheckGetKerberosTicket - SUCCESS"
@@ -3186,16 +3282,8 @@ function Debug-AzStorageAccountAuth {
                 $checksExecuted += 1;
                 Write-Verbose "CheckADObjectPasswordIsCorrect - START"
 
-                $keyMatches = Test-AzStorageAccountADObjectPasswordIsKerbKey -StorageAccountName $StorageAccountName -ResourceGroupName $ResourceGroupName;
-
-                if ($keyMatches.Count -eq 0)
-                {
-                    Write-Error `
-                        -Message ("Password for $userName does not match kerb1 or kerb2 of storage account: $StorageAccountName." + `
-                        "Please run the following command to resync the AD password with the kerb key of the storage account and " +  `
-                        "retry: Update-AzStorageAccountADObjectPassword.") -ErrorAction Stop
-
-                }
+                Test-AzStorageAccountADObjectPasswordIsKerbKey -StorageAccountName $StorageAccountName `
+                    -ResourceGroupName $ResourceGroupName -ErrorIfNoMatch -ErrorAction Stop
 
                 $checks["CheckADObjectPasswordIsCorrect"] = "Passed"
                 Write-Verbose "CheckADObjectPasswordIsCorrect - SUCCESS"
@@ -3224,9 +3312,23 @@ function Debug-AzStorageAccountAuth {
 
                 $currentUser = Get-ADUser -Identity $UserName -Server $Domain
 
+                if ($null -eq $currentUser) {
+                    Write-Error -Message "User '$UserName' not found in domain '$Domain'. Please check `
+                        whether the provided user name or domain name is correct or not." `
+                        -ErrorAction Stop
+                }
+
                 Write-Verbose "User $UserName in domain $Domain has SID = $($currentUser.Sid)"
 
                 $aadUser = Get-AadUserForSid $currentUser.Sid
+
+                if ($null -eq $aadUser) {
+                    Write-Error -Message "Cannot find an AAD user with SID '$($currentUser.Sid) for `
+                        user $UserName' in domain '$Domain'. Please ensure the domain '$Domain' is `
+                        synced to Azure Active Directory using Azure AD Connect `
+                        (https://docs.microsoft.com/en-us/azure/active-directory/hybrid/how-to-connect-install-roadmap)" `
+                        -ErrorAction Stop
+                }
 
                 Write-Verbose "Found AAD user '$($aadUser.UserPrincipalName)' for SID $($currentUser.Sid)"
 
@@ -3260,17 +3362,24 @@ function Debug-AzStorageAccountAuth {
                     $aadUser = Get-AzureADUser -ObjectId $ObjectId
 
                     if ($null -eq $aadUser) {
-                        Write-Error -Message "Cannot find Azure AD user $ObjectId" -ErrorAction Stop
+                        Write-Error -Message "Cannot find an Azure AD user with ObjectId $ObjectId. Please check `
+                            whether the provided ObjecId is correct or not." `
+                            -ErrorAction Stop
                     }
 
                     if ([string]::IsNullOrEmpty($aadUser.OnPremisesSecurityIdentifier)) {
-                        Write-Error -Message "Azure AD user $ObjectId has no OnPremisesSecurityIdentifier" -ErrorAction Stop
+                        Write-Error -Message "Azure AD user $ObjectId has no OnPremisesSecurityIdentifier. Please `
+                        ensure the domain '$Domain' is synced to Azure Active Directory using Azure AD Connect `
+                        (https://docs.microsoft.com/en-us/azure/active-directory/hybrid/how-to-connect-install-roadmap)" `
+                        -ErrorAction Stop
                     }
 
                     $user = Get-ADUser -Identity $aadUser.OnPremisesSecurityIdentifier -Server $Domain
 
                     if ($null -eq $user) {
-                        Write-Error -Message "Azure AD user $ObjectId's SID $($aadUser.OnPremisesSecurityIdentifier) is not found in domain $Domain" -ErrorAction Stop
+                        Write-Error -Message "Azure AD user $ObjectId's SID $($aadUser.OnPremisesSecurityIdentifier) `
+                            is not found in domain $Domain. Please check whether the provided SID is correct." `
+                            -ErrorAction Stop
                     }
 
                     Write-Verbose "Azure AD user $ObjectId has SID $($aadUser.OnPremisesSecurityIdentifier) in domain $Domain"
@@ -3292,14 +3401,11 @@ function Debug-AzStorageAccountAuth {
                 $checksExecuted += 1
                 Write-Verbose "CheckStorageAccountDomainJoined - START"
 
-                $storageAccount = Validate-StorageAccount -ResourceGroup $ResourceGroupName -Name $StorageAccountName
+                $activeDirectoryProperties = Get-AzStorageAccountActiveDirectoryProperties `
+                    -ResourceGroupName $ResourceGroupName -StorageAccountName $StorageAccountName -ErrorAction Stop
 
-                if ($null -ne $StorageAccount.AzureFilesIdentityBasedAuth.ActiveDirectoryProperties) {
-                    Write-Verbose "Storage account $StorageAccountName is already joined in domain $($StorageAccount.AzureFilesIdentityBasedAuth.ActiveDirectoryProperties.DomainName)."
-                } else {
-                    Write-Error -Message "Storage account $StorageAccountName is not domain joined." -ErrorAction Stop
-                }
-
+                Write-Verbose -Message "Storage account $StorageAccountName is already joined in domain $($activeDirectoryProperties.DomainName)."
+                
                 $checks["CheckStorageAccountDomainJoined"] = "Passed"
                 Write-Verbose "CheckStorageAccountDomainJoined - SUCCESS"
             } catch {
@@ -3505,7 +3611,10 @@ function Test-AzStorageAccountADObjectPasswordIsKerbKey {
          [string]$StorageAccountName,
 
          [Parameter(Mandatory=$true, Position=0, ValueFromPipeline=$true, ParameterSetName="StorageAccount")]
-         [Microsoft.Azure.Commands.Management.Storage.Models.PSStorageAccount]$StorageAccount
+         [Microsoft.Azure.Commands.Management.Storage.Models.PSStorageAccount]$StorageAccount,
+
+         [Parameter(Mandatory=$false)]
+         [switch]$ErrorIfNoMatch = $false
     )
 
     begin {
@@ -3516,13 +3625,10 @@ function Test-AzStorageAccountADObjectPasswordIsKerbKey {
 
     process
     {
-        $getObjParams = @{}
         switch ($PSCmdlet.ParameterSetName) {
             "StorageAccountName" {
-                $StorageAccount = Get-AzStorageAccount `
-                        -ResourceGroupName $ResourceGroupName `
-                        -Name $StorageAccountName `
-                        -ErrorAction Stop
+                $StorageAccount = Validate-StorageAccount -ResourceGroupName $ResourceGroupName `
+                    -StorageAccountName $StorageAccountName -ErrorAction Stop
             }
 
             "StorageAccount" {                
@@ -3535,13 +3641,15 @@ function Test-AzStorageAccountADObjectPasswordIsKerbKey {
             }
         }
 
-        $kerbKeys = $StorageAccount | `
-            Get-AzStorageAccountKey -ListKerbKey | `
-            Where-Object { $_.KeyName -like "kerb*" }
+        $kerbKeys = Get-AzStorageAccountKerbKeys -ResourceGroupName $ResourceGroupName `
+            -StorageAccountName $StorageAccountName -ErrorAction Stop
 
-        $adObj = $StorageAccount | Get-AzStorageAccountADObject 
+        $adObj = Get-AzStorageAccountADObject -StorageAccount $StorageAccount -ErrorAction Stop
 
-        $domainDns = $StorageAccount.AzureFilesIdentityBasedAuth.ActiveDirectoryProperties.DomainName
+        $activeDirectoryProperties = Get-AzStorageAccountActiveDirectoryProperties `
+            -StorageAccount $StorageAccount -ErrorAction Stop
+
+        $domainDns = $activeDirectoryProperties.DomainName
         $domain = Get-ADDomain -Server $domainDns
 
         $userName = $domain.Name + "\" + $adObj.Name
@@ -3567,10 +3675,17 @@ function Test-AzStorageAccountADObjectPasswordIsKerbKey {
         }
 
         if (!$oneKeyMatches) {
-            Write-Warning `
-                    -Message ("Password for $userName does not match kerb1 or kerb2 of storage account: $StorageAccountName." + `
-                    "Please run the following command to resync the AD password with the kerb key of the storage account and " +  `
-                    "retry: Update-AzStorageAccountADObjectPassword.")
+            $message = "Password for $userName does not match kerb1 or kerb2 of `
+                storage account: $StorageAccountName. Please run the following command to `
+                resync the AD password with the kerb key of the storage account and retry: `
+                Update-AzStorageAccountADObjectPassword. `
+                (https://docs.microsoft.com/en-us/azure/storage/files/storage-files-identity-ad-ds-update-password)"
+            
+            if ($ErrorIfNoMatch) {
+                Write-Error -Message $message -ErrorAction Stop
+            } else {
+                Write-Warning -Message $message
+            }
         }
 
         return $keyMatches
@@ -3700,10 +3815,9 @@ function Update-AzStorageAccountADObjectPassword {
                     -ErrorAction Stop | `
                 Select-Object -ExpandProperty Keys
             } else {
-                $kerbKeys = Get-AzStorageAccountKey `
+                $kerbKeys = Get-AzStorageAccountKerbKeys `
                     -ResourceGroupName $StorageAccount.ResourceGroupName `
-                    -Name $StorageAccount.StorageAccountName `
-                    -ListKerbKey `
+                    -StorageAccountName $StorageAccount.StorageAccountName `
                     -ErrorAction Stop
             }             
         
@@ -3982,8 +4096,8 @@ function Join-AzStorageAccount {
             # Ensure the storage account exists.
             if ($PSCmdlet.ParameterSetName -eq "StorageAccountName") {
                 $StorageAccount = Validate-StorageAccount `
-                    -ResourceGroup $ResourceGroupName `
-                    -Name $StorageAccountName `
+                    -ResourceGroupName $ResourceGroupName `
+                    -StorageAccountName $StorageAccountName `
                     -ErrorAction Stop
             }
 
