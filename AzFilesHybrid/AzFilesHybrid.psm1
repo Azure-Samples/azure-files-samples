@@ -3138,6 +3138,20 @@ function Debug-AzStorageAccountADObject
 }
 
 
+class CheckResult {
+    [string]$Name
+    [string]$Result
+    [string]$Issue
+
+    CheckResult(
+        [string]$Name
+    ) {
+        $this.Name = $Name
+        $this.Result = "Skipped"
+        $this.Issue = ""
+    }
+}
+
 function Debug-AzStorageAccountAuth {
     <#
     .SYNOPSIS
@@ -3180,14 +3194,14 @@ function Debug-AzStorageAccountAuth {
         $checksExecuted = 0;
         $filterIsPresent = ![string]::IsNullOrEmpty($Filter);
         $checks = @{
-            "CheckPort445Connectivity" = "Skipped";
-            "CheckDomainJoined" = "Skipped";
-            "CheckADObject" = "Skipped";
-            "CheckGetKerberosTicket" = "Skipped";
-            "CheckADObjectPasswordIsCorrect" = "Skipped";
-            "CheckSidHasAadUser" = "Skipped";
-            "CheckAadUserHasSid" = "Skipped";
-            "CheckStorageAccountDomainJoined" = "Skipped";
+            "CheckPort445Connectivity" = [CheckResult]::new("CheckPort445Connectivity");
+            "CheckDomainJoined" = [CheckResult]::new("CheckDomainJoined");
+            "CheckADObject" = [CheckResult]::new("CheckADObject");
+            "CheckGetKerberosTicket" = [CheckResult]::new("CheckGetKerberosTicket");
+            "CheckADObjectPasswordIsCorrect" = [CheckResult]::new("CheckADObjectPasswordIsCorrect");
+            "CheckSidHasAadUser" = [CheckResult]::new("CheckSidHasAadUser");
+            "CheckAadUserHasSid" = [CheckResult]::new("CheckAadUserHasSid");
+            "CheckStorageAccountDomainJoined" = [CheckResult]::new("CheckStorageAccountDomainJoined");
         }
 
         #
@@ -3203,10 +3217,11 @@ function Debug-AzStorageAccountAuth {
                 Test-Port445Connectivity -StorageAccountName $StorageAccountName `
                     -ResourceGroupName $ResourceGroupName -ErrorAction Stop
 
-                $checks["CheckPort445Connectivity"] = "Passed"
+                $checks["CheckPort445Connectivity"].Result = "Passed"
                 Write-Verbose "CheckPort445Connectivity - SUCCESS"
             } catch {
-                $checks["CheckPort445Connectivity"] = "Failed"
+                $checks["CheckPort445Connectivity"].Result = "Failed"
+                $checks["CheckPort445Connectivity"].Issue = $_
                 Write-Error "CheckPort445Connectivity - FAILED"
                 Write-Error $_
             }
@@ -3231,10 +3246,11 @@ function Debug-AzStorageAccountAuth {
                         -ErrorAction Stop
                 }
 
-                $checks["CheckDomainJoined"] = "Passed"
+                $checks["CheckDomainJoined"].Result = "Passed"
                 Write-Verbose "CheckDomainJoined - SUCCESS"
             } catch {
-                $checks["CheckDomainJoined"] = "Failed"
+                $checks["CheckDomainJoined"].Result = "Failed"
+                $checks["CheckDomainJoined"].Issue = $_
                 Write-Error "CheckDomainJoined - FAILED"
                 Write-Error $_
             }
@@ -3249,10 +3265,11 @@ function Debug-AzStorageAccountAuth {
                 Debug-AzStorageAccountADObject -StorageAccountName $StorageAccountName `
                     -ResourceGroupName $ResourceGroupName -ErrorAction Stop
 
-                $checks["CheckADObject"] = "Passed"
+                $checks["CheckADObject"].Result = "Passed"
                 Write-Verbose "CheckADObject - SUCCESS"
             } catch {
-                $checks["CheckADObject"] = "Failed"
+                $checks["CheckADObject"].Result = "Failed"
+                $checks["CheckADObject"].Issue = $_
                 Write-Error "CheckADObject - FAILED"
                 Write-Error $_
             }
@@ -3267,10 +3284,11 @@ function Debug-AzStorageAccountAuth {
                 Get-AzStorageKerberosTicketStatus -StorageaccountName $StorageAccountName `
                     -ResourceGroupName $ResourceGroupName -ErrorAction Stop
 
-                $checks["CheckGetKerberosTicket"] = "Passed"
+                $checks["CheckGetKerberosTicket"].Result = "Passed"
                 Write-Verbose "CheckGetKerberosTicket - SUCCESS"
             } catch {
-                $checks["CheckGetKerberosTicket"] = "Failed"
+                $checks["CheckGetKerberosTicket"].Result = "Failed"
+                $checks["CheckGetKerberosTicket"].Issue = $_
                 Write-Error "CheckGetKerberosTicket - FAILED"
                 Write-Error $_
             }
@@ -3285,10 +3303,11 @@ function Debug-AzStorageAccountAuth {
                 Test-AzStorageAccountADObjectPasswordIsKerbKey -StorageAccountName $StorageAccountName `
                     -ResourceGroupName $ResourceGroupName -ErrorIfNoMatch -ErrorAction Stop
 
-                $checks["CheckADObjectPasswordIsCorrect"] = "Passed"
+                $checks["CheckADObjectPasswordIsCorrect"].Result = "Passed"
                 Write-Verbose "CheckADObjectPasswordIsCorrect - SUCCESS"
             } catch {
-                $checks["CheckADObjectPasswordIsCorrect"] = "Failed"
+                $checks["CheckADObjectPasswordIsCorrect"].Result = "Failed"
+                $checks["CheckADObjectPasswordIsCorrect"].Issue = $_
                 Write-Error "CheckADObjectPasswordIsCorrect - FAILED"
                 Write-Error $_
             }
@@ -3332,10 +3351,11 @@ function Debug-AzStorageAccountAuth {
 
                 Write-Verbose "Found AAD user '$($aadUser.UserPrincipalName)' for SID $($currentUser.Sid)"
 
-                $checks["CheckSidHasAadUser"] = "Passed"
+                $checks["CheckSidHasAadUser"].Result = "Passed"
                 Write-Verbose "CheckSidHasAadUser - SUCCESS"
             } catch {
-                $checks["CheckSidHasAadUser"] = "Failed"
+                $checks["CheckSidHasAadUser"].Result = "Failed"
+                $checks["CheckSidHasAadUser"].Issue = $_
                 Write-Error "CheckSidHasAadUser - FAILED"
                 Write-Error $_
             }
@@ -3384,12 +3404,13 @@ function Debug-AzStorageAccountAuth {
 
                     Write-Verbose "Azure AD user $ObjectId has SID $($aadUser.OnPremisesSecurityIdentifier) in domain $Domain"
 
-                    $checks["CheckAadUserHasSid"] = "Passed"
+                    $checks["CheckAadUserHasSid"].Result = "Passed"
                     Write-Verbose "CheckAadUserHasSid - SUCCESS"
                 }
 
             } catch {
-                $checks["CheckAadUserHasSid"] = "Failed"
+                $checks["CheckAadUserHasSid"].Result = "Failed"
+                $checks["CheckAadUserHasSid"].Issue = $_
                 Write-Error "CheckAadUserHasSid - FAILED"
                 Write-Error $_
             }
@@ -3406,10 +3427,11 @@ function Debug-AzStorageAccountAuth {
 
                 Write-Verbose -Message "Storage account $StorageAccountName is already joined in domain $($activeDirectoryProperties.DomainName)."
                 
-                $checks["CheckStorageAccountDomainJoined"] = "Passed"
+                $checks["CheckStorageAccountDomainJoined"].Result = "Passed"
                 Write-Verbose "CheckStorageAccountDomainJoined - SUCCESS"
             } catch {
-                $checks["CheckStorageAccountDomainJoined"] = "Failed"
+                $checks["CheckStorageAccountDomainJoined"].Result = "Failed"
+                $checks["CheckStorageAccountDomainJoined"].Issue = $_
                 Write-Error "CheckStorageAccountDomainJoined - FAILED"
                 Write-Error $_
             }
@@ -3417,24 +3439,20 @@ function Debug-AzStorageAccountAuth {
 
         if ($filterIsPresent -and $checksExecuted -eq 0)
         {
-            Write-Error "Filter '$Filter' provided does not match any options.  No checks were executed. Available filters are {$($checks.Keys -join ', ')}" -ErrorAction Stop
+            Write-Error -Message "Filter '$Filter' provided does not match any options. No checks were executed. `
+                Available filters are {$($checks.Keys -join ', ')}"
+                -ErrorAction Stop
         }
         else
         {
-            Write-Verbose "Summary of checks:"
-            foreach ($k in $checks.GetEnumerator()) {
-                $resultString = "{0,-40}`t{1,10}" -f $($k.Name),$($k.Value)
-                switch ($($k.Value)) {
-                    "Passed" {
-                        Write-Host -ForegroundColor Green $resultString
-                    }
-                    "Failed" {
-                        Write-Host -ForegroundColor Red $resultString
-                    }
-                    default {
-                        Write-Host $resultString
-                    }
-                }
+            Write-Host "Summary of checks:"
+            $checks.Values | Format-Table -Property Name,Result
+            
+            $issues = $checks.Values | Where-Object { $_.Result -ieq "Failed" }
+
+            if ($issues.Length -gt 0) {
+                Write-Host "Issues found:"
+                $issues | ForEach-Object { Write-Host -ForegroundColor Red "---- $($_.Name) ----`n$($_.Issue)" }
             }
         }
     }
