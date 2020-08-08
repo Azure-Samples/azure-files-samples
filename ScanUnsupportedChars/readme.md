@@ -23,6 +23,8 @@ Use the ScanUnsupportedChars script to identify and rename files which contain u
 c:\script\ScanUnsupportedChars.ps1 -SharePath \\testshare.file.core.windows.net\filesharename| Out-File -FilePath c:\script\output.txt
 ```
 
+
+
 ### How to identify and rename files with invalid characters
 ```powershell
 <path to script>\ScanUnsupportedChars.ps1 -SharePath <share path> -RenameItem -ReplacementString <string> | Out-File -FilePath c:\script\output.txt
