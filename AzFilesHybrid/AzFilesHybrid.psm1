@@ -4070,12 +4070,15 @@ function Update-AzStorageAccountSetupForAES256 {
                 -ADObjectNameOverride $StorageAccountName -ErrorAction Stop
             
             $adObject = Get-AzStorageAccountADObject -ResourceGroupName $ResourceGroupName `
-                -StorageAccountName $StorageAccountName -ErrorAction Stop    
+                -StorageAccountName $StorageAccountName -ErrorAction Stop
         }
         
         Write-Verbose -Message "Set AD object '$($adObject.DistinguishedName)' to use AES256 for Kerberos authentication"
         Set-ADComputer -Identity $adObject.DistinguishedName -Server $domain `
             -KerberosEncryptionType "AES256" -ErrorAction Stop
+
+        Update-AzStorageAccountADObjectPassword -ResourceGroupname $ResourceGroupName -StorageAccountName $StorageAccountName `
+            -RotateToKerbKey kerb2 -ErrorAction Stop
     }
 }
 
