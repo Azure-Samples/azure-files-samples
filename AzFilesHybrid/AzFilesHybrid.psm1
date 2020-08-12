@@ -3996,6 +3996,89 @@ function Invoke-AzStorageAccountADObjectPasswordRotation {
     }
 }
 
+function Update-AzStorageAccountSetupForAES256 {
+    <#
+    .SYNOPSIS 
+    Update a storage account to support AES256 encryption.
+    .DESCRIPTION
+    This cmdlet will check and rejoin the storage account to an Active Directory domain with AES256 support.
+    .PARAMETER ResourceGroupName
+    The name of the resource group containing the storage account you would like to domain join. If StorageAccount is specified, 
+    this parameter should not specified.
+    .PARAMETER StorageAccountName
+    The name of the storage account you would like to domain join. If StorageAccount is specified, this parameter 
+    should not be specified.
+    .PARAMETER StorageAccount
+    A storage account object you would like to domain join. If StorageAccountName and ResourceGroupName is specified, this 
+    parameter should not specified.
+    .EXAMPLE
+    PS> Update-AzStorageAccountSetupForAES256 -ResourceGroupName "myResourceGroup" -StorageAccountName "myStorageAccount"
+    .EXAMPLE 
+    PS> $storageAccount = Get-AzStorageAccount -ResourceGroupName "myResourceGroup" -Name "myStorageAccount"
+    PS> Update-AzStorageAccountSetupForAES256 -StorageAccount $storageAccount
+    .EXAMPLE
+    PS> Get-AzStorageAccount -ResourceGroupName "myResourceGroup" | Update-AzStorageAccountSetupForAES256
+    In this example, note that a specific storage account has not been specified to 
+    Get-AzStorageAccount. This means Get-AzStorageAccount will pipe every storage account 
+    in the resource group myResourceGroup to Update-AzStorageAccountSetupForAES256.
+    #>
+
+    [CmdletBinding(SupportsShouldProcess, ConfirmImpact="Medium")]
+    param(
+        [Parameter(Mandatory=$true, Position=0, ParameterSetName="StorageAccountName")]
+        [string]$ResourceGroupName,
+
+        [Parameter(Mandatory=$true, Position=1, ParameterSetName="StorageAccountName")]
+        [Alias('Name')]
+        [string]$StorageAccountName,
+
+        [Parameter(Mandatory=$true, Position=0, ValueFromPipeline=$true, ParameterSetName="StorageAccount")]
+        [Microsoft.Azure.Commands.Management.Storage.Models.PSStorageAccount]$StorageAccount
+    ) 
+
+    begin {
+        Assert-IsWindows
+        Assert-IsDomainJoined
+    }
+
+    process {
+        if ($PSCmdlet.ParameterSetName -eq "StorageAccount") {
+            $StorageAccountName = $StorageAccount.StorageAccountName
+            $ResourceGroupName = $StorageAccount.ResourceGroupName
+        }
+
+        $adObject = Get-AzStorageAccountADObject -ResourceGroupName $ResourceGroupName `
+            -StorageAccountName $StorageAccountName -ErrorAction Stop
+
+        $activeDirectoryProperties = Get-AzStorageAccountActiveDirectoryProperties `
+            -ResourceGroupName $ResourceGroupName -StorageAccountName $StorageAccountName -ErrorAction Stop
+        $domain = $activeDirectoryProperties.DomainName
+
+        if (($adObject.ObjectClass -ine "computer") -or ($adObject.SamAccountName.TrimEnd("$") -ine $StorageAccountName)) {
+            Write-Verbose -Message "Removing ADObject $($adObject.DistinguishedName)"
+            Remove-ADObject -Identity $adObject.DistinguishedName -Server $domain -Confirm:$false -ErrorAction Stop
+
+            $organizationalUnitDistinguishedName = $adObject.DistinguishedName.Substring($adObject.DistinguishedName.IndexOf(',') + 1)
+
+            $message = "Join storage account '$StorageAccountName' to domain '$domain'" `
+                + " as a computer object under '$organizationalUnitDistinguishedName'"
+            Write-Verbose -Message $message
+
+            Join-AzStorageAccount -ResourceGroupName $ResourceGroupName -StorageAccountName $StorageAccountName `
+                -Domain $domain -DomainAccountType "ComputerAccount" `
+                -OrganizationalUnitDistinguishedName $organizationalUnitDistinguishedName `
+                -ADObjectNameOverride $StorageAccountName -ErrorAction Stop
+            
+            $adObject = Get-AzStorageAccountADObject -ResourceGroupName $ResourceGroupName `
+                -StorageAccountName $StorageAccountName -ErrorAction Stop    
+        }
+        
+        Write-Verbose -Message "Set AD object '$($adObject.DistinguishedName)' to use AES256 for Kerberos authentication"
+        Set-ADComputer -Identity $adObject.DistinguishedName -Server $domain `
+            -KerberosEncryptionType "AES256" -ErrorAction Stop
+    }
+}
+
 function Join-AzStorageAccount {
     <#
     .SYNOPSIS 
@@ -4092,19 +4175,28 @@ function Join-AzStorageAccount {
                     -ErrorAction Stop
         }
 
+        if ($DomainAccountType -ieq "ServiceLogonAccount") {
+            $message = "Parameter -DomainAccountType is 'ServiceLogonAccount'," `
+                + " which will not be supported when Azure Files start to use AES encryption for Kerberos tickets."
+            Write-Error -Message $message -ErrorAction Stop
+        }
+
         if ($PSCmdlet.ParameterSetName -eq "StorageAccount") {
             $StorageAccountName = $StorageAccount.StorageAccountName
             $ResourceGroupName = $StorageAccount.ResourceGroupName
         }
         
         if (!$PSBoundParameters.ContainsKey("ADObjectNameOverride")) {
-            if ($StorageAccountName.Length -gt 15) {
-                $randomSuffix = Get-RandomString -StringLength 5 -AlphanumericOnly
-                $ADObjectNameOverride = $StorageAccountName.Substring(0, 10) + $randomSuffix
+            $ADObjectNameOverride = $StorageAccountName
+        }
 
-            } else {
-                $ADObjectNameOverride = $StorageAccountName
-            }
+        if ($ADObjectNameOverride.Length -gt 15) {
+            $message = "Parameter -StorageAccountName or -ADObjectNameOverride has more than 15 characters," `
+                + " which is not supported to be used as the SamAccountName to create an Active Directory object" `
+                + " for the storage account. Azure Files will be supporting AES encryption for Kerberos tickets," `
+                + " which requires that the SamAccountName match the storage account name. Please consider using" `
+                + " a storage account with a shorter name."
+                Write-Error -Message $message -ErrorAction Stop
         }
         
         Write-Verbose -Message "Using $ADObjectNameOverride as the name for the ADObject."
