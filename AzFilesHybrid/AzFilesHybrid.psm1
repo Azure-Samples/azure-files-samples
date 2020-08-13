@@ -2893,13 +2893,11 @@ function Get-AzStorageKerberosTicketStatus {
                 # The encryption type requested is not supported by the KDC.
                 #
 
-                $message = "ERROR: Azure Files only supports Kerberos authentication with" `
-                    + " AD with RC4-HMAC encryption - which is being blocked by the KDC (Kerberos Key" `
-                    + " Distribution Center). AES Kerberos encryption is not yet supported by Azure Files" `
-                    + " at this time. To unblock authentication with RC4-HMAC encryption, please examine" `
-                    + " your group policy for 'Network security: Configure encryption types allowed for Kerberos'" `
-                    + " and add RC4-HMAC as an allowed encryption type." `
-                    + " https://docs.microsoft.com/en-us/windows/security/threat-protection/security-policy-settings/network-security-configure-encryption-types-allowed-for-kerberos"
+                $message = "ERROR: Azure Files supports Kerberos authentication with" `
+                    + " AD with AES and RC4-HMAC encryption. This error may happen when RC4-HMAC" `
+                    + " is blocked by the KDC (Kerberos Key Distribution Center). It is recommended" `
+                    + " to update the storage account setup to use AES Kerberos encryption by using cmdlet" `
+                    + " Update-AzStorageAccountSetupForAES256 -ResourceGroupName '$ResourceGroupName' -StorageAccountName '$StorageAccountName'"
                 Write-Error -Message $message -ErrorAction Stop
             }
             elseif ($line -match "0x80090303")
