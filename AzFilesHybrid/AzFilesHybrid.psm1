@@ -5471,86 +5471,18 @@ function New-AzDnsForwarder {
 #endregion
 
 #region Share level permissions migration cmdlets
-function Get-StorageAccountDetails {
-    <#
-    .SYNOPSIS
-    Verify that Storage account provided exists and is AD enabled
-    .DESCRIPTION
-    This cmdlet will check to see if the Storage account provided exists and AD enabled. It creates
-    a share on the cloud if not already present.
-    .OUTPUTS
-    PSStorageAccount, representing Storage account provided if exists, else null.
-    #>
-
-    param(
-        [Parameter(Mandatory=$true, Position=0)]
-        [string]$ResourceGroupName,
-
-        [Parameter(Mandatory=$true, Position=1)]
-        [string]$StorageAccountName,
-
-        [Parameter(Mandatory = $true, Position=2)]
-        [string]$Destinationshare
-    )
-
-    Process
-    {
-        Write-Verbose -Message "Getting details of Storage Account:$StorageAccountName."
-
-        $storageAccount = Get-AzStorageAccount -ResourceGroupName $ResourceGroupName -Name $StorageAccountName
-
-        if($storageAccount -ne $null)
-        {
-            Write-Verbose -Message "Checking if the Storage Account is AD joined."
-
-            if($storageAccount.AzureFilesIdentityBasedAuth.DirectoryServiceOptions -ceq 'AD')
-            {
-                Write-Verbose -Message "Storage account is AD joined - Proceeding to check for destination share."
-
-                $accountKeys= Get-AzStorageAccountKey -ResourceGroupName $ResourceGroupName -Name $StorageAccountName | Where-Object {$_.KeyName -like "key1"}
-                $storageAccountContext = New-AzStorageContext -StorageAccountName $StorageAccountName -StorageAccountKey $accountKeys.Value
-
-                Write-Verbose -Message "Checking if the destination share exists"
-
-                $newshare = Get-AzStorageShare -Context $storageAccountContext -Name $DestinationShareName -Erroraction 'silentlycontinue'
-
-                # If the destination share does not exist, the following step will create a new share.
-                if($newshare -eq $null)
-                {
-                    Write-Verbose -Message  "The Destination Share doesn't exist. Creating a new share with the name provided by the user"
-                    New-AzStorageShare -Name $DestinationShareName -Context $storageAccountContext
-                }
-            }
-            #If SA is not AD connect, the user has to connect the SA to AD using the steps in the URL mentioned.
-            else
-            {
-                Write-Error -Message "To Proceed, you need to have Storage Account connected to Active Directory.
-                                        Refer to - https://docs.microsoft.com/en-us/azure/storage/files/storage-files-identity-auth-active-directory-enable"
-                            -Erroraction Stop
-            }
-        }
-        else
-        {
-            Write-Error -Message "The Storage Account doesn't exist. To create the Storage account and connect it to active directory, 
-                                    please follow the link https://docs.microsoft.com/en-us/azure/storage/files/storage-files-identity-auth-active-directory-enable" 
-                        -ErrorAction Stop
-        }
-
-        return $storageAccount
-    }
-}
-
-function ACLMigration 
+function Move-OnPremSharePermissionsToAzureFileShare
 {
     <#
     .SYNOPSIS
-    Maps local share level permissions to Azure RBAC's role assignments.
+    Maps local share permissions to Azure RBAC's built-in roles for files. Applies corresponding built-in roles to domain user's identity in Azure AD.
     .DESCRIPTION
-    Local share level permissions applied on domain users will be mapped to Azure RBAC role assignments applied on cloud identity corresponding to domain users.
+    On-prem share permissions applied on domain users will be mapped to Azure RBAC's built-in roles. And these built-in roles will be assigned to domain user's identity in Azure AD.
     .OUTPUTS
-    Boolean, True, if ACL migration can happen without any errors if CommitChanges is set to False.
+    Boolean, If $CommitChanges is False, this functions checks if share permissions can be migrated to cloud without any failures. Returns True if migration is possible without errors.
+    If $CommitChanges is True, this function migrates on-prem share permissions to azure file share RBAC permissions. If there any errors are encountered particualr share permission migration is skipped and next permission in the list in processed.
     .EXAMPLE
-    PS C:\> ACLMigration -LocalSharename "<localsharename>" - Destinationshare "<destinationshharename>" -ResourceGroupName "<resourceGroupName>" -StorageAccountName "<storageAccountName>" -CommitChanges $False -StopOnAADUserLookupFailure $True -AutoFitSharePermissionsOnAAD $True
+    PS C:\> Migrate-OnPremSharePermissionsToAzureFileShare -LocalSharename "<localsharename>" -Destinationshare "<destinationshharename>" -ResourceGroupName "<resourceGroupName>" -StorageAccountName "<storageAccountName>" -CommitChanges $False -StopOnAADUserLookupFailure $True -AutoFitSharePermissionsOnAAD $True
     #>
 
     Param(
@@ -5563,16 +5495,16 @@ function ACLMigration
          [Parameter(Mandatory=$true, Position=2, HelpMessage="Resource group name of storage account.")]
          [string]$ResourceGroupName,
 
-         [Parameter(Mandatory=$true, Position=3, HelpMessage="Storage account name on Azure")]
+         [Parameter(Mandatory=$true, Position=3, HelpMessage="Storage account name on Azure.")]
          [string]$StorageAccountName,
 
          [Parameter(Mandatory=$true, Position=4, HelpMessage="If false, the tool just checks for possible errors and reports back without making any changes on the cloud.")]
          [bool]$CommitChanges,
 
-         [Parameter(Mandatory=$false, Position=5, HelpMessage="If true, ACL migration will be stopped upon failure to identity local user on AAD")]
+         [Parameter(Mandatory=$false, Position=5, HelpMessage="If true, ACL migration will be stopped upon failure to lookup local user on Azure AD.")]
          [bool]$StopOnAADUserLookupFailure = $true,
 
-         [Parameter(Mandatory=$false, Position=6, HelpMessage="If true, permissions will be mapped to closest available on AAD")]
+         [Parameter(Mandatory=$false, Position=6, HelpMessage="If true, permissions will be mapped to closest available on built-in roles in Azure RBAC.")]
          [bool]$AutoFitSharePermissionsOnAAD = $true
         )
 
@@ -5587,14 +5519,62 @@ function ACLMigration
     $roleAssignmentsDoneAccounts = New-Object System.Collections.Generic.List[CimInstance]
     $roleAssignmentsPossibleWithoutAnySkips = $True
 
-    $StorageAccountObj = Get-AzStorageAccount -ResourceGroupName $ResourceGroupName -Name $StorageAccountName
+    # Verify the Storage account and file share exist on the cloud.
+    try
+    {
+        $StorageAccountObj = Get-AzStorageAccount -ResourceGroupName $ResourceGroupName -Name $StorageAccountName -ErrorAction Stop
+    }
+    catch
+    {
+        Write-Error -Message "Caught exception: $_" -ErrorAction Stop
+    }
+
+    if($StorageAccountObj -eq $null)
+    {
+        throw "The Storage Account doesn't exist. To create the Storage account and connect it to an active directory, 
+                                    please follow the link https://docs.microsoft.com/en-us/azure/storage/files/storage-files-identity-auth-active-directory-enable"
+    }
+
+    if($StorageAccountObj.AzureFilesIdentityBasedAuth.DirectoryServiceOptions -ne 'AD')
+    {
+        throw "To Proceed, you need to have Storage Account connected to an Active Directory.
+                                        Refer the link for details - https://docs.microsoft.com/en-us/azure/storage/files/storage-files-identity-auth-active-directory-enable"
+    }
+
+    try
+    {
+        $accountKey = Get-AzStorageAccountKey -ResourceGroupName $ResourceGroupName -Name $StorageAccountName | Where-Object {$_.KeyName -like "key1"}
+        $storageAccountContext = New-AzStorageContext -StorageAccountName $StorageAccountName -StorageAccountKey $accountKey.Value
+    }
+    catch
+    {
+        Write-Error "Caught exception: $_" -ErrorAction Stop
+    }
+
+    Write-Verbose -Message "Checking if the destination share exists"
+
+    $cloudShare = Get-AzStorageShare -Context $storageAccountContext -Name $DestinationShareName -Erroraction 'silentlycontinue'
+
+    # If the destination share does not exist, the following will create a new share.
+    if($cloudShare -eq $null)
+    {
+        Write-Verbose -Message  "The Destination Share doesn't exist. Creating a new share with the name provided"
+        try
+        {
+            $cloudShare = New-AzStorageShare -Name $DestinationShareName -Context $storageAccountContext
+        }
+        catch
+        {
+            Write-Error "Caught exception: $_" -ErrorAction Stop
+        }
+    }
 
     Write-Verbose -Message "Getting the local SMB share access details"
     $localSmbShareAccess = Get-SmbShareAccess -Name $LocalShareName
 
     if ($localSmbShareAccess -eq $null)
     {
-        Write-Error -Message "Could not find share with name $LocalShareName." -ErrorAction stop
+        throw "Could not find share with name $LocalShareName."
     }
 
     Write-Host "Local SMB share access details"
@@ -5626,7 +5606,7 @@ function ACLMigration
         }
         catch
         {
-            throw
+            Write-Error "Caught exception: $_" -ErrorAction Stop
         }
 
         if ($aadUser -ne $null)
