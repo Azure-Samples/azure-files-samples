@@ -2969,7 +2969,7 @@ function Get-AzStorageKerberosTicketStatus {
                     # We found a ticket to an Azure storage account.  Check that it has valid encryption type.
                     #
                     
-                    if ($KerbTicketEType -notmatch "RC4")
+                    if (($KerbTicketEType -notmatch "RC4") -and ($KerbTicketEType -notmatch "AES-256"))
                     {
                         $WarningMessage = "Unhealthy - Unsupported KerbTicket Encryption Type $KerbTicketEType"
                         Add-Member -InputObject $Ticket -MemberType NoteProperty -Name "Azure Files Health Status" -Value $WarningMessage
@@ -4113,6 +4113,8 @@ function Join-AzStorageAccount {
     .PARAMETER OverwriteExistingADObject
     The switch to indicate whether to overwrite the existing AD object for the storage account. Default is $false and the script
     will stop if find an existing AD object for the storage account.
+    .PARAMETER EncryptionType
+    The type of encryption algorithm for the Kerberos ticket. Default is "'RC4','AES256'" which supports both 'RC4' and 'AES256' encryptions.
     .EXAMPLE
     PS> Join-AzStorageAccount -ResourceGroupName "myResourceGroup" -StorageAccountName "myStorageAccount" -Domain "subsidiary.corp.contoso.com" -DomainAccountType ComputerAccount -OrganizationalUnitName "StorageAccountsOU"
     .EXAMPLE 
@@ -4156,7 +4158,10 @@ function Join-AzStorageAccount {
         [string]$ADObjectNameOverride,
 
         [Parameter(Mandatory=$false, Position=6)]
-        [switch]$OverwriteExistingADObject
+        [switch]$OverwriteExistingADObject,
+
+        [Parameter(Mandatory=$false, Position=7)]
+        [System.Collections.Generic.HashSet[string]]$EncryptionType = @("RC4","AES256")
     ) 
 
     begin {
@@ -4176,10 +4181,10 @@ function Join-AzStorageAccount {
                     -ErrorAction Stop
         }
 
-        if ($DomainAccountType -ieq "ServiceLogonAccount") {
+        if (($DomainAccountType -ieq "ServiceLogonAccount") -and ($EncryptionType -contains "AES256")) {
             $message = "Parameter -DomainAccountType is 'ServiceLogonAccount'," `
                 + " which will not be supported when Azure Files start to use AES encryption for Kerberos tickets."
-            Write-Error -Message $message -ErrorAction Stop
+            Write-Warning -Message $message
         }
 
         if ($PSCmdlet.ParameterSetName -eq "StorageAccount") {
@@ -4187,17 +4192,31 @@ function Join-AzStorageAccount {
             $ResourceGroupName = $StorageAccount.ResourceGroupName
         }
         
-        if (!$PSBoundParameters.ContainsKey("ADObjectNameOverride")) {
-            $ADObjectNameOverride = $StorageAccountName
+        if ($EncryptionType -contains "AES256") {
+            if ($PSBoundParameters.ContainsKey("ADObjectNameOverride") -and ($ADObjectNameOverride -ine $StorageAccountName)) {
+                $message = "Parameter -ADObjectNameOverride '$ADObjectNameOverride' is differrent from storage account" `
+                    + " name '$StorageAccountName'. It cannot be used as the SamAccountName to create an Active Directory object" `
+                    + " for the storage account. Azure Files will be supporting AES encryption for Kerberos tickets," `
+                    + " which requires that the SamAccountName match the storage account name."
+                Write-Error -Message $message -ErrorAction Stop
+            }
+            if ($StorageAccountName.Length -gt 15) {
+                $message = "Parameter -StorageAccountName '$StorageAccountName' has more than 15 characters," `
+                    + " which is not supported to be used as the SamAccountName to create an Active Directory object" `
+                    + " for the storage account. Azure Files will be supporting AES encryption for Kerberos tickets," `
+                    + " which requires that the SamAccountName match the storage account name. Please consider using" `
+                    + " a storage account with a shorter name."
+                Write-Error -Message $message -ErrorAction Stop
+            }
         }
 
-        if ($ADObjectNameOverride.Length -gt 15) {
-            $message = "Parameter -StorageAccountName or -ADObjectNameOverride has more than 15 characters," `
-                + " which is not supported to be used as the SamAccountName to create an Active Directory object" `
-                + " for the storage account. Azure Files will be supporting AES encryption for Kerberos tickets," `
-                + " which requires that the SamAccountName match the storage account name. Please consider using" `
-                + " a storage account with a shorter name."
-                Write-Error -Message $message -ErrorAction Stop
+        if (!$PSBoundParameters.ContainsKey("ADObjectNameOverride")) {
+            if ($StorageAccountName.Length -gt 15) {
+                $randomSuffix = Get-RandomString -StringLength 5 -AlphanumericOnly
+                $ADObjectNameOverride = $StorageAccountName.Substring(0, 10) + $randomSuffix
+            } else {
+                $ADObjectNameOverride = $StorageAccountName
+            }
         }
         
         Write-Verbose -Message "Using $ADObjectNameOverride as the name for the ADObject."
