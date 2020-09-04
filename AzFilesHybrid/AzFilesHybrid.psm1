@@ -2894,10 +2894,10 @@ function Get-AzStorageKerberosTicketStatus {
                 #
 
                 $message = "ERROR: Azure Files supports Kerberos authentication with" `
-                    + " AD with AES and RC4-HMAC encryption. This error may happen when RC4-HMAC" `
+                    + " AD with AES256 and RC4-HMAC encryption. This error may happen when RC4-HMAC" `
                     + " is blocked by the KDC (Kerberos Key Distribution Center). It is recommended" `
-                    + " to update the storage account setup to use AES Kerberos encryption by using cmdlet" `
-                    + " Update-AzStorageAccountSetupForAES256 -ResourceGroupName '$ResourceGroupName' -StorageAccountName '$StorageAccountName'"
+                    + " to update the storage account setup to use AES256 Kerberos encryption by using cmdlet" `
+                    + " Update-AzStorageAccountAuthForAES256 -ResourceGroupName '$ResourceGroupName' -StorageAccountName '$StorageAccountName'"
                 Write-Error -Message $message -ErrorAction Stop
             }
             elseif ($line -match "0x80090303")
@@ -3994,31 +3994,31 @@ function Invoke-AzStorageAccountADObjectPasswordRotation {
     }
 }
 
-function Update-AzStorageAccountSetupForAES256 {
+function Update-AzStorageAccountAuthForAES256 {
     <#
     .SYNOPSIS 
     Update a storage account to support AES256 encryption.
     .DESCRIPTION
     This cmdlet will check and rejoin the storage account to an Active Directory domain with AES256 support.
     .PARAMETER ResourceGroupName
-    The name of the resource group containing the storage account you would like to domain join. If StorageAccount is specified, 
+    The name of the resource group containing the storage account you would like to update. If StorageAccount is specified, 
     this parameter should not specified.
     .PARAMETER StorageAccountName
-    The name of the storage account you would like to domain join. If StorageAccount is specified, this parameter 
+    The name of the storage account you would like to update. If StorageAccount is specified, this parameter 
     should not be specified.
     .PARAMETER StorageAccount
-    A storage account object you would like to domain join. If StorageAccountName and ResourceGroupName is specified, this 
+    A storage account object you would like to update. If StorageAccountName and ResourceGroupName is specified, this 
     parameter should not specified.
     .EXAMPLE
-    PS> Update-AzStorageAccountSetupForAES256 -ResourceGroupName "myResourceGroup" -StorageAccountName "myStorageAccount"
+    PS> Update-AzStorageAccountAuthForAES256 -ResourceGroupName "myResourceGroup" -StorageAccountName "myStorageAccount"
     .EXAMPLE 
     PS> $storageAccount = Get-AzStorageAccount -ResourceGroupName "myResourceGroup" -Name "myStorageAccount"
-    PS> Update-AzStorageAccountSetupForAES256 -StorageAccount $storageAccount
+    PS> Update-AzStorageAccountAuthForAES256 -StorageAccount $storageAccount
     .EXAMPLE
-    PS> Get-AzStorageAccount -ResourceGroupName "myResourceGroup" | Update-AzStorageAccountSetupForAES256
+    PS> Get-AzStorageAccount -ResourceGroupName "myResourceGroup" | Update-AzStorageAccountAuthForAES256
     In this example, note that a specific storage account has not been specified to 
     Get-AzStorageAccount. This means Get-AzStorageAccount will pipe every storage account 
-    in the resource group myResourceGroup to Update-AzStorageAccountSetupForAES256.
+    in the resource group myResourceGroup to Update-AzStorageAccountAuthForAES256.
     #>
 
     [CmdletBinding(SupportsShouldProcess, ConfirmImpact="Medium")]
@@ -4053,7 +4053,10 @@ function Update-AzStorageAccountSetupForAES256 {
         $domain = $activeDirectoryProperties.DomainName
 
         if (($adObject.ObjectClass -ine "computer") -or ($adObject.SamAccountName.TrimEnd("$") -ine $StorageAccountName)) {
-            Write-Verbose -Message "Removing ADObject $($adObject.DistinguishedName)"
+            $message = "Removing object '$($adObject.DistinguishedName)' of type '$adObject.ObjectClass' from domain '$domain'." `
+                + " AES256 is only supported for computer objects."
+            Write-Verbose -Message $message
+
             Remove-ADObject -Identity $adObject.DistinguishedName -Server $domain -Confirm:$false -ErrorAction Stop
 
             $organizationalUnitDistinguishedName = $adObject.DistinguishedName.Substring($adObject.DistinguishedName.IndexOf(',') + 1)
@@ -4183,7 +4186,7 @@ function Join-AzStorageAccount {
 
         if (($DomainAccountType -ieq "ServiceLogonAccount") -and ($EncryptionType -contains "AES256")) {
             $message = "Parameter -DomainAccountType is 'ServiceLogonAccount'," `
-                + " which will not be supported when Azure Files start to use AES encryption for Kerberos tickets."
+                + " which will not be supported when Azure Files start to use AES256 encryption for Kerberos tickets."
             Write-Warning -Message $message
         }
 
@@ -4194,16 +4197,16 @@ function Join-AzStorageAccount {
         
         if ($EncryptionType -contains "AES256") {
             if ($PSBoundParameters.ContainsKey("ADObjectNameOverride") -and ($ADObjectNameOverride -ine $StorageAccountName)) {
-                $message = "Parameter -ADObjectNameOverride '$ADObjectNameOverride' is differrent from storage account" `
+                $message = "Parameter -ADObjectNameOverride '$ADObjectNameOverride' is different from storage account" `
                     + " name '$StorageAccountName'. It cannot be used as the SamAccountName to create an Active Directory object" `
-                    + " for the storage account. Azure Files will be supporting AES encryption for Kerberos tickets," `
+                    + " for the storage account. Azure Files will be supporting AES256 encryption for Kerberos tickets," `
                     + " which requires that the SamAccountName match the storage account name."
                 Write-Error -Message $message -ErrorAction Stop
             }
             if ($StorageAccountName.Length -gt 15) {
                 $message = "Parameter -StorageAccountName '$StorageAccountName' has more than 15 characters," `
                     + " which is not supported to be used as the SamAccountName to create an Active Directory object" `
-                    + " for the storage account. Azure Files will be supporting AES encryption for Kerberos tickets," `
+                    + " for the storage account. Azure Files will be supporting AES256 encryption for Kerberos tickets," `
                     + " which requires that the SamAccountName match the storage account name. Please consider using" `
                     + " a storage account with a shorter name."
                 Write-Error -Message $message -ErrorAction Stop
