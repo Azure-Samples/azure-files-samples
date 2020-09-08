@@ -4186,7 +4186,7 @@ function Join-AzStorageAccount {
 
         if (($DomainAccountType -ieq "ServiceLogonAccount") -and ($EncryptionType -contains "AES256")) {
             $message = "Parameter -DomainAccountType is 'ServiceLogonAccount'," `
-                + " which will not be supported when Azure Files start to use AES256 encryption for Kerberos tickets."
+                + " which will not be supported AES256 encryption for Kerberos tickets."
             Write-Warning -Message $message
         }
 
