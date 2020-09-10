@@ -3139,6 +3139,69 @@ function Debug-AzStorageAccountADObject
     }
 }
 
+function Get-NativeAdUser {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory=$False, Position=0, HelpMessage="The user name or SID to look up the user")]
+        [string]$Identity,
+
+        [Parameter(Mandatory=$False, Position=1, HelpMessage="The domain name to look up the user")]
+        [string]$Domain
+    )
+    process {
+        if ([string]::IsNullOrEmpty($Identity)) {
+            $Identity = $($env:UserName)
+        }
+
+        if ([string]::IsNullOrEmpty($Domain)) {
+            $Domain = (Get-ADDomain).DnsRoot
+        }
+
+        Write-Verbose "Look up user $Identity in domain $Domain"
+
+        $user = Get-ADUser -Identity $Identity -Server $Domain
+
+        if ($null -eq $user) {
+            $message = "User '$Identity' not found in domain '$Domain'. Please check" `
+                + " whether the provided user identity or domain name is correct or not."
+            Write-Error -Message $message -ErrorAction Stop
+        }
+
+        return $user
+    }
+}
+
+function Get-NativeAdUserGroups {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory=$False, Position=0, HelpMessage="The user name or SID to look up the user groups")]
+        [string]$Identity,
+
+        [Parameter(Mandatory=$False, Position=1, HelpMessage="The domain name to look up the user groups")]
+        [string]$Domain
+    )
+    process {
+        if ([string]::IsNullOrEmpty($Identity)) {
+            $Identity = $($env:UserName)
+        }
+
+        if ([string]::IsNullOrEmpty($Domain)) {
+            $Domain = (Get-ADDomain).DnsRoot
+        }
+
+        Write-Verbose "Look up groups of user $Identity in domain $Domain"
+
+        $groups = Get-ADPrincipalGroupMembership -Identity $Identity -Server $Domain
+
+        if ($null -eq $groups) {
+            $message = "Groups of use '$Identity' not found in domain '$Domain'. Please check" `
+                + " whether the provided user identity or domain name is correct or not."
+            Write-Error -Message $message -ErrorAction Stop
+        }
+
+        return $groups
+    }
+}
 
 class CheckResult {
     [string]$Name
@@ -3204,6 +3267,7 @@ function Debug-AzStorageAccountAuth {
             "CheckSidHasAadUser" = [CheckResult]::new("CheckSidHasAadUser");
             "CheckAadUserHasSid" = [CheckResult]::new("CheckAadUserHasSid");
             "CheckStorageAccountDomainJoined" = [CheckResult]::new("CheckStorageAccountDomainJoined");
+            "CheckUserRbacAssignment" = [CheckResult]::new("CheckUserRbacAssignment");
         }
 
         #
@@ -3321,23 +3385,7 @@ function Debug-AzStorageAccountAuth {
                 $checksExecuted += 1;
                 Write-Verbose "CheckSidHasAadUser - START"
 
-                if ([string]::IsNullOrEmpty($UserName)) {
-                    $UserName = $($env:UserName)
-                }
-
-                if ([string]::IsNullOrEmpty($Domain)) {
-                    $Domain = (Get-ADDomain).DnsRoot
-                }
-
-                Write-Verbose "CheckSidHasAadUser for user $UserName in domain $Domain"
-
-                $currentUser = Get-ADUser -Identity $UserName -Server $Domain
-
-                if ($null -eq $currentUser) {
-                    $message = "User '$UserName' not found in domain '$Domain'. Please check" `
-                        + " whether the provided user name or domain name is correct or not."
-                    Write-Error -Message $message -ErrorAction Stop
-                }
+                $currentUser = Get-NativeAdUser -Identity $UserName -Domain $Domain -ErrorAction Stop
 
                 Write-Verbose "User $UserName in domain $Domain has SID = $($currentUser.Sid)"
 
@@ -3371,7 +3419,7 @@ function Debug-AzStorageAccountAuth {
 
                 if ([string]::IsNullOrEmpty($ObjectId)) {
                     Write-Verbose -Message "Missing required parameter ObjectId for CheckAadUserHasSid requires ObjectId parameter to be present, skipping CheckAadUserHasSid"
-                    $checks["CheckAadUserHasSid"] = "Skipped"
+                    $checks["CheckAadUserHasSid"].Result = "Skipped"
                 }
                 else {
                 
@@ -3435,6 +3483,83 @@ function Debug-AzStorageAccountAuth {
                 $checks["CheckStorageAccountDomainJoined"].Result = "Failed"
                 $checks["CheckStorageAccountDomainJoined"].Issue = $_
                 Write-Error "CheckStorageAccountDomainJoined - FAILED"
+                Write-Error $_
+            }
+        }
+
+        if (!$filterIsPresent -or ($Filter -match "CheckUserRbacAssignment")) {
+            try {
+                $checksExecuted += 1
+                Write-Verbose "CheckUserRbacAssignment - START"
+
+                Request-ConnectAzureAD
+
+                $user = Get-NativeAdUser -Identity $UserName -Domain $Domain -ErrorAction Stop
+
+                $groups = Get-NativeAdUserGroups -Identity $user.SID -Domain $Domain -ErrorAction Stop
+
+                $roleAssignments = Get-AzRoleAssignment -ResourceGroupName $ResourceGroupName `
+                    -ResourceName $StorageAccountName -ResourceType Microsoft.Storage/storageAccounts
+                
+                $roleDefinitions = @{}
+                $assignedAdObjects = @{}
+
+                foreach ($assignment in $roleAssignments) {
+                    $aadObject = Get-AzureADObjectByObjectId -ObjectId $assignment.ObjectId
+
+                    if (($null -ne $aadObject) -and (-not [string]::IsNullOrEmpty($aadObject.OnPremisesSecurityIdentifier))) {
+                        if ($user.SID -ieq $aadObject.OnPremisesSecurityIdentifier) {
+                            if (-not $roleDefinitions.ContainsKey($assignment.RoleDefinitionId)) {
+                                $roleDefinition = Get-AzRoleDefinition -Id $assignment.RoleDefinitionId
+                                $roleDefinitions[$assignment.RoleDefinitionId] = $roleDefinition
+                            }
+
+                            if (-not $assignedAdObjects.ContainsKey($assignment.RoleDefinitionId)) {
+                                $assignedAdObjects[$assignment.RoleDefinitionId] = @()
+                            }
+
+                            $assignedAdObjects[$assignment.RoleDefinitionId] += $user.DistinguishedName
+                        } else {
+                            foreach ($group in $groups) {
+                                if ($group.SID -ieq $aadObject.OnPremisesSecurityIdentifier) {
+                                    if (-not $roleDefinitions.ContainsKey($assignment.RoleDefinitionId)) {
+                                        $roleDefinition = Get-AzRoleDefinition -Id $assignment.RoleDefinitionId
+                                        $roleDefinitions[$assignment.RoleDefinitionId] = $roleDefinition
+                                    }
+        
+                                    if (-not $assignedAdObjects.ContainsKey($assignment.RoleDefinitionId)) {
+                                        $assignedAdObjects[$assignment.RoleDefinitionId] = @()
+                                    }
+        
+                                    $assignedAdObjects[$assignment.RoleDefinitionId] += $group.DistinguishedName
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if ($roleDefinitions.Count -eq 0) {
+                    $message = "User '$($user.UserPrincipalName)' is not assigned any share-level permission to" `
+                        + " storage account '$StorageAccountName' in resource group '$ResourceGroupName'. Please" `
+                        + " configure proper share-level permission following the guidance at" `
+                        + " https://docs.microsoft.com/en-us/azure/storage/files/storage-files-identity-ad-ds-assign-permissions"
+                    Write-Error -Message $message -ErrorAction Stop
+                }
+
+                Write-Host "User '$($user.UserPrincipalName)' is granted following share-level permissions:"
+                foreach ($roleDefinitionId in $roleDefinitions.Keys) {
+                    Write-Host "------------------------------------------"
+                    $roleDefinitions[$roleDefinitionId]
+                    Write-Host "Granted to following AD objects:"
+                    $assignedAdObjects[$roleDefinitionId] | Format-Table
+                }
+
+                $checks["CheckUserRbacAssignment"].Result = "Passed"
+                Write-Verbose "CheckUserRbacAssignment - SUCCESS"
+            } catch {
+                $checks["CheckUserRbacAssignment"].Result = "Failed"
+                $checks["CheckUserRbacAssignment"].Issue = $_
+                Write-Error "CheckUserRbacAssignment - FAILED"
                 Write-Error $_
             }
         }
