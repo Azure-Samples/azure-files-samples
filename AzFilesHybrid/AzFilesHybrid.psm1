@@ -3244,14 +3244,17 @@ function Debug-AzStorageAccountAuth {
         [Parameter(Mandatory=$False, Position=2, HelpMessage="Filter")]
         [string]$Filter,
 
-        [Parameter(Mandatory=$False, Position=3, HelpMessage="Optional parameter for filter 'CheckSidHasAadUser'. The user name to check.")]
+        [Parameter(Mandatory=$False, Position=3, HelpMessage="Optional parameter for filter 'CheckSidHasAadUser' and 'CheckUserFileAccess'. The user name to check.")]
         [string]$UserName,
 
-        [Parameter(Mandatory=$False, Position=4, HelpMessage="Optional parameter for filter 'CheckSidHasAadUser' and 'CheckAadUserHasSid'. The domain name to look up the user.")]
+        [Parameter(Mandatory=$False, Position=4, HelpMessage="Optional parameter for filter 'CheckSidHasAadUser', 'CheckUserFileAccess' and 'CheckAadUserHasSid'. The domain name to look up the user.")]
         [string]$Domain,
 
-        [Parameter(Mandatory=$False, Position=3, HelpMessage="Required parameter for filter 'CheckAadUserHasSid'. The Azure object ID or user principal name to check.")]
-        [string]$ObjectId
+        [Parameter(Mandatory=$False, Position=5, HelpMessage="Required parameter for filter 'CheckAadUserHasSid'. The Azure object ID or user principal name to check.")]
+        [string]$ObjectId,
+
+        [Parameter(Mandatory=$False, Position=6, HelpMessage="Required parameter for filter 'CheckUserFileAccess'. The file path on a mounted Azure file share.")]
+        [string]$FilePath
     )
 
     process
@@ -3268,6 +3271,7 @@ function Debug-AzStorageAccountAuth {
             "CheckAadUserHasSid" = [CheckResult]::new("CheckAadUserHasSid");
             "CheckStorageAccountDomainJoined" = [CheckResult]::new("CheckStorageAccountDomainJoined");
             "CheckUserRbacAssignment" = [CheckResult]::new("CheckUserRbacAssignment");
+            "CheckUserFileAccess" = [CheckResult]::new("CheckUserFileAccess");
         }
 
         #
@@ -3560,6 +3564,81 @@ function Debug-AzStorageAccountAuth {
                 $checks["CheckUserRbacAssignment"].Result = "Failed"
                 $checks["CheckUserRbacAssignment"].Issue = $_
                 Write-Error "CheckUserRbacAssignment - FAILED"
+                Write-Error $_
+            }
+        }
+
+        if (!$filterIsPresent -or $Filter -match "CheckUserFileAccess")
+        {
+            try {
+                $checksExecuted += 1;
+                Write-Verbose "CheckUserFileAccess - START"
+
+                if ([string]::IsNullOrEmpty($FilePath)) {
+                    Write-Verbose -Message "Missing required parameter FilePath for CheckUserFileAccess, skipping CheckUserFileAccess"
+                    $checks["CheckUserFileAccess"].Result = "Skipped"
+                } else {
+                    $fileAcl = Get-Acl -Path $FilePath
+                    if ($null -eq $fileAcl) {
+                        $message = "Unable to get the ACL of '$FilePath'. Please check if the provided file path is correct."
+                        Write-Error -Message $message -ErrorAction Stop
+                    }
+
+                    $fileAccessRules = $fileAcl.GetAccessRules($true, $true, [System.Security.Principal.SecurityIdentifier])
+                    if ($fileAccessRules.Count -eq 0) {
+                        $message = "There is no access rule granted to '$FilePath'. Please consider setting up proper access rules" `
+                            + " for the file (for example, using https://docs.microsoft.com/en-us/windows-server/administration/windows-commands/icacls)"
+                        Write-Error -Message $message -ErrorAction Stop
+                    }
+                
+                    $user = Get-NativeAdUser -Identity $UserName -Domain $Domain -ErrorAction Stop
+                    Write-Verbose -Message "Found user '$($user.UserPrincipalName)' with SID '$($user.SID)'"
+
+                    $identity = [System.Security.Principal.WindowsIdentity]::new($user.UserPrincipalName)
+
+                    $sidRules = @{}
+                    foreach ($accessRule in $fileAccessRules) {
+                        if ($accessRule.IdentityReference -ieq $user.SID) {
+                            if (-not $sidRules.ContainsKey($accessRule.IdentityReference)) {
+                                $sidRules[$accessRule.IdentityReference] = @()
+                            }
+
+                            $sidRules[$accessRule.IdentityReference] += $accessRule
+                        } else {
+                            foreach ($group in $identity.Groups) {
+                                if ($accessRule.IdentityReference -ieq $group.Value) {
+                                    if (-not $sidRules.ContainsKey($accessRule.IdentityReference)) {
+                                        $sidRules[$accessRule.IdentityReference] = @()
+                                    }
+        
+                                    $sidRules[$accessRule.IdentityReference] += $accessRule                
+                                }
+                            }
+                        }                        
+                    }
+
+                    if ($sidRules.Count -eq 0) {
+                        $message = "User '$($user.UserPrincipalName)' is not assigned any permission to '$FilePath'." `
+                            + " Please configure proper permission for the user to access the file (for example," `
+                            + " using https://docs.microsoft.com/en-us/windows-server/administration/windows-commands/icacls)"
+                        Write-Error -Message $message -ErrorAction Stop
+                    }
+    
+                    Write-Host "User '$($user.UserPrincipalName)' is granted following permissions to '$FilePath':"
+                    foreach ($sid in $sidRules.Keys) {
+                        Write-Host "------------------------------------------"
+                        Write-Host "Access through SID $($sid):"
+                        $sidRules[$sid] | Format-Table
+                    }
+
+                    $checks["CheckUserFileAccess"].Result = "Passed"
+                    Write-Verbose "CheckUserFileAccess - SUCCESS"
+                }
+
+            } catch {
+                $checks["CheckUserFileAccess"].Result = "Failed"
+                $checks["CheckUserFileAccess"].Issue = $_
+                Write-Error "CheckUserFileAccess - FAILED"
                 Write-Error $_
             }
         }
