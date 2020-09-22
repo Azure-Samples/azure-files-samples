@@ -356,16 +356,16 @@ function ValidateLmCompatibilityLevel {
     $Result = Get-ItemProperty -path $RegKeyPath  -Name $valueName -ErrorAction SilentlyContinue
 
     if ($Result -eq $null) {
-        Write-Log -level success "`n[OK]: HKLM:SYSTEM\CurrentControlSet\Control\Lsa|LmCompatibilityLevel IS NOT set, by default it should be 3" 
+        Write-Log -level success "`n[OK]: HKLM:SYSTEM\CurrentControlSet\Control\Lsa|LmCompatibilityLevel IS NOT set, by default it should be 3 (or greater)" 
 
     }
     else {
 
-        if ( $result.LmCompatibilityLevel -eq 3 ) {
-            Write-Log -level success "`n[OK]: HKLM:SYSTEM\CurrentControlSet\Control\Lsa|LmCompatibilityLevel is set to default value 3" 
+        if ( $result.LmCompatibilityLevel -ge 3 ) {
+            Write-Log -level success "`n[OK]: HKLM:SYSTEM\CurrentControlSet\Control\Lsa|LmCompatibilityLevel is set to default value 3 (or greater)" 
         }
         else {
-            Write-Log -level error "`n[ERROR]: HKLM:SYSTEM\CurrentControlSet\Control\Lsa|LmCompatibilityLevel IS NOT set to default value 3 and current value is $($result.LmCompatibilityLevel), it will cause mouting share to fail." 
+            Write-Log -level error "`n[ERROR]: HKLM:SYSTEM\CurrentControlSet\Control\Lsa|LmCompatibilityLevel IS NOT set to default value 3 (or greater) and current value is $($result.LmCompatibilityLevel), it will cause mouting share to fail." 
             $Script:ValidationPass = $false
         }
 
@@ -1508,9 +1508,3 @@ else {
     Write-Log -level warning "==========================================[END]==============================================="
 
 }
-
-
-
-
-
-
