@@ -23,6 +23,8 @@ param(
 #   DNS to access Azure resources on-premises and vice versa.
 # - DFS-N cmdlets, which wrap Azure and Windows Server DFS-N to make it a more seamless process
 #   to adopt Azure Files to replace on-premises file servers.
+#   Share level permissions migration cmdlets, used to migrate share level permissions set on
+#   local (on-rem) server  to share on Azure storage.
 
 
 #region General cmdlets
@@ -5858,6 +5860,293 @@ function New-AzDnsForwarder {
 #endregion
 
 #region DFS-N cmdlets
+#endregion
+
+#region Share level permissions migration cmdlets
+function Move-OnPremSharePermissionsToAzureFileShare
+{
+    <#
+    .SYNOPSIS
+    Maps local share permissions to Azure RBAC's built-in roles for files. Applies corresponding built-in roles to domain user's identity in Azure AD.
+    .DESCRIPTION
+    On-prem share permissions applied on domain users will be mapped to Azure RBAC's built-in roles. And these built-in roles will be assigned to domain user's identity in Azure AD.
+    .OUTPUTS
+    Boolean, If $CommitChanges is False, this functions checks if share permissions can be migrated to cloud without any failures. Returns True if migration is possible without errors.
+    If $CommitChanges is True, this function migrates on-prem share permissions to azure file share RBAC permissions. If there any errors are encountered particualr share permission migration is skipped and next permission in the list in processed.
+    .EXAMPLE
+    PS C:\> Move-OnPremSharePermissionsToAzureFileShare -LocalSharename "<localsharename>" -Destinationshare "<destinationshharename>" -ResourceGroupName "<resourceGroupName>" -StorageAccountName "<storageAccountName>" -CommitChanges $False -StopOnAADUserLookupFailure $True -AutoFitSharePermissionsOnAAD $True
+    #>
+
+    Param(
+         [Parameter(Mandatory=$true, Position=0, HelpMessage="Name of the share present on-prem.")]
+         [string]$LocalShareName,
+
+         [Parameter(Mandatory=$true, Position=1, HelpMessage="Name of the share on Azure storage account.")]
+         [string]$DestinationShareName,
+
+         [Parameter(Mandatory=$true, Position=2, HelpMessage="Resource group name of storage account.")]
+         [string]$ResourceGroupName,
+
+         [Parameter(Mandatory=$true, Position=3, HelpMessage="Storage account name on Azure.")]
+         [string]$StorageAccountName,
+
+         [Parameter(Mandatory=$true, Position=4, HelpMessage="If false, the tool just checks for possible errors and reports back without making any changes on the cloud.")]
+         [bool]$CommitChanges,
+
+         [Parameter(Mandatory=$false, Position=5, HelpMessage="If true, ACL migration will be stopped upon failure to lookup local user on Azure AD.")]
+         [bool]$StopOnAADUserLookupFailure = $true,
+
+         [Parameter(Mandatory=$false, Position=6, HelpMessage="If true, permissions will be mapped to closest available on built-in roles in Azure RBAC.")]
+         [bool]$AutoFitSharePermissionsOnAAD = $true
+        )
+
+    # Certain accounts in a domain server will not be represented in Azure AD.
+    [String[]]$wellKnowAccountName = 'Everyone', 'BUILTIN\Administrators', 'Domain', 'Authenticated Users', 'Users', 'SYSTEM', 'Domain Admins', 'Domain Users'
+    $wellKnownAccountNamesSet = [System.Collections.Generic.HashSet[String]]::new([System.Collections.Generic.IEnumerable[String]]$wellKnowAccountName)
+
+    $roleAssignmentsDoneList = New-Object System.Collections.Generic.List[Microsoft.Azure.Commands.Resources.Models.Authorization.PSRoleAssignment]
+    $roleAssignmentsSkippedAccountsForMissingRoles = New-Object System.Collections.Generic.List[CimInstance]
+    $roleAssignmentsSkippedAccountsForMissingIdentity = New-Object System.Collections.Generic.List[CimInstance]
+    $roleAssignmentsSkippedAccountsForHavingRoleAlready = New-Object System.Collections.Generic.List[CimInstance]
+    $roleAssignmentsDoneAccounts = New-Object System.Collections.Generic.List[CimInstance]
+    $roleAssignmentsPossibleWithoutAnySkips = $True
+
+    # Verify the Storage account and file share exist on the cloud.
+    try
+    {
+        $StorageAccountObj = Get-AzStorageAccount -ResourceGroupName $ResourceGroupName -Name $StorageAccountName -ErrorAction Stop
+    }
+    catch
+    {
+        Write-Error -Message "Caught exception: $_" -ErrorAction Stop
+    }
+
+    if($StorageAccountObj -eq $null)
+    {
+        throw "The Storage Account doesn't exist. To create the Storage account and connect it to an active directory, 
+                                    please follow the link https://docs.microsoft.com/en-us/azure/storage/files/storage-files-identity-auth-active-directory-enable"
+    }
+
+    if($StorageAccountObj.AzureFilesIdentityBasedAuth.DirectoryServiceOptions -ne 'AD')
+    {
+        throw "To Proceed, you need to have Storage Account connected to an Active Directory.
+                                        Refer the link for details - https://docs.microsoft.com/en-us/azure/storage/files/storage-files-identity-auth-active-directory-enable"
+    }
+
+    try
+    {
+        $accountKey = Get-AzStorageAccountKey -ResourceGroupName $ResourceGroupName -Name $StorageAccountName | Where-Object {$_.KeyName -like "key1"}
+        $storageAccountContext = New-AzStorageContext -StorageAccountName $StorageAccountName -StorageAccountKey $accountKey.Value
+    }
+    catch
+    {
+        Write-Error "Caught exception: $_" -ErrorAction Stop
+    }
+
+    Write-Verbose -Message "Checking if the destination share exists"
+
+    $cloudShare = Get-AzStorageShare -Context $storageAccountContext -Name $DestinationShareName -Erroraction 'silentlycontinue'
+
+    # If the destination share does not exist, the following will create a new share.
+    if($cloudShare -eq $null)
+    {
+        Write-Verbose -Message  "The Destination Share doesn't exist. Creating a new share with the name provided"
+        try
+        {
+            $cloudShare = New-AzStorageShare -Name $DestinationShareName -Context $storageAccountContext
+        }
+        catch
+        {
+            Write-Error "Caught exception: $_" -ErrorAction Stop
+        }
+    }
+
+    Write-Verbose -Message "Getting the local SMB share access details"
+    $localSmbShareAccess = Get-SmbShareAccess -Name $LocalShareName
+
+    if ($localSmbShareAccess -eq $null)
+    {
+        throw "Could not find share with name $LocalShareName."
+    }
+
+    Write-Host "Local SMB share access details"
+
+    $localSmbShareAccess | Format-Table | Out-String|% {Write-Host $_}
+
+    # Run through ACL of the local share.
+    foreach($smbShareAccessControl in $localSmbShareAccess)
+    {
+        $account=$smbShareAccessControl.AccountName
+        $strAccessRight =[string] $smbShareAccessControl.AccessRight
+        $strAccessControlType = [string] $smbShareAccessControl.AccessControlType
+        
+        if($wellKnownAccountNamesSet.Contains($account))
+        {
+            $roleAssignmentsSkippedAccountsForMissingIdentity.Add($smbShareAccessControl)
+            continue
+        }
+
+        $objUser = New-Object System.Security.Principal.NTAccount($account)
+        $strSID = $objUser.Translate([System.Security.Principal.SecurityIdentifier])
+
+        Write-Verbose -Message "Mapping domain user/group - $account to its corresponding identity on Azure AAD"
+
+        #Geting the OID of domain user/group using its SID
+        try
+        {
+            $aadUser = Get-AzureADUser -Filter "OnPremisesSecurityIdentifier eq '$strSID'"
+        }
+        catch
+        {
+            Write-Error "Caught exception: $_" -ErrorAction Stop
+        }
+
+        if ($aadUser -ne $null)
+        {
+            Write-Verbose -Message "Domain user/group's identity retreived from AAD - $($aadUser.UserPrincipalName)"
+
+            #Assign Rbac for OID extracted from above.
+            $roleDefinition = $null
+
+            If($strAccessControlType.Contains("Allow"))
+            {
+                if($strAccessRight.Contains("Read"))
+                {
+                    # Storage File Data SMB Share Reader - Built in role definition has below Id.
+                    $roleDefinition = Get-AzRoleDefinition -Id aba4ae5f-2193-4029-9191-0cb91df5e314
+                }
+                elseif($strAccessRight.Contains("Change"))
+                {
+                    # Storage File Data SMB Share Elevated Contributor - Built in role has below Id.
+                    $roleDefinition = Get-AzRoleDefinition -Id a7264617-510b-434b-a828-9731dc254ea7
+                }
+                elseif($strAccessRight.Contains("Full") -And $AutoFitSharePermissionsOnAAD -eq $true)
+                {
+                    # Storage File Data SMB Share Elevated Contributor - Built in role has below Id.
+                    $roleDefinition = Get-AzRoleDefinition -Id a7264617-510b-434b-a828-9731dc254ea7
+                }
+            }
+            else
+            {
+                # On deny, User should create custom role definitions.
+                $roleAssignmentsSkippedAccountsForMissingRoles.Add($smbShareAccessControl)
+            }
+
+            if ($roleDefinition -ne $null -And $CommitChanges -eq $true)
+            {
+                Write-Verbose -Message "Assigning corresponding RBAC role to the user/group with scope set to the destination share."
+
+                #Constrain the scope to the target file share
+                $storageAccountPath = $StorageAccountObj.Id
+                $scope = "$storageAccountPath/fileServices/default/fileshares/$DestinationShareName"
+
+                $roleAssignments = Get-AzRoleAssignment -Scope $scope -ObjectId $aadUser.ObjectId
+
+                #Check to see if the role is already assigned to the user/group.
+                $isRoleAssignedAlready = $False;
+
+                if($roleAssignments -ne $null )
+                {
+                    foreach($roleAssignment in $roleAssignments)
+                    {
+                        if($roleAssignment.RoleDefinitionName -eq $roleDefinition.Name)
+                        {
+                            Write-Verbose -Message "Role assignment present already, skipping"
+                            $isRoleAssignedAlready = $True
+                            $roleAssignmentsSkippedAccountsForHavingRoleAlready.Add($smbShareAccessControl)
+                            break;
+                        }
+                    }
+                }
+
+                if ($isRoleAssignedAlready -eq $False)
+                {
+                    Write-Verbose -Message "Assigning RBAC role to the user/group : $account  with the role : $($roleDefinition.Name)"
+                    #Assign the custom role to the target identity with the specified scope.
+                    $newRoleAssignment = New-AzRoleAssignment -ObjectId $aadUser.ObjectId -RoleDefinitionId $roleDefinition.Id -Scope $scope
+
+                    $roleAssignmentsDoneAccounts.Add($smbShareAccessControl)
+                    $roleAssignmentsDoneList.Add($newRoleAssignment)
+                }
+            }
+        }
+        else
+        {
+            $roleAssignmentsSkippedAccountsForMissingIdentity.Add($smbShareAccessControl)
+            If ($CommitChanges -eq $true)
+            {
+                If ($StopOnAADUserLookupFailure)
+                {
+                    Write-Error -Message "Could not find an identity on AAD for domain user - '$account'. Please confirm AD connect is complete." -ErrorAction stop
+                }
+                else
+                {
+                    Write-Error -Message "Could not find an identity on AAD for domain user - '$account', Continuing" -ErrorAction Continue
+                }
+            }
+        }
+    }
+
+    If ($CommitChanges -eq $false)
+    {
+        If ($roleAssignmentsSkippedAccountsForMissingIdentity.Count -ne 0)
+        {
+            Write-Host "Following Accounts do not have corresponding identities in Azure AD. If you continue, these account's access control will be skipped"
+
+            $roleAssignmentsPossibleWithoutAnySkips = $False
+            $roleAssignmentsSkippedAccountsForMissingIdentity | Format-Table | Out-String|% {Write-Host $_}
+        }
+
+        If ($roleAssignmentsSkippedAccountsForMissingRoles.Count -ne 0)
+        {
+            Write-Host "Following Accounts do not have corresponding access right/control in Azure AD. If you continue, these account's access control will be skipped"
+
+            $roleAssignmentsPossibleWithoutAnySkips = $False
+            $roleAssignmentsSkippedAccountsForMissingRoles | Format-Table | Out-String|% {Write-Host $_}
+        }
+    }
+    else
+    {
+        If ($roleAssignmentsSkippedAccountsForMissingIdentity.Count -ne 0)
+        {
+            Write-Host "Following Accounts do not have corresponding identities in Azure AD. Skipped ACL migration."
+
+            $roleAssignmentsSkippedAccountsForMissingIdentity | Format-Table | Out-String|% {Write-Host $_}
+        }
+
+        If ($roleAssignmentsSkippedAccountsForMissingRoles.Count -ne 0)
+        {
+            Write-Host "Following Accounts do not have corresponding access right/control in Azure AD. Skipped ACL migration."
+
+            $roleAssignmentsSkippedAccountsForMissingRoles | Format-Table | Out-String|% {Write-Host $_}
+        }
+
+        If ($roleAssignmentsSkippedAccountsForHavingRoleAlready.Count -ne 0)
+        {
+            Write-Host "Following Accounts already have access to the share at share scope or higher. Skipped ACL migration."
+
+            $roleAssignmentsSkippedAccountsForHavingRoleAlready | Format-Table | Out-String|% {Write-Host $_}
+        }
+
+        If ($roleAssignmentsDoneAccounts.Count -ne 0)
+        {
+            Write-Host "Below accounts were mapped to Azure AD roles"
+
+            $roleAssignmentsDoneAccounts | Format-Table | Out-String|% {Write-Host $_}
+        }
+
+        If ($roleAssignmentsDoneList.Count -ne 0)
+        {
+            Write-Host "`nSuccessful role assignments:"
+
+            foreach($roleAssignment in $roleAssignmentsDoneList)
+            {
+                $roleAssignment
+            }
+        }
+    }
+    return $roleAssignmentsPossibleWithoutAnySkips
+}
 #endregion
 
 #region Actions to run on module load
