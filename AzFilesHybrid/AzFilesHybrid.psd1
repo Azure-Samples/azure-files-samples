@@ -115,7 +115,7 @@
         "New-AzDnsForwarder",
         "New-AzDnsForwardingRuleSet",
         "Add-AzDnsForwardingRule",
-        "Push-DnsServerConfiguration"
+        "Push-DnsServerConfiguration",
 
         #Share level permissions migration cmdlets
         "Move-OnPremSharePermissionsToAzureFileShare"
