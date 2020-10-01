@@ -3550,13 +3550,18 @@ function Debug-AzStorageAccountAuth {
                     Write-Error -Message $message -ErrorAction Stop
                 }
 
+                Write-Host "------------------------------------------"
                 Write-Host "User '$($user.UserPrincipalName)' is granted following share-level permissions:"
+
                 foreach ($roleDefinitionId in $roleDefinitions.Keys) {
-                    Write-Host "------------------------------------------"
+                    Write-Host "Assigned role definition '$($roleDefinitions[$roleDefinitionId].Name)':"
                     $roleDefinitions[$roleDefinitionId]
-                    Write-Host "Granted to following AD objects:"
+                    Write-Host "AD objects being assigned with role definition '$($roleDefinitions[$roleDefinitionId].Name)':"
                     $assignedAdObjects[$roleDefinitionId] | Format-Table
+                    Write-Host ""
                 }
+
+                Write-Host "------------------------------------------"
 
                 $checks["CheckUserRbacAssignment"].Result = "Passed"
                 Write-Verbose "CheckUserRbacAssignment - SUCCESS"
@@ -3624,12 +3629,14 @@ function Debug-AzStorageAccountAuth {
                         Write-Error -Message $message -ErrorAction Stop
                     }
     
+                    Write-Host "------------------------------------------"
                     Write-Host "User '$($user.UserPrincipalName)' is granted following permissions to '$FilePath':"
                     foreach ($sid in $sidRules.Keys) {
-                        Write-Host "------------------------------------------"
-                        Write-Host "Access through SID $($sid):"
-                        $sidRules[$sid] | Format-Table
+                        Write-Host "Granted access through SID $($sid):"
+                        $sidRules[$sid]
                     }
+
+                    Write-Host "------------------------------------------"
 
                     $checks["CheckUserFileAccess"].Result = "Passed"
                     Write-Verbose "CheckUserFileAccess - SUCCESS"
