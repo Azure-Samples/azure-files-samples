@@ -3498,52 +3498,51 @@ function Debug-AzStorageAccountAuth {
 
                 Request-ConnectAzureAD
 
+                $sidNames = @{}
                 $user = Get-NativeAdUser -Identity $UserName -Domain $Domain -ErrorAction Stop
+                $sidNames[$user.SID.Value] = $user.DistinguishedName
 
                 $groups = Get-NativeAdUserGroups -Identity $user.SID -Domain $Domain -ErrorAction Stop
+                $groups | ForEach-Object { $sidNames[$_.SID.Value] = $_.DistinguishedName }
 
-                $roleAssignments = Get-AzRoleAssignment -ResourceGroupName $ResourceGroupName `
-                    -ResourceName $StorageAccountName -ResourceType Microsoft.Storage/storageAccounts
+                # The user needs following role assignments to have the share-level access.
+                # Currently only three roles are defined, but new ones may be added in future,
+                # hence use a prefix to check.
+                # Storage File Data SMB Share Reader
+                # Storage File Data SMB Share Contributor
+                # Storage File Data SMB Share Elevated Contributor
+                $smbRoleNamePrefix = "Storage File Data SMB Share"
+                $smbRoleDefinitions = @{}
+                Get-AzRoleDefinition | Where-Object { $_.Name.StartsWith($smbRoleNamePrefix) } `
+                    | ForEach-Object { $smbRoleDefinitions[$_.Id] = $_ }
                 
+                $roleAssignments = Get-AzRoleAssignment -ResourceGroupName $ResourceGroupName `
+                    -ResourceName $StorageAccountName -ResourceType Microsoft.Storage/storageAccounts `
+                    | Where-Object { $smbRoleDefinitions.ContainsKey($_.RoleDefinitionId) }
+
                 $roleDefinitions = @{}
                 $assignedAdObjects = @{}
 
                 foreach ($assignment in $roleAssignments) {
                     $aadObject = Get-AzureADObjectByObjectId -ObjectId $assignment.ObjectId
 
-                    if (($null -ne $aadObject) -and (-not [string]::IsNullOrEmpty($aadObject.OnPremisesSecurityIdentifier))) {
-                        if ($user.SID -ieq $aadObject.OnPremisesSecurityIdentifier) {
-                            if (-not $roleDefinitions.ContainsKey($assignment.RoleDefinitionId)) {
-                                $roleDefinition = Get-AzRoleDefinition -Id $assignment.RoleDefinitionId
-                                $roleDefinitions[$assignment.RoleDefinitionId] = $roleDefinition
-                            }
-
-                            if (-not $assignedAdObjects.ContainsKey($assignment.RoleDefinitionId)) {
-                                $assignedAdObjects[$assignment.RoleDefinitionId] = @()
-                            }
-
-                            $assignedAdObjects[$assignment.RoleDefinitionId] += $user.DistinguishedName
-                        } else {
-                            foreach ($group in $groups) {
-                                if ($group.SID -ieq $aadObject.OnPremisesSecurityIdentifier) {
-                                    if (-not $roleDefinitions.ContainsKey($assignment.RoleDefinitionId)) {
-                                        $roleDefinition = Get-AzRoleDefinition -Id $assignment.RoleDefinitionId
-                                        $roleDefinitions[$assignment.RoleDefinitionId] = $roleDefinition
-                                    }
-        
-                                    if (-not $assignedAdObjects.ContainsKey($assignment.RoleDefinitionId)) {
-                                        $assignedAdObjects[$assignment.RoleDefinitionId] = @()
-                                    }
-        
-                                    $assignedAdObjects[$assignment.RoleDefinitionId] += $group.DistinguishedName
-                                }
-                            }
+                    if (($null -ne $aadObject) `
+                        -and (-not [string]::IsNullOrEmpty($aadObject.OnPremisesSecurityIdentifier)) `
+                        -and ($sidNames.ContainsKey($aadObject.OnPremisesSecurityIdentifier))) {
+                        if (-not $roleDefinitions.ContainsKey($assignment.RoleDefinitionId)) {
+                            $roleDefinitions[$assignment.RoleDefinitionId] = $smbRoleDefinitions[$assignment.RoleDefinitionId]
                         }
+
+                        if (-not $assignedAdObjects.ContainsKey($assignment.RoleDefinitionId)) {
+                            $assignedAdObjects[$assignment.RoleDefinitionId] = @()
+                        }
+
+                        $assignedAdObjects[$assignment.RoleDefinitionId] += $sidNames[$aadObject.OnPremisesSecurityIdentifier]
                     }
                 }
 
                 if ($roleDefinitions.Count -eq 0) {
-                    $message = "User '$($user.UserPrincipalName)' is not assigned any share-level permission to" `
+                    $message = "User '$($user.UserPrincipalName)' is not assigned any SMB share-level permission to" `
                         + " storage account '$StorageAccountName' in resource group '$ResourceGroupName'. Please" `
                         + " configure proper share-level permission following the guidance at" `
                         + " https://docs.microsoft.com/en-us/azure/storage/files/storage-files-identity-ad-ds-assign-permissions"
@@ -3551,7 +3550,7 @@ function Debug-AzStorageAccountAuth {
                 }
 
                 Write-Host "------------------------------------------"
-                Write-Host "User '$($user.UserPrincipalName)' is granted following share-level permissions:"
+                Write-Host "User '$($user.UserPrincipalName)' is granted following SMB share-level permissions:"
 
                 foreach ($roleDefinitionId in $roleDefinitions.Keys) {
                     Write-Host "Assigned role definition '$($roleDefinitions[$roleDefinitionId].Name)':"
