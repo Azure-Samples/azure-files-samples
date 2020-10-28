@@ -10,8 +10,8 @@
    Scan provided share to get the file names not suported by AFS.
    It can also fix those files by replacing the unsupported char with the provided string in the files names.
 
-   Version 4.3
-   Last Modified Date: Oct 4, 2019
+   Version 4.4
+   Last Modified Date: Oct 22, 2020
 
     Example usage:
  
@@ -179,6 +179,13 @@ public class ListFiles
         disallowedChars.Add(0x0000002F); // 0x0000002F  = '/'
         disallowedChars.Add(0x0000005C); // 0x0000005C  = '\'
         disallowedChars.Add(0x0000007F); // 0x0000007F  = del delete
+
+        // Unsupported control chars
+        disallowedChars.Add(0x00000081); // high octet preset)
+        disallowedChars.Add(0x0000008D); // ri reverse line feed
+        disallowedChars.Add(0x0000008F); // ss3 single shift three
+        disallowedChars.Add(0x00000090); // dcs device control string
+        disallowedChars.Add(0x0000009D); // osc operating system command
     }
 
     public static bool IsExcluded(string itemName)
@@ -202,8 +209,7 @@ public class ListFiles
     {
         int CodePoint = Char.ConvertToUtf32(charString, 0);
 
-        if ((0x00 <= CodePoint && CodePoint <= 0x007F) ||
-            (0xA0 <= CodePoint && CodePoint <= 0xD7FF) ||
+        if ((0x1F <= CodePoint && CodePoint <= 0xD7FF) ||
             (0xF900 <= CodePoint && CodePoint <= 0xFDCF) ||
             (0xFDF0 <= CodePoint && CodePoint <= 0xFFEF) ||
             (0x10000 <= CodePoint && CodePoint <= 0x1FFFD) ||
