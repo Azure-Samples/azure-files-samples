@@ -3588,6 +3588,7 @@ function Debug-AzStorageAccountAuth {
                         Write-Error -Message $message -ErrorAction Stop
                     }
 
+                    # Get the access rules explicitly assigned to and inherited by the file
                     $fileAccessRules = $fileAcl.GetAccessRules($true, $true, [System.Security.Principal.SecurityIdentifier])
                     if ($fileAccessRules.Count -eq 0) {
                         $message = "There is no access rule granted to '$FilePath'. Please consider setting up proper access rules" `
