@@ -3139,7 +3139,7 @@ function Debug-AzStorageAccountADObject
     }
 }
 
-function Get-NativeAdUser {
+function Get-OnPremAdUser {
     [CmdletBinding()]
     param (
         [Parameter(Mandatory=$False, Position=0, HelpMessage="The user name or SID to look up the user")]
@@ -3171,7 +3171,7 @@ function Get-NativeAdUser {
     }
 }
 
-function Get-NativeAdUserGroups {
+function Get-OnPremAdUserGroups {
     [CmdletBinding()]
     param (
         [Parameter(Mandatory=$False, Position=0, HelpMessage="The user name or SID to look up the user groups")]
@@ -3389,7 +3389,7 @@ function Debug-AzStorageAccountAuth {
                 $checksExecuted += 1;
                 Write-Verbose "CheckSidHasAadUser - START"
 
-                $currentUser = Get-NativeAdUser -Identity $UserName -Domain $Domain -ErrorAction Stop
+                $currentUser = Get-OnPremAdUser -Identity $UserName -Domain $Domain -ErrorAction Stop
 
                 Write-Verbose "User $UserName in domain $Domain has SID = $($currentUser.Sid)"
 
@@ -3499,10 +3499,10 @@ function Debug-AzStorageAccountAuth {
                 Request-ConnectAzureAD
 
                 $sidNames = @{}
-                $user = Get-NativeAdUser -Identity $UserName -Domain $Domain -ErrorAction Stop
+                $user = Get-OnPremAdUser -Identity $UserName -Domain $Domain -ErrorAction Stop
                 $sidNames[$user.SID.Value] = $user.DistinguishedName
 
-                $groups = Get-NativeAdUserGroups -Identity $user.SID -Domain $Domain -ErrorAction Stop
+                $groups = Get-OnPremAdUserGroups -Identity $user.SID -Domain $Domain -ErrorAction Stop
                 $groups | ForEach-Object { $sidNames[$_.SID.Value] = $_.DistinguishedName }
 
                 # The user needs following role assignments to have the share-level access.
@@ -3595,7 +3595,7 @@ function Debug-AzStorageAccountAuth {
                         Write-Error -Message $message -ErrorAction Stop
                     }
                 
-                    $user = Get-NativeAdUser -Identity $UserName -Domain $Domain -ErrorAction Stop
+                    $user = Get-OnPremAdUser -Identity $UserName -Domain $Domain -ErrorAction Stop
                     Write-Verbose -Message "Found user '$($user.UserPrincipalName)' with SID '$($user.SID)'"
 
                     $identity = [System.Security.Principal.WindowsIdentity]::new($user.UserPrincipalName)
