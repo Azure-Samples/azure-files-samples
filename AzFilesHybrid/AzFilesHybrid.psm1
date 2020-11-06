@@ -3139,6 +3139,69 @@ function Debug-AzStorageAccountADObject
     }
 }
 
+function Get-OnPremAdUser {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory=$False, Position=0, HelpMessage="The user name or SID to look up the user")]
+        [string]$Identity,
+
+        [Parameter(Mandatory=$False, Position=1, HelpMessage="The domain name to look up the user")]
+        [string]$Domain
+    )
+    process {
+        if ([string]::IsNullOrEmpty($Identity)) {
+            $Identity = $($env:UserName)
+        }
+
+        if ([string]::IsNullOrEmpty($Domain)) {
+            $Domain = (Get-ADDomain).DnsRoot
+        }
+
+        Write-Verbose "Look up user $Identity in domain $Domain"
+
+        $user = Get-ADUser -Identity $Identity -Server $Domain
+
+        if ($null -eq $user) {
+            $message = "User '$Identity' not found in domain '$Domain'. Please check" `
+                + " whether the provided user identity or domain name is correct or not."
+            Write-Error -Message $message -ErrorAction Stop
+        }
+
+        return $user
+    }
+}
+
+function Get-OnPremAdUserGroups {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory=$False, Position=0, HelpMessage="The user name or SID to look up the user groups")]
+        [string]$Identity,
+
+        [Parameter(Mandatory=$False, Position=1, HelpMessage="The domain name to look up the user groups")]
+        [string]$Domain
+    )
+    process {
+        if ([string]::IsNullOrEmpty($Identity)) {
+            $Identity = $($env:UserName)
+        }
+
+        if ([string]::IsNullOrEmpty($Domain)) {
+            $Domain = (Get-ADDomain).DnsRoot
+        }
+
+        Write-Verbose "Look up groups of user $Identity in domain $Domain"
+
+        $groups = Get-ADPrincipalGroupMembership -Identity $Identity -Server $Domain
+
+        if ($null -eq $groups) {
+            $message = "Groups of use '$Identity' not found in domain '$Domain'. Please check" `
+                + " whether the provided user identity or domain name is correct or not."
+            Write-Error -Message $message -ErrorAction Stop
+        }
+
+        return $groups
+    }
+}
 
 class CheckResult {
     [string]$Name
@@ -3181,14 +3244,17 @@ function Debug-AzStorageAccountAuth {
         [Parameter(Mandatory=$False, Position=2, HelpMessage="Filter")]
         [string]$Filter,
 
-        [Parameter(Mandatory=$False, Position=3, HelpMessage="Optional parameter for filter 'CheckSidHasAadUser'. The user name to check.")]
+        [Parameter(Mandatory=$False, Position=3, HelpMessage="Optional parameter for filter 'CheckSidHasAadUser' and 'CheckUserFileAccess'. The user name to check.")]
         [string]$UserName,
 
-        [Parameter(Mandatory=$False, Position=4, HelpMessage="Optional parameter for filter 'CheckSidHasAadUser' and 'CheckAadUserHasSid'. The domain name to look up the user.")]
+        [Parameter(Mandatory=$False, Position=4, HelpMessage="Optional parameter for filter 'CheckSidHasAadUser', 'CheckUserFileAccess' and 'CheckAadUserHasSid'. The domain name to look up the user.")]
         [string]$Domain,
 
-        [Parameter(Mandatory=$False, Position=3, HelpMessage="Required parameter for filter 'CheckAadUserHasSid'. The Azure object ID or user principal name to check.")]
-        [string]$ObjectId
+        [Parameter(Mandatory=$False, Position=5, HelpMessage="Required parameter for filter 'CheckAadUserHasSid'. The Azure object ID or user principal name to check.")]
+        [string]$ObjectId,
+
+        [Parameter(Mandatory=$False, Position=6, HelpMessage="Required parameter for filter 'CheckUserFileAccess'. The SMB file path on the Azure file share mounted locally using storage account key.")]
+        [string]$FilePath
     )
 
     process
@@ -3204,6 +3270,8 @@ function Debug-AzStorageAccountAuth {
             "CheckSidHasAadUser" = [CheckResult]::new("CheckSidHasAadUser");
             "CheckAadUserHasSid" = [CheckResult]::new("CheckAadUserHasSid");
             "CheckStorageAccountDomainJoined" = [CheckResult]::new("CheckStorageAccountDomainJoined");
+            "CheckUserRbacAssignment" = [CheckResult]::new("CheckUserRbacAssignment");
+            "CheckUserFileAccess" = [CheckResult]::new("CheckUserFileAccess");
         }
 
         #
@@ -3321,23 +3389,7 @@ function Debug-AzStorageAccountAuth {
                 $checksExecuted += 1;
                 Write-Verbose "CheckSidHasAadUser - START"
 
-                if ([string]::IsNullOrEmpty($UserName)) {
-                    $UserName = $($env:UserName)
-                }
-
-                if ([string]::IsNullOrEmpty($Domain)) {
-                    $Domain = (Get-ADDomain).DnsRoot
-                }
-
-                Write-Verbose "CheckSidHasAadUser for user $UserName in domain $Domain"
-
-                $currentUser = Get-ADUser -Identity $UserName -Server $Domain
-
-                if ($null -eq $currentUser) {
-                    $message = "User '$UserName' not found in domain '$Domain'. Please check" `
-                        + " whether the provided user name or domain name is correct or not."
-                    Write-Error -Message $message -ErrorAction Stop
-                }
+                $currentUser = Get-OnPremAdUser -Identity $UserName -Domain $Domain -ErrorAction Stop
 
                 Write-Verbose "User $UserName in domain $Domain has SID = $($currentUser.Sid)"
 
@@ -3371,7 +3423,7 @@ function Debug-AzStorageAccountAuth {
 
                 if ([string]::IsNullOrEmpty($ObjectId)) {
                     Write-Verbose -Message "Missing required parameter ObjectId for CheckAadUserHasSid requires ObjectId parameter to be present, skipping CheckAadUserHasSid"
-                    $checks["CheckAadUserHasSid"] = "Skipped"
+                    $checks["CheckAadUserHasSid"].Result = "Skipped"
                 }
                 else {
                 
@@ -3435,6 +3487,165 @@ function Debug-AzStorageAccountAuth {
                 $checks["CheckStorageAccountDomainJoined"].Result = "Failed"
                 $checks["CheckStorageAccountDomainJoined"].Issue = $_
                 Write-Error "CheckStorageAccountDomainJoined - FAILED"
+                Write-Error $_
+            }
+        }
+
+        if (!$filterIsPresent -or ($Filter -match "CheckUserRbacAssignment")) {
+            try {
+                $checksExecuted += 1
+                Write-Verbose "CheckUserRbacAssignment - START"
+
+                Request-ConnectAzureAD
+
+                $sidNames = @{}
+                $user = Get-OnPremAdUser -Identity $UserName -Domain $Domain -ErrorAction Stop
+                $sidNames[$user.SID.Value] = $user.DistinguishedName
+
+                $groups = Get-OnPremAdUserGroups -Identity $user.SID -Domain $Domain -ErrorAction Stop
+                $groups | ForEach-Object { $sidNames[$_.SID.Value] = $_.DistinguishedName }
+
+                # The user needs following role assignments to have the share-level access.
+                # Currently only three roles are defined, but new ones may be added in future,
+                # hence use a prefix to check.
+                # Storage File Data SMB Share Reader
+                # Storage File Data SMB Share Contributor
+                # Storage File Data SMB Share Elevated Contributor
+                $smbRoleNamePrefix = "Storage File Data SMB Share"
+                $smbRoleDefinitions = @{}
+                Get-AzRoleDefinition | Where-Object { $_.Name.StartsWith($smbRoleNamePrefix) } `
+                    | ForEach-Object { $smbRoleDefinitions[$_.Id] = $_ }
+                
+                $roleAssignments = Get-AzRoleAssignment -ResourceGroupName $ResourceGroupName `
+                    -ResourceName $StorageAccountName -ResourceType Microsoft.Storage/storageAccounts `
+                    | Where-Object { $smbRoleDefinitions.ContainsKey($_.RoleDefinitionId) }
+
+                $roleDefinitions = @{}
+                $assignedAdObjects = @{}
+
+                foreach ($assignment in $roleAssignments) {
+                    $aadObject = Get-AzureADObjectByObjectId -ObjectId $assignment.ObjectId
+
+                    if (($null -ne $aadObject) `
+                        -and (-not [string]::IsNullOrEmpty($aadObject.OnPremisesSecurityIdentifier)) `
+                        -and ($sidNames.ContainsKey($aadObject.OnPremisesSecurityIdentifier))) {
+                        if (-not $roleDefinitions.ContainsKey($assignment.RoleDefinitionId)) {
+                            $roleDefinitions[$assignment.RoleDefinitionId] = $smbRoleDefinitions[$assignment.RoleDefinitionId]
+                        }
+
+                        if (-not $assignedAdObjects.ContainsKey($assignment.RoleDefinitionId)) {
+                            $assignedAdObjects[$assignment.RoleDefinitionId] = @()
+                        }
+
+                        $assignedAdObjects[$assignment.RoleDefinitionId] += $sidNames[$aadObject.OnPremisesSecurityIdentifier]
+                    }
+                }
+
+                if ($roleDefinitions.Count -eq 0) {
+                    $message = "User '$($user.UserPrincipalName)' is not assigned any SMB share-level permission to" `
+                        + " storage account '$StorageAccountName' in resource group '$ResourceGroupName'. Please" `
+                        + " configure proper share-level permission following the guidance at" `
+                        + " https://docs.microsoft.com/en-us/azure/storage/files/storage-files-identity-ad-ds-assign-permissions"
+                    Write-Error -Message $message -ErrorAction Stop
+                }
+
+                Write-Host "------------------------------------------"
+                Write-Host "User '$($user.UserPrincipalName)' is granted following SMB share-level permissions:"
+
+                foreach ($roleDefinitionId in $roleDefinitions.Keys) {
+                    Write-Host "Assigned role definition '$($roleDefinitions[$roleDefinitionId].Name)':"
+                    $roleDefinitions[$roleDefinitionId]
+                    Write-Host "AD objects being assigned with role definition '$($roleDefinitions[$roleDefinitionId].Name)':"
+                    $assignedAdObjects[$roleDefinitionId] | Format-Table
+                    Write-Host ""
+                }
+
+                Write-Host "------------------------------------------"
+
+                $checks["CheckUserRbacAssignment"].Result = "Passed"
+                Write-Verbose "CheckUserRbacAssignment - SUCCESS"
+            } catch {
+                $checks["CheckUserRbacAssignment"].Result = "Failed"
+                $checks["CheckUserRbacAssignment"].Issue = $_
+                Write-Error "CheckUserRbacAssignment - FAILED"
+                Write-Error $_
+            }
+        }
+
+        if (!$filterIsPresent -or $Filter -match "CheckUserFileAccess")
+        {
+            try {
+                $checksExecuted += 1;
+                Write-Verbose "CheckUserFileAccess - START"
+
+                if ([string]::IsNullOrEmpty($FilePath)) {
+                    Write-Verbose -Message "Missing required parameter FilePath for CheckUserFileAccess, skipping CheckUserFileAccess"
+                    $checks["CheckUserFileAccess"].Result = "Skipped"
+                } else {
+                    $fileAcl = Get-Acl -Path $FilePath
+                    if ($null -eq $fileAcl) {
+                        $message = "Unable to get the ACL of '$FilePath'. Please check if the provided file path is correct."
+                        Write-Error -Message $message -ErrorAction Stop
+                    }
+
+                    # Get the access rules explicitly assigned to and inherited by the file
+                    $fileAccessRules = $fileAcl.GetAccessRules($true, $true, [System.Security.Principal.SecurityIdentifier])
+                    if ($fileAccessRules.Count -eq 0) {
+                        $message = "There is no access rule granted to '$FilePath'. Please consider setting up proper access rules" `
+                            + " for the file (for example, using https://docs.microsoft.com/en-us/windows-server/administration/windows-commands/icacls)"
+                        Write-Error -Message $message -ErrorAction Stop
+                    }
+                
+                    $user = Get-OnPremAdUser -Identity $UserName -Domain $Domain -ErrorAction Stop
+                    Write-Verbose -Message "Found user '$($user.UserPrincipalName)' with SID '$($user.SID)'"
+
+                    $identity = [System.Security.Principal.WindowsIdentity]::new($user.UserPrincipalName)
+
+                    $sidRules = @{}
+                    foreach ($accessRule in $fileAccessRules) {
+                        if ($accessRule.IdentityReference -ieq $user.SID) {
+                            if (-not $sidRules.ContainsKey($accessRule.IdentityReference)) {
+                                $sidRules[$accessRule.IdentityReference] = @()
+                            }
+
+                            $sidRules[$accessRule.IdentityReference] += $accessRule
+                        } else {
+                            foreach ($group in $identity.Groups) {
+                                if ($accessRule.IdentityReference -ieq $group.Value) {
+                                    if (-not $sidRules.ContainsKey($accessRule.IdentityReference)) {
+                                        $sidRules[$accessRule.IdentityReference] = @()
+                                    }
+        
+                                    $sidRules[$accessRule.IdentityReference] += $accessRule                
+                                }
+                            }
+                        }                        
+                    }
+
+                    if ($sidRules.Count -eq 0) {
+                        $message = "User '$($user.UserPrincipalName)' is not assigned any permission to '$FilePath'." `
+                            + " Please configure proper permission for the user to access the file (for example," `
+                            + " using https://docs.microsoft.com/en-us/windows-server/administration/windows-commands/icacls)"
+                        Write-Error -Message $message -ErrorAction Stop
+                    }
+    
+                    Write-Host "------------------------------------------"
+                    Write-Host "User '$($user.UserPrincipalName)' is granted following permissions to '$FilePath':"
+                    foreach ($sid in $sidRules.Keys) {
+                        Write-Host "Granted access through SID $($sid):"
+                        $sidRules[$sid]
+                    }
+
+                    Write-Host "------------------------------------------"
+
+                    $checks["CheckUserFileAccess"].Result = "Passed"
+                    Write-Verbose "CheckUserFileAccess - SUCCESS"
+                }
+
+            } catch {
+                $checks["CheckUserFileAccess"].Result = "Failed"
+                $checks["CheckUserFileAccess"].Issue = $_
+                Write-Error "CheckUserFileAccess - FAILED"
                 Write-Error $_
             }
         }
