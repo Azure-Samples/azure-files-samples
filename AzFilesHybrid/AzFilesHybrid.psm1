@@ -3883,7 +3883,7 @@ function Test-AzStorageAccountADObjectPasswordIsKerbKey {
         $domainDns = $activeDirectoryProperties.DomainName
         $domain = Get-ADDomain -Server $domainDns
 
-        $userName = $domain.Name + "\" + $adObj.Name
+        $userName = $domain.NetBIOSName + "\" + $adObj.Name
 
         $oneKeyMatches = $false
         $keyMatches = [KerbKeyMatch[]]@()
