@@ -1,4 +1,4 @@
-﻿<#
+<#
  .SYNOPSIS
 
     Copyright (c) Microsoft Corporation.  All rights reserved.
@@ -10,8 +10,8 @@
    Scan provided share to get the file names not suported by AFS.
    It can also fix those files by replacing the unsupported char with the provided string in the files names.
 
-   Version 4.4
-   Last Modified Date: Oct 22, 2020
+   Version 4.6
+   Last Modified Date: Nov 16, 2020
 
     Example usage:
  
@@ -26,14 +26,19 @@
        .\ScanUnsupportedChars.ps1  -SharePath  <LocalShareRootPath> -RenameItem -ReplacementString "YourOwnString"
        4. If you want to remove the unsupported char from file paths do
        .\ScanUnsupportedChars.ps1  -SharePath  <LocalShareRootPath> -RenameItem
+       5. If you want to dump the script output to CSV files
+       .\ScanUnsupportedChars.ps1  -SharePath  <LocalShareRootPath> -CsvPath <DirectoryPathForCSVFiles>
      Set-ExecutionPolicy AllSigned
 
  .PARAMETER SharePath
      Path of the share to scan, it could be local folder like D:\share, D:\ or a remote share like \\server\share
- .PARAMETER $RenameItems
+ .PARAMETER RenameItems
      Switch if you want to rename the item as it scan. If you wont want to rename, do not provide this switch.
  .PARAMETER ReplacementString
      The 'character' that would replace the unsupported char in the file names. Default is '' (empty string)
+ .PARAMETER CsvPath
+     Directory path for output CSV formatted files. If not specified, the output would be printed on the PS console.
+     The output would be in UnsupportedCharsDetails.csv, LongPathFileNames.csv and FixedFileNames.csv
 
  .EXAMPLE
      .\ScanUnsupportedChars.ps1  -SharePath  E:\SyncShare
@@ -63,6 +68,11 @@
       This would scan and rename the unsupported file names for the provided remote SyncShare.
       This would replace the unsupported char with "-".
 
+ .EXAMPLE
+      .\ScanUnsupportedChars.ps1  -SharePath  \\server\SyncShare  -CsvPath "C:\temp"
+      This would scan unsupported file names for the provided remote SyncShare and puts the output in the
+      CSV formatted files in the output directory.
+
  .NOTES
      Script Limitations:
      1. If file name have only the unsupported chars in the name and provided ReplacementString is empty string,
@@ -78,7 +88,9 @@ Param(
    [Parameter(Mandatory=$False,Position=2, HelpMessage = "Rename Items as it scan")]
    [switch]$RenameItems,
    [Parameter(Mandatory=$False,Position=3, HelpMessage = "Replacement string for the unsupported char")]
-   [string]$ReplacementString
+   [string]$ReplacementString,
+   [Parameter(Mandatory=$False,Position=4, HelpMessage = "Directory for CSV formatted file output")]
+   [string]$CsvPath
 )
 
 $ErrorActionPreference="Stop"
@@ -279,12 +291,11 @@ public class ListFiles
         }
 
         // Filenames with trailing dots are not supported
-        // Filenames with trailing spaces are not supported
-        if (fileName.EndsWith(@".") || fileName.EndsWith(@" "))
+        if (fileName.EndsWith(@"."))
         {
             InvalidCharInfo info = new InvalidCharInfo();
 
-            info.Code = fileName.EndsWith(@".") ? 0x0000002E : 0x00000020;
+            info.Code = 0x0000002E;
             info.Position = filePath.Length;
             info.Message = "File name ends with '.' or ' '";
             InvalidCharFileInformation.Add(filePath, info);
@@ -551,6 +562,18 @@ else
     Write-Host "Provided ReplacementString: " $ReplacementString
 }
 
+if (-not ([string]::IsNullOrEmpty($CsvPath)))
+{
+    if (-not (Test-Path -Path $CsvPath -PathType Container))
+    {
+        Write-Error "Specified output directory does not exist or its not a directory: $CsvPath" -ErrorAction Stop
+    }
+}
+
+$UnsupportedCharsDetailsFileName = $CsvPath + "\\UnsupportedCharsDetails.csv"
+$LongPathFileNamesFileName = $CsvPath + "\\LongPathFileNames.csv"
+$FixedFileNamesFileName = $CsvPath + "\\FixedFileNames.csv"
+
 $listFile = New-Object ListFiles
 
 $listFile.ReplacementString = $ReplacementString
@@ -570,34 +593,64 @@ if($UnSupportedList.Count -eq 0)
 }
 else
 {
-    [int] $hostWindowWidth = $host.UI.RawUI.WindowSize.Width
-    [int] $codewidth = 12;
-
-    if($hostWindowWidth -lt $codewidth)
+    if ([string]::IsNullOrEmpty($CsvPath))
     {
-        $codewidth = 1;
+        [bool] $setTableWidth = $true
+        [int] $hostWindowWidth = $host.UI.RawUI.WindowSize.Width
+        [int] $codewidth = 12;
+
+        if($hostWindowWidth -lt $codewidth)
+        {
+            $setTableWidth = $false;
+        }
+
+        $hostWindowWidth = $hostWindowWidth - $codewidth;
+
+        [int] $messageWidth = [int] $hostWindowWidth/3;
+
+        if($messageWidth -le 0)
+        {
+            $setTableWidth = $false;
+        }
+
+        [int] $fileNameWidth = $hostWindowWidth - $messageWidth;
+
+        if($fileNameWidth -le 0)
+        {
+            $setTableWidth = $false;
+        }
+
+        if($setTableWidth)
+        {
+            $UnSupportedList | Format-Table @{Label= "FileName";    Expression={ $_.Key}; Width=$fileNameWidth },`
+                                            @{Label= "Message";     Expression={ $_.Value.Message}; Width=$messageWidth},`
+                                            @{Label= "Code";        Expression={ $_.Value.Code}; Width=$codewidth},`
+                                            @{Label= "Position";    Expression={ $_.Value.Position}; Width=$codewidth} -Wrap -AutoSize
+        }
+        else
+        {
+            $UnSupportedList | Format-Table @{Label= "FileName";    Expression={ $_.Key}; },`
+                                            @{Label= "Message";     Expression={ $_.Value.Message}; },`
+                                            @{Label= "Code";        Expression={ $_.Value.Code}; },`
+                                            @{Label= "Position";    Expression={ $_.Value.Position}; } -Wrap -AutoSize
+        }
     }
-
-    $hostWindowWidth = $hostWindowWidth - $codewidth;
-
-    [int] $messageWidth = [int] $hostWindowWidth/3;
-
-    if($messageWidth -le 0)
+    else
     {
-        $messageWidth = 1;
+        foreach ($item in $UnSupportedList.GetEnumerator())
+        {
+            $fileObject = [PSCustomObject]@{
+                                FileName = $item.Key
+                                Message = $item.Value.Message
+                                Code = $item.Value.Code
+                                Position = $item.Value.Position
+                                }
+
+            Export-Csv -InputObject $fileObject -Path $UnsupportedCharsDetailsFileName -Append -NoTypeInformation -Force
+        }
+
+        Write-Host "CSV file generated at: $UnsupportedCharsDetailsFileName"  -ForegroundColor Green
     }
-
-    [int] $fileNameWidth = $hostWindowWidth - $messageWidth;
-
-    if($fileNameWidth -le 0)
-    {
-        $fileNameWidth = 1;
-    }
-
-    $UnSupportedList | Format-Table @{Label= "FileName";    Expression={ $_.Key}; Width=$fileNameWidth },`
-                                    @{Label= "Message";     Expression={ $_.Value.Message}; Width=$messageWidth},`
-                                    @{Label= "Code";        Expression={ $_.Value.Code}; Width=$codewidth},`
-                                    @{Label= "Position";    Expression={ $_.Value.Position}; Width=$codewidth} -Wrap 
 }
 
 Write-Host "========================== File Path too long start==========================================" -ForegroundColor Yellow
@@ -608,9 +661,18 @@ Write-Host "Files/Directories having path length > 2048 chars (current limit for
 
 if($FilePathTooLongList.Count -gt 0)
 {
-    ForEach ($File in $FilePathTooLongList)
+    if ([string]::IsNullOrEmpty($CsvPath))
     {
-        Write-Host $File -ForegroundColor Red
+        ForEach ($File in $FilePathTooLongList)
+        {
+            Write-Host $File -ForegroundColor Red
+        }
+    }
+    else
+    {
+        $FilePathTooLongList | Export-Csv -Path $LongPathFileNamesFileName -Append -NoTypeInformation -Force
+
+        Write-Host "CSV file generated at: $LongPathFileNamesFileName" -ForegroundColor Green
     }
 }
 
@@ -629,8 +691,16 @@ if ($FilesWithInvalidCharsFixedName.Count -gt 0)
 
         Write-Host "***************************Items rename table start***************************" -ForegroundColor Yellow
 
-        $FilesWithInvalidCharsFixedName | Format-Table @{Label= "OriginalFilePath";    Expression={ $_.OriginalFilePath}; Width=$fileNameWidth },`
-                                                    @{Label= "FixedFileName";         Expression={ $_.FixedFileName}; Width=$fileNameWidth} -Wrap
+        if($setTableWidth)
+        {
+            $FilesWithInvalidCharsFixedName | Format-Table @{Label= "OriginalFilePath";    Expression={ $_.OriginalFilePath}; Width=$fileNameWidth },`
+                                                           @{Label= "FixedFileName";       Expression={ $_.FixedFileName}; Width=$fileNameWidth} -Wrap
+        }
+        else
+        {
+            $FilesWithInvalidCharsFixedName | Format-Table @{Label= "OriginalFilePath";    Expression={ $_.OriginalFilePath};},`
+                                                           @{Label= "FixedFileName";       Expression={ $_.FixedFileName};} -Wrap -AutoSize
+        }
 
         Write-Host "***************************Items rename table end*****************************" -ForegroundColor Yellow
 
@@ -642,19 +712,52 @@ if ($FilesWithInvalidCharsFixedName.Count -gt 0)
 
         if ($filesFailedToRename.Count -gt 0)
         {
-            $filesFailedToRename | Format-Table @{Label= "OriginalFilePath";    Expression={ $_.OriginalFilePath}; Width=$fileNameWidth },`
-                                                @{Label= "FixedFileName";         Expression={ $_.FixedFileName}; Width=$fileNameWidth} -Wrap
+            if($setTableWidth)
+            {
+                $filesFailedToRename | Format-Table @{Label= "OriginalFilePath"; Expression={ $_.OriginalFilePath}; Width=$fileNameWidth },`
+                                                    @{Label= "FixedFileName";    Expression={ $_.FixedFileName}; Width=$fileNameWidth} -Wrap
+            }
+            else
+            {
+                $filesFailedToRename | Format-Table @{Label= "OriginalFilePath"; Expression={ $_.OriginalFilePath};},`
+                                                    @{Label= "FixedFileName";    Expression={ $_.FixedFileName};} -Wrap -AutoSize
+            }
         }
 
         Write-Host "***************************Items failed to rename table end*****************************" -ForegroundColor Yellow
     }
     else
     {
-        Write-Host "***************************Items can be renamed table start***************************" -ForegroundColor Yellow
-        $FilesWithInvalidCharsFixedName | Format-Table @{Label= "OriginalFilePath";    Expression={ $_.OriginalFilePath}; Width=$fileNameWidth },`
-                                                       @{Label= "FixedFileName";         Expression={ $_.FixedFileName}; Width=$fileNameWidth} -Wrap
+        if ([string]::IsNullOrEmpty($CsvPath))
+        {
+            Write-Host "***************************Items can be renamed table start***************************" -ForegroundColor Yellow
 
-        Write-Host "***************************Items can be renamed table end*****************************" -ForegroundColor Yellow
+            if($setTableWidth)
+            {
+                    $FilesWithInvalidCharsFixedName | Format-Table @{Label= "OriginalFilePath";Expression={ $_.OriginalFilePath}; Width=$fileNameWidth },`
+                                                                    @{Label= "FixedFileName";Expression={ $_.FixedFileName}; Width=$fileNameWidth} -Wrap
+            }
+            else
+            {
+                    $FilesWithInvalidCharsFixedName | Format-Table @{Label= "OriginalFilePath";Expression={ $_.OriginalFilePath};},`
+                                                                    @{Label= "FixedFileName";Expression={ $_.FixedFileName};} -Wrap -AutoSize
+            }
+
+            Write-Host "***************************Items can be renamed table end*****************************" -ForegroundColor Yellow
+        }
+        else
+        {
+            $FilesWithInvalidCharsFixedName |  ForEach-Object {
+                $fileObject = [PSCustomObject]@{
+                                OriginalFilePath = $_.OriginalFilePath
+                                FixedFileName = $_.FixedFileName
+                                }
+
+                Export-Csv -InputObject $fileObject -Path $FixedFileNamesFileName -Append -NoTypeInformation -Force
+            }
+
+            Write-Host "CSV file generated at: $FixedFileNamesFileName"  -ForegroundColor Green
+        }
 
         Write-Host "To rename the items, run the script as " -ForegroundColor Green
 
