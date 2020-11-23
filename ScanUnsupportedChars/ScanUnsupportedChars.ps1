@@ -40,6 +40,14 @@
      Directory path for output CSV formatted files. If not specified, the output would be printed on the PS console.
      The output would be in UnsupportedCharsDetails.csv, LongPathFileNames.csv and FixedFileNames.csv
 
+ .PARAMETER DestinationPath
+     Switch if you want to Copy invalid Files to a seperate location. This location can be a local folder C:\share or remote share like \\server\share
+     This does not work in combination with RenameItems
+
+ .PARAMETER RoboCopyOptions
+     Arguments which should be passed directly to the Robocopy Process /SEC for setting ACL's in remote Share for example.
+     Through this Arguments it can be controlled if Files should be moved / copied and/or overriden
+     
  .EXAMPLE
      .\ScanUnsupportedChars.ps1  -SharePath  E:\SyncShare
       This would scan the provided SyncShare for the unsupported file names.
@@ -72,6 +80,11 @@
       .\ScanUnsupportedChars.ps1  -SharePath  \\server\SyncShare  -CsvPath "C:\temp"
       This would scan unsupported file names for the provided remote SyncShare and puts the output in the
       CSV formatted files in the output directory.
+ 
+ .EXAMPLE
+      .\ScanUnsupportedChars.ps1  -SharePath  \\server\SyncShare  -DestinationPath "\\some\server" -RoboCopyOptions '/SEC'
+      This would scan unsupported file names for the provided remote SyncShare and puts the output in the
+      CSV formatted files in the output directory.
 
  .NOTES
      Script Limitations:
@@ -79,6 +92,7 @@
         the fixed file name would be empty string, hence cannot be renamed into.
      2. If after replacing the unsupported chars, two or more files gets the same fixed name, the script would not
         be able to rename them due to name collision.
+     3. If Folders have unsupported chars in the name, Azure FileSync will not pick them up, but folder names are not yet scanned
 #>
 
 [CmdletBinding()]
@@ -90,7 +104,11 @@ Param(
    [Parameter(Mandatory=$False,Position=3, HelpMessage = "Replacement string for the unsupported char")]
    [string]$ReplacementString,
    [Parameter(Mandatory=$False,Position=4, HelpMessage = "Directory for CSV formatted file output")]
-   [string]$CsvPath
+   [string]$CsvPath,
+   [Parameter(Mandatory=$False,Position=5, HelpMessage = "Destination path to Copy/Move Items to (acts as switch)")]
+   [string]$DestinationPath,
+   [Parameter(Mandatory=$False,Position=6, HelpMessage = "Arguments which should be passed to RoboCopy")]
+   [string]$RoboCopyOptions
 )
 
 $ErrorActionPreference="Stop"
@@ -725,6 +743,30 @@ if ($FilesWithInvalidCharsFixedName.Count -gt 0)
         }
 
         Write-Host "***************************Items failed to rename table end*****************************" -ForegroundColor Yellow
+    }
+    elseif($PSBoundParameters.ContainsKey('DestinationPath'))
+    {
+        Write-Host "========================== File COPY/MOVE start ==========================================" -ForegroundColor Yellow
+        # Ensure UTF-8 Encoding
+        $PSDefaultParameterValues['*:Encoding'] = 'utf8'
+        
+        foreach ($file in $FilesWithInvalidCharsFixedName){
+            $root = [System.IO.Path]::GetPathRoot($file.OriginalFilePath);
+            $relative_path = [System.IO.Path]::GetRelativePath($root, $file.OriginalFilePath);
+            $destination = [System.IO.Path]::Combine($DestinationPath, [System.IO.Path]::GetDirectoryName($relative_path));
+            $file_name = [System.IO.Path]::GetFileName($file.OriginalFilePath)
+            
+            # Create Target Directory
+            [System.IO.Directory]::CreateDirectory($destination);
+
+            $allArgs = @('"' + $SharePath + '"', '"' + $destination + '"', '"'+ $file_name +'"', $RoboCopyOptions)
+            # Redirect Output as Workaround, as only last process output will be contained, but console blocked otherwise
+            Start-Process Robocopy.exe -ArgumentList $allArgs -NoNewWindow -RedirectStandardOutput "copy.log"
+
+            Write-Host 'File'$file_name' copied from '$SharePath' to '$destination -ForegroundColor Green
+        }
+        Write-Host "========================== File COPY/MOVE end ==========================================" -ForegroundColor Yellow
+
     }
     else
     {
