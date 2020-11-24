@@ -83,8 +83,7 @@
  
  .EXAMPLE
       .\ScanUnsupportedChars.ps1  -SharePath  \\server\SyncShare  -DestinationPath "\\some\server" -RoboCopyOptions '/SEC'
-      This would scan unsupported file names for the provided remote SyncShare and puts the output in the
-      CSV formatted files in the output directory.
+      This would scan unsupported file names for the provided remote SyncShare and puts the output in the Destination Path
 
  .NOTES
      Script Limitations:
