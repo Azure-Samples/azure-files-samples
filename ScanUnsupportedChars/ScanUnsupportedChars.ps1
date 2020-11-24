@@ -762,7 +762,7 @@ if ($FilesWithInvalidCharsFixedName.Count -gt 0)
 
         Write-Host "***************************Items failed to rename table end*****************************" -ForegroundColor Yellow
     }
-    elseif($PSBoundParameters.ContainsKey('DestinationPath'))
+    elseif($PSBoundParameters.ContainsKey('DestinationPath') -and !($PSBoundParameters.ContainsKey('RenameItems')))
     {
         Write-Host "========================== File COPY/MOVE start ==========================================" -ForegroundColor Yellow
         Write-Host "Ensure UTF-8 Codepage and Encoding"
