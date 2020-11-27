@@ -148,7 +148,7 @@ public class FixedFileNameEntry
     public string OriginalFilePath { get; set; }
     public string FixedFileName { get; set; }
 
-    public FixedEntryType Type { get; set; } = FixedEntryType.FILE;
+    public FixedEntryType Type { get; set; }
 
     public FixedFileNameEntry()
     {
@@ -162,6 +162,7 @@ public class ListFiles
 {
     static IntPtr INVALID_HANDLE_VALUE = new IntPtr(-1);
     static int FILE_ATTRIBUTE_DIRECTORY = 0x00000010;
+    private const int FILE_ATTRIBUTE_NORMAL = 0x80;
     const int MAX_PATH = 260;
     public int ItemCount = 0;
     private const int AzureMaxFilePathLengthLimit = 2048;
@@ -205,6 +206,9 @@ public class ListFiles
     [DllImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     internal static extern bool FindClose(IntPtr hFindFile);
+
+    [DllImport("shlwapi.dll", SetLastError = true)]
+    internal static extern int PathRelativePathTo(StringBuilder pszPath, string pszFrom, int dwAttrFrom, string pszTo, int dwAttrTo);
 
     public ListFiles()
     {
@@ -532,6 +536,41 @@ public class ListFiles
                 && item.Type == FixedEntryType.FOLDER);
     }
 
+    public string GetRelativePath(string fromPath, string toPath) 
+    {
+        int fromAttr = GetPathAttribute(fromPath);
+        int toAttr = GetPathAttribute(toPath);
+
+        StringBuilder path = new StringBuilder(260); // MAX_PATH
+        if(PathRelativePathTo(
+            path,
+            fromPath,
+            fromAttr,
+            toPath,
+            toAttr) == 0)
+        {
+            throw new ArgumentException("Paths must have a common prefix");
+        }
+        return path.ToString();
+    }
+
+    private static int GetPathAttribute(string path)
+    {
+        DirectoryInfo di = new DirectoryInfo(path);
+        if (di.Exists)
+        {
+            return FILE_ATTRIBUTE_DIRECTORY;
+        }
+
+        FileInfo fi = new FileInfo(path);
+        if(fi.Exists)
+        {
+            return FILE_ATTRIBUTE_NORMAL;
+        }
+
+        throw new FileNotFoundException();
+    }
+
     public void RenameItems()
     {
         foreach(var item in FilesWithInvalidCharsFixedName)
@@ -785,7 +824,7 @@ if ($FilesWithInvalidCharsFixedName.Count -gt 0)
             $isHandled = $listFile.IsHandledThroughFolder($file.OriginalFilePath)
             if(!$isHandled){
                 $root = [System.IO.Path]::GetPathRoot($file.OriginalFilePath);
-                $relative_path = [System.IO.Path]::GetRelativePath($root, $file.OriginalFilePath);
+                $relative_path = $listFile.GetRelativePath($root, $file.OriginalFilePath); #[System.IO.Path]::GetRelativePath($root, $file.OriginalFilePath);
                 $destination = [System.IO.Path]::Combine($DestinationPath, [System.IO.Path]::GetDirectoryName($relative_path));
                 $file_name = [System.IO.Path]::GetFileName($file.OriginalFilePath)
                 
