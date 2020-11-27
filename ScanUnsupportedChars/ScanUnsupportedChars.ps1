@@ -10,8 +10,8 @@
    Scan provided share to get the file names not suported by AFS.
    It can also fix those files by replacing the unsupported char with the provided string in the files names.
 
-   Version 4.6
-   Last Modified Date: Nov 16, 2020
+   Version 4.7
+   Last Modified Date: Nov 27, 2020
 
     Example usage:
  
