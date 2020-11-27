@@ -19,15 +19,15 @@
 
     Set-ExecutionPolicy Unrestricted
        1. Just to see all files with unsupported chars on console window with unsupported char replaced by 'empty string'
-       .\ScanUnsupportedChars.ps1  -SharePath  <LocalShareRootPath>
+       .\ScanUnsupportedChars.ps1Â  -SharePathÂ  <LocalShareRootPath>
        2. Just to see all files with unsupported chars on console window with unsupported char replaced by 'YourOwnString'
-       .\ScanUnsupportedChars.ps1  -SharePath  <LocalShareRootPath> -ReplacementString "YourOwnString"
+       .\ScanUnsupportedChars.ps1Â  -SharePathÂ  <LocalShareRootPath> -ReplacementString "YourOwnString"
        3. If you want to replace the unsupported char with your own string do
-       .\ScanUnsupportedChars.ps1  -SharePath  <LocalShareRootPath> -RenameItem -ReplacementString "YourOwnString"
+       .\ScanUnsupportedChars.ps1Â  -SharePathÂ  <LocalShareRootPath> -RenameItem -ReplacementString "YourOwnString"
        4. If you want to remove the unsupported char from file paths do
-       .\ScanUnsupportedChars.ps1  -SharePath  <LocalShareRootPath> -RenameItem
+       .\ScanUnsupportedChars.ps1Â  -SharePathÂ  <LocalShareRootPath> -RenameItem
        5. If you want to dump the script output to CSV files
-       .\ScanUnsupportedChars.ps1  -SharePath  <LocalShareRootPath> -CsvPath <DirectoryPathForCSVFiles>
+       .\ScanUnsupportedChars.ps1Â  -SharePathÂ  <LocalShareRootPath> -CsvPath <DirectoryPathForCSVFiles>
      Set-ExecutionPolicy AllSigned
 
  .PARAMETER SharePath
@@ -49,40 +49,40 @@
      Through this Arguments it can be controlled if Files should be moved / copied and/or overriden
      
  .EXAMPLE
-     .\ScanUnsupportedChars.ps1  -SharePath  E:\SyncShare
+     .\ScanUnsupportedChars.ps1Â  -SharePathÂ  E:\SyncShare
       This would scan the provided SyncShare for the unsupported file names.
 
  .EXAMPLE
-     .\ScanUnsupportedChars.ps1  -SharePath  E:\SyncShare -RenameItem
+     .\ScanUnsupportedChars.ps1Â  -SharePathÂ  E:\SyncShare -RenameItem
       This would scan and rename the unsupported file names in the provided sync share.
       This would replace the unsupported char with empty string.
 
  .EXAMPLE
-      .\ScanUnsupportedChars.ps1  -SharePath  E:\SyncShare -RenameItem -ReplacementString "-"
+      .\ScanUnsupportedChars.ps1Â  -SharePathÂ  E:\SyncShare -RenameItem -ReplacementString "-"
       This would scan and rename the unsupported file names in the provided sync share.
       This would replace the unsupported char with "-".
 
  .EXAMPLE
-      .\ScanUnsupportedChars.ps1  -SharePath  \\server\SyncShare 
+      .\ScanUnsupportedChars.ps1Â  -SharePathÂ  \\server\SyncShare 
         This would scan the provided remote SyncShare for the unsupported file names.
 
  .EXAMPLE
-      .\ScanUnsupportedChars.ps1  -SharePath  \\server\SyncShare  -RenameItem
+      .\ScanUnsupportedChars.ps1Â  -SharePathÂ  \\server\SyncShare  -RenameItem
       This would scan and rename the unsupported file names for the provided remote SyncShare.
       This would replace the unsupported char with empty string.
 
  .EXAMPLE
-      .\ScanUnsupportedChars.ps1  -SharePath  \\server\SyncShare  -RenameItem -ReplacementString "-"
+      .\ScanUnsupportedChars.ps1Â  -SharePathÂ  \\server\SyncShare  -RenameItem -ReplacementString "-"
       This would scan and rename the unsupported file names for the provided remote SyncShare.
       This would replace the unsupported char with "-".
 
  .EXAMPLE
-      .\ScanUnsupportedChars.ps1  -SharePath  \\server\SyncShare  -CsvPath "C:\temp"
+      .\ScanUnsupportedChars.ps1Â  -SharePathÂ  \\server\SyncShare  -CsvPath "C:\temp"
       This would scan unsupported file names for the provided remote SyncShare and puts the output in the
       CSV formatted files in the output directory.
  
  .EXAMPLE
-      .\ScanUnsupportedChars.ps1  -SharePath  \\server\SyncShare  -DestinationPath "\\some\server" -RoboCopyOptions '/SEC'
+      .\ScanUnsupportedChars.ps1Â  -SharePathÂ  \\server\SyncShare  -DestinationPath "\\some\server" -RoboCopyOptions '/SEC'
       This would scan unsupported file names for the provided remote SyncShare and puts the output in the Destination Path
 
  .NOTES
