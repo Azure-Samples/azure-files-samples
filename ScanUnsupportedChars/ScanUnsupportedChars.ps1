@@ -207,9 +207,6 @@ public class ListFiles
     [return: MarshalAs(UnmanagedType.Bool)]
     internal static extern bool FindClose(IntPtr hFindFile);
 
-    [DllImport("shlwapi.dll", SetLastError = true)]
-    internal static extern int PathRelativePathTo(StringBuilder pszPath, string pszFrom, int dwAttrFrom, string pszTo, int dwAttrTo);
-
     public ListFiles()
     {
         disallowedChars.Add(0x0000002A); // 0x0000002A  = '*'
@@ -536,41 +533,6 @@ public class ListFiles
                 && item.Type == FixedEntryType.FOLDER);
     }
 
-    public string GetRelativePath(string fromPath, string toPath) 
-    {
-        int fromAttr = GetPathAttribute(fromPath);
-        int toAttr = GetPathAttribute(toPath);
-
-        StringBuilder path = new StringBuilder(260); // MAX_PATH
-        if(PathRelativePathTo(
-            path,
-            fromPath,
-            fromAttr,
-            toPath,
-            toAttr) == 0)
-        {
-            throw new ArgumentException("Paths must have a common prefix");
-        }
-        return path.ToString();
-    }
-
-    private static int GetPathAttribute(string path)
-    {
-        DirectoryInfo di = new DirectoryInfo(path);
-        if (di.Exists)
-        {
-            return FILE_ATTRIBUTE_DIRECTORY;
-        }
-
-        FileInfo fi = new FileInfo(path);
-        if(fi.Exists)
-        {
-            return FILE_ATTRIBUTE_NORMAL;
-        }
-
-        throw new FileNotFoundException();
-    }
-
     public void RenameItems()
     {
         foreach(var item in FilesWithInvalidCharsFixedName)
@@ -804,44 +766,45 @@ if ($FilesWithInvalidCharsFixedName.Count -gt 0)
     elseif($PSBoundParameters.ContainsKey('DestinationPath') -and !($PSBoundParameters.ContainsKey('RenameItems')))
     {
         Write-Host "========================== File COPY/MOVE start ==========================================" -ForegroundColor Yellow
-        Write-Host "Ensure UTF-8 Codepage and Encoding"
         $PSDefaultParameterValues['*:Encoding'] = 'utf8'
         CHCP 65001
 
         # To prevent previous code from breaking, revert for copy to previous sharepath
-        $cleanSharePath = $SharePath
-        if($cleanSharePath.StartsWith("\\?\"))
-        {
-            $cleanSharePath = $cleanSharePath.Remove(0, 4)
-        }
-        if($cleanSharePath.StartsWith("\\?\unc\")){
-            $cleanSharePath = $cleanSharePath.Remove(0, 8)
-        }
-
         foreach ($file in $FilesWithInvalidCharsFixedName) {
+            $path = $file.OriginalFilePath
+            if($path.StartsWith("\\?\"))
+            {
+                $path = $path.Remove(0, 4)
+            }
+            if($path.StartsWith("\\?\unc\")){
+                $path = $path.Remove(0, 8)
+            }
 
             # is File or Folder already part of a synced directory, file can be skipped
             $isHandled = $listFile.IsHandledThroughFolder($file.OriginalFilePath)
             if(!$isHandled){
-                $root = [System.IO.Path]::GetPathRoot($file.OriginalFilePath);
-                $relative_path = $listFile.GetRelativePath($root, $file.OriginalFilePath); #[System.IO.Path]::GetRelativePath($root, $file.OriginalFilePath);
-                $destination = [System.IO.Path]::Combine($DestinationPath, [System.IO.Path]::GetDirectoryName($relative_path));
-                $file_name = [System.IO.Path]::GetFileName($file.OriginalFilePath)
-                
-                # Create Target Directory
-                [System.IO.Directory]::CreateDirectory($destination);
+                $root = [System.IO.Path]::GetPathRoot($path);
+                $relative_path = $path.Remove(0, $root.Length);
+                $file_name = [System.IO.Path]::GetFileName($path)
+                $source = [System.IO.Path]::GetDirectoryName($path + '\')
 
                 if($file.Type -eq 'FOLDER'){
-                    $allArgs = @('"' + $cleanSharePath + '"', '"' + $destination + '"', '*.*', '/E ' + $RoboCopyOptions)
-                    # Redirect Output as Workaround, as only last process output will be contained, but console blocked otherwise
-                    Start-Process Robocopy.exe -ArgumentList $allArgs -NoNewWindow -RedirectStandardOutput "copy.log"
-        
+                    Write-Host "START - UNSUPORTED FOLDER: " $file.OriginalFilePath
+                    $source = [System.IO.Path]::GetDirectoryName($path + '\')
+                    $destination = [System.IO.Path]::Combine($DestinationPath, [System.IO.Path]::GetDirectoryName($relative_path + '\'));
+                    
+                    [System.IO.Directory]::CreateDirectory($destination)
+                    $allArgs = @('"' + $source + '"', '"' + $destination + '"', '*.*', '/E ' + $RoboCopyOptions)
+
+                    Start-Process Robocopy.exe -ArgumentList $allArgs -NoNewWindow -Wait -PassThru
                     Write-Host 'Folder'$file_name' and all contents were copied from '$SharePath' to '$destination -ForegroundColor Green
                 } else {
-                    $allArgs = @('"' + $cleanSharePath + '"', '"' + $destination + '"', '"'+ $file_name +'"', $RoboCopyOptions)
-                    # Redirect Output as Workaround, as only last process output will be contained, but console blocked otherwise
-                    Start-Process Robocopy.exe -ArgumentList $allArgs -NoNewWindow -RedirectStandardOutput "copy.log"
-        
+                    $source = [System.IO.Path]::GetDirectoryName($path)
+                    $destination = [System.IO.Path]::Combine($DestinationPath, [System.IO.Path]::GetDirectoryName($relative_path));
+                
+                    Write-Host "START - UNSUPORTED FILE: " $file.OriginalFilePath
+                    $allArgs = @('"' + $source + '"', '"' + $destination + '"', '"'+ $file_name +'"', $RoboCopyOptions)
+                    Start-Process Robocopy.exe -ArgumentList $allArgs -NoNewWindow -Wait -PassThru
                     Write-Host 'File'$file_name' copied from '$SharePath' to '$destination -ForegroundColor Green
                 }
 
