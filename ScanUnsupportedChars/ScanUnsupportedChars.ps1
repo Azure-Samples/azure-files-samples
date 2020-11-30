@@ -91,7 +91,6 @@
         the fixed file name would be empty string, hence cannot be renamed into.
      2. If after replacing the unsupported chars, two or more files gets the same fixed name, the script would not
         be able to rename them due to name collision.
-     3. If Folders have unsupported chars in the name, Azure FileSync will not pick them up, but folder names are not yet scanned
 #>
 
 [CmdletBinding()]
@@ -786,7 +785,6 @@ if ($FilesWithInvalidCharsFixedName.Count -gt 0)
                 $root = [System.IO.Path]::GetPathRoot($path);
                 $relative_path = $path.Remove(0, $root.Length);
                 $file_name = [System.IO.Path]::GetFileName($path)
-                $source = [System.IO.Path]::GetDirectoryName($path + '\')
 
                 if($file.Type -eq 'FOLDER'){
                     Write-Host "START - UNSUPORTED FOLDER: " $file.OriginalFilePath
