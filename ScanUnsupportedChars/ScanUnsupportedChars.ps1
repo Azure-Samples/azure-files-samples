@@ -787,7 +787,6 @@ if ($FilesWithInvalidCharsFixedName.Count -gt 0)
                 $file_name = [System.IO.Path]::GetFileName($path)
 
                 if($file.Type -eq 'FOLDER'){
-                    Write-Host "START - UNSUPORTED FOLDER: " $file.OriginalFilePath
                     $source = [System.IO.Path]::GetDirectoryName($path + '\')
                     $destination = [System.IO.Path]::Combine($DestinationPath, [System.IO.Path]::GetDirectoryName($relative_path + '\'));
                     
@@ -800,7 +799,6 @@ if ($FilesWithInvalidCharsFixedName.Count -gt 0)
                     $source = [System.IO.Path]::GetDirectoryName($path)
                     $destination = [System.IO.Path]::Combine($DestinationPath, [System.IO.Path]::GetDirectoryName($relative_path));
                 
-                    Write-Host "START - UNSUPORTED FILE: " $file.OriginalFilePath
                     $allArgs = @('"' + $source + '"', '"' + $destination + '"', '"'+ $file_name +'"', $RoboCopyOptions)
                     Start-Process Robocopy.exe -ArgumentList $allArgs -NoNewWindow -Wait -PassThru
                     Write-Host 'File'$file_name' copied from '$SharePath' to '$destination -ForegroundColor Green
