@@ -10,8 +10,8 @@
    Scan provided share to get the file names not suported by AFS.
    It can also fix those files by replacing the unsupported char with the provided string in the files names.
 
-   Version 4.6
-   Last Modified Date: Nov 16, 2020
+   Version 4.7
+   Last Modified Date: Nov 27, 2020
 
     Example usage:
  
@@ -40,6 +40,14 @@
      Directory path for output CSV formatted files. If not specified, the output would be printed on the PS console.
      The output would be in UnsupportedCharsDetails.csv, LongPathFileNames.csv and FixedFileNames.csv
 
+ .PARAMETER DestinationPath
+     Switch if you want to Copy invalid Files to a seperate location. This location can be a local folder C:\share or remote share like \\server\share
+     This does not work in combination with RenameItems
+
+ .PARAMETER RoboCopyOptions
+     Arguments which should be passed directly to the Robocopy Process /SEC for setting ACL's in remote Share for example.
+     Through this Arguments it can be controlled if Files should be moved / copied and/or overriden
+     
  .EXAMPLE
      .\ScanUnsupportedChars.ps1  -SharePath  E:\SyncShare
       This would scan the provided SyncShare for the unsupported file names.
@@ -72,6 +80,10 @@
       .\ScanUnsupportedChars.ps1  -SharePath  \\server\SyncShare  -CsvPath "C:\temp"
       This would scan unsupported file names for the provided remote SyncShare and puts the output in the
       CSV formatted files in the output directory.
+ 
+ .EXAMPLE
+      .\ScanUnsupportedChars.ps1  -SharePath  \\server\SyncShare  -DestinationPath "\\some\server" -RoboCopyOptions '/SEC'
+      This would scan unsupported file names for the provided remote SyncShare and puts the output in the Destination Path
 
  .NOTES
      Script Limitations:
@@ -90,7 +102,11 @@ Param(
    [Parameter(Mandatory=$False,Position=3, HelpMessage = "Replacement string for the unsupported char")]
    [string]$ReplacementString,
    [Parameter(Mandatory=$False,Position=4, HelpMessage = "Directory for CSV formatted file output")]
-   [string]$CsvPath
+   [string]$CsvPath,
+   [Parameter(Mandatory=$False,Position=5, HelpMessage = "Destination path to Copy/Move Items to (acts as switch)")]
+   [string]$DestinationPath,
+   [Parameter(Mandatory=$False,Position=6, HelpMessage = "Arguments which should be passed to RoboCopy")]
+   [string]$RoboCopyOptions
 )
 
 $ErrorActionPreference="Stop"
@@ -104,6 +120,7 @@ using System.Runtime.InteropServices;
 using ft = System.Runtime.InteropServices.ComTypes;
 using System.ComponentModel;
 using System.Text;
+using System.Linq;
 
 public class InvalidCharInfo
 {
@@ -119,15 +136,24 @@ public class InvalidCharInfo
     }
 }
 
+public enum FixedEntryType
+{
+    FOLDER,
+    FILE
+}
+
 public class FixedFileNameEntry
 {
     public string OriginalFilePath { get; set; }
     public string FixedFileName { get; set; }
 
+    public FixedEntryType Type { get; set; }
+
     public FixedFileNameEntry()
     {
         OriginalFilePath = string.Empty;
         FixedFileName = string.Empty;
+        Type = FixedEntryType.FILE;
     }
 }
 
@@ -135,6 +161,7 @@ public class ListFiles
 {
     static IntPtr INVALID_HANDLE_VALUE = new IntPtr(-1);
     static int FILE_ATTRIBUTE_DIRECTORY = 0x00000010;
+    private const int FILE_ATTRIBUTE_NORMAL = 0x80;
     const int MAX_PATH = 260;
     public int ItemCount = 0;
     private const int AzureMaxFilePathLengthLimit = 2048;
@@ -432,6 +459,7 @@ public class ListFiles
                             FixedFileNameEntry entry = new FixedFileNameEntry();
                             entry.OriginalFilePath = dirPath;
                             entry.FixedFileName = fixedDirName;
+                            entry.Type = FixedEntryType.FOLDER;
 
                             FilesWithInvalidCharsFixedName.Add(entry);
                         }
@@ -494,6 +522,14 @@ public class ListFiles
         {
             Console.WriteLine("Processed Item count: " + ItemCount);
         }
+    }
+
+    public bool IsHandledThroughFolder(string path)
+    {
+        return FilesWithInvalidCharsFixedName.Any(
+            item => Path.GetDirectoryName(path)
+                    .StartsWith(item.OriginalFilePath)
+                && item.Type == FixedEntryType.FOLDER);
     }
 
     public void RenameItems()
@@ -726,6 +762,54 @@ if ($FilesWithInvalidCharsFixedName.Count -gt 0)
 
         Write-Host "***************************Items failed to rename table end*****************************" -ForegroundColor Yellow
     }
+    elseif($PSBoundParameters.ContainsKey('DestinationPath') -and !($PSBoundParameters.ContainsKey('RenameItems')))
+    {
+        Write-Host "========================== File COPY/MOVE start ==========================================" -ForegroundColor Yellow
+        $PSDefaultParameterValues['*:Encoding'] = 'utf8'
+        CHCP 65001
+
+        # To prevent previous code from breaking, revert for copy to previous sharepath
+        foreach ($file in $FilesWithInvalidCharsFixedName) {
+            $path = $file.OriginalFilePath
+            if($path.StartsWith("\\?\"))
+            {
+                $path = $path.Remove(0, 4)
+            }
+            if($path.StartsWith("\\?\unc\")){
+                $path = $path.Remove(0, 8)
+            }
+
+            # is File or Folder already part of a synced directory, file can be skipped
+            $isHandled = $listFile.IsHandledThroughFolder($file.OriginalFilePath)
+            if(!$isHandled){
+                $root = [System.IO.Path]::GetPathRoot($path);
+                $relative_path = $path.Remove(0, $root.Length);
+                $file_name = [System.IO.Path]::GetFileName($path)
+
+                if($file.Type -eq 'FOLDER'){
+                    $source = [System.IO.Path]::GetDirectoryName($path + '\')
+                    $destination = [System.IO.Path]::Combine($DestinationPath, [System.IO.Path]::GetDirectoryName($relative_path + '\'));
+                    
+                    [System.IO.Directory]::CreateDirectory($destination)
+                    $allArgs = @('"' + $source + '"', '"' + $destination + '"', '*.*', '/E ' + $RoboCopyOptions)
+
+                    Start-Process Robocopy.exe -ArgumentList $allArgs -NoNewWindow -Wait -PassThru
+                    Write-Host 'Folder'$file_name' and all contents were copied from '$SharePath' to '$destination -ForegroundColor Green
+                } else {
+                    $source = [System.IO.Path]::GetDirectoryName($path)
+                    $destination = [System.IO.Path]::Combine($DestinationPath, [System.IO.Path]::GetDirectoryName($relative_path));
+                
+                    $allArgs = @('"' + $source + '"', '"' + $destination + '"', '"'+ $file_name +'"', $RoboCopyOptions)
+                    Start-Process Robocopy.exe -ArgumentList $allArgs -NoNewWindow -Wait -PassThru
+                    Write-Host 'File'$file_name' copied from '$SharePath' to '$destination -ForegroundColor Green
+                }
+
+            } else {
+                Write-Host $file.OriginalFilePath' skipped because already synced through parent folder' -ForegroundColor Yellow
+            }
+        }
+        Write-Host "========================== File COPY/MOVE end ==========================================" -ForegroundColor Yellow
+    }
     else
     {
         if ([string]::IsNullOrEmpty($CsvPath))
@@ -735,12 +819,14 @@ if ($FilesWithInvalidCharsFixedName.Count -gt 0)
             if($setTableWidth)
             {
                     $FilesWithInvalidCharsFixedName | Format-Table @{Label= "OriginalFilePath";Expression={ $_.OriginalFilePath}; Width=$fileNameWidth },`
-                                                                    @{Label= "FixedFileName";Expression={ $_.FixedFileName}; Width=$fileNameWidth} -Wrap
+                                                                    @{Label= "FixedFileName";Expression={ $_.FixedFileName}; Width=$fileNameWidth},`
+                                                                    @{Label= "Type";Expression={ $_.Type};}  -Wrap
             }
             else
             {
                     $FilesWithInvalidCharsFixedName | Format-Table @{Label= "OriginalFilePath";Expression={ $_.OriginalFilePath};},`
-                                                                    @{Label= "FixedFileName";Expression={ $_.FixedFileName};} -Wrap -AutoSize
+                                                                    @{Label= "FixedFileName";Expression={ $_.FixedFileName};},`
+                                                                    @{Label= "Type";Expression={ $_.Type};} -Wrap -AutoSize
             }
 
             Write-Host "***************************Items can be renamed table end*****************************" -ForegroundColor Yellow
