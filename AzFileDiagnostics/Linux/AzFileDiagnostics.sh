@@ -330,7 +330,7 @@ if echo "$DISTNAME" | grep Ubuntu >/dev/null 2>&1 ; then
 	fi
 
 elif echo "$DISTNAME" | grep SLES >/dev/null 2>&1; then
-	ver_lt "$DISTVER" "12.3"
+	ver_lt "$DISTVER" "12.2"
 	if [ $? -eq 0 ] ; then
 		print_log "System DOES NOT support SMB 3 Encryption" "warning"
 		SMB3=1
