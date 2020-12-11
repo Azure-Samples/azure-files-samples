@@ -233,7 +233,7 @@ case $DISTNAME  in
 		;;
 	*SLES* )
 		if ( ver_lt $DISTVER '12' ); then
-			print_log "We recommend running following Linux Distributions: Ubuntu Server 14.04+ | RHEL 7+ | CentOS 7+ | Debian 8 | openSUSE 13.2+ | SUSE Linux Enterprise Server 12, please refer to https://docs.microsoft.com/en-us/azure/storage/files/storage-how-to-use-files-linux for more information" "warning"
+			print_log "We recommend running following Linux Distributions: Ubuntu Server 18.04+ | RHEL 8+ | CentOS 7.6+ | Debian 9 | openSUSE 15+ | SUSE Linux Enterprise Server 15, please refer to https://docs.microsoft.com/en-us/azure/storage/files/storage-how-to-use-files-linux for more information" "warning"
 
 		fi
 		;;

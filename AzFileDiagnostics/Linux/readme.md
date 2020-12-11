@@ -40,7 +40,7 @@ Example 1:
 
 ## Validations Preformed
 
-- Verify Linux distributions. We recommend running the following Linux distributions: Ubuntu Server 14.04+, Red Hat Enterprise Linux (RHEL) 7+, CentOS 7+, Debian 8+, openSUSE 13.2+, SUSE Linux Enterprise Server 12.
+- Verify Linux distributions. We recommend running the following Linux distributions: Ubuntu Server 18.04+, Red Hat Enterprise Linux (RHEL) 8+, CentOS 7.6+, Debian 9+, openSUSE 15+, SUSE Linux Enterprise Server 12.
 
 - Verify CIFS utils is installed.
 
