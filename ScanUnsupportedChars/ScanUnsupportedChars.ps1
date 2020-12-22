@@ -3,15 +3,15 @@
 
     Copyright (c) Microsoft Corporation.  All rights reserved.
 
-    This is a Powershell script to scan / scan plus rename the files that are not supported by Azure File Sync.
+    This is a Powershell script to scan / scan plus rename the files/directories that are not supported by Azure File Sync.
 
  .DESCRIPTION
 
    Scan provided share to get the file names not suported by AFS.
    It can also fix those files by replacing the unsupported char with the provided string in the files names.
 
-   Version 4.7
-   Last Modified Date: Nov 27, 2020
+   Version 4.8
+   Last Modified Date: Dec 22, 2020
 
     Example usage:
  
@@ -23,9 +23,9 @@
        2. Just to see all files with unsupported chars on console window with unsupported char replaced by 'YourOwnString'
        .\ScanUnsupportedChars.ps1  -SharePath  <LocalShareRootPath> -ReplacementString "YourOwnString"
        3. If you want to replace the unsupported char with your own string do
-       .\ScanUnsupportedChars.ps1  -SharePath  <LocalShareRootPath> -RenameItem -ReplacementString "YourOwnString"
+       .\ScanUnsupportedChars.ps1  -SharePath  <LocalShareRootPath> -RenameItems -ReplacementString "YourOwnString"
        4. If you want to remove the unsupported char from file paths do
-       .\ScanUnsupportedChars.ps1  -SharePath  <LocalShareRootPath> -RenameItem
+       .\ScanUnsupportedChars.ps1  -SharePath  <LocalShareRootPath> -RenameItems
        5. If you want to dump the script output to CSV files
        .\ScanUnsupportedChars.ps1  -SharePath  <LocalShareRootPath> -CsvPath <DirectoryPathForCSVFiles>
      Set-ExecutionPolicy AllSigned
@@ -53,12 +53,12 @@
       This would scan the provided SyncShare for the unsupported file names.
 
  .EXAMPLE
-     .\ScanUnsupportedChars.ps1  -SharePath  E:\SyncShare -RenameItem
+     .\ScanUnsupportedChars.ps1  -SharePath  E:\SyncShare -RenameItems
       This would scan and rename the unsupported file names in the provided sync share.
       This would replace the unsupported char with empty string.
 
  .EXAMPLE
-      .\ScanUnsupportedChars.ps1  -SharePath  E:\SyncShare -RenameItem -ReplacementString "-"
+      .\ScanUnsupportedChars.ps1  -SharePath  E:\SyncShare -RenameItems -ReplacementString "-"
       This would scan and rename the unsupported file names in the provided sync share.
       This would replace the unsupported char with "-".
 
@@ -67,12 +67,12 @@
         This would scan the provided remote SyncShare for the unsupported file names.
 
  .EXAMPLE
-      .\ScanUnsupportedChars.ps1  -SharePath  \\server\SyncShare  -RenameItem
+      .\ScanUnsupportedChars.ps1  -SharePath  \\server\SyncShare  -RenameItems
       This would scan and rename the unsupported file names for the provided remote SyncShare.
       This would replace the unsupported char with empty string.
 
  .EXAMPLE
-      .\ScanUnsupportedChars.ps1  -SharePath  \\server\SyncShare  -RenameItem -ReplacementString "-"
+      .\ScanUnsupportedChars.ps1  -SharePath  \\server\SyncShare  -RenameItems -ReplacementString "-"
       This would scan and rename the unsupported file names for the provided remote SyncShare.
       This would replace the unsupported char with "-".
 
