@@ -25,12 +25,12 @@ c:\script\ScanUnsupportedChars.ps1 -SharePath \\testshare.file.core.windows.net\
 
 ### How to identify and rename files with invalid characters
 ```powershell
-<path to script>\ScanUnsupportedChars.ps1 -SharePath <share path> -RenameItem -ReplacementString <string> | Out-File -FilePath c:\script\output.txt
+<path to script>\ScanUnsupportedChars.ps1 -SharePath <share path> -RenameItems -ReplacementString <string> | Out-File -FilePath c:\script\output.txt
 ```
 
 Example to rename the files and replace the invalid character with a hyphen**
 ```powershell
-c:\script\ScanUnsupportedChars.ps1 -SharePath \\testshare.file.core.windows.net\filesharename -RenameItem -ReplacementString "-" | Out-File -FilePath c:\script\output.txt
+c:\script\ScanUnsupportedChars.ps1 -SharePath \\testshare.file.core.windows.net\filesharename -RenameItems -ReplacementString "-" | Out-File -FilePath c:\script\output.txt
 ```
 
 Example to **copy** all files and directories with invalid characters.
