@@ -1,6 +1,4 @@
 # Autoincrease Premium File Share Quota
-- [Overview]
-- [Options]
 
 ## Overview
 This method will create an Azure Function with a timer trigger that checks every 5 minutes to see whether the target premium file share has 20% or less of its quota still free. If so, this function will automatically increase the file share's quota by 20%.
