@@ -10,8 +10,8 @@
    Scan provided share to get the file names not suported by AFS.
    It can also fix those files by replacing the unsupported char with the provided string in the files names.
 
-   Version 4.8
-   Last Modified Date: Dec 22, 2020
+   Version 4.9
+   Last Modified Date: March 12, 2021
 
     Example usage:
  
@@ -111,7 +111,8 @@ Param(
 
 $ErrorActionPreference="Stop"
 
-Add-Type -TypeDefinition @"
+$assemblies = ("System.Net.Http")
+Add-Type -ReferencedAssemblies $assemblies -TypeDefinition @"
 
 using System;
 using System.Collections.Generic;
@@ -121,6 +122,8 @@ using ft = System.Runtime.InteropServices.ComTypes;
 using System.ComponentModel;
 using System.Text;
 using System.Linq;
+using System.Net.Http;
+using System.Net.Http.Headers;
 
 public class InvalidCharInfo
 {
@@ -277,6 +280,10 @@ public class ListFiles
                 Console.WriteLine("Unsupported char code point: " + CodePoint);
                 return CodePoint;
             }
+            else if (0x80 <= CodePoint && CodePoint <= 0x9F)
+            {
+                return CodePoint;
+            }
             else
             {
                 return 0;
@@ -376,6 +383,30 @@ public class ListFiles
             {
                 char[] charArray = { Character };
                 Code = IsSupported(new string(charArray));
+                
+                // Check if control char is supported in combination of other file name chars
+                if (0x80 <= Code && Code <= 0x9F)
+                {
+                    string requestUrl = @"https://afscharscanner.file.core.windows.net/afscharscanner/" + fileName;
+                    var request = new HttpRequestMessage(HttpMethod.Get, requestUrl);
+                    request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", "somerandominvalidkey==");
+
+                    using (var client = new HttpClient())
+                    {
+                        var result = client.SendAsync(request).Result;
+                        var containsRequestId = result.Headers.Contains("x-ms-request-id");
+                        Console.WriteLine(result.StatusCode + " RequestId " + containsRequestId);
+
+                        if ((result.StatusCode == System.Net.HttpStatusCode.BadRequest) && !containsRequestId)
+                        {
+                           Console.WriteLine("File/Directory name contains a control char that is not supported with combination of other char");
+                        }
+                        else
+                        {
+                            Code = 0;
+                        }
+                    }
+                }
             }
 
             if (Code != 0)
