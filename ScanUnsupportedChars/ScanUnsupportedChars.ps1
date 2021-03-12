@@ -10,8 +10,8 @@
    Scan provided share to get the file names not suported by AFS.
    It can also fix those files by replacing the unsupported char with the provided string in the files names.
 
-   Version 4.8
-   Last Modified Date: Dec 22, 2020
+   Version 4.9
+   Last Modified Date: March 12, 2021
 
     Example usage:
  
@@ -111,7 +111,8 @@ Param(
 
 $ErrorActionPreference="Stop"
 
-Add-Type -TypeDefinition @"
+$assemblies = ("System.Net.Http")
+Add-Type -ReferencedAssemblies $assemblies -TypeDefinition @"
 
 using System;
 using System.Collections.Generic;
@@ -121,6 +122,8 @@ using ft = System.Runtime.InteropServices.ComTypes;
 using System.ComponentModel;
 using System.Text;
 using System.Linq;
+using System.Net.Http;
+using System.Net.Http.Headers;
 
 public class InvalidCharInfo
 {
@@ -277,6 +280,13 @@ public class ListFiles
                 Console.WriteLine("Unsupported char code point: " + CodePoint);
                 return CodePoint;
             }
+            else if (0x80 <= CodePoint && CodePoint <= 0x9F)
+            {
+                // These are supported codepoints, but are returned due to them sometimes
+                // being rejected when in combination with other characters.  The caller
+                // can test this further.
+                return CodePoint;
+            }
             else
             {
                 return 0;
@@ -315,21 +325,6 @@ public class ListFiles
             Console.WriteLine("**** Empty File name ****");
 
             return string.Empty;
-        }
-
-        // Filenames with trailing dots are not supported
-        if (fileName.EndsWith(@"."))
-        {
-            InvalidCharInfo info = new InvalidCharInfo();
-
-            info.Code = 0x0000002E;
-            info.Position = filePath.Length;
-            info.Message = "File name ends with '.' or ' '";
-            InvalidCharFileInformation.Add(filePath, info);
-
-            fileName = fileName.TrimEnd(new char [] {' ','.'});
-
-            return filePath.Substring(0, fileNameIndex + 1) + fileName + ReplacementString;
         }
 
         var fileNameArray = fileName.ToCharArray();
@@ -376,6 +371,31 @@ public class ListFiles
             {
                 char[] charArray = { Character };
                 Code = IsSupported(new string(charArray));
+                
+                // Check if control char is supported in combination of other file name chars
+                if (0x80 <= Code && Code <= 0x9F)
+                {
+                    // known issue: this is checking against the full filename, which would remove all control
+                    // characters if there are any other unsupported control characters in the name.
+                    string requestUrl = @"https://afscharscanner.file.core.windows.net/afscharscanner/" + fileName;
+                    var request = new HttpRequestMessage(HttpMethod.Get, requestUrl);
+                    request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", "somerandominvalidkey==");
+
+                    using (var client = new HttpClient())
+                    {
+                        var result = client.SendAsync(request).Result;
+                        var containsRequestId = result.Headers.Contains("x-ms-request-id");
+
+                        if ((result.StatusCode == System.Net.HttpStatusCode.BadRequest) && !containsRequestId)
+                        {
+                           Console.WriteLine("File/Directory name contains a control char that is not supported with combination of other char");
+                        }
+                        else
+                        {
+                            Code = 0;
+                        }
+                    }
+                }
             }
 
             if (Code != 0)
@@ -404,7 +424,27 @@ public class ListFiles
 
         if (foundUnsupportedChar)
         {
-            return filePath.Substring(0, fileNameIndex + 1) + newFileName.ToString();
+            // Convert from string builder to string
+            string updatedFileName = newFileName.ToString();
+
+            if (updatedFileName.EndsWith(@".")) // Filenames with trailing dots are not supported
+            {
+                updatedFileName = updatedFileName.TrimEnd(new char [] {'.'}) + ReplacementString;
+            }
+
+            return filePath.Substring(0, fileNameIndex + 1) + updatedFileName.ToString();
+        }
+        else if (fileName.EndsWith(@".")) // Filenames with trailing dots are not supported
+        {
+            InvalidCharInfo info = new InvalidCharInfo();
+
+            info.Code = 0x0000002E;
+            info.Position = filePath.Length;
+            info.Message = "File name ends with '.'";
+
+            InvalidCharFileInformation.Add(filePath, info);
+            fileName = fileName.TrimEnd(new char [] {'.'});
+            return filePath.Substring(0, fileNameIndex + 1) + fileName + ReplacementString;
         }
         else
         {
