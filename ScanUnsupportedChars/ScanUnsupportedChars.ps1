@@ -285,7 +285,7 @@ public class ListFiles
                 // These are supported codepoints, but are returned due to them sometimes
                 // being rejected when in combination with other characters.  The caller
                 // can test this further.
-                return -1;
+                return CodePoint;
             }
             else
             {
@@ -373,7 +373,7 @@ public class ListFiles
                 Code = IsSupported(new string(charArray));
                 
                 // Check if control char is supported in combination of other file name chars
-                if (Code == -1)
+                if (0x80 <= Code && Code <= 0x9F)
                 {
                     // known issue: this is checking against the full filename, which would remove all control
                     // characters if there are any other unsupported control characters in the name.
