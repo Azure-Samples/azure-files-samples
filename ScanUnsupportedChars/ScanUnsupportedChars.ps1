@@ -282,6 +282,9 @@ public class ListFiles
             }
             else if (0x80 <= CodePoint && CodePoint <= 0x9F)
             {
+                // These are supported codepoints, but are returned due to them sometimes
+                // being rejected when in combination with other characters.  The caller
+                // can test this further.
                 return CodePoint;
             }
             else
@@ -322,21 +325,6 @@ public class ListFiles
             Console.WriteLine("**** Empty File name ****");
 
             return string.Empty;
-        }
-
-        // Filenames with trailing dots are not supported
-        if (fileName.EndsWith(@"."))
-        {
-            InvalidCharInfo info = new InvalidCharInfo();
-
-            info.Code = 0x0000002E;
-            info.Position = filePath.Length;
-            info.Message = "File name ends with '.' or ' '";
-            InvalidCharFileInformation.Add(filePath, info);
-
-            fileName = fileName.TrimEnd(new char [] {' ','.'});
-
-            return filePath.Substring(0, fileNameIndex + 1) + fileName + ReplacementString;
         }
 
         var fileNameArray = fileName.ToCharArray();
@@ -387,6 +375,8 @@ public class ListFiles
                 // Check if control char is supported in combination of other file name chars
                 if (0x80 <= Code && Code <= 0x9F)
                 {
+                    // known issue: this is checking against the full filename, which would remove all control
+                    // characters if there are any other unsupported control characters in the name.
                     string requestUrl = @"https://afscharscanner.file.core.windows.net/afscharscanner/" + fileName;
                     var request = new HttpRequestMessage(HttpMethod.Get, requestUrl);
                     request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", "somerandominvalidkey==");
@@ -395,7 +385,6 @@ public class ListFiles
                     {
                         var result = client.SendAsync(request).Result;
                         var containsRequestId = result.Headers.Contains("x-ms-request-id");
-                        Console.WriteLine(result.StatusCode + " RequestId " + containsRequestId);
 
                         if ((result.StatusCode == System.Net.HttpStatusCode.BadRequest) && !containsRequestId)
                         {
@@ -435,7 +424,27 @@ public class ListFiles
 
         if (foundUnsupportedChar)
         {
-            return filePath.Substring(0, fileNameIndex + 1) + newFileName.ToString();
+            // Convert from string builder to string
+            string updatedFileName = newFileName.ToString();
+
+            if (updatedFileName.EndsWith(@".")) // Filenames with trailing dots are not supported
+            {
+                updatedFileName = updatedFileName.TrimEnd(new char [] {'.'}) + ReplacementString;
+            }
+
+            return filePath.Substring(0, fileNameIndex + 1) + updatedFileName.ToString();
+        }
+        else if (fileName.EndsWith(@".")) // Filenames with trailing dots are not supported
+        {
+            InvalidCharInfo info = new InvalidCharInfo();
+
+            info.Code = 0x0000002E;
+            info.Position = filePath.Length;
+            info.Message = "File name ends with '.'";
+
+            InvalidCharFileInformation.Add(filePath, info);
+            fileName = fileName.TrimEnd(new char [] {'.'});
+            return filePath.Substring(0, fileNameIndex + 1) + fileName + ReplacementString;
         }
         else
         {
