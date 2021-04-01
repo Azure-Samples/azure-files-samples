@@ -2525,7 +2525,6 @@ function New-ADAccountForStorageAccount {
                     $userSpnMatch.PasswordNeverExpires = $true
                     $userSpnMatch.Description = "Service logon account for Azure storage account $StorageAccountName."
                     $userSpnMatch.Enabled = $true
-                    $userSpnMatch.TrustedForDelegation = $true
                     Set-ADUser -Instance $userSpnMatch -ErrorAction Stop
                 } else {
                     New-ADUser `
@@ -2539,7 +2538,6 @@ function New-ADAccountForStorageAccount {
                         -ServicePrincipalNames $spnValue `
                         -Server $Domain `
                         -Enabled $true `
-                        -TrustedForDelegation $true `
                         -ErrorAction Stop
                 }
 
