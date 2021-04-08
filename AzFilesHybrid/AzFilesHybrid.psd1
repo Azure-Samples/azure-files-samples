@@ -12,7 +12,7 @@
     RootModule = 'AzFilesHybrid.psm1'
     
     # Version number of this module.
-    ModuleVersion = '0.1.2.0'
+    ModuleVersion = '0.2.3.0'
     
     # Supported PSEditions
     CompatiblePSEditions = "Core", "Desktop"
@@ -97,6 +97,7 @@
         "Join-AzStorageAccount", 
         "Invoke-AzStorageAccountADObjectPasswordRotation",
         "Debug-AzStorageAccountAuth",
+        "Update-AzStorageAccountAuthForAES256",
 
         # General Azure cmdlets
         "Expand-AzResourceId",
@@ -114,7 +115,10 @@
         "New-AzDnsForwarder",
         "New-AzDnsForwardingRuleSet",
         "Add-AzDnsForwardingRule",
-        "Push-DnsServerConfiguration"
+        "Push-DnsServerConfiguration",
+
+        #Share level permissions migration cmdlets
+        "Move-OnPremSharePermissionsToAzureFileShare"
     
     # Cmdlets to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no cmdlets to export.
     CmdletsToExport = @()
