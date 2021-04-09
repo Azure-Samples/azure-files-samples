@@ -2665,7 +2665,7 @@ function Get-AzStorageAccountADObject {
 
         if ($PSCmdlet.ParameterSetName -eq "ADObjectName") {
             if ([System.String]::IsNullOrEmpty($Domain)) {
-                $domainInfo = Get-Domain
+                $domainInfo = Get-ADDomain -Current LocalComputer
                 $Domain = $domainInfo.DnsRoot
             }
         }
@@ -3749,7 +3749,7 @@ function Set-StorageAccountDomainProperties {
         Write-Verbose "Set-StorageAccountDomainProperties: Enabling the feature on the storage account and providing the required properties to the storage service"
 
         if ([System.String]::IsNullOrEmpty($Domain)) {
-            $domainInformation = Get-ADDomain
+            $domainInformation = Get-ADDomain -Current LocalComputer
             $Domain = $domainInformation.DnsRoot
         } else {
             $domainInformation = Get-ADDomain -Server $Domain
