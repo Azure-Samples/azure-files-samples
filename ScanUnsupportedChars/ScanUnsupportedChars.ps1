@@ -1,34 +1,28 @@
 <#
  .SYNOPSIS
-
     Copyright (c) Microsoft Corporation.  All rights reserved.
 
     This is a Powershell script to scan / scan plus rename the files/directories that are not supported by Azure File Sync.
 
  .DESCRIPTION
 
-   Scan provided share to get the file names not suported by AFS.
-   It can also fix those files by replacing the unsupported char with the provided string in the files names.
+    Scan provided share to get the file names not suported by AFS. The script can be used to:
+       a. Scan file/directories name that have unsupported chars.
+       b. Rename (remove or replace) such unsupported chars from names.
+       c. Move such file/directories out of the share to a desired location.
 
-   Version 4.9
+   Version 5.1
    Last Modified Date: March 12, 2021
 
-    Example usage:
- 
-    Note: Please open powershell in full screen mode to avoid output truncation.
+   Note: Please open powershell in full screen mode to avoid output truncation.
 
-    Set-ExecutionPolicy Unrestricted
-       1. Just to see all files with unsupported chars on console window with unsupported char replaced by 'empty string'
-       .\ScanUnsupportedChars.ps1  -SharePath  <LocalShareRootPath>
-       2. Just to see all files with unsupported chars on console window with unsupported char replaced by 'YourOwnString'
-       .\ScanUnsupportedChars.ps1  -SharePath  <LocalShareRootPath> -ReplacementString "YourOwnString"
-       3. If you want to replace the unsupported char with your own string do
-       .\ScanUnsupportedChars.ps1  -SharePath  <LocalShareRootPath> -RenameItems -ReplacementString "YourOwnString"
-       4. If you want to remove the unsupported char from file paths do
-       .\ScanUnsupportedChars.ps1  -SharePath  <LocalShareRootPath> -RenameItems
-       5. If you want to dump the script output to CSV files
-       .\ScanUnsupportedChars.ps1  -SharePath  <LocalShareRootPath> -CsvPath <DirectoryPathForCSVFiles>
-     Set-ExecutionPolicy AllSigned
+   How to execute this script:
+
+   Open PS in admin and full screen mode and run following command:
+
+   Set-ExecutionPolicy Unrestricted
+   #Run of your command as per the examples shared below.
+   Set-ExecutionPolicy AllSigned
 
  .PARAMETER SharePath
      Path of the share to scan, it could be local folder like D:\share, D:\ or a remote share like \\server\share
@@ -39,53 +33,71 @@
  .PARAMETER CsvPath
      Directory path for output CSV formatted files. If not specified, the output would be printed on the PS console.
      The output would be in UnsupportedCharsDetails.csv, LongPathFileNames.csv and FixedFileNames.csv
-
  .PARAMETER DestinationPath
      Switch if you want to Copy invalid Files to a seperate location. This location can be a local folder C:\share or remote share like \\server\share
      This does not work in combination with RenameItems
-
  .PARAMETER RoboCopyOptions
      Arguments which should be passed directly to the Robocopy Process /SEC for setting ACL's in remote Share for example.
      Through this Arguments it can be controlled if Files should be moved / copied and/or overriden
-     
+
  .EXAMPLE
-     .\ScanUnsupportedChars.ps1  -SharePath  E:\SyncShare
+     .\ScanUnsupportedChars.ps1  -SharePath  <LocalShareRootPath>
+     Just to see all files with unsupported chars on console window with unsupported char replaced by 'empty string'
+
+ .EXAMPLE
+     .\ScanUnsupportedChars.ps1  -SharePath  <LocalShareRootPath> -ReplacementString "YourOwnString"
+     Just to see all files with unsupported chars on console window with unsupported char replaced by 'YourOwnString'
+
+ .EXAMPLE
+     .\ScanUnsupportedChars.ps1  -SharePath  <LocalShareRootPath> -RenameItems -ReplacementString "YourOwnString"
+     To replace the unsupported char with your own string.
+
+ .EXAMPLE
+     .\ScanUnsupportedChars.ps1  -SharePath  <LocalShareRootPath> -RenameItems
+     To remove the unsupported char from file paths
+
+ .EXAMPLE
+     .\ScanUnsupportedChars.ps1  -SharePath  <LocalShareRootPath> -CsvPath <DirectoryPathForCSVFiles>
+     To dump the script output to CSV files
+
+ .EXAMPLE
+     .\ScanUnsupportedChars.ps1  -SharePath  E:\SyncShare
       This would scan the provided SyncShare for the unsupported file names.
 
  .EXAMPLE
-     .\ScanUnsupportedChars.ps1  -SharePath  E:\SyncShare -RenameItems
+     .\ScanUnsupportedChars.ps1  -SharePath  E:\SyncShare -RenameItems
       This would scan and rename the unsupported file names in the provided sync share.
       This would replace the unsupported char with empty string.
 
  .EXAMPLE
-      .\ScanUnsupportedChars.ps1  -SharePath  E:\SyncShare -RenameItems -ReplacementString "-"
+      .\ScanUnsupportedChars.ps1  -SharePath  E:\SyncShare -RenameItems -ReplacementString "-"
       This would scan and rename the unsupported file names in the provided sync share.
       This would replace the unsupported char with "-".
 
  .EXAMPLE
-      .\ScanUnsupportedChars.ps1  -SharePath  \\server\SyncShare 
+      .\ScanUnsupportedChars.ps1  -SharePath  \\server\SyncShare 
         This would scan the provided remote SyncShare for the unsupported file names.
 
  .EXAMPLE
-      .\ScanUnsupportedChars.ps1  -SharePath  \\server\SyncShare  -RenameItems
+      .\ScanUnsupportedChars.ps1  -SharePath  \\server\SyncShare  -RenameItems
       This would scan and rename the unsupported file names for the provided remote SyncShare.
       This would replace the unsupported char with empty string.
 
  .EXAMPLE
-      .\ScanUnsupportedChars.ps1  -SharePath  \\server\SyncShare  -RenameItems -ReplacementString "-"
+      .\ScanUnsupportedChars.ps1  -SharePath  \\server\SyncShare  -RenameItems -ReplacementString "-"
       This would scan and rename the unsupported file names for the provided remote SyncShare.
       This would replace the unsupported char with "-".
 
  .EXAMPLE
-      .\ScanUnsupportedChars.ps1  -SharePath  \\server\SyncShare  -CsvPath "C:\temp"
+      .\ScanUnsupportedChars.ps1  -SharePath  \\server\SyncShare  -CsvPath "C:\temp"
       This would scan unsupported file names for the provided remote SyncShare and puts the output in the
       CSV formatted files in the output directory.
- 
+
  .EXAMPLE
-      .\ScanUnsupportedChars.ps1  -SharePath  \\server\SyncShare  -DestinationPath "\\some\server" -RoboCopyOptions '/SEC'
+      .\ScanUnsupportedChars.ps1  -SharePath  \\server\SyncShare  -DestinationPath "\\some\server" -RoboCopyOptions '/SEC'
       This would scan unsupported file names for the provided remote SyncShare and puts the output in the Destination Path
 
- .NOTES
+.NOTES
      Script Limitations:
      1. If file name have only the unsupported chars in the name and provided ReplacementString is empty string,
         the fixed file name would be empty string, hence cannot be renamed into.
@@ -113,7 +125,6 @@ $ErrorActionPreference="Stop"
 
 $assemblies = ("System.Net.Http")
 Add-Type -ReferencedAssemblies $assemblies -TypeDefinition @"
-
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -130,7 +141,6 @@ public class InvalidCharInfo
     public int Code { get; set; }
     public int Position { get; set; }
     public string Message { get; set; }
-
     public InvalidCharInfo()
     {
         Code = 0;
@@ -149,7 +159,6 @@ public class FixedFileNameEntry
 {
     public string OriginalFilePath { get; set; }
     public string FixedFileName { get; set; }
-
     public FixedEntryType Type { get; set; }
 
     public FixedFileNameEntry()
@@ -238,7 +247,6 @@ public class ListFiles
         if (excluded)
         {
             Console.WriteLine("Excluded from checks directory path : " + itemName);
-
             return excluded;
         }
 
@@ -250,28 +258,15 @@ public class ListFiles
     public static int IsSupported(string charString)
     {
         int CodePoint = Char.ConvertToUtf32(charString, 0);
-
         if ((0x1F <= CodePoint && CodePoint <= 0xD7FF) ||
-            (0xF900 <= CodePoint && CodePoint <= 0xFDCF) ||
-            (0xFDF0 <= CodePoint && CodePoint <= 0xFFEF) ||
-            (0x10000 <= CodePoint && CodePoint <= 0x1FFFD) ||
-            (0x20000 <= CodePoint && CodePoint <= 0x2FFFD) ||
-            (0x30000 <= CodePoint && CodePoint <= 0x3FFFD) ||
-            (0x40000 <= CodePoint && CodePoint <= 0x4FFFD) ||
-            (0x50000 <= CodePoint && CodePoint <= 0x5FFFD) ||
-            (0x60000 <= CodePoint && CodePoint <= 0x6FFFD) ||
-            (0x70000 <= CodePoint && CodePoint <= 0x7FFFD) ||
-            (0x80000 <= CodePoint && CodePoint <= 0x8FFFD) ||
-            (0x90000 <= CodePoint && CodePoint <= 0x9FFFD) ||
-            (0xA0000 <= CodePoint && CodePoint <= 0xAFFFD) ||
-            (0xB0000 <= CodePoint && CodePoint <= 0xBFFFD) ||
-            (0xC0000 <= CodePoint && CodePoint <= 0xCFFFD) ||
-            (0xD0000 <= CodePoint && CodePoint <= 0xDFFFD) ||
-            (0xE1000 <= CodePoint && CodePoint <= 0xEFFFD) ||
             (0xE000 <= CodePoint && CodePoint <= 0xF8FF) ||
-            (0xF0000 <= CodePoint && CodePoint <= 0xFFFFD) ||
-            (0x100000 <= CodePoint && CodePoint <= 0x10FFFD) ||
-            (0xE0000 <= CodePoint && CodePoint <= 0xE0FFF))
+            (0xF900 <= CodePoint && CodePoint <= 0xFDCF) ||  // FDD0 not supported
+            (0xFDD1 <= CodePoint && CodePoint <= 0xFDDC) ||  // FDDD not supported
+            (0xFDDE <= CodePoint && CodePoint <= 0xFFFD) ||
+            (0x10000 <= CodePoint && CodePoint <= 0x4FFFD) ||
+            (0x50000 <= CodePoint && CodePoint <= 0x8FFFD) ||
+            (0x90000 <= CodePoint && CodePoint <= 0xCFFFD) ||
+            (0xD0000 <= CodePoint && CodePoint <= 0x10FFFD))
         {
             // The character is withing the range of valid characters supported by XStore,
             // hence it is supported, unless it is part of the exception list
@@ -299,6 +294,7 @@ public class ListFiles
             return CodePoint;
         }
     }
+
     public string ValidateAndReturnFixedPath(string filePath)
     {
         ItemCount++;
@@ -309,7 +305,6 @@ public class ListFiles
         if (filePathLength > AzureMaxFilePathLengthLimit)
         {
             FilePathTooLongList.Add(filePath);
-
             return string.Empty;
         }
 
@@ -323,7 +318,6 @@ public class ListFiles
         if (string.IsNullOrEmpty(fileName))
         {
             Console.WriteLine("**** Empty File name ****");
-
             return string.Empty;
         }
 
@@ -371,7 +365,7 @@ public class ListFiles
             {
                 char[] charArray = { Character };
                 Code = IsSupported(new string(charArray));
-                
+
                 // Check if control char is supported in combination of other file name chars
                 if (0x80 <= Code && Code <= 0x9F)
                 {
@@ -411,7 +405,6 @@ public class ListFiles
 
                 // Keeps information about only one unsupported char
                 InvalidCharFileInformation[filePath] = info;
-
                 newFileName.Append(ReplacementString);
             }
             else
@@ -456,7 +449,6 @@ public class ListFiles
     public void FindFilesAndDirs(string directoryPath)
     {
         SharePathLength = directoryPath.Length;
-
         WIN32_FIND_DATA findData;
 
         if (directoryPath.EndsWith(@"\"))
@@ -489,9 +481,7 @@ public class ListFiles
                     if (currentFileName != "." && currentFileName != ".." && !IsExcluded(volumeRootExclusionName))
                     {
                         string dirPath = Path.Combine(directoryPath, currentFileName);
-
                         FindFilesAndDirs(dirPath);
-
                         string fixedDirName = ValidateAndReturnFixedPath(dirPath);
 
                         if (!string.IsNullOrEmpty(fixedDirName))
@@ -500,7 +490,6 @@ public class ListFiles
                             entry.OriginalFilePath = dirPath;
                             entry.FixedFileName = fixedDirName;
                             entry.Type = FixedEntryType.FOLDER;
-
                             FilesWithInvalidCharsFixedName.Add(entry);
                         }
                     }
@@ -508,7 +497,6 @@ public class ListFiles
                 else // it's a file, add it to the results
                 {
                     string filePath = Path.Combine(directoryPath, currentFileName);
-
                     string fixedFileName = ValidateAndReturnFixedPath(filePath);
 
                     if (!string.IsNullOrEmpty(fixedFileName))
@@ -516,7 +504,6 @@ public class ListFiles
                         FixedFileNameEntry entry = new FixedFileNameEntry();;
                         entry.OriginalFilePath = filePath;
                         entry.FixedFileName = fixedFileName;
-
                         FilesWithInvalidCharsFixedName.Add(entry);
                     }
                 }
