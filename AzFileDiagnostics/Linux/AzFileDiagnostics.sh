@@ -117,7 +117,7 @@ if [ $# -gt 0 ] ; then
 		case "$ENVIRONMENT" in
 			azurecloud) SUFFIX='.file.core.windows.net' ;;
 			azurechinacloud) SUFFIX='.file.core.chinacloudapi.cn' ;;
-			azureusgovernment) SUFFIX='.file.usgovcloudapi.net' ;;
+			azureusgovernment) SUFFIX='.file.core.usgovcloudapi.net' ;;
 			azuregermancloud) SUFFIX='.file.core.cloudapi.de' ;;
 		esac
 		SAFQDN="$ACCOUNT""$SUFFIX"
@@ -398,7 +398,7 @@ if  [ -z "$SAFQDN" ]; then
 				break
 				;;
 			"azureusgovernment")
-				SUFFIX=".file.usgovcloudapi.net"
+				SUFFIX=".file.core.usgovcloudapi.net"
 				break
 				;;
 			*) echo invalid option;;
