@@ -428,7 +428,7 @@ function GetFileSharePath {
                 0 { $surffix = ".file.core.windows.net" }
                 1 { $surffix = ".file.core.chinacloudapi.cn" }
                 2 { $surffix = ".file.core.cloudapi.de" }
-                3 { $surffix = ".file.usgovcloudapi.net" }
+                3 { $surffix = ".file.core.usgovcloudapi.net" }
                 Default { $surffix = ".file.core.windows.net" }
             }
             $FileSharePath = "\\" + $StorageAccountName + $surffix + "\" + $FileShareName               
