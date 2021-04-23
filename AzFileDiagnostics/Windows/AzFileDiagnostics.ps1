@@ -29,7 +29,7 @@
 [CmdletBinding(DefaultParametersetName = 'None')] 
 param(
     [Parameter(ParameterSetName = 'UNCParameterSet', Mandatory = $false)]
-    [ValidatePattern('^\\\\[a-z0-9`]{3,24}(.file.core.windows.net|.file.core.chinacloudapi.cn|.file.core.cloudapi.de|.file.usgovcloudapi.net)\\([a-z0-9](?:[a-z0-9]|(\-(?!\-))){1,61}[a-z0-9])(\\[^\x00-\x1f`"\\/:|<>*?\uE000-\uF8FF]{1,255})*$')]
+    [ValidatePattern('^\\\\[a-z0-9`]{3,24}(.file.core.windows.net|.file.core.chinacloudapi.cn|.file.core.cloudapi.de|.file.core.usgovcloudapi.net)\\([a-z0-9](?:[a-z0-9]|(\-(?!\-))){1,61}[a-z0-9])(\\[^\x00-\x1f`"\\/:|<>*?\uE000-\uF8FF]{1,255})*$')]
     $UNCPath = $null,
     [Parameter(ParameterSetName = 'StorageAccountParameterSet', Mandatory = $false)]
     [ValidatePattern('^[a-z0-9`]{3,24}$')]
@@ -1352,7 +1352,7 @@ $Script:logfilepath = "$Script:LogDirectory\\AzFileDiag-$($CurrentTime).txt"
 
 $Script:StorageAccountNameValidationPattern = "^[a-z0-9`]{3,24}$"
 $Script:ShareNameValidationPattern = "^[a-z0-9](?:[a-z0-9]|(\-(?!\-))){1,61}[a-z0-9]$"
-$Script:UNCPathValidationPattern = "^\\\\[a-z0-9`]{3,24}(.file.core.windows.net|.file.core.chinacloudapi.cn|.file.core.cloudapi.de|.file.usgovcloudapi.net)\\([a-z0-9](?:[a-z0-9]|(\-(?!\-))){1,61}[a-z0-9])(\\[^\x00-\x1f`"\\/:|<>*?\uE000-\uF8FF]{1,255})*$"
+$Script:UNCPathValidationPattern = "^\\\\[a-z0-9`]{3,24}(.file.core.windows.net|.file.core.chinacloudapi.cn|.file.core.cloudapi.de|.file.core.usgovcloudapi.net)\\([a-z0-9](?:[a-z0-9]|(\-(?!\-))){1,61}[a-z0-9])(\\[^\x00-\x1f`"\\/:|<>*?\uE000-\uF8FF]{1,255})*$"
 
 #set default validtion pass value. 
 $Script:ValidationPass = $true
@@ -1423,7 +1423,7 @@ elseif (($StorageAccountName -ne $null) -and ($fileshareName -ne $null) -and ($E
         "azurecloud" { $surffix = ".file.core.windows.net" }
         "azurechinacloud" { $surffix = ".file.core.chinacloudapi.cn" }
         "azuregermancloud" { $surffix = ".file.core.cloudapi.de" }
-        "azureusgovernment" { $surffix = ".file.usgovcloudapi.net" }
+        "azureusgovernment" { $surffix = ".file.core.usgovcloudapi.net" }
         Default { $surffix = ".file.core.windows.net" }
  
     }
