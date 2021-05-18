@@ -13,7 +13,7 @@ The solution works as follows:
 2. Copy snapshot just taken to the target share using azcopy --sync. AzCopy sync will only transfer new files or files that have changed, and will also remove deleted files from target.
 3. Snapshot target share. Result is both snapshots are the same. 
 4. The script automatically removes your oldest manual snapshot from both source and target when you are close to the Azure Files snapshot limit (currently 200), ensuring both the script and your scheduled backup jobs never fail.
-5. You can automate these steps using Azure Automation (see [Sync between Two Azure File Shares for Disaster Recovery]("www.charbelnemnom.com/sync-between-two-azure-file-shares-for-disaster-recovery") for more details). 
+5. You can automate these steps using Azure Automation (see [Sync between Two Azure File Shares for Disaster Recovery](https://charbelnemnom.com/sync-between-two-azure-file-shares-for-disaster-recovery/) for more details). 
 
 
 ![solution overview](./AzCopyBackup.jpg)
