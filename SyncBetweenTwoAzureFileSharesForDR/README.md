@@ -2,7 +2,7 @@
 
 Many Azure Files customers wish to back up their data in another storage account to be able to recover from unintended changes or deletions to their file systems. This solution will enable you to create your own easy backup solution that automatically creates incremental backups of an Azure Files system on a customer-defined schedule and stores the backups in a separate storage account. In particular, it enables customers to achieve geographic redundancy for their backups. This webpage provides an overview of the Azure Files AzCopy based backup solution's design and functionality.
 
-For full details on how to automate this solution, read the following blog post by Microsoft MVP Charbel Nemnom: [Sync between Two Azure File Shares for Disaster Recovery]("www.charbelnemnom.com/sync-between-two-azure-file-shares-for-disaster-recovery").
+For full details on how to automate this solution, read the following blog post by Microsoft MVP Charbel Nemnom: [Sync between Two Azure File Shares for Disaster Recovery](https://charbelnemnom.com/sync-between-two-azure-file-shares-for-disaster-recovery/).
 
 ## Solution overview
 
