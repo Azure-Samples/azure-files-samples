@@ -3757,11 +3757,11 @@ function Set-StorageAccountDomainProperties {
             -ADObjectName $ADObjectName `
             -Domain $Domain `
             -ErrorAction Stop
-        $azureStorageSid = $azureStorageIdentity.SID.Value
+        $azureStorageSid = $azureStorageIdentity.SID
 
         $domainGuid = $domainInformation.ObjectGUID.ToString()
         $domainName = $domainInformation.DnsRoot
-        $domainSid = $domainInformation.DomainSID.Value
+        $domainSid = $domainInformation.DomainSID
         $forestName = $domainInformation.Forest
         $netBiosDomainName = $domainInformation.DnsRoot
 
