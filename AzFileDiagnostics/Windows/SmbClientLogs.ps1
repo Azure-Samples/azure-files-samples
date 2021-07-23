@@ -869,12 +869,15 @@ namespace SmbAccessLog
 
         void EventRecordCallbackWrapper([In] ref EventRecord eventRecord)
         {
-            try
+            if (thread != null)
             {
-                EventRecordCallback(ref eventRecord);
-            }
-            catch
-            {
+                try
+                {
+                    EventRecordCallback(ref eventRecord);
+                }
+                catch
+                {
+                }
             }
         }
 
@@ -942,7 +945,7 @@ namespace SmbAccessLog
             {
                 try
                 {
-                    if (Thread.CurrentThread.ManagedThreadId == oldThread.ManagedThreadId || !oldThread.Join(TimeSpan.FromSeconds(10)))
+                    if (Thread.CurrentThread.ManagedThreadId != oldThread.ManagedThreadId && !oldThread.Join(TimeSpan.FromSeconds(10)))
                     {
                         oldThread.Abort();
                     }
@@ -1060,6 +1063,8 @@ function Start-SmbAccessLog
     param(
         [string]$directory,
         [string]$prefix)
+
+    Stop-SmbAccessLog | Out-Null
 
     $settings = Get-Settings
     $name = "accesslog"
