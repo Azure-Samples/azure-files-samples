@@ -883,13 +883,13 @@ function Request-AzPowerShellModule {
 
     $storageModule = Get-Module -Name Az.Storage -ListAvailable | `
         Where-Object { 
-            $_.Version -ge [Version]::new(2,0,0) 
+            $_.Version -ge [Version]::new(3,7,0) 
         }
 
     # Do should process if modules must be installed
     if ($null -eq $azModule -or $null -eq $storageModule) {
         $caption = "Install Azure PowerShell modules"
-        $verboseConfirmMessage = "This module requires Azure PowerShell (`"Az`" module) 2.8.0+ and Az.Storage 2.0.0+. This can be installed now if you are running as an administrator."
+        $verboseConfirmMessage = "This module requires Azure PowerShell (`"Az`" module) 2.8.0+ and Az.Storage 3.7.0+. This can be installed now if you are running as an administrator."
         
         if ($PSCmdlet.ShouldProcess($verboseConfirmMessage, $verboseConfirmMessage, $caption)) {
             if (!(Get-IsElevatedSession)) {
@@ -926,7 +926,7 @@ function Request-AzPowerShellModule {
                         -Repository PSGallery `
                         -AllowClobber `
                         -Force `
-                        -MinimumVersion "2.0.0" `
+                        -MinimumVersion "3.7.0" `
                         -SkipPublisherCheck `
                         -ErrorAction Stop
             }       
@@ -941,7 +941,7 @@ function Request-AzPowerShellModule {
 
     $storageModule = ,(Get-Module -Name Az.Storage -ListAvailable | `
         Where-Object { 
-            $_.Version -ge [Version]::new(2,0,0) 
+            $_.Version -ge [Version]::new(3,7,0) 
         } | `
         Sort-Object -Property Version -Descending)
 
@@ -2262,6 +2262,40 @@ function Get-AzStorageAccountActiveDirectoryProperties {
     return $StorageAccount.AzureFilesIdentityBasedAuth.ActiveDirectoryProperties
 }
 
+function Get-AzStorageAccountDefaultSharePermission {
+    <#
+    .SYNOPSIS
+        Gets the default share permission for the storage account.
+    
+    .DESCRIPTION
+        Gets the default share permission for the storage account.
+    .EXAMPLE
+        PS C:\> Get-AzStorageAccountDefaultSharePermission -storageAccountName "storageAccount" -resourceGroupName "resourceGroup"
+    #>
+
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory=$True, Position=0, HelpMessage="Storage account name")]
+        [string]$StorageAccountName,
+
+        [Parameter(Mandatory=$True, Position=1, HelpMessage="Resource group name")]
+        [string]$ResourceGroupName
+    )
+
+    $storageAccount = Validate-StorageAccount -ResourceGroupName $ResourceGroupName `
+        -StorageAccountName $StorageAccountName -ErrorAction Stop
+
+    if ($null -eq $StorageAccount.AzureFilesIdentityBasedAuth.DefaultSharePermission) {
+        $message = "DefaultSharePermission is not set for storage account '$StorageAccountName'" `
+            + " in resource group '$ResourceGroupName'. To set the properties, please use cmdlet" `
+            + " Set-AzStorageAccount if the account is already associated with an Active Directory" `
+            + " (https://docs.microsoft.com/en-us/azure/storage/files/storage-files-identity-ad-ds-assign-permissions?tabs=azure-powershell#share-level-permissions-for-all-authenticated-identities)"
+        Write-Error -Message $message -ErrorAction Stop
+    }
+    
+    return $StorageAccount.AzureFilesIdentityBasedAuth.DefaultSharePermission
+}
+
 function Get-AzStorageAccountKerbKeys {
     <#
     .SYNOPSIS
@@ -3270,6 +3304,7 @@ function Debug-AzStorageAccountAuth {
             "CheckStorageAccountDomainJoined" = [CheckResult]::new("CheckStorageAccountDomainJoined");
             "CheckUserRbacAssignment" = [CheckResult]::new("CheckUserRbacAssignment");
             "CheckUserFileAccess" = [CheckResult]::new("CheckUserFileAccess");
+            "CheckDefaultSharePermission" = [CheckResult]::new("CheckDefaultSharePermission");
         }
 
         #
@@ -3644,6 +3679,27 @@ function Debug-AzStorageAccountAuth {
                 $checks["CheckUserFileAccess"].Result = "Failed"
                 $checks["CheckUserFileAccess"].Issue = $_
                 Write-Error "CheckUserFileAccess - FAILED"
+                Write-Error $_
+            }
+        }
+
+        if (!$filterIsPresent -or ($Filter -match "CheckDefaultSharePermission"))
+        {
+            try {
+                $checksExecuted += 1
+                Write-Verbose "CheckDefaultSharePermission - START"
+
+                $defaultSharePermission = Get-AzStorageAccountDefaultSharePermission `
+                    -ResourceGroupName $ResourceGroupName -StorageAccountName $StorageAccountName -ErrorAction Stop
+
+                Write-Verbose -Message "Storage account $StorageAccountName default share permission is $defaultSharePermission."
+                
+                $checks["CheckDefaultSharePermission"].Result = "Passed"
+                Write-Verbose "CheckDefaultSharePermission - SUCCESS"
+            } catch {
+                $checks["CheckDefaultSharePermission"].Result = "Failed"
+                $checks["CheckDefaultSharePermission"].Issue = $_
+                Write-Error "CheckDefaultSharePermission - FAILED"
                 Write-Error $_
             }
         }
