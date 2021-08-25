@@ -24,7 +24,7 @@ Example
 c:\script\ScanUnsupportedChars.ps1 -SharePath \\testshare.file.core.windows.net\filesharename -CsvPath C:\logpath
 ```
 
-### How to identify and rename files with invalid characters (just remove unsupported char from file/directory name)
+### How to identify and rename files with invalid characters
 ```powershell
 <path to script>\ScanUnsupportedChars.ps1 -SharePath <share path> -RenameItems -ReplacementString <string> -CsvPath <DirectoryPathForCSVFiles>
 ```
