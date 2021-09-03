@@ -2284,14 +2284,6 @@ function Get-AzStorageAccountDefaultSharePermission {
 
     $storageAccount = Validate-StorageAccount -ResourceGroupName $ResourceGroupName `
         -StorageAccountName $StorageAccountName -ErrorAction Stop
-
-    if ($null -eq $StorageAccount.AzureFilesIdentityBasedAuth.DefaultSharePermission) {
-        $message = "DefaultSharePermission is not set for storage account '$StorageAccountName'" `
-            + " in resource group '$ResourceGroupName'. To set the properties, please use cmdlet" `
-            + " Set-AzStorageAccount if the account is already associated with an Active Directory" `
-            + " (https://docs.microsoft.com/en-us/azure/storage/files/storage-files-identity-ad-ds-assign-permissions?tabs=azure-powershell#share-level-permissions-for-all-authenticated-identities)"
-        Write-Error -Message $message -ErrorAction Stop
-    }
     
     return $StorageAccount.AzureFilesIdentityBasedAuth.DefaultSharePermission
 }
@@ -3304,7 +3296,6 @@ function Debug-AzStorageAccountAuth {
             "CheckStorageAccountDomainJoined" = [CheckResult]::new("CheckStorageAccountDomainJoined");
             "CheckUserRbacAssignment" = [CheckResult]::new("CheckUserRbacAssignment");
             "CheckUserFileAccess" = [CheckResult]::new("CheckUserFileAccess");
-            "CheckDefaultSharePermission" = [CheckResult]::new("CheckDefaultSharePermission");
         }
 
         #
@@ -3574,7 +3565,11 @@ function Debug-AzStorageAccountAuth {
                     }
                 }
 
-                if ($roleDefinitions.Count -eq 0) {
+                $defaultSharePermission = Get-AzStorageAccountDefaultSharePermission -ResourceGroupName $ResourceGroupName `
+                    -StorageAccountName $StorageAccountName -ErrorAction Stop
+
+                if (($roleDefinitions.Count -eq 0) `
+                    -and ([string]::IsNullOrEmpty($defaultSharePermission) -or ($defaultSharePermission -ieq "None"))) {
                     $message = "User '$($user.UserPrincipalName)' is not assigned any SMB share-level permission to" `
                         + " storage account '$StorageAccountName' in resource group '$ResourceGroupName'. Please" `
                         + " configure proper share-level permission following the guidance at" `
@@ -3584,6 +3579,9 @@ function Debug-AzStorageAccountAuth {
 
                 Write-Host "------------------------------------------"
                 Write-Host "User '$($user.UserPrincipalName)' is granted following SMB share-level permissions:"
+
+                Write-Host "Assigned default share permission: $defaultSharePermission"
+                Write-Host ""
 
                 foreach ($roleDefinitionId in $roleDefinitions.Keys) {
                     Write-Host "Assigned role definition '$($roleDefinitions[$roleDefinitionId].Name)':"
@@ -3679,27 +3677,6 @@ function Debug-AzStorageAccountAuth {
                 $checks["CheckUserFileAccess"].Result = "Failed"
                 $checks["CheckUserFileAccess"].Issue = $_
                 Write-Error "CheckUserFileAccess - FAILED"
-                Write-Error $_
-            }
-        }
-
-        if (!$filterIsPresent -or ($Filter -match "CheckDefaultSharePermission"))
-        {
-            try {
-                $checksExecuted += 1
-                Write-Verbose "CheckDefaultSharePermission - START"
-
-                $defaultSharePermission = Get-AzStorageAccountDefaultSharePermission `
-                    -ResourceGroupName $ResourceGroupName -StorageAccountName $StorageAccountName -ErrorAction Stop
-
-                Write-Verbose -Message "Storage account $StorageAccountName default share permission is $defaultSharePermission."
-                
-                $checks["CheckDefaultSharePermission"].Result = "Passed"
-                Write-Verbose "CheckDefaultSharePermission - SUCCESS"
-            } catch {
-                $checks["CheckDefaultSharePermission"].Result = "Failed"
-                $checks["CheckDefaultSharePermission"].Issue = $_
-                Write-Error "CheckDefaultSharePermission - FAILED"
                 Write-Error $_
             }
         }
