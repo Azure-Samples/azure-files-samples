@@ -883,13 +883,13 @@ function Request-AzPowerShellModule {
 
     $storageModule = Get-Module -Name Az.Storage -ListAvailable | `
         Where-Object { 
-            $_.Version -ge [Version]::new(2,0,0) 
+            $_.Version -ge [Version]::new(3,7,0) 
         }
 
     # Do should process if modules must be installed
     if ($null -eq $azModule -or $null -eq $storageModule) {
         $caption = "Install Azure PowerShell modules"
-        $verboseConfirmMessage = "This module requires Azure PowerShell (`"Az`" module) 2.8.0+ and Az.Storage 2.0.0+. This can be installed now if you are running as an administrator."
+        $verboseConfirmMessage = "This module requires Azure PowerShell (`"Az`" module) 2.8.0+ and Az.Storage 3.7.0+. This can be installed now if you are running as an administrator."
         
         if ($PSCmdlet.ShouldProcess($verboseConfirmMessage, $verboseConfirmMessage, $caption)) {
             if (!(Get-IsElevatedSession)) {
@@ -926,7 +926,7 @@ function Request-AzPowerShellModule {
                         -Repository PSGallery `
                         -AllowClobber `
                         -Force `
-                        -MinimumVersion "2.0.0" `
+                        -MinimumVersion "3.7.0" `
                         -SkipPublisherCheck `
                         -ErrorAction Stop
             }       
@@ -941,7 +941,7 @@ function Request-AzPowerShellModule {
 
     $storageModule = ,(Get-Module -Name Az.Storage -ListAvailable | `
         Where-Object { 
-            $_.Version -ge [Version]::new(2,0,0) 
+            $_.Version -ge [Version]::new(3,7,0) 
         } | `
         Sort-Object -Property Version -Descending)
 
@@ -2262,6 +2262,32 @@ function Get-AzStorageAccountActiveDirectoryProperties {
     return $StorageAccount.AzureFilesIdentityBasedAuth.ActiveDirectoryProperties
 }
 
+function Get-AzStorageAccountDefaultSharePermission {
+    <#
+    .SYNOPSIS
+        Gets the default share permission for the storage account.
+    
+    .DESCRIPTION
+        Gets the default share permission for the storage account.
+    .EXAMPLE
+        PS C:\> Get-AzStorageAccountDefaultSharePermission -storageAccountName "storageAccount" -resourceGroupName "resourceGroup"
+    #>
+
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory=$True, Position=0, HelpMessage="Storage account name")]
+        [string]$StorageAccountName,
+
+        [Parameter(Mandatory=$True, Position=1, HelpMessage="Resource group name")]
+        [string]$ResourceGroupName
+    )
+
+    $storageAccount = Validate-StorageAccount -ResourceGroupName $ResourceGroupName `
+        -StorageAccountName $StorageAccountName -ErrorAction Stop
+    
+    return $StorageAccount.AzureFilesIdentityBasedAuth.DefaultSharePermission
+}
+
 function Get-AzStorageAccountKerbKeys {
     <#
     .SYNOPSIS
@@ -3539,7 +3565,11 @@ function Debug-AzStorageAccountAuth {
                     }
                 }
 
-                if ($roleDefinitions.Count -eq 0) {
+                $defaultSharePermission = Get-AzStorageAccountDefaultSharePermission -ResourceGroupName $ResourceGroupName `
+                    -StorageAccountName $StorageAccountName -ErrorAction Stop
+
+                if (($roleDefinitions.Count -eq 0) `
+                    -and ([string]::IsNullOrEmpty($defaultSharePermission) -or ($defaultSharePermission -ieq "None"))) {
                     $message = "User '$($user.UserPrincipalName)' is not assigned any SMB share-level permission to" `
                         + " storage account '$StorageAccountName' in resource group '$ResourceGroupName'. Please" `
                         + " configure proper share-level permission following the guidance at" `
@@ -3549,6 +3579,9 @@ function Debug-AzStorageAccountAuth {
 
                 Write-Host "------------------------------------------"
                 Write-Host "User '$($user.UserPrincipalName)' is granted following SMB share-level permissions:"
+
+                Write-Host "Assigned default share permission: $defaultSharePermission"
+                Write-Host ""
 
                 foreach ($roleDefinitionId in $roleDefinitions.Keys) {
                     Write-Host "Assigned role definition '$($roleDefinitions[$roleDefinitionId].Name)':"
