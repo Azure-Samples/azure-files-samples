@@ -1,6 +1,6 @@
 # FileSyncErrorsReport script for Azure File Sync
 
-Use the FileSyncErrorsReport script to parse Azure Storage Sync errors log and then list the items currently not syncing properly. The result of the script is a table that shows all per-item errors. The table can be grouped by SyncGroup this server participates in.
+Use the FileSyncErrorsReport script to parse Azure File Sync error log and then list the items currently not syncing properly. The result of the script is a table that shows all per-item errors. The table can be grouped by SyncGroup this server participates in.
 
 ## How to download the PowerShell script
 
