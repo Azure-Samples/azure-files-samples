@@ -99,6 +99,11 @@
         "Debug-AzStorageAccountAuth",
         "Update-AzStorageAccountAuthForAES256",
 
+        # Azure Files Azure AD Kerberos cmdlets
+        "Join-AzStorageAccountForAzureADKerberos",
+        "Update-AzStorageAccountAzureADKerberosPassword",
+        "Set-StorageAccountAadKerberosADProperties",
+
         # General Azure cmdlets
         "Expand-AzResourceId",
         "Compress-AzResourceId",
