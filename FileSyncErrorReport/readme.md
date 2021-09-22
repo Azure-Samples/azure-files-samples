@@ -1,6 +1,6 @@
 # FileSyncErrorsReport script for Azure File Sync
 
-Use the FileSyncErrorsReport script to identify and rename files which contain unsupported characters that are not currently supported by Azure File Sync. 
+Use the FileSyncErrorsReport script to parse Azure Storage Sync errors log and then list the items currently not syncing properly. The result of the script is a table that shows all per-item errors. The table can be grouped by SyncGroup this server participates in.
 
 ## How to download the PowerShell script
 
@@ -10,11 +10,19 @@ Use the FileSyncErrorsReport script to identify and rename files which contain u
 
 ## How to run the PowerShell script
 
-**Note:** To run the FileSyncErrorsReport script, launch PowerShell as an administrator.
-**Note:** Copy FileSyncErrorsReport.ps1 under $Env:ProgramFiles\Azure\StorageSyncAgent
-**Note:** To see the examples, type: "get-help $Env:ProgramFiles\Azure\StorageSyncAgent\FileSyncErrorsReport.ps1 -examples".
-**Note:** For more information, type: "get-help $Env:ProgramFiles\Azure\StorageSyncAgent\FileSyncErrorsReport.ps1 -detailed".
-**Note:** For technical information, type: "get-help $Env:ProgramFiles\Azure\StorageSyncAgent\FileSyncErrorsReport.ps1 -full".
+To run the FileSyncErrorsReport script:
+- Launch PowerShell as an administrator.
+- Copy FileSyncErrorsReport.ps1 under $Env:ProgramFiles\Azure\StorageSyncAgent
+
+**Note:** Script usage:
+- To see the examples:
+```powershell
+    get-help $Env:ProgramFiles\Azure\StorageSyncAgent\FileSyncErrorsReport.ps1 -example
+```
+- For more information:
+```powershell
+    get-help $Env:ProgramFiles\Azure\StorageSyncAgent\FileSyncErrorsReport.ps1 -detailed
+```
 
 ### How to get a report that include all sync sessions and all errors
 ```powershell
@@ -29,5 +37,3 @@ Use the FileSyncErrorsReport script to identify and rename files which contain u
 ```powershell
     $Env:ProgramFiles\FileSyncErrorsReport.ps1 -SyncGroupName 'sync group name'  -CsvPath 'output_path.CSV'
 ```
-
-**Note**: The -SharePath can be a local path (if the share is mounted on the server or using Azure File Sync) or a network path. See additional examples provided in the script.
