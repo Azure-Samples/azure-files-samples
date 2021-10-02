@@ -110,7 +110,7 @@ Overview of the steps to run the SmbClientLogs script. See [examples](#examples)
 ```
 - The output file (.zip) will be generated in the output directory.  
 
-**Example 3: If the issue cannot be easily reproduced, perform the following steps to stop the SMB logs when any anomaly is detected:**
+**Example 3: If the issue cannot be easily reproduced, perform the following steps to stop the logs when any anomaly is detected:**
 
 - Run the following PowerShell command:
 ```powershell
@@ -118,7 +118,7 @@ Overview of the steps to run the SmbClientLogs script. See [examples](#examples)
 ```
 - The output file (.zip) will be generated in the output directory. 
 
-**Example 4: If the issue cannot be easily reproduced, perform the following steps to stop the SMB log and network trace when any anomaly is detected:**
+**Example 4: If the issue cannot be easily reproduced, perform the following steps to stop the logs and network trace when any anomaly is detected:**
 
 - Run the following PowerShell command:
 ```powershell
@@ -126,7 +126,7 @@ Overview of the steps to run the SmbClientLogs script. See [examples](#examples)
 ```
 - The output file (.zip) will be generated in the output directory. 
 
-**Example 5: Stop SMB logs and network trace collection when a connectivity error occurs:**
+**Example 5: Stop logs and network trace collection when a connectivity error occurs:**
 
 - Run the following PowerShell command:
 ```powershell
@@ -134,7 +134,7 @@ Overview of the steps to run the SmbClientLogs script. See [examples](#examples)
 ```
 - The output file (.zip) will be generated in the output directory. 
 
-**Example 6: Stop SMB logs and network trace collection when a connectivity Event ID 30809 is logged:**
+**Example 6: Stop logs and network trace collection when a connectivity Event ID 30809 is logged:**
 
 - Run the following PowerShell command:
 ```powershell
