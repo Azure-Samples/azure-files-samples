@@ -74,8 +74,8 @@ Alternatively, you can specify optional parameters when running the script if yo
 To run the SmbClientLogs script, perform the following steps:
 - Launch PowerShell as an Administrator.
 - Navigate to the directory where the script is located. 
-- Run the SmbClientLogs.ps1 with the appropriate parameters to collect SMB logs and network traces (see examples and parameters section for more details).
-- Once the issue reproduces, an output file (.zip file) will be generated in the output directory. 
+- Run the SmbClientLogs.ps1 with the appropriate parameters to collect SMB logs and network traces. See [examples](#examples) and [parameters](#parameters-1) section for more details.
+- Once the log and trace collection is stopped, an output file (.zip file) will be generated in the output directory. 
 
 **Notes**
 - SMB logs are always collected and to collect a network trace, you must use the -CaptureNetwork parameter. 
