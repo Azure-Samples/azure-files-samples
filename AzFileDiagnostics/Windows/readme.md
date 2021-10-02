@@ -71,9 +71,19 @@ Alternatively, you can specify optional parameters when running the script if yo
 
 ## How to run the SmbClientLogs script
 
-**Note: To run the SmbClientLogs script, launch PowerShell as an administrator and navigate to the directory where the script is located.** 
+To run the SmbClientLogs script, perform the following steps:
+- Launch PowerShell as an Administrator.
+- Navigate to the directory where the script is located. 
+- Run the SmbClientLogs.ps1 with the appropriate parameters to collect SMB logs and network traces (see examples and parameters section for more details).
+- Once the issue reproduces, an output file (.zip file) will be generated in the output directory. 
 
-When you run the script, you must specify a parameter. SMB logs are always collected and to collect a network trace, you must use the -CaptureNetwork parameter. The script can also be configured to stop log and trace collection when an anomaly is detected (error in the event log, unexpected SMB status code, high latency, high credit stall). See more details in the parameters section. The output file (.zip) will be generated in the output directory (default is C:\Windows\System32 directory). To use a different output directory, use the -OutputDirectory parameter.
+**Notes**
+- When you run the script, you must specify a parameter. 
+- SMB logs are always collected and to collect a network trace, you must use the -CaptureNetwork parameter. 
+- The script can also be configured to stop log and trace collection when an anomaly is detected (error in the event log, unexpected SMB status code, high latency, high credit stall). See more details in the parameters section. 
+- The output file (.zip) will be generated in the output directory (default is C:\Windows\System32 directory). To use a different output directory, use the -OutputDirectory parameter.
+
+### Examples
 
 **Example 1: If the issue can be easily reproduced, perform the following steps to capture the SMB logs:**
 
@@ -86,7 +96,7 @@ When you run the script, you must specify a parameter. SMB logs are always colle
 ```powershell
 .\SmbClientLogs.ps1 -Stop
 ```
-- The output file (.zip) with the SMB logs will be generated in the output directory (default is C:\Windows\System32 directory). 
+- The output file (.zip) will be generated in the output directory (default is C:\Windows\System32 directory). 
  
 **Example 2: If the issue can be easily reproduced, perform the following steps to capture the SMB logs and network trace:**
 
@@ -99,7 +109,7 @@ When you run the script, you must specify a parameter. SMB logs are always colle
 ```powershell
 .\SmbClientLogs.ps1 -Stop
 ```
-- The output file (.zip) with the SMB logs and network trace will be generated in the output directory (default is C:\Windows\System32 directory). 
+- The output file (.zip) will be generated in the output directory (default is C:\Windows\System32 directory).  
 
 **Example 3: If the issue cannot be easily reproduced, perform the following steps to stop the SMB logs when any anomaly is detected:**
 
@@ -107,7 +117,7 @@ When you run the script, you must specify a parameter. SMB logs are always colle
 ```powershell
 .\SmbClientLogs.ps1 -OnAnomaly
 ```
-- The output file (.zip) with the SMB logs and network trace will be generated in the output directory (default is C:\Windows\System32 directory).
+- The output file (.zip) will be generated in the output directory (default is C:\Windows\System32 directory). 
 
 **Example 4: If the issue cannot be easily reproduced, perform the following steps to stop the SMB log and network trace when any anomaly is detected:**
 
@@ -115,7 +125,7 @@ When you run the script, you must specify a parameter. SMB logs are always colle
 ```powershell
 .\SmbClientLogs.ps1 -OnAnomaly -CaptureNetwork
 ```
-- The output file (.zip) with the SMB logs and network trace will be generated in the output directory (default is C:\Windows\System32 directory). 
+- The output file (.zip) will be generated in the output directory (default is C:\Windows\System32 directory). 
 
 **Example 5: Stop SMB log collection and network trace when a connectivity error occurs:**
 
@@ -123,7 +133,7 @@ When you run the script, you must specify a parameter. SMB logs are always colle
 ```powershell
 .\SmbClientLogs.ps1 -OnConnectivityError -CaptureNetwork -IncludeTcpLogs
 ```
-- The output file (.zip) with the SMB logs and network trace will be generated in the output directory (default is C:\Windows\System32 directory).
+- The output file (.zip) will be generated in the output directory (default is C:\Windows\System32 directory). 
 
 **Example 6: Stop SMB log collection and network trace when a connectivity Event ID 30809 is logged:**
 
@@ -131,7 +141,7 @@ When you run the script, you must specify a parameter. SMB logs are always colle
 ```powershell
 .\SmbClientLogs.ps1 -OnConnectivityEventId 30809 -IncludeTcpLogs -CaptureNetwork
 ```
-- The output file (.zip) with the SMB logs and network trace will be generated in the output directory (default is C:\Windows\System32 directory). 
+- The output file (.zip) will be generated in the output directory (default is C:\Windows\System32 directory). 
 
 ### Parameters
 
