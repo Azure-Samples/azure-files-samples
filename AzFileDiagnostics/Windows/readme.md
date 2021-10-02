@@ -79,7 +79,7 @@ To run the SmbClientLogs script, perform the following steps:
 
 **Notes**
 - SMB logs are always collected and to collect a network trace, you must use the -CaptureNetwork parameter. 
-- The script can also be configured to stop log and trace collection when an anomaly is detected (error in the event log, unexpected SMB status code, high latency, high credit stall). See more details in the parameters section. 
+- The script can also be configured to stop log and trace collection when an anomaly is detected (error in the event log, unexpected SMB status code, high latency, high credit stall). See more details in the [parameters](#parameters-1) section. 
 - The output file (.zip) will be generated in the output directory (default is C:\Windows\System32 directory). To use a different output directory, use the -OutputDirectory parameter.
 
 ### Examples
