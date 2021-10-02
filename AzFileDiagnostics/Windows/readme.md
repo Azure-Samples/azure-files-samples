@@ -126,7 +126,7 @@ To run the SmbClientLogs script, perform the following steps:
 ```
 - The output file (.zip) will be generated in the output directory. 
 
-**Example 5: Stop SMB log collection and network trace when a connectivity error occurs:**
+**Example 5: Stop SMB logs and network trace collection when a connectivity error occurs:**
 
 - Run the following PowerShell command:
 ```powershell
@@ -134,7 +134,7 @@ To run the SmbClientLogs script, perform the following steps:
 ```
 - The output file (.zip) will be generated in the output directory. 
 
-**Example 6: Stop SMB log collection and network trace when a connectivity Event ID 30809 is logged:**
+**Example 6: Stop SMB logs and network trace collection when a connectivity Event ID 30809 is logged:**
 
 - Run the following PowerShell command:
 ```powershell
