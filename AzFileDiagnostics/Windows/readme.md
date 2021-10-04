@@ -71,11 +71,13 @@ Alternatively, you can specify optional parameters when running the script if yo
 
 ## How to run the SmbClientLogs script
 
-Overview of the steps to run the SmbClientLogs script. See [examples](#examples) and [parameters](#parameters-1) section for more details. 
+Overview of the steps to run the SmbClientLogs script. 
 - Launch PowerShell as an Administrator.
 - Navigate to the directory where the script is located. 
 - Run the SmbClientLogs.ps1 with the appropriate parameters to collect SMB logs and network traces. 
 - Once the log and trace collection is stopped, an output file (.zip file) will be generated in the output directory. 
+
+See [examples](#examples) and [parameters](#parameters-1) section for more details. 
 
 **Notes**
 - SMB logs are always collected and to collect a network trace, you must use the -CaptureNetwork parameter. 
@@ -176,8 +178,7 @@ When any of the following parameters are specified, SMB logs and network trace c
 | -HighLatencyMs | Latency for any operation exceeds the ms threshold specified. |
 | -CreditStallThreshold | Credit stalls exceed the threshold specified. |
 | -StatusCodes | Status code specific (for example, 0x2, 0x3) is returned. |
-
-**Note**: To continue collecting logs once an anomaly is detected, use the -Continuous parameter. An output file (.zip file) will be generated for each anomaly detected. To stop SMB logs and network trace collection, use CTRL+C and then run the ".\SmbClientLogs.ps1 -Stop" PowerShell command.
+| -Continuous | Continue collecting logs once an anomaly is detected. An output file (.zip file) will be generated for each anomaly detected. To stop SMB logs and network trace collection, use CTRL+C and then run the ".\SmbClientLogs.ps1 -Stop" PowerShell command. |
 
 For the complete list of parameters, run the SmbClientLogs.ps1 with no parameters.
 
