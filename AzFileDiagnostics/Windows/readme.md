@@ -177,7 +177,7 @@ When any of the following parameters are specified, SMB logs and network trace c
 | -HighAvgIOLatencyMs | Averagy latency for one second exceeds the ms threshold specified. |
 | -HighLatencyMs | Latency for any operation exceeds the ms threshold specified. |
 | -CreditStallThreshold | Credit stalls exceed the threshold specified. |
-| -StatusCodes | Status code specific (for example, 0x2, 0x3) is returned. |
+| -StatusCodes | Status code specified (for example, 0x2, 0x3) is returned. |
 | -Continuous | Continue collecting logs once an anomaly is detected. An output file (.zip file) will be generated for each anomaly detected. To stop SMB logs and network trace collection, use CTRL+C and then run the ".\SmbClientLogs.ps1 -Stop" PowerShell command. |
 
 For the complete list of parameters, run the SmbClientLogs.ps1 with no parameters.
