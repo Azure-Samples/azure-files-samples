@@ -15,22 +15,22 @@ Use the ScanUnsupportedChars script to identify and rename files which contain u
 ### How to identify files with invalid characters
 
 ```powershell
-  <path to script>\ScanUnsupportedChars.ps1 -SharePath <share path> | Out-File -FilePath c:\script\output.txt
+  <path to script>\ScanUnsupportedChars.ps1 -SharePath <share path> -CsvPath <DirectoryPathForCSVFiles>
 ```
 
 Example
 ```powershell
-c:\script\ScanUnsupportedChars.ps1 -SharePath \\testshare.file.core.windows.net\filesharename| Out-File -FilePath c:\script\output.txt
+c:\script\ScanUnsupportedChars.ps1 -SharePath \\testshare.file.core.windows.net\filesharename -CsvPath C:\temp\unsupportedchars
 ```
 
 ### How to identify and rename files with invalid characters
 ```powershell
-<path to script>\ScanUnsupportedChars.ps1 -SharePath <share path> -RenameItems -ReplacementString <string> | Out-File -FilePath c:\script\output.txt
+<path to script>\ScanUnsupportedChars.ps1 -SharePath <share path> -RenameItems -ReplacementString <string> -CsvPath C:\temp\unsupportedchars
 ```
 
 Example to rename the files and replace the invalid character with a hyphen**
 ```powershell
-c:\script\ScanUnsupportedChars.ps1 -SharePath \\testshare.file.core.windows.net\filesharename -RenameItems -ReplacementString "-" | Out-File -FilePath c:\script\output.txt
+c:\script\ScanUnsupportedChars.ps1 -SharePath \\testshare.file.core.windows.net\filesharename -RenameItems -ReplacementString "-" -CsvPath C:\temp\unsupportedchars
 ```
 
 Example to **copy** all files and directories with invalid characters.
