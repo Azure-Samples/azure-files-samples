@@ -11,8 +11,11 @@
        b. Rename (remove or replace) such unsupported chars from names.
        c. Move such file/directories out of the share to a desired location.
 
-   Version 5.1
-   Last Modified Date: March 12, 2021
+   Note - this script might report false positive i.e. a file name is supported but this script might say its not supported.
+          This is by design to keep the script simple and allow customer to rename such files proactively.
+
+   Version 5.2
+   Last Modified Date: November 3, 2021
 
    Note: Please open powershell in full screen mode to avoid output truncation.
 
@@ -185,8 +188,11 @@ public class ListFiles
     public List<FixedFileNameEntry> FilesWithInvalidCharsFixedName = new List<FixedFileNameEntry>();
     public List<FixedFileNameEntry> FilesFailedToRename = new List<FixedFileNameEntry>();
 
-    // Unsupported chars black list
+    // Unsupported chars blocked list
     private static List<int> disallowedChars = new List<int>();
+
+    // Chars may not work in combination with others
+    private static List<int> combinationFailureChars = new List<int>();
 
     public Dictionary<string, InvalidCharInfo> InvalidCharFileInformation = new Dictionary<string, InvalidCharInfo>();
 
@@ -237,6 +243,40 @@ public class ListFiles
         disallowedChars.Add(0x0000008F); // ss3 single shift three
         disallowedChars.Add(0x00000090); // dcs device control string
         disallowedChars.Add(0x0000009D); // osc operating system command
+
+        // Following chars may not work with combination of other chars
+        combinationFailureChars.Add(0x1FFFE);
+        combinationFailureChars.Add(0x1FFFF);
+        combinationFailureChars.Add(0x2FFFE);
+        combinationFailureChars.Add(0x2FFFF);
+        combinationFailureChars.Add(0x3FFFE);
+        combinationFailureChars.Add(0x3FFFF);
+        combinationFailureChars.Add(0x4FFFE);
+        combinationFailureChars.Add(0x4FFFF);
+        combinationFailureChars.Add(0x5FFFE);
+        combinationFailureChars.Add(0x5FFFF);
+        combinationFailureChars.Add(0x6FFFE);
+        combinationFailureChars.Add(0x6FFFF);
+        combinationFailureChars.Add(0x7FFFE);
+        combinationFailureChars.Add(0x7FFFF);
+        combinationFailureChars.Add(0x8FFFE);
+        combinationFailureChars.Add(0x8FFFF);
+        combinationFailureChars.Add(0x9FFFE);
+        combinationFailureChars.Add(0x9FFFF);
+        combinationFailureChars.Add(0xAFFFE);
+        combinationFailureChars.Add(0xAFFFF);
+        combinationFailureChars.Add(0xBFFFE);
+        combinationFailureChars.Add(0xBFFFF);
+        combinationFailureChars.Add(0xCFFFE);
+        combinationFailureChars.Add(0xCFFFF);
+        combinationFailureChars.Add(0xDFFFE);
+        combinationFailureChars.Add(0xDFFFF);
+        combinationFailureChars.Add(0xEFFFE);
+        combinationFailureChars.Add(0xEFFFF);
+        combinationFailureChars.Add(0xFFFFE);
+        combinationFailureChars.Add(0xFFFFF);
+        combinationFailureChars.Add(0x10FFFE);
+        combinationFailureChars.Add(0x10FFFF);
     }
 
     public static bool IsExcluded(string itemName)
@@ -275,11 +315,15 @@ public class ListFiles
                 Console.WriteLine("Unsupported char code point: " + CodePoint);
                 return CodePoint;
             }
-            else if (0x80 <= CodePoint && CodePoint <= 0x9F)
+            else if ((0x80 <= CodePoint && CodePoint <= 0x9F) ||
+                     (0xFDD0 <= CodePoint && CodePoint <= 0xFFFF) ||
+                     combinationFailureChars.Contains(CodePoint))
             {
-                // These are supported codepoints, but are returned due to them sometimes
-                // being rejected when in combination with other characters.  The caller
-                // can test this further.
+                // These are supported codepoints, but they might not work in combination of other chars
+                // The char combination that fails the REST call for the item could be anywhere in the path
+                // so instead of making this scanner more complicated to identify which combination might work
+                // we are over cautious and remove these from file/directory names
+                Console.WriteLine("Code point might not work in combination of other chars: " + CodePoint);
                 return CodePoint;
             }
             else
@@ -365,31 +409,6 @@ public class ListFiles
             {
                 char[] charArray = { Character };
                 Code = IsSupported(new string(charArray));
-
-                // Check if control char is supported in combination of other file name chars
-                if (0x80 <= Code && Code <= 0x9F)
-                {
-                    // known issue: this is checking against the full filename, which would remove all control
-                    // characters if there are any other unsupported control characters in the name.
-                    string requestUrl = @"https://afscharscanner.file.core.windows.net/afscharscanner/" + fileName;
-                    var request = new HttpRequestMessage(HttpMethod.Get, requestUrl);
-                    request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", "somerandominvalidkey==");
-
-                    using (var client = new HttpClient())
-                    {
-                        var result = client.SendAsync(request).Result;
-                        var containsRequestId = result.Headers.Contains("x-ms-request-id");
-
-                        if ((result.StatusCode == System.Net.HttpStatusCode.BadRequest) && !containsRequestId)
-                        {
-                           Console.WriteLine("File/Directory name contains a control char that is not supported with combination of other char");
-                        }
-                        else
-                        {
-                            Code = 0;
-                        }
-                    }
-                }
             }
 
             if (Code != 0)
@@ -481,16 +500,24 @@ public class ListFiles
                     if (currentFileName != "." && currentFileName != ".." && !IsExcluded(volumeRootExclusionName))
                     {
                         string dirPath = Path.Combine(directoryPath, currentFileName);
-                        FindFilesAndDirs(dirPath);
-                        string fixedDirName = ValidateAndReturnFixedPath(dirPath);
 
-                        if (!string.IsNullOrEmpty(fixedDirName))
+                        try
                         {
-                            FixedFileNameEntry entry = new FixedFileNameEntry();
-                            entry.OriginalFilePath = dirPath;
-                            entry.FixedFileName = fixedDirName;
-                            entry.Type = FixedEntryType.FOLDER;
-                            FilesWithInvalidCharsFixedName.Add(entry);
+                            FindFilesAndDirs(dirPath);
+                            string fixedDirName = ValidateAndReturnFixedPath(dirPath);
+
+                            if (!string.IsNullOrEmpty(fixedDirName))
+                            {
+                                FixedFileNameEntry entry = new FixedFileNameEntry();
+                                entry.OriginalFilePath = dirPath;
+                                entry.FixedFileName = fixedDirName;
+                                entry.Type = FixedEntryType.FOLDER;
+                                FilesWithInvalidCharsFixedName.Add(entry);
+                            }
+                        }
+                        catch(Exception ex)
+                        {
+                            Console.WriteLine("Failed to process directory :" + dirPath + " Exception: " + ex);
                         }
                     }
                 }
