@@ -71,6 +71,13 @@ param(
     [int[]]$KnownOperationalErrors,
     [int[]]$KnownSecurityErrors,
 
+    [string[]]$FlagsOverride,
+    [string[]]$LevelOverride,
+
+    [string[]]$Fskm,
+    [string[]]$FskmAdd,
+    [string[]]$FskmRemove,
+
     [switch]$Verbose,
 
     [switch]$AgentMode,
@@ -1285,6 +1292,24 @@ function Set-Settings
         }
     }
 
+    if (!$settingsDict['Fskm'])
+    {
+        if ($agentMode)
+        {
+            $settingsDict['Fskm'] = @('handle', 'network')
+        }
+        else
+        {
+            $settingsDict['Fskm'] = @('handle', 'network', 'io', 'readwrite')
+        }
+    }
+
+    if ($agentMode)
+    {
+        $settingsDict['StopBeforeStart'] = $true
+        $settingsDict['NoCompression'] = $true
+    }
+
     $settingsDict['LogChannels'] = [string[]] ($settingsDict['LogChannels'])
 
     if ($settingsDict['IncludeTcpLogs'])
@@ -1475,6 +1500,52 @@ function Invoke-Start
     }
 }
 
+function Get-DictFromArray
+{
+    param(
+        [string[]]$base,
+        [string[]]$add,
+        [string[]]$remove
+    )
+
+    $dict = @{}
+
+    foreach ($value in $base)
+    {
+        $dict[$value.Trim().ToLower()] = $true
+    }
+
+    foreach ($value in $add)
+    {
+        $dict[$value.Trim().ToLower()] = $true
+    }
+
+    foreach ($value in $remove)
+    {
+        $dict[$value.Trim().ToLower()] = $false
+    }
+
+    return $dict
+}
+
+function Get-UpdatedKeyword
+{
+    param(
+        [uint64]$keyword,
+        $enabled,
+        [uint64]$keywordToEnable
+    )
+
+    if ($enabled)
+    {
+        return $keyword -bor $keywordToEnable
+    }
+    else
+    {
+        return $keyword -band (-bnot $keywordToEnable)
+    }
+}
+
 function Invoke-StartInternal
 {
     param(
@@ -1503,23 +1574,36 @@ function Invoke-StartInternal
 
     if ($settings.LogChannels -icontains 'fskm')
     {
-        Invoke-TraceCreate $directory $prefix "fskm"
+        $fskmDict = Get-DictFromArray $settings.Fskm $settings.FskmAdd $settings.FskmRemove
 
-        # no turbo-io
+        $rdbss = [uint64]"0xffffffff"
+        $rdbss = Get-UpdatedKeyword $rdbss $fskmDict['io'] 0x4
+        $rdbss = Get-UpdatedKeyword $rdbss $fskmDict['readwrite'] 0x10
+        $rdbss = Get-UpdatedKeyword $rdbss $fskmDict['turboio'] 0x4000
+
+        $smb20 = [uint64]"0xffffffff"
+        $smb20 = Get-UpdatedKeyword $smb20 $fskmDict['network'] 0x4
+        $smb20 = Get-UpdatedKeyword $smb20 $fskmDict['handle'] 0x40
+
+        $mrxsmb = [uint64]"0xffffffff"
+        $mrxsmb = Get-UpdatedKeyword $mrxsmb $fskmDict['network'] 0x4
+        $mrxsmb = Get-UpdatedKeyword $mrxsmb $fskmDict['turboio'] 0x400
+
+        Invoke-TraceCreate $directory $prefix "fskm"
 
         if ($DetailedSmbTracing)
         {
             Invoke-TraceUpdate $prefix "fskm" "20c46239-d059-4214-a11e-7d6769cbe020" "0xffff0f0"  "7"
-            Invoke-TraceUpdate $prefix "fskm" "0086eae4-652e-4dc7-b58f-11fa44f927b4" "0xffffbfff" "4"
+            Invoke-TraceUpdate $prefix "fskm" "0086eae4-652e-4dc7-b58f-11fa44f927b4" "0xffffffff" "4"
             Invoke-TraceUpdate $prefix "fskm" "f818ebb3-fbc4-4191-96d6-4e5c37c8a237" "0xffffffff" "4"
             Invoke-TraceUpdate $prefix "fskm" "e4ad554c-63b2-441b-9f86-fe66d8084963" "0xffffffff" "4"
         }
         else
         {
             Invoke-TraceUpdate $prefix "fskm" "20c46239-d059-4214-a11e-7d6769cbe020" "0x3333030"  "0"
-            Invoke-TraceUpdate $prefix "fskm" "0086eae4-652e-4dc7-b58f-11fa44f927b4" "0xffffbfff" "2"
-            Invoke-TraceUpdate $prefix "fskm" "f818ebb3-fbc4-4191-96d6-4e5c37c8a237" "0xffffffff" "2"
-            Invoke-TraceUpdate $prefix "fskm" "e4ad554c-63b2-441b-9f86-fe66d8084963" "0xffffffff" "2"
+            Invoke-TraceUpdate $prefix "fskm" "0086eae4-652e-4dc7-b58f-11fa44f927b4" $rdbss "2"
+            Invoke-TraceUpdate $prefix "fskm" "f818ebb3-fbc4-4191-96d6-4e5c37c8a237" $mrxsmb "2"
+            Invoke-TraceUpdate $prefix "fskm" "e4ad554c-63b2-441b-9f86-fe66d8084963" $smb20 "2"
         }
 
         Invoke-TraceUpdate $prefix "fskm" "47eba62c-87e6-4564-9946-0dd4e361ed9b" "0x7fffffff" "7"
@@ -1755,6 +1839,25 @@ function Invoke-TraceCreate
     }
 }
 
+function Get-SettingOverride
+{
+    param (
+        [string[]]$overrides,
+        [guid]$provider
+    )
+
+    foreach ($pair in $overrides)
+    {
+        $s = $pair.Split(':')
+        if ($provider -eq [guid]$s[0])
+        {
+            return $s[1]
+        }
+    }
+
+    return $null
+}
+
 function Invoke-TraceUpdate
 {
     param(
@@ -1772,6 +1875,23 @@ function Invoke-TraceUpdate
     {
         $suffix = '-mem'
     }
+
+
+    $flagsOverride = Get-SettingOverride $settings.FlagsOverride $provider
+    if ($flagsOverride -ne $null)
+    {
+        $flags = [uint64]$flagsOverride
+        Write-Log "FlagOverride: $provider -> 0x$($flags.ToString('x'))"
+    }
+
+    $levelOverride = Get-SettingOverride $settings.LevelOverride $provider
+    if ($levelOverride -ne $null)
+    {
+        $level = [byte]$levelOverride
+        Write-Log "LevelOverride: $provider -> $level"
+    }
+
+    Write-Log "Update: $($prefix + $name + $suffix) - $provider - 0x$($flags.ToString('x')) $level"
 
     if (Get-Command 'Start-EtwTraceSession' -ErrorAction SilentlyContinue)
     {
@@ -2555,7 +2675,7 @@ else
     Write-Log @"
 SmbClientLogs.ps1 - script to capture SMB Client logs. After capture is done it creates zip package in the current directory (OutputDirectory).
 
-Version: 3.04
+Version: 3.3
 
 Options:
 
@@ -2622,14 +2742,21 @@ Options:
     -NoDateTimePrefix
     -LogChannels fskm, fsum, rpcxdr, sec, counters
 
+    -FlagsOverride
+    -LevelOverride
+
+    -Fskm handle, network, io, readwrite
+    -FskmAdd
+    -FskmRemove
+
     -Silent
     -Verbose
 
 Examples:
 
-    .\SmbClientLogs.ps1 -OnConnectivityError
-    .\SmbClientLogs.ps1 -OnConnectivityError -Continuous
-    .\SmbClientLogs.ps1 -OnConnectivityError -CaptureNetwork -IncludeTcpLogs
+    .\SmbClientLogs.ps1 -OnAnomaly
+    .\SmbClientLogs.ps1 -OnAnomaly -Continuous
+    .\SmbClientLogs.ps1 -OnAnomaly -CaptureNetwork
     .\SmbClientLogs.ps1 -OnConnectivityEventId 30809 -IncludeTcpLogs -CaptureNetwork
     .\SmbClientLogs.ps1 -Start
     .\SmbClientLogs.ps1 -Stop
