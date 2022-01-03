@@ -3782,7 +3782,7 @@ function Set-StorageAccountDomainProperties {
             }
         }
 
-        Write-Verbose "Setting AD properties on $StorageAccountName in $ResourceGroupName : `
+        Write-Verbose "Following AD properties need to be configured on $StorageAccountName in $ResourceGroupName : `
             EnableActiveDirectoryDomainServicesForFile=$true, ActiveDirectoryDomainName=$domainName, `
             ActiveDirectoryNetBiosDomainName=$netBiosDomainName, ActiveDirectoryForestName=$($domainInformation.Forest) `
             ActiveDirectoryDomainGuid=$domainGuid, ActiveDirectoryDomainSid=$domainSid, `
@@ -3790,12 +3790,13 @@ function Set-StorageAccountDomainProperties {
             SamAccountName=$ADObjectName, `
             AccountType=$accountType"
 
-        Set-AzStorageAccount -ResourceGroupName $ResourceGroupName -AccountName $StorageAccountName `
-             -EnableActiveDirectoryDomainServicesForFile $true -ActiveDirectoryDomainName $domainName `
-             -ActiveDirectoryNetBiosDomainName $netBiosDomainName -ActiveDirectoryForestName $forestName `
-             -ActiveDirectoryDomainGuid $domainGuid -ActiveDirectoryDomainSid $domainSid `
-             -ActiveDirectoryAzureStorageSid $azureStorageSid -SamAccountName $ADObjectName `
-             -AccountType $accountType
+        Write-Verbose "Please share all the console output for Azure Storage team to continue account configuration."
+        # Set-AzStorageAccount -ResourceGroupName $ResourceGroupName -AccountName $StorageAccountName `
+        #     -EnableActiveDirectoryDomainServicesForFile $true -ActiveDirectoryDomainName $domainName `
+        #     -ActiveDirectoryNetBiosDomainName $netBiosDomainName -ActiveDirectoryForestName $forestName `
+        #     -ActiveDirectoryDomainGuid $domainGuid -ActiveDirectoryDomainSid $domainSid `
+        #     -ActiveDirectoryAzureStorageSid $azureStorageSid -SamAccountName $ADObjectName `
+        #     -AccountType $accountType
     }
 
     Write-Verbose "Set-StorageAccountDomainProperties: Complete"
