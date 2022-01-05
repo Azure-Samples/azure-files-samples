@@ -2379,7 +2379,10 @@ function New-ADAccountForStorageAccount {
         [string]$ObjectType = "ComputerAccount",
 
         [Parameter(Mandatory=$false, Position=6)]
-        [switch]$OverwriteExistingADObject
+        [switch]$OverwriteExistingADObject,
+
+        [Parameter(Mandatory=$false, Position=7)]
+        [string]$SamAccountName
     )
 
     Assert-IsWindows
@@ -2513,6 +2516,12 @@ function New-ADAccountForStorageAccount {
         Write-Verbose -Message "Overwriting an existing AD $ObjectType object $ADObjectName with a Service Principal Name of $spnValue in domain $Domain."
     }
 
+    if ([System.String]::IsNullOrEmpty($SamAccountName)) {
+        $SamAccountName = $ADObjectName
+    }
+
+    Write-Verbose -Message "AD object name is $ADObjectName, SamAccountName is $SamAccountName."
+
     # Create the identity in Active Directory.    
     try
     {
@@ -2528,7 +2537,7 @@ function New-ADAccountForStorageAccount {
                     Set-ADUser -Instance $userSpnMatch -ErrorAction Stop
                 } else {
                     New-ADUser `
-                        -SamAccountName $ADObjectName `
+                        -SamAccountName $SamAccountName `
                         -Path $path `
                         -Name $ADObjectName `
                         -AccountPassword $fileServiceAccountPwdSecureString `
@@ -2555,7 +2564,7 @@ function New-ADAccountForStorageAccount {
                     Set-ADComputer -Instance $computerSpnMatch -ErrorAction Stop
                 } else {
                     New-ADComputer `
-                        -SAMAccountName $ADObjectName `
+                        -SAMAccountName $SamAccountName `
                         -Path $path `
                         -Name $ADObjectName `
                         -AccountPassword $fileServiceAccountPwdSecureString `
@@ -3760,7 +3769,8 @@ function Set-StorageAccountDomainProperties {
             -Domain $Domain `
             -ErrorAction Stop
         $azureStorageSid = $azureStorageIdentity.SID.Value
-
+        $samAccountName = $azureStorageIdentity.SamAccountName.TrimEnd("$")`
+        
         $domainGuid = $domainInformation.ObjectGUID.ToString()
         $domainName = $domainInformation.DnsRoot
         $domainSid = $domainInformation.DomainSID.Value
@@ -3787,7 +3797,7 @@ function Set-StorageAccountDomainProperties {
             ActiveDirectoryNetBiosDomainName=$netBiosDomainName, ActiveDirectoryForestName=$($domainInformation.Forest) `
             ActiveDirectoryDomainGuid=$domainGuid, ActiveDirectoryDomainSid=$domainSid, `
             ActiveDirectoryAzureStorageSid=$azureStorageSid, `
-            SamAccountName=$ADObjectName, `
+            SamAccountName=$samAccountName, `
             AccountType=$accountType"
 
         Set-AzStorageAccount -ResourceGroupName $ResourceGroupName -AccountName $StorageAccountName `
@@ -4395,7 +4405,11 @@ function Join-AzStorageAccount {
         [switch]$OverwriteExistingADObject,
 
         [Parameter(Mandatory=$false, Position=7)]
-        [System.Collections.Generic.HashSet[string]]$EncryptionType = @("RC4","AES256")
+        [System.Collections.Generic.HashSet[string]]$EncryptionType = @("RC4","AES256"),
+
+        [Parameter(Mandatory=$false, Position=8)]
+        [string]$SamAccountName
+
     ) 
 
     begin {
@@ -4427,11 +4441,15 @@ function Join-AzStorageAccount {
         }
         
         if (!$PSBoundParameters.ContainsKey("ADObjectNameOverride")) {
+            $ADObjectNameOverride = $StorageAccountName
+        }
+
+        if (!$PSBoundParameters.ContainsKey("SamAccountName")) {
             if ($StorageAccountName.Length -gt 15) {
                 $randomSuffix = Get-RandomString -StringLength 5 -AlphanumericOnly
-                $ADObjectNameOverride = $StorageAccountName.Substring(0, 10) + $randomSuffix
+                $SamAccountName = $StorageAccountName.Substring(0, 10) + $randomSuffix
             } else {
-                $ADObjectNameOverride = $StorageAccountName
+                $SamAccountName = $StorageAccountName
             }
         }
         
@@ -4457,7 +4475,8 @@ function Join-AzStorageAccount {
                 "ADObjectName" = $ADObjectNameOverride;
                 "StorageAccountName" = $StorageAccountName;
                 "ResourceGroupName" = $ResourceGroupName;
-                "ObjectType" = $DomainAccountType
+                "ObjectType" = $DomainAccountType;
+                "SamAccountName" = $SamAccountName
             }
 
             if ($PSBoundParameters.ContainsKey("Domain")) {
