@@ -646,7 +646,7 @@ done
 
 
 ## Prompt user to select diagnostics option
-print_log "Do you want to tun on diagnostics logs"
+print_log "Do you want to turn on diagnostics logs"
 
 options=("yes" "no")
 
