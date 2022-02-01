@@ -1,0 +1,141 @@
+#!/usr/bin/python
+from bcc import BPF
+from bcc.utils import printb
+from time import sleep
+import os
+
+# define BPF program
+bpf_text= """
+#include <linux/sched.h>
+BPF_HASH(callers_read, u64, unsigned long);
+BPF_HASH(callers_write, u64, unsigned long);
+BPF_HASH(callers_query_dir, u64, unsigned long);
+BPF_HASH(callers_zero, u64, unsigned long);
+BPF_HASH(callers_falloc, u64, unsigned long);
+BPF_HASH(callers_cmd, u64, unsigned long);
+
+struct smb3_rw_err_ctx {
+        u64 __pad;
+        unsigned int xid;
+        u64 fid;
+        u32 tid;
+        u64 sesid;
+        u64 offset;
+        u32 len;
+        int rc;
+};
+
+struct smb3_cmd_err_ctx {
+        u64 __pad;
+        u32 tid;
+        u64 sesid;
+        u16 cmd;
+        u64 mid;
+        u32 status;
+        int rc;
+};
+
+
+int trace_read_err(struct smb3_rw_err_ctx *args) {
+        u64 key = 0;
+        unsigned long value;
+
+        value = args->rc;
+        callers_read.update(&key, &value);
+        return 0;
+}
+
+int trace_write_err(struct smb3_rw_err_ctx *args) {
+        u64 key = 0;
+        unsigned long value;
+
+        value = args->rc;
+        callers_write.update(&key, &value);
+        return 0;
+}
+
+int trace_query_dir_err(struct smb3_rw_err_ctx *args) {
+        u64 key = 0;
+        unsigned long value;
+
+        value = args->rc;
+        callers_query_dir.update(&key, &value);
+        return 0;
+}
+
+int trace_zero_err(struct smb3_rw_err_ctx *args) {
+        u64 key = 0;
+        unsigned long value;
+
+        value = args->rc;
+        callers_zero.update(&key, &value);
+        return 0;
+}
+
+int trace_falloc_err(struct smb3_rw_err_ctx *args) {
+        u64 key = 0;
+        unsigned long value;
+
+        value = args->rc;
+        callers_falloc.update(&key, &value);
+        return 0;
+}
+
+int trace_cmd_err(struct smb3_cmd_err_ctx *args) {
+        u64 key = 0;
+        unsigned long value;
+
+        value = args->rc;
+        callers_cmd.update(&key, &value);
+        return 0;
+}
+"""
+
+b = BPF(text=bpf_text)
+b.attach_tracepoint(tp="cifs:smb3_read_err", fn_name="trace_read_err")
+b.attach_tracepoint(tp="cifs:smb3_write_err", fn_name="trace_write_err")
+b.attach_tracepoint(tp="cifs:smb3_query_dir_err", fn_name="trace_query_dir_err")
+b.attach_tracepoint(tp="cifs:smb3_zero_err", fn_name="trace_zero_err")
+b.attach_tracepoint(tp="cifs:smb3_falloc_err", fn_name="trace_falloc_err")
+b.attach_tracepoint(tp="cifs:smb3_cmd_err", fn_name="trace_cmd_err")
+
+knownErrors = [-2, -11, -61];
+class stop_and_collapse(Exception):
+    pass
+
+while 1:
+    try:
+        sleep(1);
+        for k,v in b["callers_read"].items():
+            raise stop_and_collapse
+        for k,v in b["callers_write"].items():
+            raise stop_and_collapse
+        for k,v in b["callers_query_dir"].items():
+            raise stop_and_collapse
+        for k,v in b["callers_zero"].items():
+            raise stop_and_collapse
+        for k,v in b["callers_falloc"].items():
+            raise stop_and_collapse
+        for k,v in b["callers_cmd"].items():
+            if v.value in knownErrors:
+                continue;
+            raise stop_and_collapse
+    except KeyboardInterrupt:
+        exit()
+    except stop_and_collapse:
+        break;
+
+fd=open("/tmp/smbclientlog.pid", "r");
+trace_pid=fd.readline();
+tcpdump_pid=fd.readline();
+print(tcpdump_pid)
+command = "kill -INT %s" % (tcpdump_pid)
+os.system(command);
+command = "kill -INT %s" % (trace_pid)
+os.system(command);
+sleep(3)
+os.system("trace-cmd report 2>&1 > cifs_trace")
+os.system("sudo dmesg -c > cifs_dmesg")
+os.system("zip cifs_debug.zip cifs_dmesg cifs_trace cifs_traffic.pcap")
+os.system("rm -rf /tmp/smbclientlog.pid")
+
