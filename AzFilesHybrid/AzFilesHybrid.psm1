@@ -3951,10 +3951,11 @@ function Update-AzStorageAccountADObjectPassword {
     StorageAccountName, you do not need to specify StorageAccount.
     .Example
     PS> Update-AzStorageAccountADObjectPassword -RotateToKerbKey kerb2 -ResourceGroupName "myResourceGroup" -StorageAccountName "myStorageAccount"
-    
+    .PARAMETER $Credential
+    The credentials that are used to update the AD computer object password.
     .Example 
     PS> $storageAccount = Get-AzStorageAccount -ResourceGroupName "myResourceGroup" -Name "myStorageAccount"
-    PS> Update-AzStorageAccountADObjectPassword -RotateToKerbKey kerb2 -StorageAccount $storageAccount 
+    PS> Update-AzStorageAccountADObjectPassword -RotateToKerbKey kerb2 -StorageAccount $storageAccount -credential $creds
     
     .Example
     PS> Get-AzStorageAccount -ResourceGroupName "myResourceGroup" | Update-AzStorageAccountADObjectPassword -RotateToKerbKey
@@ -3984,7 +3985,10 @@ function Update-AzStorageAccountADObjectPassword {
         [Microsoft.Azure.Commands.Management.Storage.Models.PSStorageAccount]$StorageAccount,
 
         [Parameter(Mandatory=$false)]
-        [switch]$SkipKeyRegeneration
+        [switch]$SkipKeyRegeneration,
+
+        [Parameter(Mandatory=$false, Position=4)]
+        [System.Management.Automation.PSCredential]$Credential
 
         #[Parameter(Mandatory=$false)]
         #[switch]$Force
@@ -4068,6 +4072,7 @@ function Update-AzStorageAccountADObjectPassword {
                     -Reset `
                     -NewPassword $newPassword `
                     -Server $domain `
+                    -Credential $creds `
                     -ErrorAction Stop
             # } else {
             #     Write-Verbose `
