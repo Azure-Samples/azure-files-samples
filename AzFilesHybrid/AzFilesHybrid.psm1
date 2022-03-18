@@ -3757,11 +3757,16 @@ function Set-StorageAccountDomainProperties {
             -ADObjectName $ADObjectName `
             -Domain $Domain `
             -ErrorAction Stop
-        $azureStorageSid = $azureStorageIdentity.SID.Value
 
+        if ($PSVersionTable.PSEdition -eq 'Core') {
+            $domainSid = $domainInformation.DomainSID
+            $azureStorageSid = $azureStorageIdentity.SID
+        } else {
+            $domainSid = $domainInformation.DomainSID.Value
+            $azureStorageSid = $azureStorageIdentity.SID.Value
+        }
         $domainGuid = $domainInformation.ObjectGUID.ToString()
         $domainName = $domainInformation.DnsRoot
-        $domainSid = $domainInformation.DomainSID.Value
         $forestName = $domainInformation.Forest
         $netBiosDomainName = $domainInformation.DnsRoot
 
