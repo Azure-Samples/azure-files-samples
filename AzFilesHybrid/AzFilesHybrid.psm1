@@ -883,13 +883,13 @@ function Request-AzPowerShellModule {
 
     $storageModule = Get-Module -Name Az.Storage -ListAvailable | `
         Where-Object { 
-            $_.Version -eq [Version]::new(4,1,2) 
+            $_.Version -ge [Version]::new(4,3,0) 
         }
 
     # Do should process if modules must be installed
     if ($null -eq $azModule -or $null -eq $storageModule) {
         $caption = "Install Azure PowerShell modules"
-        $verboseConfirmMessage = "This module requires Azure PowerShell (`"Az`" module) 2.8.0+ and Az.Storage 4.1.2-preview+. This can be installed now if you are running as an administrator."
+        $verboseConfirmMessage = "This module requires Azure PowerShell (`"Az`" module) 2.8.0+ and Az.Storage 4.3.0+. This can be installed now if you are running as an administrator."
         
         if ($PSCmdlet.ShouldProcess($verboseConfirmMessage, $verboseConfirmMessage, $caption)) {
             if (!(Get-IsElevatedSession)) {
@@ -926,8 +926,7 @@ function Request-AzPowerShellModule {
                         -Repository PSGallery `
                         -AllowClobber `
                         -Force `
-                        -AllowPrerelease `
-                        -RequiredVersion "4.1.2-preview" `
+                        -MinimumVersion "4.3.0" `
                         -SkipPublisherCheck `
                         -ErrorAction Stop
             }       
@@ -942,7 +941,7 @@ function Request-AzPowerShellModule {
 
     $storageModule = ,(Get-Module -Name Az.Storage -ListAvailable | `
         Where-Object { 
-            $_.Version -eq [Version]::new(4,1,2) 
+            $_.Version -ge [Version]::new(4,3,0) 
         } | `
         Sort-Object -Property Version -Descending)
 
