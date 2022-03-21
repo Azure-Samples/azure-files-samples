@@ -883,13 +883,13 @@ function Request-AzPowerShellModule {
 
     $storageModule = Get-Module -Name Az.Storage -ListAvailable | `
         Where-Object { 
-            $_.Version -ge [Version]::new(2,0,0) 
+            $_.Version -ge [Version]::new(4,3,0) 
         }
 
     # Do should process if modules must be installed
     if ($null -eq $azModule -or $null -eq $storageModule) {
         $caption = "Install Azure PowerShell modules"
-        $verboseConfirmMessage = "This module requires Azure PowerShell (`"Az`" module) 2.8.0+ and Az.Storage 2.0.0+. This can be installed now if you are running as an administrator."
+        $verboseConfirmMessage = "This module requires Azure PowerShell (`"Az`" module) 2.8.0+ and Az.Storage 4.3.0+. This can be installed now if you are running as an administrator."
         
         if ($PSCmdlet.ShouldProcess($verboseConfirmMessage, $verboseConfirmMessage, $caption)) {
             if (!(Get-IsElevatedSession)) {
@@ -926,7 +926,7 @@ function Request-AzPowerShellModule {
                         -Repository PSGallery `
                         -AllowClobber `
                         -Force `
-                        -MinimumVersion "2.0.0" `
+                        -MinimumVersion "4.3.0" `
                         -SkipPublisherCheck `
                         -ErrorAction Stop
             }       
@@ -941,7 +941,7 @@ function Request-AzPowerShellModule {
 
     $storageModule = ,(Get-Module -Name Az.Storage -ListAvailable | `
         Where-Object { 
-            $_.Version -ge [Version]::new(2,0,0) 
+            $_.Version -ge [Version]::new(4,3,0) 
         } | `
         Sort-Object -Property Version -Descending)
 
@@ -2379,7 +2379,10 @@ function New-ADAccountForStorageAccount {
         [string]$ObjectType = "ComputerAccount",
 
         [Parameter(Mandatory=$false, Position=6)]
-        [switch]$OverwriteExistingADObject
+        [switch]$OverwriteExistingADObject,
+
+        [Parameter(Mandatory=$false, Position=7)]
+        [string]$SamAccountName
     )
 
     Assert-IsWindows
@@ -2513,6 +2516,12 @@ function New-ADAccountForStorageAccount {
         Write-Verbose -Message "Overwriting an existing AD $ObjectType object $ADObjectName with a Service Principal Name of $spnValue in domain $Domain."
     }
 
+    if ([System.String]::IsNullOrEmpty($SamAccountName)) {
+        $SamAccountName = $ADObjectName
+    }
+
+    Write-Verbose -Message "AD object name is $ADObjectName, SamAccountName is $SamAccountName."
+
     # Create the identity in Active Directory.    
     try
     {
@@ -2528,7 +2537,7 @@ function New-ADAccountForStorageAccount {
                     Set-ADUser -Instance $userSpnMatch -ErrorAction Stop
                 } else {
                     New-ADUser `
-                        -SamAccountName $ADObjectName `
+                        -SamAccountName $SamAccountName `
                         -Path $path `
                         -Name $ADObjectName `
                         -AccountPassword $fileServiceAccountPwdSecureString `
@@ -2555,7 +2564,7 @@ function New-ADAccountForStorageAccount {
                     Set-ADComputer -Instance $computerSpnMatch -ErrorAction Stop
                 } else {
                     New-ADComputer `
-                        -SAMAccountName $ADObjectName `
+                        -SAMAccountName $SamAccountName `
                         -Path $path `
                         -Name $ADObjectName `
                         -AccountPassword $fileServiceAccountPwdSecureString `
@@ -3736,7 +3745,9 @@ function Set-StorageAccountDomainProperties {
                 ForestName=$($storageAccount.AzureFilesIdentityBasedAuth.ActiveDirectoryProperties.ForestName) `
                 DomainGuid=$($storageAccount.AzureFilesIdentityBasedAuth.ActiveDirectoryProperties.DomainGuid) `
                 DomainSid=$($storageAccount.AzureFilesIdentityBasedAuth.ActiveDirectoryProperties.DomainSid) `
-                AzureStorageSid=$($storageAccount.AzureFilesIdentityBasedAuth.ActiveDirectoryProperties.AzureStorageSid)" `
+                AzureStorageSid=$($storageAccount.AzureFilesIdentityBasedAuth.ActiveDirectoryProperties.AzureStorageSid) `
+                SamAccountName=$($storageAccount.AzureFilesIdentityBasedAuth.ActiveDirectoryProperties.SamAccountName) `
+                AccountType=$($storageAccount.AzureFilesIdentityBasedAuth.ActiveDirectoryProperties.AccountType)" `
                 -ErrorAction Stop
         }
 
@@ -3758,24 +3769,43 @@ function Set-StorageAccountDomainProperties {
             -Domain $Domain `
             -ErrorAction Stop
         $azureStorageSid = $azureStorageIdentity.SID.Value
-
+        $samAccountName = $azureStorageIdentity.SamAccountName.TrimEnd("$")
         $domainGuid = $domainInformation.ObjectGUID.ToString()
         $domainName = $domainInformation.DnsRoot
         $domainSid = $domainInformation.DomainSID.Value
         $forestName = $domainInformation.Forest
         $netBiosDomainName = $domainInformation.DnsRoot
+        $accountType = ""
+
+        switch ($azureStorageIdentity.ObjectClass) {
+            "computer" {
+                $accountType = "Computer"
+            }
+            "user" {
+                $accountType = "User"
+            }
+            Default {
+                Write-Error `
+                    -Message ("AD object $ADObjectName is of unsupported object class " + $azureStorageIdentity.ObjectClass + ".") `
+                    -ErrorAction Stop 
+            }
+        }
 
         Write-Verbose "Setting AD properties on $StorageAccountName in $ResourceGroupName : `
             EnableActiveDirectoryDomainServicesForFile=$true, ActiveDirectoryDomainName=$domainName, `
             ActiveDirectoryNetBiosDomainName=$netBiosDomainName, ActiveDirectoryForestName=$($domainInformation.Forest) `
             ActiveDirectoryDomainGuid=$domainGuid, ActiveDirectoryDomainSid=$domainSid, `
-            ActiveDirectoryAzureStorageSid=$azureStorageSid"
+            ActiveDirectoryAzureStorageSid=$azureStorageSid, `
+            ActiveDirectorySamAccountName=$samAccountName, `
+            ActiveDirectoryAccountType=$accountType"
 
         Set-AzStorageAccount -ResourceGroupName $ResourceGroupName -AccountName $StorageAccountName `
              -EnableActiveDirectoryDomainServicesForFile $true -ActiveDirectoryDomainName $domainName `
              -ActiveDirectoryNetBiosDomainName $netBiosDomainName -ActiveDirectoryForestName $forestName `
              -ActiveDirectoryDomainGuid $domainGuid -ActiveDirectoryDomainSid $domainSid `
-             -ActiveDirectoryAzureStorageSid $azureStorageSid
+             -ActiveDirectoryAzureStorageSid $azureStorageSid `
+             -ActiveDirectorySamAccountName $samAccountName `
+             -ActiveDirectoryAccountType $accountType
     }
 
     Write-Verbose "Set-StorageAccountDomainProperties: Complete"
@@ -3881,7 +3911,7 @@ function Test-AzStorageAccountADObjectPasswordIsKerbKey {
         $domainDns = $activeDirectoryProperties.DomainName
         $domain = Get-ADDomain -Server $domainDns
 
-        $userName = $domain.NetBIOSName + "\" + $adObj.Name
+        $userName = $domain.NetBIOSName + "\" + $adObj.SamAccountName
 
         $oneKeyMatches = $false
         $keyMatches = [KerbKeyMatch[]]@()
@@ -4259,11 +4289,13 @@ function Update-AzStorageAccountAuthForAES256 {
         $adObject = Get-AzStorageAccountADObject -ResourceGroupName $ResourceGroupName `
             -StorageAccountName $StorageAccountName -ErrorAction Stop
 
+        $adObjectName = $adObject.Name
+ 
         $activeDirectoryProperties = Get-AzStorageAccountActiveDirectoryProperties `
             -ResourceGroupName $ResourceGroupName -StorageAccountName $StorageAccountName -ErrorAction Stop
         $domain = $activeDirectoryProperties.DomainName
 
-        if (($adObject.ObjectClass -ine "computer") -or ($adObject.SamAccountName.TrimEnd("$") -ine $StorageAccountName)) {
+        if ($adObject.ObjectClass -ine "computer") {
             $message = "Removing object '$($adObject.DistinguishedName)' of type '$adObject.ObjectClass' from domain '$domain'." `
                 + " AES256 is only supported for computer objects."
             Write-Verbose -Message $message
@@ -4271,6 +4303,7 @@ function Update-AzStorageAccountAuthForAES256 {
             Remove-ADObject -Identity $adObject.DistinguishedName -Server $domain -Confirm:$false -ErrorAction Stop
 
             $organizationalUnitDistinguishedName = $adObject.DistinguishedName.Substring($adObject.DistinguishedName.IndexOf(',') + 1)
+            $samAccountName = $adObject.SamAccountName.TrimEnd("$")
 
             $message = "Join storage account '$StorageAccountName' to domain '$domain'" `
                 + " as a computer object under '$organizationalUnitDistinguishedName'"
@@ -4279,12 +4312,20 @@ function Update-AzStorageAccountAuthForAES256 {
             Join-AzStorageAccount -ResourceGroupName $ResourceGroupName -StorageAccountName $StorageAccountName `
                 -Domain $domain -DomainAccountType "ComputerAccount" `
                 -OrganizationalUnitDistinguishedName $organizationalUnitDistinguishedName `
-                -ADObjectNameOverride $StorageAccountName -ErrorAction Stop
+                -ADObjectNameOverride $adObjectName -SamAccountName $samAccountName `
+                -ErrorAction Stop
             
             $adObject = Get-AzStorageAccountADObject -ResourceGroupName $ResourceGroupName `
                 -StorageAccountName $StorageAccountName -ErrorAction Stop
+        } else {
+            Set-StorageAccountDomainProperties `
+                -ADObjectName $adObjectName `
+                -ResourceGroupName $ResourceGroupName `
+                -StorageAccountName $StorageAccountName `
+                -Domain $domain `
+                -Force
         }
-        
+
         Write-Verbose -Message "Set AD object '$($adObject.DistinguishedName)' to use AES256 for Kerberos authentication"
         Set-ADComputer -Identity $adObject.DistinguishedName -Server $domain `
             -KerberosEncryptionType "AES256" -ErrorAction Stop
@@ -4375,7 +4416,10 @@ function Join-AzStorageAccount {
         [switch]$OverwriteExistingADObject,
 
         [Parameter(Mandatory=$false, Position=7)]
-        [System.Collections.Generic.HashSet[string]]$EncryptionType = @("RC4","AES256")
+        [System.Collections.Generic.HashSet[string]]$EncryptionType = @("RC4","AES256"),
+
+        [Parameter(Mandatory=$false, Position=8)]
+        [string]$SamAccountName
     ) 
 
     begin {
@@ -4406,30 +4450,16 @@ function Join-AzStorageAccount {
             $ResourceGroupName = $StorageAccount.ResourceGroupName
         }
         
-        if ($EncryptionType -contains "AES256") {
-            if ($PSBoundParameters.ContainsKey("ADObjectNameOverride") -and ($ADObjectNameOverride -ine $StorageAccountName)) {
-                $message = "Parameter -ADObjectNameOverride '$ADObjectNameOverride' is different from storage account" `
-                    + " name '$StorageAccountName'. It cannot be used as the SamAccountName to create an Active Directory object" `
-                    + " for the storage account. Azure Files will be supporting AES256 encryption for Kerberos tickets," `
-                    + " which requires that the SamAccountName match the storage account name."
-                Write-Error -Message $message -ErrorAction Stop
-            }
-            if ($StorageAccountName.Length -gt 15) {
-                $message = "Parameter -StorageAccountName '$StorageAccountName' has more than 15 characters," `
-                    + " which is not supported to be used as the SamAccountName to create an Active Directory object" `
-                    + " for the storage account. Azure Files will be supporting AES256 encryption for Kerberos tickets," `
-                    + " which requires that the SamAccountName match the storage account name. Please consider using" `
-                    + " a storage account with a shorter name."
-                Write-Error -Message $message -ErrorAction Stop
-            }
+        if (!$PSBoundParameters.ContainsKey("ADObjectNameOverride")) {
+            $ADObjectNameOverride = $StorageAccountName
         }
 
-        if (!$PSBoundParameters.ContainsKey("ADObjectNameOverride")) {
+        if (!$PSBoundParameters.ContainsKey("SamAccountName")) {
             if ($StorageAccountName.Length -gt 15) {
                 $randomSuffix = Get-RandomString -StringLength 5 -AlphanumericOnly
-                $ADObjectNameOverride = $StorageAccountName.Substring(0, 10) + $randomSuffix
+                $SamAccountName = $StorageAccountName.Substring(0, 10) + $randomSuffix
             } else {
-                $ADObjectNameOverride = $StorageAccountName
+                $SamAccountName = $StorageAccountName
             }
         }
         
@@ -4455,7 +4485,8 @@ function Join-AzStorageAccount {
                 "ADObjectName" = $ADObjectNameOverride;
                 "StorageAccountName" = $StorageAccountName;
                 "ResourceGroupName" = $ResourceGroupName;
-                "ObjectType" = $DomainAccountType
+                "ObjectType" = $DomainAccountType;
+                "SamAccountName" = $SamAccountName
             }
 
             if ($PSBoundParameters.ContainsKey("Domain")) {
