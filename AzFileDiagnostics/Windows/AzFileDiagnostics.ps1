@@ -382,7 +382,7 @@ function ValidateLmCompatibilityLevel {
 # Validate the RestrictSendingNTLMTraffic. 
 #
 #.DESCRIPTION
-# Currently just check the registry key and its value. if it is set to 0 or 1, prompt user to change it to expected value. 
+# Currently just check the registry key and its value. Check for group policy "Restrict NTLM: Outgoing NTLM traffic to remote servers", if it is not set to 0 or 1, prompt user to change it to expected value. 
 #
 #.EXAMPLE
 #An example
@@ -395,25 +395,20 @@ function ValidateRestrictSendingNTLMTraffic {
     $RegKeyPath = "HKLM:SYSTEM\CurrentControlSet\Control\Lsa\MSV1_0"
     $valueName = "RestrictSendingNTLMTraffic"
 
-    $Result = Get-ItemProperty -path $RegKeyPath  -Name $valueName -ErrorAction SilentlyContinue
+    $Result = Get-ItemProperty -path $RegKeyPath -Name $valueName -ErrorAction SilentlyContinue
 
     if ($Result -eq $null) {
         Write-Log -level success "`n[OK]: HKLM:SYSTEM\CurrentControlSet\Control\Lsa\MSV1_0|RestrictSendingNTLMTraffic IS NOT set, by default it should be 0 (or 1)" 
-
     }
     else {
-
-        if ( $result.RestrictSendingNTLMTraffic -ne 2 ) {
+        if ( $result.RestrictSendingNTLMTraffic -lt 2 -and $result.RestrictSendingNTLMTraffic -ge 0) {
             Write-Log -level success "`n[OK]: HKLM:SYSTEM\CurrentControlSet\Control\Lsa\MSV1_0|RestrictSendingNTLMTraffic is set to default value 0 (or 1)" 
         }
         else {
             Write-Log -level error "`n[ERROR]: HKLM:SYSTEM\CurrentControlSet\Control\Lsa\MSV1_0|RestrictSendingNTLMTraffic IS NOT set to default value 0 (or 1) and current value is $($result.RestrictSendingNTLMTraffic), it will cause mouting share to fail." 
             $Script:ValidationPass = $false
         }
-
-    }
-
-    
+    }    
 }
 
 ##############################
@@ -1452,7 +1447,7 @@ if ($Script:ValidationPass -eq $false) {
 
 ###validate RestrictSendingNTLMTraffic
 Write-Log -level info "`n======Validate RestrictSendingNTLMTraffic setting on client"
-ValidateRestrictSendingNTLMTraffic($Script:OSEnv)
+ValidateRestrictSendingNTLMTraffic
 if ($Script:ValidationPass -eq $false) {
     Write-Log -level error "`n[Error]: RestrictSendingNTLMTraffic validation fails ,error can occur if RestrictSendingNTLMTraffic is set as Deny All on the client"  
     Write-Log -level warning "==========================================[END]==============================================="
