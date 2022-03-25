@@ -379,6 +379,45 @@ function ValidateLmCompatibilityLevel {
 
 ##############################
 #.SYNOPSIS
+# Validate the RestrictSendingNTLMTraffic. 
+#
+#.DESCRIPTION
+# Currently just check the registry key and its value. if it is set to 0 or 1, prompt user to change it to expected value. 
+#
+#.EXAMPLE
+#An example
+#
+#.NOTES
+#General notes
+##############################
+function ValidateRestrictSendingNTLMTraffic {
+
+    $RegKeyPath = "HKLM:SYSTEM\CurrentControlSet\Control\Lsa\MSV1_0"
+    $valueName = "RestrictSendingNTLMTraffic"
+
+    $Result = Get-ItemProperty -path $RegKeyPath  -Name $valueName -ErrorAction SilentlyContinue
+
+    if ($Result -eq $null) {
+        Write-Log -level success "`n[OK]: HKLM:SYSTEM\CurrentControlSet\Control\Lsa\MSV1_0|RestrictSendingNTLMTraffic IS NOT set, by default it should be 0 (or 1)" 
+
+    }
+    else {
+
+        if ( $result.RestrictSendingNTLMTraffic -ne 2 ) {
+            Write-Log -level success "`n[OK]: HKLM:SYSTEM\CurrentControlSet\Control\Lsa\MSV1_0|RestrictSendingNTLMTraffic is set to default value 0 (or 1)" 
+        }
+        else {
+            Write-Log -level error "`n[ERROR]: HKLM:SYSTEM\CurrentControlSet\Control\Lsa\MSV1_0|RestrictSendingNTLMTraffic IS NOT set to default value 0 (or 1) and current value is $($result.RestrictSendingNTLMTraffic), it will cause mouting share to fail." 
+            $Script:ValidationPass = $false
+        }
+
+    }
+
+    
+}
+
+##############################
+#.SYNOPSIS
 # Collect the UNC path or Storage account name/File share name/Cloud. 
 #
 #.DESCRIPTION
@@ -1406,6 +1445,16 @@ Write-Log -level info "`n======Validate LmCompatibilityLevel setting on client"
 ValidateLmCompatibilityLevel($Script:OSEnv)
 if ($Script:ValidationPass -eq $false) {
     Write-Log -level error "`n[Error]: LmCompatibilityLevel validation fails, System error 53 or system error 87 can occur if NTLMv1 communication is enabled on the client. Azure File storage supports only NTLMv2 authentication. LmCompatibilityLevel should be set to 3"  
+    Write-Log -level warning "==========================================[END]==============================================="
+    exit
+}
+
+
+###validate RestrictSendingNTLMTraffic
+Write-Log -level info "`n======Validate RestrictSendingNTLMTraffic setting on client"
+ValidateRestrictSendingNTLMTraffic($Script:OSEnv)
+if ($Script:ValidationPass -eq $false) {
+    Write-Log -level error "`n[Error]: RestrictSendingNTLMTraffic validation fails ,error can occur if RestrictSendingNTLMTraffic is set as Deny All on the client"  
     Write-Log -level warning "==========================================[END]==============================================="
     exit
 }
