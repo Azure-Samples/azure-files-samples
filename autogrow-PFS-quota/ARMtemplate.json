@@ -1,6 +1,6 @@
 {
-    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-    "contentVersion": "1.0.0.0",
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
   "parameters": {
     "functionAppName": {
       "type": "string",
@@ -85,147 +85,151 @@
     "targetSubscriptionId": "[parameters('targetSubscriptionId')]",
     "targetResourceGroup": "[parameters('targetResourceGroup')]"
   },
-    "resources": [
-      {
-        "type": "Microsoft.Storage/storageAccounts",
-        "apiVersion": "2019-06-01",
-        "name": "[variables('faStorageAccountName')]",
-        "location": "[parameters('location')]",
-        "sku": {
-          "name": "[parameters('faStorageAccountType')]"
-        },
-        "kind": "Storage"
+  "resources": [
+    {
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2019-06-01",
+      "name": "[variables('faStorageAccountName')]",
+      "location": "[parameters('location')]",
+      "sku": {
+        "name": "[parameters('faStorageAccountType')]"
       },
-      {
-        "type": "Microsoft.Web/serverfarms",
-        "apiVersion": "2020-06-01",
+      "kind": "Storage"
+    },
+    {
+      "type": "Microsoft.Web/serverfarms",
+      "apiVersion": "2020-06-01",
+      "name": "[variables('hostingPlanName')]",
+      "location": "[parameters('location')]",
+      "sku": {
+        "name": "Y1",
+        "tier": "Dynamic"
+      },
+      "properties": {
         "name": "[variables('hostingPlanName')]",
-        "location": "[parameters('location')]",
-        "sku": {
-          "name": "Y1",
-          "tier": "Dynamic"
-        },
-        "properties": {
-          "name": "[variables('hostingPlanName')]",
-          "computeMode": "Dynamic"
-        }
+        "computeMode": "Dynamic"
+      }
+    },
+    {
+      "type": "Microsoft.Web/sites",
+      "apiVersion": "2020-06-01",
+      "name": "[variables('functionAppName')]",
+      "location": "[parameters('location')]",
+      "kind": "functionapp",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]",
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('faStorageAccountName'))]"
+      ],
+      "identity": {
+        "type": "SystemAssigned"
       },
-      {
-        "type": "Microsoft.Web/sites",
-        "apiVersion": "2020-06-01",
-        "name": "[variables('functionAppName')]",
-        "location": "[parameters('location')]",
-        "kind": "functionapp",
-        "dependsOn": [
-          "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]",
-          "[resourceId('Microsoft.Storage/storageAccounts', variables('faStorageAccountName'))]"
-        ],
-        "identity": {
-          "type": "SystemAssigned"
-        },
-        "properties": {
-          "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]",
-          "siteConfig": {
-            "appSettings": [
-              {
-                "name": "AzureWebJobsStorage",
-                "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('faStorageAccountName'), ';EndpointSuffix=', environment().suffixes.storage, ';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('faStorageAccountName')), '2019-06-01').keys[0].value)]"
-              },
-              {
-                "name": "WEBSITE_CONTENTAZUREFILECONNECTIONSTRING",
-                "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('faStorageAccountName'), ';EndpointSuffix=', environment().suffixes.storage, ';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('faStorageAccountName')), '2019-06-01').keys[0].value)]"
-              },
-              {
-                "name": "WEBSITE_CONTENTSHARE",
-                "value": "[toLower(variables('functionAppName'))]"
-              },
-              {
-                "name": "FUNCTIONS_EXTENSION_VERSION",
-                "value": "~2"
-              },
-              {
-                "name": "WEBSITE_NODE_DEFAULT_VERSION",
-                "value": "~10"
-              },
-              {
-                "name": "APPINSIGHTS_INSTRUMENTATIONKEY",
-                "value": "[reference(resourceId('microsoft.insights/components', variables('applicationInsightsName')), '2020-02-02-preview').InstrumentationKey]"
-              },
-              {
-                "name": "FUNCTIONS_WORKER_RUNTIME",
-                "value": "powershell"
-              },
-              {
-                "name": "targetStorageAccountName",
-                "value": "[variables('targetStorageAccountName')]"
-              },
-              {
-                "name": "targetFileShareName",
-                "value": "[variables('targetFileShareName')]"
-              },
-              {
-                "name": "targetSubscriptionId",
-                "value": "[variables('targetSubscriptionId')]"
-              },
-              {
-                "name": "targetResourceGroup",
-                "value": "[variables('targetResourceGroup')]"
-              }
-            ],
-            "use32BitWorkerProcess": "[bool('true')]",
-            "powerShellVersion": "7.0"
-          }
-        }
-      },
-      {
-        "type": "microsoft.insights/components",
-        "apiVersion": "2020-02-02-preview",
-        "name": "[variables('applicationInsightsName')]",
-        "location": "[parameters('appInsightsLocation')]",
-        "tags": {
-          "[concat('hidden-link:', resourceId('Microsoft.Web/sites', variables('applicationInsightsName')))]": "Resource"
-        },
-        "properties": {
-          "ApplicationId": "[variables('applicationInsightsName')]",
-          "Request_Source": "IbizaWebAppExtensionCreate"
-        }
-      },
-
-      {
-        "apiVersion": "2019-08-01",
-        "name": "[concat(variables('functionAppName'),'/', parameters('functionName'))]",
-        "type": "Microsoft.Web/sites/functions",
-        "dependsOn": [
-          "[resourceId('Microsoft.Web/sites', variables('functionAppName'))]"
-        ],
-        "properties": {
-          "config": {
-            "bindings": [
-              {
-                "name": "Timer",
-                "type": "timerTrigger",
-                "direction": "in",
-                "schedule": "0 */5 * * * *"
-              }
-            ]
-          },
-          "files": {
-            "azure-functions-script.ps1": "# Input bindings are passed in via param block.\r\nparam($Timer)\r\n\r\n# Get the current universal time in the default string format.\r\n$currentUTCtime = (Get-Date).ToUniversalTime()\r\n\r\n# The 'IsPastDue' property is 'true' when the current function invocation is later than scheduled.\r\nif ($Timer.IsPastDue) {\r\n    Write-Host \"PowerShell timer is running late!\"\r\n}\r\n\r\n#Variable Definitions\r\n$subscription_id = $env:targetSubscriptionId\r\n$resource_group = $env:targetResourceGroup\r\n$storage_account_name = $env:targetStorageAccountName\r\n$file_share_name = $env:targetFileShareName\r\n\r\n#Connect to Azure and Import Az Module\r\nConnect-AzAccount -Identity\r\nImport-Module -Name Az.Accounts\r\nImport-Module -Name Az.Storage\r\nSet-AzContext -SubscriptionId $subscription_id\r\n\r\n# Get file share\r\n$StorageContext = New-AzStorageContext -StorageAccountName $storage_account_name -Anonymous\r\n$PFS = Get-AzRmStorageShare -ResourceGroupName $resource_group -StorageAccountName $storage_account_name -Name $file_share_name -GetShareUsage\r\n\r\n# Get provisioned capacity and used capacity\r\n$ProvisionedCapacity = $PFS.QuotaGiB\r\n$UsedCapacity = $PFS.ShareUsageBytes\r\nWrite-Host \"Provisioned Capacity:\" $ProvisionedCapacity\r\nWrite-Host \"Share Usage Bytes:\" $UsedCapacity\r\n\r\n# get storage account\r\n$StorageAccount = Get-AzStorageAccount -ResourceGroupName $resource_group -AccountName $storage_account_name\r\n\r\n# if less than 20% of provisioned capacity is remaining, increase provisioned capacity by 20%\r\nif (($ProvisionedCapacity - ($UsedCapacity / ([Math]::Pow(2,30)))) -lt ($ProvisionedCapacity*0.2)) {\r\n     $Quota = $ProvisionedCapacity*1.2\r\n     Update-AzRmStorageShare -StorageAccount $StorageAccount -Name $file_share_name -QuotaGiB $Quota\r\n     $ProvisionedCapacity = $Quota\r\n}\r\nWrite-Host \"New Provisioned Capacity:\" $ProvisionedCapacity\r\n\r\n# Write an information log with the current time.\r\nWrite-Host \"PowerShell timer trigger function ran! TIME:\" $currentUTCtime\r\n"
-          }
-        }
-      },
-      {
-        "type": "Microsoft.Authorization/roleAssignments",
-        "apiVersion": "2020-04-01-preview",
-        "name": "[guid(resourceId('Microsoft.Web/sites', variables('functionAppName')))]",
-        "dependsOn": [
-          "[resourceId('Microsoft.Web/sites', variables('functionAppName'))]"
-        ],
-        "properties": {
-          "roleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions', parameters('roleDefinitionId'))]",
-          "principalId": "[reference(resourceId('Microsoft.Web/sites', variables('functionAppName')),'2019-08-01', 'full').identity.principalId]",
-          "scope": "[resourceGroup().id]"
+      "properties": {
+        "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]",
+        "siteConfig": {
+          "appSettings": [
+            {
+              "name": "AzureWebJobsStorage",
+              "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('faStorageAccountName'), ';EndpointSuffix=', environment().suffixes.storage, ';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('faStorageAccountName')), '2019-06-01').keys[0].value)]"
+            },
+            {
+              "name": "WEBSITE_CONTENTAZUREFILECONNECTIONSTRING",
+              "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('faStorageAccountName'), ';EndpointSuffix=', environment().suffixes.storage, ';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('faStorageAccountName')), '2019-06-01').keys[0].value)]"
+            },
+            {
+              "name": "WEBSITE_CONTENTSHARE",
+              "value": "[toLower(variables('functionAppName'))]"
+            },
+            {
+              "name": "FUNCTIONS_EXTENSION_VERSION",
+              "value": "~2"
+            },
+            {
+              "name": "WEBSITE_NODE_DEFAULT_VERSION",
+              "value": "~10"
+            },
+            {
+              "name": "APPINSIGHTS_INSTRUMENTATIONKEY",
+              "value": "[reference(resourceId('microsoft.insights/components', variables('applicationInsightsName')), '2020-02-02-preview').InstrumentationKey]"
+            },
+            {
+              "name": "FUNCTIONS_WORKER_RUNTIME",
+              "value": "powershell"
+            },
+            {
+              "name": "targetStorageAccountName",
+              "value": "[variables('targetStorageAccountName')]"
+            },
+            {
+              "name": "targetFileShareName",
+              "value": "[variables('targetFileShareName')]"
+            },
+            {
+              "name": "targetSubscriptionId",
+              "value": "[variables('targetSubscriptionId')]"
+            },
+            {
+              "name": "targetResourceGroup",
+              "value": "[variables('targetResourceGroup')]"
+            },
+            {
+              "name": "environment",
+              "value": "[environment().name]"
+            }
+          ],
+          "use32BitWorkerProcess": "[bool('true')]",
+          "powerShellVersion": "7.0"
         }
       }
-    ]
+    },
+    {
+      "type": "microsoft.insights/components",
+      "apiVersion": "2020-02-02-preview",
+      "name": "[variables('applicationInsightsName')]",
+      "location": "[parameters('appInsightsLocation')]",
+      "tags": {
+        "[concat('hidden-link:', resourceId('Microsoft.Web/sites', variables('applicationInsightsName')))]": "Resource"
+      },
+      "properties": {
+        "ApplicationId": "[variables('applicationInsightsName')]",
+        "Request_Source": "IbizaWebAppExtensionCreate"
+      }
+    },
+
+    {
+      "apiVersion": "2019-08-01",
+      "name": "[concat(variables('functionAppName'),'/', parameters('functionName'))]",
+      "type": "Microsoft.Web/sites/functions",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/sites', variables('functionAppName'))]"
+      ],
+      "properties": {
+        "config": {
+          "bindings": [
+            {
+              "name": "Timer",
+              "type": "timerTrigger",
+              "direction": "in",
+              "schedule": "0 */5 * * * *"
+            }
+          ]
+        },
+        "files": {
+          "azure-functions-script.ps1": "# Input bindings are passed in via param block.\r\nparam($Timer)\r\n\r\n# Get the current universal time in the default string format.\r\n$currentUTCtime = (Get-Date).ToUniversalTime()\r\n\r\n# The 'IsPastDue' property is 'true' when the current function invocation is later than scheduled.\r\nif ($Timer.IsPastDue) {\r\n    Write-Host \"PowerShell timer is running late!\"\r\n}\r\n\r\n#Variable Definitions\r\n$environment = $env:environment\r\n$subscription_id = $env:targetSubscriptionId\r\n$resource_group = $env:targetResourceGroup\r\n$storage_account_name = $env:targetStorageAccountName\r\n$file_share_name = $env:targetFileShareName\r\n\r\n#Connect to Azure and Import Az Module\r\nImport-Module -Name Az.Accounts\r\nImport-Module -Name Az.Storage\r\nConnect-AzAccount -Environment $environment -Subscription $subscription_id -Identity\r\n\r\n# Get file share\r\n$PFS = Get-AzRmStorageShare -ResourceGroupName $resource_group -StorageAccountName $storage_account_name -Name $file_share_name -GetShareUsage\r\n\r\n# Get provisioned capacity and used capacity\r\n$ProvisionedCapacity = $PFS.QuotaGiB\r\n$UsedCapacity = $PFS.ShareUsageBytes\r\nWrite-Host \"Provisioned Capacity:\" $ProvisionedCapacity\r\nWrite-Host \"Share Usage Bytes:\" $UsedCapacity\r\n\r\n# get storage account\r\n$StorageAccount = Get-AzStorageAccount -ResourceGroupName $resource_group -AccountName $storage_account_name\r\n\r\n# if less than 20% of provisioned capacity is remaining, increase provisioned capacity by 20%\r\nif (($ProvisionedCapacity - ($UsedCapacity / ([Math]::Pow(2,30)))) -lt ($ProvisionedCapacity*0.2)) {\r\n     $Quota = $ProvisionedCapacity*1.2\r\n     Update-AzRmStorageShare -StorageAccount $StorageAccount -Name $file_share_name -QuotaGiB $Quota\r\n     $ProvisionedCapacity = $Quota\r\nWrite-Host \"New Provisioned Capacity:\" $ProvisionedCapacity\r\n}\r\n\r\n# Write an information log with the current time.\r\nWrite-Host \"PowerShell timer trigger function ran! TIME:\" $currentUTCtime\r\n"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2020-04-01-preview",
+      "name": "[guid(resourceId('Microsoft.Web/sites', variables('functionAppName')))]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/sites', variables('functionAppName'))]"
+      ],
+      "properties": {
+        "roleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions', parameters('roleDefinitionId'))]",
+        "principalId": "[reference(resourceId('Microsoft.Web/sites', variables('functionAppName')),'2019-08-01', 'full').identity.principalId]",
+        "scope": "[resourceGroup().id]"
+      }
+    }
+  ]
 }
