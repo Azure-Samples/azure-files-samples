@@ -54,6 +54,8 @@ Example 1:
 
 - Verify connectivity to the storage account over TCP port 445. The script dumps the IPTABLES output to check if any firewall rules block traffic.
 
+- Validate Azure storage account security protocol settings with client configurations.
+
 - If all validation passes, map the drive on behalf of the user. User can choose turn on the diagnostics to collect more logs (including CIFS traces/packet traces, which are saved into MSFileMountDiagLog subfolder).
 
 ## Sample Output
