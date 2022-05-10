@@ -103,7 +103,6 @@ get_server_protocol_settings()
 validate_smb_version()
 {
 	supported_ver=$(echo $PROTOCOLSETTINGS  | sed 's/,/\n/g' | grep "smbProtocolVersions" | awk -F\" '{print $(NF-1)}' | sed 's/;/ /g')
-
 	print_log "Choose one of the following SMB versions supported by linux kernel, Default version is recommended " "info"
 
 	if [ "$SMB311" -eq 0 ]; then
@@ -196,8 +195,8 @@ validate_auth_mechanism()
 	fi
 }
 
-validate_channel_encryption_settings() {
-
+validate_channel_encryption_settings()
+{
 	print_log "Validating Channel encryption settings"
 	supported_enc=$(echo $PROTOCOLSETTINGS | sed 's/,/\n/g' | grep "smbChannelEncryption" | awk -F\" '{print $(NF-1)}' | sed 's/;/ /g')
 
@@ -227,10 +226,10 @@ validate_channel_encryption_settings() {
 	fi
 }
 
-check_kereros_ticket_enc() {
-
+check_kereros_ticket_enc()
+{
 	supported_kerb_ticket_enc=$(echo $PROTOCOLSETTINGS | sed 's/,/\n/g' | grep "smbKerberosTicketEncryption" | awk -F\" '{print $(NF-1)}' | sed 's/;/ /g')
-	#echo "supported_kerb_ticket_enc $supported_kerb_ticket_enc"
+
 	if [ $1 = "Kerberos" ]; then
 		print_log "Make sure you have kerbros ticket with one of the following encryption:$supported_kerb_ticket_enc" "info"
 		print_log "Server and Client configurations have been validated for Kerbros, Please mount share using appropriate options" "info"
@@ -240,7 +239,6 @@ check_kereros_ticket_enc() {
 
 validate_server_cfg()
 {
-
 	if [ "$VALIDATESRVCFG" -eq 0 ]; then
 
 		#Check if azure cli is installed on system
