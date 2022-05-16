@@ -1,3 +1,5 @@
+
+
 ################################
 #.SYNOPSIS
 # AzFilediagnostics.ps1 is a sample script to help customer diagnose issues with mounting AZURE File Share on Windows machines.  Output will be redirected to both console and file AzFileDiag-<timestamp>.txt in the script folder
@@ -235,23 +237,29 @@ function ValidateSMBver($adminmode, $OSEnv) {
             try {
                 Get-ChildItem \\localhost\C$ | Out-Null
                 $smbconn = Get-SmbConnection -ServerName localhost
-                Write-Log -level success "`n[OK]: Client SMB version is $($smbconn.Dialect)"  
+                Write-Log -level success "`n[OK]: Client SMB version is $($smbconn.Dialect)"
+
+                #Handling devices with 3.0.2 SMB version
+                if($smbconn[0].Dialect -eq "3.02") {
+                    Write-Log -level info "`n: Client SMB version 3.02 is not supported by Azure, defaulting to 3.0"
+                    return "3.0"
+                }
                 return $smbconn[0].Dialect
             }
             catch {
                 Write-Log -level verbose "Get-SmbConnection fails, Determine the SMB version based on OS version only"
 
                 if ( ($OSEnv -ne $null) -and ([System.Version]$OSEnv.version -ge [System.Version]"6.2.0.0") ) {
-                    Write-Log -level success"`n[OK]: Client SMB version is 3.0+"  
+                    Write-Log -level success"`n[OK]: Client SMB version is 3.0+"
                     return "3.0"                        
                 }
-                elseif ( ($OSEnv -ne $null) -and ([System.Version]$OSEnv.version -ge [System.Version]"6.0.0.0") ) {
-                    Write-Log -level success "`n[OK]: Client SMB version is 2.0+"  
-                    return "2.0" 
+                elseif ( ($OSEnv -ne $null) -and ([System.Version]$OSEnv.version -ge [System.Version]"6.1.0.0") ) {
+                    Write-Log -level success "`n[OK]: Client SMB version is 2.1+"
+                    return "2.1"
             
                 } 
                 else {
-                    WWrite-Log -level error "`n[ERROR]: Client SMB version is below 2.0" 
+                    Write-Log -level error "`n[ERROR]: Client SMB version is below 2.1"
                     $Script:ValidationPass = $false
                     return $null
                 }
@@ -260,16 +268,16 @@ function ValidateSMBver($adminmode, $OSEnv) {
         else {
 
             if ( ($OSEnv -ne $null) -and ([System.Version]$OSEnv.version -ge [System.Version]"6.2.0.0") ) {
-                Write-Log -level success "`n[OK]: Client SMB version is 3.0+"  
+                Write-Log -level success "`n[OK]: Client SMB version is 3.0+"
                 return "3.0"                        
             }
-            elseif ( ($OSEnv -ne $null) -and ([System.Version]$OSEnv.version -ge [System.Version]"6.0.0.0") ) {
-                Write-Log -level success "`n[OK]: Client SMB version is 2.0+"  
-                return "2.0" 
+            elseif ( ($OSEnv -ne $null) -and ([System.Version]$OSEnv.version -ge [System.Version]"6.1.0.0") ) {
+                Write-Log -level success "`n[OK]: Client SMB version is 2.1+"
+                return "2.1"
             
             } 
             else {
-                Write-Log -level error "`n[ERROR]: SMB version is below 2.0" 
+                Write-Log -level error "`n[ERROR]: SMB version is below 2.1"
                 $Script:ValidationPass = $false
                 return $null
             }
@@ -368,13 +376,7 @@ function ValidateLmCompatibilityLevel {
             Write-Log -level error "`n[ERROR]: HKLM:SYSTEM\CurrentControlSet\Control\Lsa|LmCompatibilityLevel IS NOT set to default value 3 (or greater) and current value is $($result.LmCompatibilityLevel), it will cause mouting share to fail." 
             $Script:ValidationPass = $false
         }
-
     }
-
-
-
-
-    
 }
 
 ##############################
@@ -1373,9 +1375,290 @@ function MapDrive ($FileSharePath) {
 }
 
 
+##############################
+#.SYNOPSIS
+# Return the Azure storage account name.
+#
+#.DESCRIPTION
+# Extracts Azure storage account name from FileSharePath
+#.EXAMPLE
+#An example
+#
+#.NOTES
+#General notes
+##############################
+
+function GetAccountName($FileSharePath) {
+
+    $StorageAccountName = ($FileSharePath.split("\", $option))[0]
+    Write-log -level verbose "`n Storage account name $StorageAccountName"
+    $option = [System.StringSplitOptions]::RemoveEmptyEntries
+    $StorageAccounturl = ($FileSharePath.split("\", $option))[0]
+    $StorageAccountName = "$(($StorageAccountName.split('.'))[0])"
+    return $StorageAccountName
+}
 
 
+##############################
+#.SYNOPSIS
+# Return the Azure storage account protocolSettings.
+#
+#.DESCRIPTION
+# Azure portal provides option for user to create custom protocol settings at storage account level.
+# This function reads the data from azure service and returns protocolSettings.
+#.EXAMPLE
+#An example
+#
+#.NOTES
+#General notes
+##############################
+function GetServerProtocolSettings($PSStorageAccount) {
 
+
+    # If you've never changed any SMB security settings, the values for the SMB security
+    # settings returned by Azure Files will be null. Null returned values should be interpreted
+    # as default settings are in effect. To make this more user-friendly, the following
+    # PowerShell commands replace null values with the human-readable default values.
+
+    $smbProtocolVersions = "SMB2.1", "SMB3.0", "SMB3.1.1"
+    $smbAuthenticationMethods = "NTLMv2", "Kerberos"
+    $smbKerberosTicketEncryption = "RC4-HMAC", "AES-256"
+    $smbChannelEncryption = "AES-128-CCM", "AES-128-GCM", "AES-256-GCM"
+
+    $smbProtocolSettingstest=Get-AzStorageFileServiceProperty -StorageAccount $PSStorageAccount
+    $ver=$smbProtocolSettingstest.ProtocolSettings.Smb.Versions
+
+    if ($null -eq $smbProtocolSettingstest.ProtocolSettings.Smb.Versions) {
+        $smbProtocolSettingstest.ProtocolSettings.Smb.Versions=$smbProtocolVersions;
+    }
+    if ($null -eq $($smbProtocolSettingstest.ProtocolSettings.Smb.ChannelEncryption)) {
+        Write-log -level info "($smbProtocolSettingstest.Smb.ChannelEncryption)"
+        $smbProtocolSettingstest.ProtocolSettings.Smb.ChannelEncryption=$smbChannelEncryption;
+    }
+    if ($null -eq $smbProtocolSettingstest.ProtocolSettings.Smb.AuthenticationMethods) {
+        $smbProtocolSettingstest.ProtocolSettings.Smb.AuthenticationMethods=$AuthenticationMethods;
+    }
+    if ($null -eq $smbProtocolSettingstest.ProtocolSettings.Smb.KerberosTicketEncryption) {
+        $smbProtocolSettingstest.ProtocolSettings.Smb.KerberosTicketEncryption=$smbKerberosTicketEncryption;
+    }
+
+    Write-log -level verbose "Account Protocol settings: SMB Version: $($smbProtocolSettingstest.ProtocolSettings.Smb.Versions) smbChannelEncryption:$($smbProtocolSettingstest.ProtocolSettings.Smb.ChannelEncryption) AuthenticationMethods:$($smbProtocolSettingstest.ProtocolSettings.Smb.AuthenticationMethods) smbKerberosTicketEncryptionticket: $($smbProtocolSettingstest.ProtocolSettings.Smb.KerberosTicketEncryption)"
+    return $($smbProtocolSettingstest)
+}
+
+
+##############################
+#.SYNOPSIS
+# Check if Azure powershell module installed and connect to azure account.
+#
+#.DESCRIPTION
+#
+#.EXAMPLE
+#An example
+#
+#.NOTES
+#General notes
+##############################
+function CheckAzPowershell {
+
+    $module=Get-Module -ListAvailable -Name Az.*
+    if($module -ne $null) {
+        Write-log -level info "`n[OK]Azure Powershell module installed.!"
+    } else {
+        Write-log -level error "`nPlease install Azure power shell module using following instructions to proceed further:https://docs.microsoft.com/en-us/powershell/azure/install-az-ps"
+        exit 1
+    }
+
+    $context=Get-AzContext -WarningVariable WarningAzContext
+
+
+    if(($context -ne $null) -and  ($context.Tenant -ne $null)) {
+        Write-log -level info "`n[OK] You are already logged into Azure with account $($context.Account), Please confirm and proceed further, If is is not the right one please run 'Disconnect-AzAccount' from powershell"
+    } else {
+        Write-log -level info "`nPlease follow instructions to login to azure, Make sure you have right permissions to access the account. Additional manual steps is necessary if your account is setup with Multifactor authentication"
+        Write-log -level info "`nIf you have trouble please use https://docs.microsoft.com/en-us/powershell/module/az.accounts/connect-azaccount and login manually then run this script again `n"
+
+        Connect-AzAccount -WarningVariable Warningvar
+
+        if($Warningvar -like "*please rerun 'Connect-AzAccount' with additional parameter '-TenantId*") {
+            $tenant=([regex]::Match($Warningvar, "(?<=\-TenantId )([^\.]*)(?=\')" )).value
+            Write-log -level warning "`nConnect-AzAccount Encountered above erros/warnings and needs multifactor authentication, Trying to run Connect-AzAccount with tenant ID $tenant"
+            Connect-AzAccount -TenantId $tenant
+        }
+    }
+}
+
+
+##############################
+#.SYNOPSIS
+# Validate SMB version config
+#
+#.DESCRIPTION
+# Validate client SMB version with azure storage account configuration
+#.EXAMPLE
+#An example
+#
+#.NOTES
+#General notes
+##############################
+function ValidateSMBVersion($ProtocolSettings) {
+
+    $server_ver=$($ProtocolSettings.ProtocolSettings.Smb.Versions)
+
+    if($server_ver -like "SMB$Script:smbver") {
+         Write-Log -level success "`n[OK] SMB$Script:smbver is present in list of server supported versions:$server_ver"
+    } else {
+         Write-Log -level error "`nSMB$Script:smbver is Not present in list of server supported versions: $server_ver"
+         Write-Log -level error "`Refer https://docs.microsoft.com/en-us/azure/storage/files/files-smb-protocol?tabs=azure-portal#smb-security-settings to enable SMB$Script:smbver"
+         exit 1
+    }
+}
+
+
+##############################
+#.SYNOPSIS
+# Validate Channel encryption config
+#
+#.DESCRIPTION
+# Validate client channel encryption with azure storage account configuration
+#.EXAMPLE
+#An example
+#
+#.NOTES
+#General notes
+##############################
+function ValidateChannelEncryption($ProtocolSettings, $AccountName) {
+
+    $server_enc=$($ProtocolSettings.ProtocolSettings.Smb.ChannelEncryption)
+    Switch -Wildcard ($Script:smbver)
+    {
+        "3.1.1"
+        {
+            if($server_enc -like "AES-128-GCM") {
+                Write-Log -level success "`n[OK] AES-128-GCM will be choosen as default channel encryption mechanism for 3.1.1"
+            } elseif ($server_enc -like "AES-256-GCM") {
+                Write-Log -level warning "`nAES-256-GCM will be choosen as channel encryption mechanism, Please make sure AES-256-GCM is communicated at highest presedence from client end"
+            } elseif ($server_enc -like "AES-128-CCM") {
+                Write-Log -level warning "`nAES-128-CCM will be choosen as channel encryption mechanism, Please make sure AES-128-CCM is communicated at highest order of from client end"
+            } else {
+                Write-Log -level error "`nInvalid channel encryption mechanism"
+                Write-Log -level error "`Please enable encryption from here and retry: https://docs.microsoft.com/en-us/azure/storage/files/files-smb-protocol?tabs=azure-portal#smb-security-settings"
+                exit 1
+            }
+            break
+        }
+
+        "3.0"
+        {
+            if($server_enc -like "AES-128-CCM") {
+                Write-Log -level success "`n[OK]AES-128-CCM will be choosen as default channel encryption mechanism"
+             } else {
+                Write-Log -level error " `nInvalid channel encryption mechanism"
+                Write-Log -level error "`Please enable encryption from here and retry: https://docs.microsoft.com/en-us/azure/storage/files/files-smb-protocol?tabs=azure-portal#smb-security-settings"
+                exit 1
+             }
+             break
+        }
+
+        "2.1"
+        {
+            $secure_transfer=Get-AzStorageAccount | Where StorageAccountName -like $AccountName
+            Write-Log -level info "Sec TX: $secure_transfer.enableHttpsTrafficOnly"
+            if($secure_transfer.enableHttpsTrafficOnly -match  "True") {
+                Write-Log -level error "`nSecure Transfer should be disabled to use SMB 2.1"
+                Write-Log -level error "`For more details visit:  https://docs.microsoft.com/en-us/azure/storage/common/storage-require-secure-transfer"
+                exit 1
+            }
+            break
+        }
+
+        default
+        {
+            Write-Log -level error "`nSMB version is not present in server supported list: $server_enc"
+            Write-Log -level error "`Please check client configurations and enable azure storage configurations from here and retry: https://docs.microsoft.com/en-us/azure/storage/files/files-smb-protocol?tabs=azure-portal#smb-security-settings"
+            exit 1
+        }
+    }
+}
+
+
+##############################
+#.SYNOPSIS
+# Validate Authentication mechanism
+#
+#.DESCRIPTION
+# Validate client authentication mechanism with azure storage account configuration
+#.EXAMPLE
+#An example
+#
+#.NOTES
+#General notes
+##############################
+function ValidateAuth($ProtocolSettings) {
+
+    $message = "`nPlease choose Security Authentication method, Default is NTLMv2"
+    $options = [System.Management.Automation.Host.ChoiceDescription[]]("&NTLMv2", "&Kerberos")
+    $result = $host.ui.PromptForChoice($title, $message, $options, 0)
+
+    switch ($result) {
+        0 { $auth = "NTLMv2" }
+        1 { $auth = "Kerberos" }
+    }
+
+
+    $server_sec=$($ProtocolSettings.ProtocolSettings.Smb.AuthenticationMethods)
+    if($server_sec.Contains($auth)) {
+        Write-Log -level success "`n[OK] $auth is present in list of server supported Authentication methods:$server_sec"
+        if($auth -eq "Kerberos") {
+            $krb_sec=$($ProtocolSettings.ProtocolSettings.Smb.KerberosTicketEncryption)
+            Write-Log -level info "`nPlease generate kerberos ticket using one of the following server supported Kerbros ticket encryption mechanisms:$krb_sec"
+        }
+    } else {
+         Write-Log -level error "`n$auth is not present in list of server supported Authentication methods:$server_sec"
+         Write-Log -level error "Please enable $auth in azure portal https://docs.microsoft.com/en-us/azure/storage/files/files-smb-protocol?tabs=azure-portal#smb-security-setting"
+         exit 1
+    }
+}
+
+
+##############################
+#.SYNOPSIS
+# Validate Storage account configurations
+#
+#.DESCRIPTION
+# Main function which calls helpers to validate server protocol settings
+#.EXAMPLE
+#An example
+#
+#.NOTES
+#General notes
+##############################
+function ValidateServerCfg($FileSharePath) {
+
+    CheckAzPowershell
+    if ($Script:ValidationPass -eq $false) {
+        Write-Log -level error "`n Unable to log in to Azure POwershell, Please try loggin in mnually and retry the script"
+        exit 1
+    }
+    $AccountName = GetAccountName $FileSharePath
+
+    #Validate if Storage account is listed in subscriptions
+    $StorageAccDetails=Get-AzStorageAccount |  Where StorageAccountName -like $AccountName
+    if($null -eq $StorageAccDetails) {
+        Write-log -level error "Storage account $storageAccountName Not found in this subscription"
+        exit 1
+    }
+
+    $ProtocolSettings=GetServerProtocolSettings $StorageAccDetails
+    if($null -eq $ProtocolSettings) {
+        Write-log -level error "Unable to get ProtocolSettings from azure storage account"
+        exit 1
+    }
+
+    ValidateSMBVersion $ProtocolSettings
+    ValidateAuth $ProtocolSettings
+    ValidateChannelEncryption $ProtocolSettings $AccountName
+}
 
 ###################################################################################################################################################################################################
 ###################################################################################################################################################################################################
@@ -1522,6 +1805,15 @@ if ($Script:ValidationPass -eq $false) {
     exit
 }
 
+###Validate Azure storage account settings with client capabilities
+$message = "`nDo you want to validate azure portal file share settings with client configurations, You will have to authenticate your storage account to validate configurations"
+$options = [System.Management.Automation.Host.ChoiceDescription[]]("&Yes", "&No")
+$validatesrvcfg = $host.ui.PromptForChoice($title, $message, $options, 1)
+
+if($validatesrvcfg -eq 0) {
+    Write-Log -level info "`n======Validating Storage account protocol settings"
+    ValidateServerCfg $FileSharePath
+}
 
 ###start mapping the drive. 
 if ($Script:ValidationPass -eq $true) {
@@ -1554,4 +1846,15 @@ else {
     Write-Log -level warning "`nValidation fails, please review the script output for more detail" 
     Write-Log -level warning "==========================================[END]==============================================="
 
+}
+
+###Logout from Azure powershell
+if($validatesrvcfg -eq 0) {
+
+    $message = "`nDo you want to logout of azure powershell"
+    $options = [System.Management.Automation.Host.ChoiceDescription[]]("&Yes", "&No")
+    $result = $host.ui.PromptForChoice($title, $message, $options, 0)
+    if($result -eq 0) {
+        Disconnect-azaccount
+    }
 }
