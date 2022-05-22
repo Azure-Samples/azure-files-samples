@@ -253,13 +253,23 @@ validate_server_cfg()
 		az account show  > /dev/null 2>&1
 		retVal=$?
 		if [ $retVal -ne 0 ]; then
-			print_log "Please follow the steps to login to azure cli, If you have trouble follow https://docs.microsoft.com/en-us/cli/azure/authenticate-azure-cli and login manually" "info"
-			az login
+			print_log "Please follow the steps to login to azure cli, If you have trouble follow https://docs.microsoft.com/en-us/cli/azure/authenticate-azure-cli and login manually\n \n"
+			rm -f /tmp/azlog.txt
+			az login  |& tee -a /tmp/azlog.txt
+
+			cat /tmp/azlog.txt | grep -q "The following tenants require Multi-Factor Authentication (MFA). Use 'az login --tenant TENANT_ID' to explicitly login to a tenant"
+			retVal=$?
+			if [ $retVal -eq 0 ]; then
+				tenantid=`cat /tmp/azlog.txt | grep -wo ' .*-.*-.*-.*-.* ' | xargs`
+				print_log "Account requires Multi-Factor Authentication. Executing 'az login --tenant $tenantid', Please follow the below steps to authenticate"
+				az login --tenant $tenantid
+			fi
+			rm -f /tmp/azlog.txt
 		else
-			print_log "Already logged into Azure command line interface, please verify details and proceed further" "info"
+			print_log "Already logged into Azure command line interface, please verify details and proceed further"
 			az account show
 		fi
-
+		print_log "Make sure to logout from az cli using 'az logout' once validations are complete"
 		get_server_protocol_settings
 		validate_smb_version
 		validate_auth_mechanism
@@ -821,8 +831,8 @@ fi
 
 
 ## Prompt user to select server configurations validation
-print_log "Script has validated client configurations" "info"
-print_log "Do you want to validate azure portal file share settings with client configurations" "info"
+print_log "Script has validated client configurations"
+print_log "Do you want to validate azure portal file share settings with client configurations, You will have to authenticate your storage account to read and validate configurations " "info"
 
 options=("yes" "no")
 select opt in "${options[@]}"
