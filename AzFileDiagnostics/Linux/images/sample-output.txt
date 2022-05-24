@@ -1,0 +1,115 @@
+Ubuntu >sudo bash ./AzFileDiagnostics.sh
+
+2022-05-24T12:14:08.081Z Checking: Create a folder MSFileMountDiagLog to save the script output
+
+2022-05-24T12:14:08.169Z Checking: Client running with Ubuntu version 22.04, kernel version is 5.18.0-051800rc5-generic
+Current Ubuntu distribution version is:  22.04
+
+2022-05-24T12:14:08.188Z Checking: Check if the dependencies for this script are installed
+
+2022-05-24T12:14:08.192Z Checking: All dependencies for the script are installed
+
+2022-05-24T12:14:08.194Z Checking: Check if cifs-utils is installed
+2022-05-24T12:14:08.205Z cifs-utils is already installed on this client
+
+2022-05-24T12:14:08.207Z Checking: Check if keyutils is installed
+2022-05-24T12:14:08.210Z Keyutils is already installed!
+
+2022-05-24T12:14:08.214Z Checking: Check if client has at least SMB2.1 support
+2022-05-24T12:14:08.220Z System supports SMB2.1
+
+2022-05-24T12:14:08.222Z Checking: Check if client has SMB 3 Encryption support
+2022-05-24T12:14:08.230Z System supports SMB version 3
+2022-05-24T12:14:08.235Z System supports SMB version 3.1.1
+
+2022-05-24T12:14:08.238Z Checking: Check if client has been patched with the recommended kernel update for idle timeout issue
+2022-05-24T12:14:08.244Z Kernel has been patched with the fixes that prevent idle timeout issues
+
+2022-05-24T12:14:08.247Z Checking: Check if client has any connectivity issue with storage account
+
+2022-05-24T12:14:08.249Z Type the storage account name, followed by [ENTER]:
+azurefilediag
+2022-05-24T12:14:11.891Z Type the share name, followed by [ENTER]:
+testshare
+2022-05-24T12:14:15.841Z Choose the Azure Environment:
+1) azurecloud
+2) azurechinacloud
+3) azuregermancloud
+4) azureusgovernment
+Please enter your choice: 1
+2022-05-24T12:14:16.922Z Storage account FQDN is azurefilediag.file.core.windows.net
+2022-05-24T12:14:16.925Z Getting the Iptables policies
+2022-05-24T12:14:16.944Z Test the storage account IP connectivity over TCP port 445
+2022-05-24T12:14:16.977Z Port 445 is reachable from this client.
+2022-05-24T12:14:16.980Z Script has validated client configurations
+
+2022-05-24T12:14:16.983Z Do you want to validate azure portal file share settings with client configurations, You will have to authenticate your storage account to read and validate configurations
+1) yes
+2) no
+Please enter your choice: 1
+
+2022-05-24T12:14:20.578Z Checking: Please follow the steps to login to azure cli, If you have trouble follow https://docs.microsoft.com/en-us/cli/azure/authenticate-azure-cli and login manually
+
+WARNING: To sign in, use a web browser to open the page https://microsoft.com/devicelogin and enter the code EGRCLDJQZ to authenticate.
+WARNING: The following tenants require Multi-Factor Authentication (MFA). Use 'az login --tenant TENANT_ID' to explicitly login to a tenant.
+WARNING: d3736be6-72a2-****-a718-c6ea***** 'Default Directory'
+ERROR: No subscriptions found for <email>.
+
+2022-05-24T12:15:14.246Z Checking: Account requires Multi-Factor Authentication. Executing 'az login --tenant d3736be6-72a2-****-a718-c6ea8******', Please follow the below steps to authenticate
+To sign in, use a web browser to open the page https://microsoft.com/devicelogin and enter the code S3EFLH4F7 to authenticate.
+[
+  {
+    "cloudName": "AzureCloud",
+    <Account details>
+  }
+]
+
+2022-05-24T12:15:42.172Z Checking: Make sure to logout from az cli using 'sudo az logout' once validations are complete
+2022-05-24T12:15:44.071Z Choose one of the following SMB versions supported by linux kernel, Default version is recommended
+1) Default
+2) SMB3.1.1
+3) SMB3.0
+4) SMB2.1
+Please enter your choice: 1
+2022-05-24T12:15:45.923Z Requested version SMB3.1.1 is supported by server
+
+2022-05-24T12:15:45.926Z Checking: Validating Channel encryption settings
+2022-05-24T12:15:45.936Z AES-128-GCM Channel encryption supported by server for 3.1.1
+
+2022-05-24T12:15:45.939Z Select the Authentication mechanisms
+1) Default
+2) NTLMv2
+3) Kerberos
+Please enter your choice: 1
+2022-05-24T12:15:47.237Z Requested security Authentication NTLMv2 is supported by server
+
+2022-05-24T12:15:47.247Z Script has vaidated the server configurations
+
+2022-05-24T12:15:47.250Z Do you want to map drive by script?
+1) yes
+2) no
+Please enter your choice: 1
+
+2022-05-24T12:15:49.042Z Checking: Do you want to turn on diagnostics logs
+1) yes
+2) no
+Please enter your choice: 1
+
+2022-05-24T12:15:52.962Z Checking: type the local mount point, followed by [ENTER]:
+/mnt/aztest
+2022-05-24T12:16:07.802Z mount point /mnt/aztest does not exist, create it now
+
+2022-05-24T12:16:07.806Z Checking: Type the storage account access key, followed by [ENTER]:
+Ny2w6I1dBWO/****BDvLO**U+hSmpLNOAJFPhl7qqR+P30i9U/nKGYOCpbTo56a***fEnEDdKrs/+ASteK/pWA==
+
+2022-05-24T12:16:21.525Z Checking: Try with mounting share using 3.1.1
+2022-05-24T12:16:21.528Z mount -t cifs //azurefilediag.file.core.windows.net/testshare  /mnt/aztest -o vers=3.1.1,username=azurefilediag,password='Ny2w6I1dBWO/****BDvLOPU+hSmpLNOAJFPhl7qqR+P30i9U/nKGYOCpbTo56a***fEnEDdKrs/+ASteK/pWA==',dir_mode=0777,file_mode=0777,sec=ntlmssp
+2022-05-24T12:16:21.614Z Mounting share succeeds
+
+2022-05-24T12:16:22.619Z Do you want to logout from az cli
+1) yes
+2) no
+Please enter your choice: 1
+2022-05-24T12:16:25.399Z Packet trace/CIFS debugging logs can be found in MSFileMountDiagLog folder
+Ubuntu >
+

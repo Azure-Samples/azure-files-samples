@@ -186,7 +186,7 @@ validate_auth_mechanism()
 	supported_sec=$(echo $PROTOCOLSETTINGS | sed 's/,/\n/g' | grep "smbAuthenticationMethods" | awk -F\" '{print $(NF-1)}' | sed 's/;/ /g')
 
 	if [[ " $supported_sec " = *" $requested_sec "* ]]; then
-		print_log "Requested security Authentication $requested_sec is supported by server" "info"
+		print_log "Requested security Authentication $requested_sec is supported by server\n" "info"
 		check_kereros_ticket_enc $requested_sec
 	else
 		print_log "Requested security Authentication $requested_sec is not present in azure server supported versions:$supported_sec" "error"
@@ -203,9 +203,9 @@ validate_channel_encryption_settings()
 	if [ $requested_ver = "SMB3.1.1" ]; then
 		default_enc="AES-128-GCM"
 		if [[ " $supported_enc " = *" $default_enc "* ]]; then
-			print_log "$default_enc Channel encryption supported by server for 3.1.1" "info"
+			print_log "$default_enc Channel encryption supported by server for 3.1.1\n" "info"
 		elif  [[ " $supported_enc " = *" AES-256-GCM "* ]]; then
-			print_log "AES-256-GCM is supported by server for 3.1.1, but you should install cifs module on client with module parameter 'require_gcm_256' to use AES-256-GCM" "warning"
+			print_log "AES-256-GCM is supported by server for 3.1.1, but you should install cifs module on client with module parameter 'require_gcm_256' to use AES-256-GCM\n" "warning"
 		elif [[ " $supported_enc " = " AES-128-CCM " ]]; then
 			print_log "AES-128-CCM not supported with Azure SMB 3.1.1, Please enable other encryption mechanisms using https://docs.microsoft.com/en-us/azure/storage/files/files-smb-protocol?tabs=azure-portal#smb-security-settings" "error"
 			exit 1
@@ -217,7 +217,7 @@ validate_channel_encryption_settings()
 	elif [[ "$requested_ver" == "SMB3.0" ]]; then
 		default_enc="AES-128-CCM"
 		if [[ " $supported_enc " = *" $default_enc "* ]]; then
-			print_log "$default_enc Channel encryption is supported by server" "info"
+			print_log "$default_enc Channel encryption is supported by server\n" "info"
 		else
 			print_log "Requested Channel encryption is not supported $default_enc, Available channel encryptions are $supported_enc" "info"
 			print_log "Please enable $default_enc in server configurations or choose different SMB version" "info"
@@ -232,7 +232,7 @@ check_kereros_ticket_enc()
 
 	if [ $1 = "Kerberos" ]; then
 		print_log "Make sure you have kerbros ticket with one of the following encryption:$supported_kerb_ticket_enc" "info"
-		print_log "Server and Client configurations have been validated for Kerbros, Please mount share using appropriate options" "info"
+		print_log "Server and Client configurations have been validated for Kerbros, Please mount share using appropriate options\n" "info"
 		exit 1
 	fi
 }
@@ -253,7 +253,7 @@ validate_server_cfg()
 		az account show  > /dev/null 2>&1
 		retVal=$?
 		if [ $retVal -ne 0 ]; then
-			print_log "Please follow the steps to login to azure cli, If you have trouble follow https://docs.microsoft.com/en-us/cli/azure/authenticate-azure-cli and login manually\n \n"
+			print_log "Please follow the steps to login to azure cli, If you have trouble follow https://docs.microsoft.com/en-us/cli/azure/authenticate-azure-cli and login manually \n"
 			rm -f /tmp/azlog.txt
 			az login  |& tee -a /tmp/azlog.txt
 
@@ -272,14 +272,14 @@ validate_server_cfg()
 			fi
 			rm -f /tmp/azlog.txt
 		else
-			print_log "Already logged into Azure command line interface, please verify details and proceed further"
+			print_log "Already logged into Azure command line interface, please verify details and proceed further" "info"
 			az account show
 		fi
 		print_log "Make sure to logout from az cli using 'sudo az logout' once validations are complete"
 		get_server_protocol_settings
-		validate_smb_version
-		validate_auth_mechanism
-		validate_channel_encryption_settings
+                validate_smb_version
+                validate_channel_encryption_settings
+                validate_auth_mechanism
 	fi
 }
 
@@ -605,7 +605,7 @@ else
 fi
 
 ## Prompt user for UNC path if no options are provided.
-print_log "Check if client has any connectivity issue with storage account"
+print_log "Check if client has any connectivity issue with storage account\n"
 if  [ -z "$SAFQDN" ]; then
 	ACCOUNT=''
 	while [ -z "$ACCOUNT" ];
@@ -837,7 +837,7 @@ fi
 
 
 ## Prompt user to select server configurations validation
-print_log "Script has validated client configurations"
+print_log "Script has validated client configurations\n" "info"
 print_log "Do you want to validate azure portal file share settings with client configurations, You will have to authenticate your storage account to read and validate configurations " "info"
 
 options=("yes" "no")
@@ -860,7 +860,7 @@ done
 
 if [ "$VALIDATESRVCFG" -eq 0 ]; then
         validate_server_cfg
-        print_log "Script has vaidated the server configurations" "info"
+        print_log "Script has vaidated the server configurations\n" "info"
 fi
 
 
@@ -1009,7 +1009,7 @@ if [[ $? -gt 0 ]];then
 		echo "To resolve this issue, follow the steps in the Azure Files troubleshooting guide: https://docs.microsoft.com/en-us/azure/storage/files/storage-troubleshoot-linux-file-connection-problems#mount-error13-permission-denied-when-you-mount-an-azure-file-share"
 	fi
 else
-	print_log "Mounting share succeeds" "info"
+	print_log "Mounting share succeeds\n" "info"
 fi
 
 cat /tmp/mount.error
