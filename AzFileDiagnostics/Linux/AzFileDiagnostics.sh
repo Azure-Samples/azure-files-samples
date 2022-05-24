@@ -261,15 +261,21 @@ validate_server_cfg()
 			retVal=$?
 			if [ $retVal -eq 0 ]; then
 				tenantid=`cat /tmp/azlog.txt | grep -wo ' .*-.*-.*-.*-.* ' | xargs`
-				print_log "Account requires Multi-Factor Authentication. Executing 'az login --tenant $tenantid', Please follow the below steps to authenticate"
-				az login --tenant $tenantid
+                                if [ ! -z "$tenantid" ]; then
+                                    print_log "Account requires Multi-Factor Authentication. Executing 'az login --tenant $tenantid', Please follow the below steps to authenticate"
+                                    az login --tenant $tenantid
+                                else
+                                    print_log "Account requires Multi-Factor Authentication. Please get the tenant id from azure portal and execute 'az login --tenant TENANTID'"
+                                    print_log "Refer this page for more details: https://docs.microsoft.com/en-us/azure/active-directory/fundamentals/active-directory-how-to-find-tenant#find-tenant-id-through-the-azure-portal"
+                                    exit 1
+                                fi
 			fi
 			rm -f /tmp/azlog.txt
 		else
 			print_log "Already logged into Azure command line interface, please verify details and proceed further"
 			az account show
 		fi
-		print_log "Make sure to logout from az cli using 'az logout' once validations are complete"
+		print_log "Make sure to logout from az cli using 'sudo az logout' once validations are complete"
 		get_server_protocol_settings
 		validate_smb_version
 		validate_auth_mechanism
