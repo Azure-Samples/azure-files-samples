@@ -168,7 +168,7 @@ print_log "Client running with $DISTNAME version $DISTVER, kernel version is $KE
 case $DISTNAME  in
 	*Redhat* )
 		if ( ver_lt $DISTVER '8' ); then
-			print_log "We recommend running following Linux Distributions: Ubuntu Server 18.04+ | RHEL 8+ | CentOS 7.6+ | Debian 9 | openSUSE 15+ | SUSE Linux Enterprise Server 15, please refer to https://docs.microsoft.com/en-us/azure/storage/files/storage-how-to-use-files-linux for more information" "warning"
+			print_log "We recommend running following Linux Distributions: Ubuntu Server 18.04+ | Red Hat Enterprise 7.5+ | RHEL 8+ | CentOS 7.6+ | Debian 9 | openSUSE 15+ | SUSE Linux Enterprise Server 15, please refer to https://docs.microsoft.com/en-us/azure/storage/files/storage-how-to-use-files-linux for more information" "warning"
 		fi
 		#kernel version check
 		if ( ! ver_lt $DISTVER '8' ); then
@@ -177,7 +177,17 @@ case $DISTNAME  in
 			fi
 		fi
 		;;
-
+	*'Red Hat Enterprise'* )
+		if ( ver_lt $DISTVER '7.5' ); then
+			print_log "We recommend running following Linux Distributions: Ubuntu Server 18.04+ | Red Hat Enterprise 7.5+ | RHEL 8+ | CentOS 7.6+ | Debian 9 | openSUSE 15+ | SUSE Linux Enterprise Server 15, please refer to https://docs.microsoft.com/en-us/azure/storage/files/storage-how-to-use-files-linux for more information" "warning"
+		fi
+		#kernel version check
+		if ( ! ver_lt $DISTVER '7.5' ); then
+			if ( ver_lt $KERVER '3.10.0'); then
+				print_log "For Red Hat Enterprise 7.5+, we recommend running Kernel with version 3.10.0+" "warning"
+			fi
+		fi
+		;;
 	*CentOS* )
 		if ( ver_lt $DISTVER '7.6' ); then
 			print_log "We recommend running following Linux Distributions: Ubuntu Server 18.04+ | RHEL 8+ | CentOS 7.6+ | Debian 9 | openSUSE 15+ | SUSE Linux Enterprise Server 15, please refer to https://docs.microsoft.com/en-us/azure/storage/files/storage-how-to-use-files-linux for more information" "warning"
@@ -328,7 +338,15 @@ if echo "$DISTNAME" | grep Ubuntu >/dev/null 2>&1 ; then
 		print_log "System supports SMB 3 Encryption" "info"
 		SMB3=0
 	fi
-
+elif echo "$DISTNAME" | grep "Red Hat Enterprise" >/dev/null 2>&1; then
+	ver_lt "$DISTVER" "7.5"
+	if [ $? -eq 0 ] ; then
+		print_log "System DOES NOT support SMB 3 Encryption" "warning"
+		SMB3=1
+	else
+		print_log "System supports SMB 3 Encryption" "info"
+		SMB3=0
+	fi
 elif echo "$DISTNAME" | grep SLES >/dev/null 2>&1; then
 	ver_lt "$DISTVER" "12.2"
 	if [ $? -eq 0 ] ; then
@@ -343,7 +361,7 @@ else
 	ver_lt "$KERVER" "4.11"
 
 	if [ $? -eq 0 ]; then
-		print_log "System DOES NOT support SMB 3 Encryption"  "warning"
+		print_log "System DOES NOT support SMB 3 Encryption. Distro:$DISTNAME $DISTVER Kernel:$KERVER"  "warning"
 		SMB3=1
 	else
 		print_log "System supports SMB 3 Encryption" "info"
