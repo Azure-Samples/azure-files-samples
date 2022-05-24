@@ -54,8 +54,9 @@ WARNING: To sign in, use a web browser to open the page https://microsoft.com/de
 WARNING: The following tenants require Multi-Factor Authentication (MFA). Use 'az login --tenant TENANT_ID' to explicitly login to a tenant.
 WARNING: d3736be6-72a2-****-a718-c6ea***** 'Default Directory'
 ERROR: No subscriptions found for <email>.
+2022-05-24T12:14:25.981Z Warning: Account requires Multi-Factor Authentication to read account & subscription details. Executing 'az login --tenant d3736be6-72a2-****-a718-c6ea*****'
+2022-05-24T12:14:24.981Z Please follow the below steps to authenticate again
 
-2022-05-24T12:15:14.246Z Checking: Account requires Multi-Factor Authentication. Executing 'az login --tenant d3736be6-72a2-****-a718-c6ea8******', Please follow the below steps to authenticate
 To sign in, use a web browser to open the page https://microsoft.com/devicelogin and enter the code S3EFLH4F7 to authenticate.
 [
   {

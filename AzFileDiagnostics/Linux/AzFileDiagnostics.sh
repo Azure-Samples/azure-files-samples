@@ -262,7 +262,8 @@ validate_server_cfg()
 			if [ $retVal -eq 0 ]; then
 				tenantid=`cat /tmp/azlog.txt | grep -wo ' .*-.*-.*-.*-.* ' | xargs`
                                 if [ ! -z "$tenantid" ]; then
-                                    print_log "Account requires Multi-Factor Authentication. Executing 'az login --tenant $tenantid', Please follow the below steps to authenticate"
+                                    print_log "Account requires Multi-Factor Authentication to read account & subscription details. Executing 'az login --tenant $tenantid'" "warning"
+                                    print_log "Please follow the below steps to authenticate again\n" "info"
                                     az login --tenant $tenantid
                                 else
                                     print_log "Account requires Multi-Factor Authentication. Please get the tenant id from azure portal and execute 'az login --tenant TENANTID'"
