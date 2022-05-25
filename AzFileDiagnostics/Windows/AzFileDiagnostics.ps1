@@ -1391,7 +1391,7 @@ function MapDrive ($FileSharePath) {
 function GetAccountName($FileSharePath) {
 
     $StorageAccountName = ($FileSharePath.split("\", $option))[0]
-    Write-log -level verbose "`n Storage account name $StorageAccountName"
+    Write-log -level verbose "`nStorage account name $StorageAccountName"
     $option = [System.StringSplitOptions]::RemoveEmptyEntries
     $StorageAccounturl = ($FileSharePath.split("\", $option))[0]
     $StorageAccountName = "$(($StorageAccountName.split('.'))[0])"
@@ -1425,25 +1425,23 @@ function GetServerProtocolSettings($PSStorageAccount) {
     $smbKerberosTicketEncryption = "RC4-HMAC", "AES-256"
     $smbChannelEncryption = "AES-128-CCM", "AES-128-GCM", "AES-256-GCM"
 
-    $smbProtocolSettingstest=Get-AzStorageFileServiceProperty -StorageAccount $PSStorageAccount
-    $ver=$smbProtocolSettingstest.ProtocolSettings.Smb.Versions
+    $smbProtocolSettings = Get-AzStorageFileServiceProperty -StorageAccount $PSStorageAccount
 
-    if ($null -eq $smbProtocolSettingstest.ProtocolSettings.Smb.Versions) {
-        $smbProtocolSettingstest.ProtocolSettings.Smb.Versions=$smbProtocolVersions;
+    if ($null -eq $($smbProtocolSettings.ProtocolSettings.Smb.Versions)) {
+        $smbProtocolSettings.ProtocolSettings.Smb.Versions=$smbProtocolVersions;
     }
-    if ($null -eq $($smbProtocolSettingstest.ProtocolSettings.Smb.ChannelEncryption)) {
-        Write-log -level info "($smbProtocolSettingstest.Smb.ChannelEncryption)"
-        $smbProtocolSettingstest.ProtocolSettings.Smb.ChannelEncryption=$smbChannelEncryption;
+    if ($null -eq $($smbProtocolSettings.ProtocolSettings.Smb.ChannelEncryption)) {
+        $smbProtocolSettings.ProtocolSettings.Smb.ChannelEncryption=$smbChannelEncryption;
     }
-    if ($null -eq $smbProtocolSettingstest.ProtocolSettings.Smb.AuthenticationMethods) {
-        $smbProtocolSettingstest.ProtocolSettings.Smb.AuthenticationMethods=$AuthenticationMethods;
+    if ($null -eq $($smbProtocolSettings.ProtocolSettings.Smb.AuthenticationMethods)) {
+        $smbProtocolSettings.ProtocolSettings.Smb.AuthenticationMethods=$smbAuthenticationMethods;
     }
-    if ($null -eq $smbProtocolSettingstest.ProtocolSettings.Smb.KerberosTicketEncryption) {
-        $smbProtocolSettingstest.ProtocolSettings.Smb.KerberosTicketEncryption=$smbKerberosTicketEncryption;
+    if ($null -eq $($smbProtocolSettingt.ProtocolSettings.Smb.KerberosTicketEncryption)) {
+        $smbProtocolSettings.ProtocolSettings.Smb.KerberosTicketEncryption=$smbKerberosTicketEncryption;
     }
 
-    Write-log -level verbose "Account Protocol settings: SMB Version: $($smbProtocolSettingstest.ProtocolSettings.Smb.Versions) smbChannelEncryption:$($smbProtocolSettingstest.ProtocolSettings.Smb.ChannelEncryption) AuthenticationMethods:$($smbProtocolSettingstest.ProtocolSettings.Smb.AuthenticationMethods) smbKerberosTicketEncryptionticket: $($smbProtocolSettingstest.ProtocolSettings.Smb.KerberosTicketEncryption)"
-    return $($smbProtocolSettingstest)
+    Write-log -level verbose "Account Protocol settings: SMB Version: $($smbProtocolSettings.ProtocolSettings.Smb.Versions) smbChannelEncryption:$($smbProtocolSettings.ProtocolSettings.Smb.ChannelEncryption) AuthenticationMethods:$($smbProtocolSettings.ProtocolSettings.Smb.AuthenticationMethods) smbKerberosTicketEncryptionticket: $($smbProtocolSettings.ProtocolSettings.Smb.KerberosTicketEncryption)"
+    return $($smbProtocolSettings)
 }
 
 
@@ -1461,29 +1459,61 @@ function GetServerProtocolSettings($PSStorageAccount) {
 ##############################
 function CheckAzPowershell {
 
-    $module=Get-Module -ListAvailable -Name Az.*
+    #Check if Az module is installed
+    $module = Get-Module -ListAvailable -Name Az.*
     if($module -ne $null) {
-        Write-log -level info "`n[OK]Azure Powershell module installed.!"
+        Write-log -level success "`n[OK]Azure Powershell module installed.!"
     } else {
         Write-log -level error "`nPlease install Azure power shell module using following instructions to proceed further:https://docs.microsoft.com/en-us/powershell/azure/install-az-ps"
         exit 1
     }
 
-    $context=Get-AzContext -WarningVariable WarningAzContext
+    #Check if user is already logged in to azure powershell
+    try {
+        $account = Get-AzStorageAccount -ErrorAction Stop
+        $loggedin = $True
+    } catch {
+        $loggedin = $False
+    }
 
+    #Get account details
+    $context = Get-AzContext
 
-    if(($context -ne $null) -and  ($context.Tenant -ne $null)) {
-        Write-log -level info "`n[OK] You are already logged into Azure with account $($context.Account), Please confirm and proceed further, If is is not the right one please run 'Disconnect-AzAccount' from powershell"
+    if( $loggedin -eq $True) {
+        Write-log -level info "`n[OK] You are already logged into Azure with account $($context.Account), Please confirm and proceed further, If is is not the right account one please run 'Disconnect-AzAccount' from powershell and retry"
     } else {
-        Write-log -level info "`nPlease follow instructions to login to azure, Make sure you have right permissions to access the account. Additional manual steps is necessary if your account is setup with Multifactor authentication"
-        Write-log -level info "`nIf you have trouble please use https://docs.microsoft.com/en-us/powershell/module/az.accounts/connect-azaccount and login manually then run this script again `n"
+        Write-log -level info "`nPlease follow instructions to login to azure, Make sure you have right permissions to access the account. Additional authentication steps is necessary if your account is setup with Multifactor authentication"
+        Write-log -level info "`nIf you have trouble please use https://docs.microsoft.com/en-us/powershell/module/az.accounts/connect-azaccount and login manually then run this script again "
 
-        Connect-AzAccount -WarningVariable Warningvar
+        $Error.Clear();
+
+        try {
+            Connect-AzAccount -WarningVariable Warningvar -ErrorAction Stop -WarningAction SilentlyContinue
+        } catch {
+            Write-log -level info "If you face issues to login please try 'Clear-AzContext -Force' manually on powershell and retry `n"
+            Write-log -level verbose "$Error[0]"
+        }
+
+        Write-log -level verbose "$Warningvar"
 
         if($Warningvar -like "*please rerun 'Connect-AzAccount' with additional parameter '-TenantId*") {
+
             $tenant=([regex]::Match($Warningvar, "(?<=\-TenantId )([^\.]*)(?=\')" )).value
-            Write-log -level warning "`nConnect-AzAccount Encountered above erros/warnings and needs multifactor authentication, Trying to run Connect-AzAccount with tenant ID $tenant"
-            Connect-AzAccount -TenantId $tenant
+            Write-log -level warning "`nConnect-AzAccount Encountered warnings because account needs multifactor authentication, Trying to run Connect-AzAccount with tenant ID $tenant, Please approve the login request"
+
+            if($tenant -ne $null) {
+                try {
+                    Connect-AzAccount -TenantId $tenant -ErrorAction Stop
+                } catch {
+                    Write-log -level error "Unable to connect to azure account, Please retry and for more details refer https://docs.microsoft.com/en-us/powershell/module/az.accounts/connect-azaccount"
+                    Write-log -level error "$Error[0]"
+                    exit 1
+                }
+            } else {
+                Write-log -level warning "Account requires Multi-Factor Authentication. Please get the tenant id from azure portal and execute 'Connect-AzAccount -TenantId TENENTID'"
+                Write-log -level warning "Refer this page for more details on tenentid: https://docs.microsoft.com/en-us/azure/active-directory/fundamentals/active-directory-how-to-find-tenant#find-tenant-id-through-the-azure-portal"
+                exit 1
+            }
         }
     }
 }
@@ -1503,7 +1533,7 @@ function CheckAzPowershell {
 ##############################
 function ValidateSMBVersion($ProtocolSettings) {
 
-    $server_ver=$($ProtocolSettings.ProtocolSettings.Smb.Versions)
+    $server_ver = $($ProtocolSettings.ProtocolSettings.Smb.Versions)
 
     if($server_ver -like "SMB$Script:smbver") {
          Write-Log -level success "`n[OK] SMB$Script:smbver is present in list of server supported versions:$server_ver"
@@ -1529,7 +1559,7 @@ function ValidateSMBVersion($ProtocolSettings) {
 ##############################
 function ValidateChannelEncryption($ProtocolSettings, $AccountName) {
 
-    $server_enc=$($ProtocolSettings.ProtocolSettings.Smb.ChannelEncryption)
+    $server_enc = $($ProtocolSettings.ProtocolSettings.Smb.ChannelEncryption)
     Switch -Wildcard ($Script:smbver)
     {
         "3.1.1"
@@ -1606,11 +1636,11 @@ function ValidateAuth($ProtocolSettings) {
     }
 
 
-    $server_sec=$($ProtocolSettings.ProtocolSettings.Smb.AuthenticationMethods)
+    $server_sec = $($ProtocolSettings.ProtocolSettings.Smb.AuthenticationMethods)
     if($server_sec.Contains($auth)) {
         Write-Log -level success "`n[OK] $auth is present in list of server supported Authentication methods:$server_sec"
         if($auth -eq "Kerberos") {
-            $krb_sec=$($ProtocolSettings.ProtocolSettings.Smb.KerberosTicketEncryption)
+            $krb_sec = $($ProtocolSettings.ProtocolSettings.Smb.KerberosTicketEncryption)
             Write-Log -level info "`nPlease generate kerberos ticket using one of the following server supported Kerbros ticket encryption mechanisms:$krb_sec"
         }
     } else {
@@ -1656,8 +1686,8 @@ function ValidateServerCfg($FileSharePath) {
     }
 
     ValidateSMBVersion $ProtocolSettings
-    ValidateAuth $ProtocolSettings
     ValidateChannelEncryption $ProtocolSettings $AccountName
+    ValidateAuth $ProtocolSettings
 }
 
 ###################################################################################################################################################################################################
@@ -1807,7 +1837,9 @@ if ($Script:ValidationPass -eq $false) {
 
 ###Validate Azure storage account settings with client capabilities
 $message = "`nDo you want to validate azure portal file share settings with client configurations, You will have to authenticate your storage account to validate configurations"
-$options = [System.Management.Automation.Host.ChoiceDescription[]]("&Yes", "&No")
+$option1 = New-Object System.Management.Automation.Host.ChoiceDescription "&Yes", "Will be logged into your azure account to get the details of storage configurations then the configurations are validated against windows client"
+$option2 = New-Object System.Management.Automation.Host.ChoiceDescription "&No", "Will be validated only windows client side configurations"
+$options = [System.Management.Automation.Host.ChoiceDescription[]]($option1 , $option2)
 $validatesrvcfg = $host.ui.PromptForChoice($title, $message, $options, 1)
 
 if($validatesrvcfg -eq 0) {
@@ -1855,6 +1887,6 @@ if($validatesrvcfg -eq 0) {
     $options = [System.Management.Automation.Host.ChoiceDescription[]]("&Yes", "&No")
     $result = $host.ui.PromptForChoice($title, $message, $options, 0)
     if($result -eq 0) {
-        Disconnect-azaccount
+        DisConnect-AzAccount | Out-Null
     }
 }
