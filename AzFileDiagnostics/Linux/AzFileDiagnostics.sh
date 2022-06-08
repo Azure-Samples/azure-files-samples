@@ -8,7 +8,12 @@ SHARE=''
 ENVIRONMENT='AzureCloud'
 SAFQDN=''
 IPREGION=''
+VALIDATESRVCFG=1
+PROTOCOLSETTINGS=''
 
+#Default mount parameters
+sec_name="ntlmssp"
+smb_ver="3.1.1"
 
 ## print the log in custom format <to do: add color support>
 print_log()
@@ -48,11 +53,249 @@ usage()
 }
 
 
+get_server_protocol_settings()
+{
+	# If you've never changed any SMB security settings, the values for the SMB security
+	# settings returned by Azure Files will be null. Null returned values should be interpreted
+	# as "default settings are in effect". To make this more user-friendly, the following
+	# az cli commands replace null values with the human-readable default values.
+
+	# Values to be replaced
+	replaceSmbProtocolVersion="\"smbProtocolVersions\": null"
+	replaceSmbChannelEncryption="\"smbChannelEncryption\": null"
+	replaceSmbAuthenticationMethods="\"smbAuthenticationMethods\": null"
+	replaceSmbKerberosTicketEncryption="\"smbKerberosTicketEncryption\": null"
+
+	# Replacement values for null parameters. If you copy this into your own
+	# scripts, you will need to ensure that you keep these variables up-to-date with any new
+	# options we may add to these parameters in the future.
+	defaultSmbProtocolVersion="\"smbProtocolVersions\": \"SMB2.1;SMB3.0;SMB3.1.1\""
+	defaultSmbChannelEncryption="\"smbChannelEncryption\": \"AES-128-CCM;AES-128-GCM;AES-256-GCM\""
+	defaultSmbAuthenticationMethods="\"smbAuthenticationMethods\": \"NTLMv2;Kerberos\""
+	defaultSmbKerberosTicketEncryption="\"smbKerberosTicketEncryption\": \"RC4-HMAC;AES-256\""
+
+	# Build JMESPath query string
+	query="{"
+	query="${query}smbProtocolVersions: protocolSettings.smb.versions,"
+	query="${query}smbChannelEncryption: protocolSettings.smb.channelEncryption,"
+	query="${query}smbAuthenticationMethods: protocolSettings.smb.authenticationMethods,"
+	query="${query}smbKerberosTicketEncryption: protocolSettings.smb.kerberosTicketEncryption"
+	query="${query}}"
+
+	# Get protocol settings from the Azure Files FileService object
+	PROTOCOLSETTINGS=$(az storage account file-service-properties show \
+		--account-name $ACCOUNT \
+		--query "${query}")
+	retVal=$?
+	if [ $retVal -ne 0 ]; then
+		print_log "Get file service properties operaion failed, Please make sure storage account name is correct" "error"
+		exit 1
+	fi
+
+	# Replace returned values if null with default values
+	PROTOCOLSETTINGS="${PROTOCOLSETTINGS/$replaceSmbProtocolVersion/$defaultSmbProtocolVersion}"
+	PROTOCOLSETTINGS="${PROTOCOLSETTINGS/$replaceSmbChannelEncryption/$defaultSmbChannelEncryption}"
+	PROTOCOLSETTINGS="${PROTOCOLSETTINGS/$replaceSmbAuthenticationMethods/$defaultSmbAuthenticationMethods}"
+	PROTOCOLSETTINGS="${PROTOCOLSETTINGS/$replaceSmbKerberosTicketEncryption/$defaultSmbKerberosTicketEncryption}"
+}
+
+#
+# Ask user to input the smb version from a list of client supported versions, Based on user input check compatibility with the azure account settings
+# If requested version is SMB 2.1 then do a additional check for 'require secure transfer' configuration
+#
+validate_smb_version()
+{
+	# Extract the supported SMB version details from the PROTOCOLSETTINGS
+	supported_ver=$(echo $PROTOCOLSETTINGS  | sed 's/,/\n/g' | grep "smbProtocolVersions" | awk -F\" '{print $(NF-1)}' | sed 's/;/ /g')
+	print_log "Choose one of the following SMB versions supported by linux kernel, Default version is recommended " "info"
+
+	if [ "$SMB311" -eq 0 ]; then
+		options=('Default' 'SMB3.1.1' 'SMB3.0' 'SMB2.1')
+	elif [ "$SMB3" -eq 0 ]; then
+		options=('Default' 'SMB3.0' 'SMB2.1')
+	else
+		options=('Default' 'SMB2.1')
+	fi
+
+	select opt in "${options[@]}"
+	do
+		case $opt in
+			"SMB2.1")
+				requested_ver="SMB2.1"
+				#Check azure portal configurations for secure transfer enable setting
+				az storage account show -n $ACCOUNT | grep "enableHttpsTrafficOnly" | grep -q "true"
+				retVal=$?
+				if [ $retVal -eq 0 ]; then
+					print_log "Secure transfer is enabled on the storage account. SMB v2.1 is supported by this kernel, which is not secure" "error"
+					print_log "Use a kernel that supports SMB v3.0 or greater" "error"
+					print_log "For more details visit:  https://docs.microsoft.com/en-us/azure/storage/common/storage-require-secure-transfer" "error"
+					exit 1
+				fi
+				print_log "Make sure your storage account and VM are presnet in same region" "warning"
+				break
+				;;
+			"SMB3.0")
+				requested_ver="SMB3.0"
+				break
+				;;
+			"SMB3.1.1")
+				requested_ver="SMB3.1.1"
+				break
+				;;
+			"Default")
+				requested_ver=${options[1]}
+				break
+				;;
+			*) echo invalid option;;
+		esac
+	done
+
+	smb_ver=$(echo $requested_ver | cut -c 4-)
+
+	if [[ " $supported_ver " = *" $requested_ver "* ]]; then
+		print_log "Requested version $requested_ver is supported by server" "info"
+	else
+		print_log "Requested version $requested_ver is not present in azure server supported versions:$supported_ver" "error"
+		print_log "Enable $requested_ver in server configurations https://docs.microsoft.com/en-us/azure/storage/files/files-smb-protocol?tabs=azure-portal#smb-security-settings" "error"
+		exit 1
+	fi
+}
+
+validate_auth_mechanism()
+{
+	print_log "Select the Authentication mechanisms" "info"
+	options=('Default' 'NTLMv2' 'Kerberos' )
+
+	select opt in "${options[@]}"
+	do
+		case $opt in
+			"NTLMv2")
+				requested_sec="NTLMv2"
+				sec_name="ntlmssp"
+				break
+				;;
+			"Kerberos")
+				requested_sec="Kerberos"
+				sec_name="krb5"
+				break
+				;;
+			"Default")
+				requested_sec="NTLMv2"
+				break
+				;;
+			*) echo invalid option;;
+		esac
+	done
+
+
+	supported_sec=$(echo $PROTOCOLSETTINGS | sed 's/,/\n/g' | grep "smbAuthenticationMethods" | awk -F\" '{print $(NF-1)}' | sed 's/;/ /g')
+
+	if [[ " $supported_sec " = *" $requested_sec "* ]]; then
+		print_log "Requested security Authentication $requested_sec is supported by server\n" "info"
+		check_kereros_ticket_enc $requested_sec
+	else
+		print_log "Requested security Authentication $requested_sec is not present in azure server supported versions:$supported_sec" "error"
+		print_log "Please enable $requested_sec in azure portal https://docs.microsoft.com/en-us/azure/storage/files/files-smb-protocol?tabs=azure-portal#smb-security-settings" "error"
+		exit 1
+	fi
+}
+
+validate_channel_encryption_settings()
+{
+	print_log "Validating Channel encryption settings"
+	supported_enc=$(echo $PROTOCOLSETTINGS | sed 's/,/\n/g' | grep "smbChannelEncryption" | awk -F\" '{print $(NF-1)}' | sed 's/;/ /g')
+
+	if [ $requested_ver = "SMB3.1.1" ]; then
+		default_enc="AES-128-GCM"
+		if [[ " $supported_enc " = *" $default_enc "* ]]; then
+			print_log "$default_enc Channel encryption supported by server for 3.1.1\n" "info"
+		elif  [[ " $supported_enc " = *" AES-256-GCM "* ]]; then
+			print_log "AES-256-GCM is supported by server for 3.1.1, but you should enable require_gcm_256 using 'echo Y > /sys/module/cifs/parameters/require_gcm_256' to use AES-256-GCM\n" "warning"
+		elif [[ " $supported_enc " = " AES-128-CCM " ]]; then
+			print_log "AES-128-CCM not supported with Azure SMB 3.1.1, Please enable other encryption mechanisms using https://docs.microsoft.com/en-us/azure/storage/files/files-smb-protocol?tabs=azure-portal#smb-security-settings" "error"
+			exit 1
+		else
+			print_log "Requested Channel encryption is not supported, Available channel encryptions are $supported_enc" "info"
+			print_log "Please enable $default_enc in server configurations or choose different SMB version" "info"
+			exit 1
+		fi
+
+	elif [[ "$requested_ver" == "SMB3.0" ]]; then
+		default_enc="AES-128-CCM"
+		if [[ " $supported_enc " = *" $default_enc "* ]]; then
+			print_log "$default_enc Channel encryption is supported by server\n" "info"
+		else
+			print_log "Requested Channel encryption is not supported $default_enc, Available channel encryptions are $supported_enc" "info"
+			print_log "Please enable $default_enc in server configurations or choose different SMB version" "info"
+			exit 1
+		fi
+	fi
+}
+
+check_kereros_ticket_enc()
+{
+	supported_kerb_ticket_enc=$(echo $PROTOCOLSETTINGS | sed 's/,/\n/g' | grep "smbKerberosTicketEncryption" | awk -F\" '{print $(NF-1)}' | sed 's/;/ /g')
+
+	if [ $1 = "Kerberos" ]; then
+		print_log "Make sure you have kerbros ticket with one of the following encryption:$supported_kerb_ticket_enc" "info"
+		print_log "Server and Client configurations have been validated for Kerbros, Please mount share using appropriate options\n" "info"
+		exit 1
+	fi
+}
+
+validate_server_cfg()
+{
+	if [ "$VALIDATESRVCFG" -eq 0 ]; then
+
+		#Check if azure cli is installed on system
+		az --version > /dev/null 2>&1
+		retVal=$?
+		if [ $retVal -ne 0 ]; then
+			print_log "Install az cli using  https://docs.microsoft.com/en-us/cli/azure/install-azure-cli and try again" "info"
+			exit 1
+		fi
+
+		#Check if user has already logged into azure cli
+		az account show  > /dev/null 2>&1
+		retVal=$?
+		if [ $retVal -ne 0 ]; then
+			print_log "Please follow the steps to login to azure cli, If you have trouble follow https://docs.microsoft.com/en-us/cli/azure/authenticate-azure-cli and login manually \n"
+			rm -f /tmp/azlog.txt
+			az login  |& tee -a /tmp/azlog.txt
+
+			cat /tmp/azlog.txt | grep -q "The following tenants require Multi-Factor Authentication (MFA). Use 'az login --tenant TENANT_ID' to explicitly login to a tenant"
+			retVal=$?
+			if [ $retVal -eq 0 ]; then
+				tenantid=`cat /tmp/azlog.txt | grep -wo ' .*-.*-.*-.*-.* ' | xargs`
+                                if [ ! -z "$tenantid" ]; then
+                                    print_log "Account requires Multi-Factor Authentication to read account & subscription details. Executing 'az login --tenant $tenantid'" "warning"
+                                    print_log "Please follow the below steps to authenticate again\n" "info"
+                                    az login --tenant $tenantid
+                                else
+                                    print_log "Account requires Multi-Factor Authentication. Please get the tenant id from azure portal and execute 'az login --tenant TENANTID'"
+                                    print_log "Refer this page for more details: https://docs.microsoft.com/en-us/azure/active-directory/fundamentals/active-directory-how-to-find-tenant#find-tenant-id-through-the-azure-portal"
+                                    exit 1
+                                fi
+			fi
+			rm -f /tmp/azlog.txt
+		else
+			print_log "Already logged into Azure command line interface" "info"
+			az account show
+		fi
+		print_log "Please verify account details and proceed further" "info"
+		print_log "Make sure to logout from az cli using 'sudo az logout' once validations are complete"
+		get_server_protocol_settings
+                validate_smb_version
+                validate_channel_encryption_settings
+                validate_auth_mechanism
+	fi
+}
+
 ## When invoking script by sh, it would have syntax error. it happens becuase, by default on ubunntu /bin/sh is mapped to DASH which has many constraints on scripting (e.g. DASH does not support array or select).
 ## BASH is still default SHELL for SSH. Force to use bash  SHELL now. it does not appear to  impact user expereince a lot.
 if [ -z $BASH_VERSION ]; then
-	print_log "current SHELL is not BASH. please use bash to run this script" "error"
-	exit 1
+        print_log "current SHELL is not BASH. please use bash to run this script" "error"
+        exit 1
 fi
 
 ##  argument # is zero which means user does not specify argument to run the script.
@@ -104,6 +347,7 @@ if [ $# -gt 0 ] ; then
 		print_log  "UNC path option is specified, other options will be ignored (use -h or --help for help)" "warning"
 		UNCPATH=$(echo "$UNCPATH" | sed    's/\\/\//g')
 		SAFQDN=$(echo "$UNCPATH" | sed 's/[\/\\]/ /g' | awk '{print $1}' )
+		ACCOUNT=$(echo "$SAFQDN" | cut -d '.' -f1 )
 
 	elif  ( [ -z "$UNCPATH" ] && (  [ -n "$ACCOUNT" ]  && [  -n "$SHARE" ] && [ -n "$ENVIRONMENT" ] ) ); then
 
@@ -322,20 +566,20 @@ print_log "Check if client has SMB 3 Encryption support "
 if echo "$DISTNAME" | grep Ubuntu >/dev/null 2>&1 ; then
 	ver_lt "$DISTVER" "16.04"
 	if [ $? -eq 0 ] ; then
-		print_log "System DOES NOT support SMB 3 Encryption" "warning"
+		print_log "System DOES NOT support SMB version 3 " "warning"
 		SMB3=1
 	else
-		print_log "System supports SMB 3 Encryption" "info"
+		print_log "System supports SMB version 3" "info"
 		SMB3=0
 	fi
 
 elif echo "$DISTNAME" | grep SLES >/dev/null 2>&1; then
 	ver_lt "$DISTVER" "12.2"
 	if [ $? -eq 0 ] ; then
-		print_log "System DOES NOT support SMB 3 Encryption" "warning"
+		print_log "System DOES NOT support SMB version 3 " "warning"
 		SMB3=1
 	else
-		print_log "System supports SMB 3 Encryption" "info"
+		print_log "System supports SMB version 3" "info"
 		SMB3=0
 	fi
 	## Other distributions check kernel versions.
@@ -343,12 +587,21 @@ else
 	ver_lt "$KERVER" "4.11"
 
 	if [ $? -eq 0 ]; then
-		print_log "System DOES NOT support SMB 3 Encryption"  "warning"
+		print_log "System DOES NOT support SMB version 3 "  "warning"
 		SMB3=1
 	else
-		print_log "System supports SMB 3 Encryption" "info"
+		print_log "System supports SMB version 3 " "info"
 		SMB3=0
 	fi
+fi
+
+#Check if kernel supports SMB v3.1.1
+ver_lt "$KERVER" "4.17"
+if [ $? -eq 0 ]; then
+	SMB311=1
+else
+	SMB311=0
+	print_log "System supports SMB version 3.1.1" "info"
 fi
 
 ## Check if system has fix for known idle timeout/reconnect issues, not terminate error though.
@@ -360,7 +613,7 @@ else
 fi
 
 ## Prompt user for UNC path if no options are provided.
-print_log "Check if client has any connectivity issue with storage account"
+print_log "Check if client has any connectivity issue with storage account\n"
 if  [ -z "$SAFQDN" ]; then
 	ACCOUNT=''
 	while [ -z "$ACCOUNT" ];
@@ -559,7 +812,7 @@ if [ "$SMB3" -eq 1 ]; then
 	SARegion=''
 
 	## verify client is Azure VM or not. On untuntu DHCP lease option can be used to check it but Red Hat does not seem to support it. Use client IP too.
-	grep -q unknown-245 /var/lib/dhcp/dhclient.eth0.leases  2&>1
+	grep -q unknown-245 /var/lib/dhcp/dhclient.eth0.leases  2>&1
 	DHCP245=$?
 
 	command -v dig >/dev/null 2>&1  &&  PIP=$(dig +short myip.opendns.com @resolver1.opendns.com) || PIP=$(host -t a myip.opendns.com resolver1.opendns.com 2>&1  | grep 'has address' | grep -o [0-9]\\+\.[0-9]\\+\.[0-9]\\+\.[0-9]\\+)
@@ -586,6 +839,36 @@ if [ "$SMB3" -eq 1 ]; then
 		exit 2
 	fi
 
+fi
+
+
+
+
+## Prompt user to select server configurations validation
+print_log "Script has validated client configurations\n" "info"
+print_log "Do you want to validate azure portal file share settings with client configurations, You will have to authenticate your storage account to read and validate configurations " "info"
+
+options=("yes" "no")
+select opt in "${options[@]}"
+do
+        case $opt in
+                yes)
+                        #comform to BASH, 0 means true.
+                        VALIDATESRVCFG=0
+                        break
+                        ;;
+                no)
+                        VALIDATESRVCFG=1
+                        break
+                        ;;
+                *) echo please type 1 or 2;;
+        esac
+done
+
+
+if [ "$VALIDATESRVCFG" -eq 0 ]; then
+        validate_server_cfg
+        print_log "Script has vaidated the server configurations\n" "info"
 fi
 
 
@@ -627,7 +910,7 @@ disable_log()
 
 ## Prompt user to select if he wants to map drive or not.
 
-print_log "Script has validated the client settings and do you want to map drive by script?"
+print_log "Do you want to mount the share using this script?" "info"
 options=("yes" "no")
 
 select opt in "${options[@]}"
@@ -696,15 +979,18 @@ if [ "$DIAGON" -eq 0 ]; then
 fi
 
 
-command="mount -t cifs "$UNCPATH"  "$mountpoint" -o vers=3.0,username="$username",password=$password,dir_mode=0777,file_mode=0777,sec=ntlmssp"
-print_log "Try with mounting share using SMB3.0"
+command="mount -t cifs "$UNCPATH"  "$mountpoint" -o vers="$smb_ver",username="$username",password=$password,dir_mode=0777,file_mode=0777,nosharesock,actimeo=30,sec="$sec_name""
+print_log "Try with mounting share using $smb_ver"
 print_log "$command" "info"
+
+if [ -f "/tmp/mount.error" ]; then
+	rm /tmp/mount.error
+fi
 sudo sh -c "$command" 2>/tmp/mount.error
-cat /tmp/mount.error
 
 if [[ $? -gt 0 ]] ;then
-	echo "Fail to mount with SMB3.0"
-
+	echo "Fail to mount with $smb_ver"
+	cat /tmp/mount.error
 	grep "Permission denied" /tmp/mount.error >/dev/null 2>&1
 	if [ $? -eq 0 ]; then
 		#SMB 3.0, provide hints to Cx
@@ -715,7 +1001,7 @@ if [[ $? -gt 0 ]] ;then
 
 	# now try to mount with SMB2.1
 	command="mount -t cifs "$UNCPATH"  "$mountpoint" -o vers=2.1,username="$username",password=$password,dir_mode=0777,file_mode=0777,sec=ntlmssp"
-	print_log "Failed to mount the share with SMB3.0. Try with mounting share using SMB2.1"
+	print_log "Failed to mount the share with $smb_ver. Try with mounting share using SMB2.1"
 	print_log "$command" "info"
 	sudo sh -c "$command" 2>/tmp/mount.error
 fi
@@ -731,15 +1017,35 @@ if [[ $? -gt 0 ]];then
 		echo "To resolve this issue, follow the steps in the Azure Files troubleshooting guide: https://docs.microsoft.com/en-us/azure/storage/files/storage-troubleshoot-linux-file-connection-problems#mount-error13-permission-denied-when-you-mount-an-azure-file-share"
 	fi
 else
-	print_log "Mounting share succeeds" "info"
+	print_log "Mounting share succeeds\n" "info"
 fi
+
+cat /tmp/mount.error
 
 sleep 1
 
+#Logout from az cli
+if [[ $VALIDATESRVCFG -eq 0 ]]; then
+	print_log "Do you want to logout from az cli" "info"
+
+	options=("yes" "no")
+	select opt in "${options[@]}"
+	do
+		case $opt in
+			yes)
+				az logout
+				break
+				;;
+			no)
+				break
+				;;
+				*) echo please type 1 or 2;;
+		esac
+	done
+fi
 
 if [ "$DIAGON" -eq 0 ]; then
 	disable_log
 	print_log "Packet trace/CIFS debugging logs can be found in MSFileMountDiagLog folder" "info"
 fi
-
 
