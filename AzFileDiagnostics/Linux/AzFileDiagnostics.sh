@@ -99,9 +99,13 @@ get_server_protocol_settings()
 	PROTOCOLSETTINGS="${PROTOCOLSETTINGS/$replaceSmbKerberosTicketEncryption/$defaultSmbKerberosTicketEncryption}"
 }
 
-
+#
+# Ask user to input the smb version from a list of client supported versions, Based on user input check compatibility with the azure account settings
+# If requested version is SMB 2.1 then do a additional check for 'require secure transfer' configuration
+#
 validate_smb_version()
 {
+	# Extract the supported SMB version details from the PROTOCOLSETTINGS
 	supported_ver=$(echo $PROTOCOLSETTINGS  | sed 's/,/\n/g' | grep "smbProtocolVersions" | awk -F\" '{print $(NF-1)}' | sed 's/;/ /g')
 	print_log "Choose one of the following SMB versions supported by linux kernel, Default version is recommended " "info"
 
@@ -122,7 +126,8 @@ validate_smb_version()
 				az storage account show -n $ACCOUNT | grep "enableHttpsTrafficOnly" | grep -q "true"
 				retVal=$?
 				if [ $retVal -eq 0 ]; then
-					print_log "Secure transfer is enabled on server, Please disable to from azure portal to mount SMB2 shares" "error"
+					print_log "Secure transfer is enabled on the storage account. SMB v2.1 is supported by this kernel, which is not secure" "error"
+					print_log "Use a kernel that supports SMB v3.0 or greater" "error"
 					print_log "For more details visit:  https://docs.microsoft.com/en-us/azure/storage/common/storage-require-secure-transfer" "error"
 					exit 1
 				fi
@@ -205,12 +210,13 @@ validate_channel_encryption_settings()
 		if [[ " $supported_enc " = *" $default_enc "* ]]; then
 			print_log "$default_enc Channel encryption supported by server for 3.1.1\n" "info"
 		elif  [[ " $supported_enc " = *" AES-256-GCM "* ]]; then
-			print_log "AES-256-GCM is supported by server for 3.1.1, but you should install cifs module on client with module parameter 'require_gcm_256' to use AES-256-GCM\n" "warning"
+			print_log "AES-256-GCM is supported by server for 3.1.1, but you should enable require_gcm_256 using 'echo Y > /sys/module/cifs/parameters/require_gcm_256' to use AES-256-GCM\n" "warning"
 		elif [[ " $supported_enc " = " AES-128-CCM " ]]; then
 			print_log "AES-128-CCM not supported with Azure SMB 3.1.1, Please enable other encryption mechanisms using https://docs.microsoft.com/en-us/azure/storage/files/files-smb-protocol?tabs=azure-portal#smb-security-settings" "error"
 			exit 1
 		else
-			print_log "Unknown Encryption mechanism" "error"
+			print_log "Requested Channel encryption is not supported, Available channel encryptions are $supported_enc" "info"
+			print_log "Please enable $default_enc in server configurations or choose different SMB version" "info"
 			exit 1
 		fi
 
@@ -273,9 +279,10 @@ validate_server_cfg()
 			fi
 			rm -f /tmp/azlog.txt
 		else
-			print_log "Already logged into Azure command line interface, please verify details and proceed further" "info"
+			print_log "Already logged into Azure command line interface" "info"
 			az account show
 		fi
+		print_log "Please verify account details and proceed further" "info"
 		print_log "Make sure to logout from az cli using 'sudo az logout' once validations are complete"
 		get_server_protocol_settings
                 validate_smb_version
@@ -903,7 +910,7 @@ disable_log()
 
 ## Prompt user to select if he wants to map drive or not.
 
-print_log "Do you want to map drive by script?" "info"
+print_log "Do you want to mount the share using this script?" "info"
 options=("yes" "no")
 
 select opt in "${options[@]}"
@@ -972,7 +979,7 @@ if [ "$DIAGON" -eq 0 ]; then
 fi
 
 
-command="mount -t cifs "$UNCPATH"  "$mountpoint" -o vers="$smb_ver",username="$username",password=$password,dir_mode=0777,file_mode=0777,sec="$sec_name""
+command="mount -t cifs "$UNCPATH"  "$mountpoint" -o vers="$smb_ver",username="$username",password=$password,dir_mode=0777,file_mode=0777,nosharesock,actimeo=30,sec="$sec_name""
 print_log "Try with mounting share using $smb_ver"
 print_log "$command" "info"
 
