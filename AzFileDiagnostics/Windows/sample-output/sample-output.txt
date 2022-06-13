@@ -1,0 +1,107 @@
+PS C:\Users\azureuser\azure-files-samples\AzFileDiagnostics\Windows> ./AzFileDiagnostics.ps1
+========================================[BEGINNING]============================================
+Starting to validate the client environment at 05-24-2022_21-30-58
+Output messages will be logged into AzFilediag-<Timestamp>.txt under the script folder as well.
+
+[OK]: Current PowerShell version is 5.1.22000.653
+
+======Validate if it is Admin session, some of the validation steps require elevated rights
+[OK]: Script runs with elevated right
+
+======Validate Client OS Version
+[OK]: Running script on host with OS version 10.0.22000
+
+======Validate SMB Version Client supports
+
+[OK]: Client SMB version is 3.1.1
+
+======Validate LmCompatibilityLevel setting on client
+
+[OK]: HKLM:SYSTEM\CurrentControlSet\Control\Lsa|LmCompatibilityLevel IS NOT set, by default it should be 3 (or greater)
+
+======Validate RestrictSendingNTLMTraffic setting on client
+
+[OK]: HKLM:SYSTEM\CurrentControlSet\Control\Lsa\MSV1_0|RestrictSendingNTLMTraffic IS NOT set, by default it should be 0 as Allow All (or 1 as Audit All)
+
+More information:https://docs.microsoft.com/en-us/windows/security/threat-protection/security-policy-settings/network-security-restrict-ntlm-outgoing-ntlm-traffic-to-remote-servers
+
+======Validate Azure Storage File Share Path Naming
+
+No file share path is provided yet, please Type U or S to proceed
+[U] UNCPath  [S] StorageAccount  [?] Help (default is "S"): S
+
+Please now type Storage Account Name: azurefilediag
+
+Please now type File Share Name: testshare
+
+Please choose cloud environment, default is AzureCloud
+[A] AzureCloud  [C] AzureChinaCloud  [G] AzureGermanCloud  [U] AzureUSGovernment  [?] Help (default is "A"): A
+[OK]: Azure File Share path is \\azurefilediag.file.core.windows.net\testshare
+
+======Validate Storage Account Name resolution
+
+[OK]: Storage Account Name azurefilediag.file.core.windows.net is resolved to 52.239.170.72
+
+======Validate port 445 reachability over Storage Account IP 52.239.170.72
+
+[OK]: Connection attempt succeeds -  Port is open
+
+Do you want to validate azure portal file share settings with client configurations, You will have to authenticate your storage account to validate configurations
+[Y] Yes  [N] No  [?] Help (default is "N"): Y
+
+======Validating Storage account protocol settings
+
+[OK]Azure Powershell module installed.!
+
+Please follow instructions to login to azure, Make sure you have right permissions to access the account. Additional auth steps is necessary if your account is setup with Multifactor authentication
+
+If you have trouble please use https://docs.microsoft.com/en-us/powershell/module/az.accounts/connect-azaccount and login manually then run this script again
+If you face issues to login please try 'Clear-AzContext -Force' manually on powershell and retry
+
+
+Connect-AzAccount Encountered warnings because account needs multifactor authentication, Trying to run Connect-AzAccount with tenant ID d3736be6-72a2-4843-a718-c6ea8c65da44, Please approve the login request
+
+
+[OK] SMB3.1.1 is present in list of server supported versions:SMB2.1 SMB3.0 SMB3.1.1
+
+[OK] AES-128-GCM will be choosen as default channel encryption mechanism for 3.1.1
+
+Please choose Security Authentication method, Default is NTLMv2
+[N] NTLMv2  [K] Kerberos  [?] Help (default is "N"): N
+
+[OK] NTLMv2 is present in list of server supported Authentication methods:NTLMv2 Kerberos
+
+[OK]: Validation steps do not return any errors
+
+Do you want to go ahead to map the drive with file share path \\azurefilediag.file.core.windows.net\testshare
+[Y] Yes  [N] No  [?] Help (default is "Y"): Y
+
+Please type Storage Account Access Key: KcdXfeSDIb2NXMswfzCOtBMGhd************ObbM1oF4opMvW5kMVpByqWIffRhEN9T8ik+AStbYW7Mg==
+
+Please type drive letter like Z: or *: *
+
+Do you want to make persistent mapped drive?
+[Y] Yes  [N] No  [?] Help (default is "N"): N
+
+Do you want to turn on diagnostics SMB/Packet trace?
+[Y] Yes  [N] No  [?] Help (default is "N"): Y
+
+Successfully start netsh packet capture. Capturing all activities to [C:\Users\azureuser\azgit\azure-files-samples\AzFileDiagnostics\Windows\packet.etl]
+
+====Running command, Net use * \\azurefilediag.file.core.windows.net\testshare /User:Azure\azurefilediag *******************
+Drive \\win11\root\cimv2:Win32_MappedLogicalDisk.DeviceID="Y:",SessionID="1510920".name is mapped to \\win11\root\cimv2:Win32_MappedLogicalDisk.DeviceID="Y:",SessionID="1510920".ProviderName
+
+[OK]: Validation is done and Mapped drive is created successfully
+
+[WARNING]: Map drive in admin session successfuly.If you cannot see the mapped drive in File Explorer, you can follow steps in https://technet.microsoft.com/library/ee844140.aspx to configure the EnableLinkedConnections registry value.
+
+Stopping Netsh trace, Please be patient as NetSH retrieves the packet captures...
+
+Successfully stop netsh packet capture
+========================================[END]============================================
+
+Do you want to logout of azure powershell
+[Y] Yes  [N] No  [?] Help (default is "Y"): Y
+Account               SubscriptionName                      TenantId                             Environment
+-------               ----------------                      --------                             -----------
+<email>  		    Subscription 			d3736be6-****-****-a718-c6ea8c65da44 		 AzureCloud
