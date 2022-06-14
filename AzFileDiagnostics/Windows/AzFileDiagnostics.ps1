@@ -1427,6 +1427,11 @@ function GetServerProtocolSettings($PSStorageAccount) {
 
     $smbProtocolSettings = Get-AzStorageFileServiceProperty -StorageAccount $PSStorageAccount
 
+    if($null -eq $smbProtocolSettings.ProtocolSettings) {
+      $smbProtocolSettings.ProtocolSettings = New-Object Microsoft.Azure.Management.Storage.Models.ProtocolSettings;
+      $smbProtocolSettings.ProtocolSettings.smb = New-Object Microsoft.Azure.Management.Storage.Models.SmbSetting;
+    }
+
     if ($null -eq $($smbProtocolSettings.ProtocolSettings.Smb.Versions)) {
         $smbProtocolSettings.ProtocolSettings.Smb.Versions=$smbProtocolVersions;
     }
