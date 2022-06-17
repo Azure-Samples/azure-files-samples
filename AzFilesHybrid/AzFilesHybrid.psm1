@@ -3211,7 +3211,7 @@ function Get-OnPremAdUserGroups {
 }
 
 class CheckResult {
-    [string]$Name
+    [string]$Name 
     [string]$Result
     [string]$Issue
 
@@ -3279,6 +3279,7 @@ function Debug-AzStorageAccountAuth {
             "CheckStorageAccountDomainJoined" = [CheckResult]::new("CheckStorageAccountDomainJoined");
             "CheckUserRbacAssignment" = [CheckResult]::new("CheckUserRbacAssignment");
             "CheckUserFileAccess" = [CheckResult]::new("CheckUserFileAccess");
+            "CheckDefaultSharePermission" = [CheckResult]::new("CheckDefaultSharePermission");
         }
 
         #
@@ -3653,6 +3654,37 @@ function Debug-AzStorageAccountAuth {
                 $checks["CheckUserFileAccess"].Result = "Failed"
                 $checks["CheckUserFileAccess"].Issue = $_
                 Write-Error "CheckUserFileAccess - FAILED"
+                Write-Error $_
+            }
+        }
+
+        if (!$filterIsPresent -or $Filter -match "CheckDefaultSharePermission")
+        {
+            try {
+                $checksExecuted += 1
+                Write-Verbose "CheckDefaultSharePermission - START"
+
+                $StorageAccountObject = Validate-StorageAccount `
+                    -ResourceGroupName $ResourceGroupName `
+                    -StorageAccountName $StorageAccountName `
+                    -ErrorAction Stop
+ 
+                Write-Verbose -Message "Storage account $StorageAccountName is already joined in domain $($activeDirectoryProperties.DomainName)."
+                
+                $DefaultSharePermission = $StorageAccountObject.AzureFilesIdentityBasedAuth.DefaultSharePermission
+                
+                # If DefaultSharePermission is null or 'None'
+                if((!$DefaultSharePermission) -or ($DefaultSharePermission -eq 'None')){
+                    Write-Error "CheckDefaultSharePermission - FAILED"
+                    $DefaultSharePermission = "Not Configured"
+                }else{
+                    Write-Verbose "CheckDefaultSharePermission - SUCCESS"
+                }
+                $checks["CheckDefaultSharePermission"].Result = $DefaultSharePermission
+            } catch {
+                $checks["CheckDefaultSharePermission"].Result = "Failed"
+                $checks["CheckDefaultSharePermission"].Issue = $_
+                Write-Error "CheckDefaultSharePermission - FAILED"
                 Write-Error $_
             }
         }
