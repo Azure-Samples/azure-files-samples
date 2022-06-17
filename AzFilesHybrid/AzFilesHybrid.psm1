@@ -3211,7 +3211,7 @@ function Get-OnPremAdUserGroups {
 }
 
 class CheckResult {
-    [string]$Name 
+    [string]$Name
     [string]$Result
     [string]$Issue
 
