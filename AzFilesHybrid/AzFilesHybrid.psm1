@@ -3279,6 +3279,7 @@ function Debug-AzStorageAccountAuth {
             "CheckStorageAccountDomainJoined" = [CheckResult]::new("CheckStorageAccountDomainJoined");
             "CheckUserRbacAssignment" = [CheckResult]::new("CheckUserRbacAssignment");
             "CheckUserFileAccess" = [CheckResult]::new("CheckUserFileAccess");
+            "CheckDefaultSharePermission" = [CheckResult]::new("CheckDefaultSharePermission");
         }
 
         #
@@ -3653,6 +3654,34 @@ function Debug-AzStorageAccountAuth {
                 $checks["CheckUserFileAccess"].Result = "Failed"
                 $checks["CheckUserFileAccess"].Issue = $_
                 Write-Error "CheckUserFileAccess - FAILED"
+                Write-Error $_
+            }
+        }
+
+        if (!$filterIsPresent -or $Filter -match "CheckDefaultSharePermission")
+        {
+            try {
+                $checksExecuted += 1
+                Write-Verbose "CheckDefaultSharePermission - START"
+
+                $StorageAccountObject = Validate-StorageAccount `
+                    -ResourceGroupName $ResourceGroupName `
+                    -StorageAccountName $StorageAccountName `
+                    -ErrorAction Stop
+ 
+                $DefaultSharePermission = $StorageAccountObject.AzureFilesIdentityBasedAuth.DefaultSharePermission
+                
+                # If DefaultSharePermission is null or 'None'
+                if((!$DefaultSharePermission) -or ($DefaultSharePermission -eq 'None')){
+                    $DefaultSharePermission = "Not Configured. Please visit https://docs.microsoft.com/en-us/azure/storage/files/storage-files-identity-ad-ds-assign-permissions?tabs=azure-portal for more information if needed."
+                }
+                Write-Verbose "DefaultSharePermission: $DefaultSharePermission"
+                Write-Verbose "CheckDefaultSharePermission - SUCCESS"
+                $checks["CheckDefaultSharePermission"].Result = "Passed"
+            } catch {
+                $checks["CheckDefaultSharePermission"].Result = "Failed"
+                $checks["CheckDefaultSharePermission"].Issue = $_
+                Write-Error "CheckDefaultSharePermission - FAILED"
                 Write-Error $_
             }
         }
