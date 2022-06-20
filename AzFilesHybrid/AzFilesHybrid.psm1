@@ -3669,18 +3669,15 @@ function Debug-AzStorageAccountAuth {
                     -StorageAccountName $StorageAccountName `
                     -ErrorAction Stop
  
-                Write-Verbose -Message "Storage account $StorageAccountName is already joined in domain $($activeDirectoryProperties.DomainName)."
-                
                 $DefaultSharePermission = $StorageAccountObject.AzureFilesIdentityBasedAuth.DefaultSharePermission
                 
                 # If DefaultSharePermission is null or 'None'
                 if((!$DefaultSharePermission) -or ($DefaultSharePermission -eq 'None')){
-                    Write-Error "CheckDefaultSharePermission - FAILED"
-                    $DefaultSharePermission = "Not Configured"
-                }else{
-                    Write-Verbose "CheckDefaultSharePermission - SUCCESS"
+                    $DefaultSharePermission = "Not Configured. Please visit https://docs.microsoft.com/en-us/azure/storage/files/storage-files-identity-ad-ds-assign-permissions?tabs=azure-portal for more information if needed."
                 }
-                $checks["CheckDefaultSharePermission"].Result = $DefaultSharePermission
+                Write-Verbose "DefaultSharePermission: $DefaultSharePermission"
+                Write-Verbose "CheckDefaultSharePermission - SUCCESS"
+                $checks["CheckDefaultSharePermission"].Result = "Passed"
             } catch {
                 $checks["CheckDefaultSharePermission"].Result = "Failed"
                 $checks["CheckDefaultSharePermission"].Issue = $_
