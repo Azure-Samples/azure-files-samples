@@ -2522,6 +2522,7 @@ function New-ADAccountForStorageAccount {
 
     Write-Verbose -Message "AD object name is $ADObjectName, SamAccountName is $SamAccountName."
 
+    $UserPrincipalName = "$spnValue@$Domain"
     # Create the identity in Active Directory.    
     try
     {
@@ -2547,7 +2548,8 @@ function New-ADAccountForStorageAccount {
                         -ServicePrincipalNames $spnValue `
                         -Server $Domain `
                         -Enabled $true `
-                        -ErrorAction Stop
+                        -UserPrincipalName $UserPrincipalName `
+                        -ErrorAction Stop 
                 }
 
                 #
@@ -4295,40 +4297,26 @@ function Update-AzStorageAccountAuthForAES256 {
             -ResourceGroupName $ResourceGroupName -StorageAccountName $StorageAccountName -ErrorAction Stop
         $domain = $activeDirectoryProperties.DomainName
 
-        if ($adObject.ObjectClass -ine "computer") {
-            $message = "Removing object '$($adObject.DistinguishedName)' of type '$adObject.ObjectClass' from domain '$domain'." `
-                + " AES256 is only supported for computer objects."
-            Write-Verbose -Message $message
+        Set-StorageAccountDomainProperties `
+            -ADObjectName $adObjectName `
+            -ResourceGroupName $ResourceGroupName `
+            -StorageAccountName $StorageAccountName `
+            -Domain $domain `
+            -Force
 
-            Remove-ADObject -Identity $adObject.DistinguishedName -Server $domain -Confirm:$false -ErrorAction Stop
+        switch($adObject.ObjectClass) {
+            "user" {
+                Write-Verbose -Message "Set AD user object '$($adObject.DistinguishedName)' to use AES256 for Kerberos authentication"
+                Set-ADUser -Identity $adObject.DistinguishedName -Server $domain `
+                    -KerberosEncryptionType "AES256" -ErrorAction Stop
+            }
 
-            $organizationalUnitDistinguishedName = $adObject.DistinguishedName.Substring($adObject.DistinguishedName.IndexOf(',') + 1)
-            $samAccountName = $adObject.SamAccountName.TrimEnd("$")
-
-            $message = "Join storage account '$StorageAccountName' to domain '$domain'" `
-                + " as a computer object under '$organizationalUnitDistinguishedName'"
-            Write-Verbose -Message $message
-
-            Join-AzStorageAccount -ResourceGroupName $ResourceGroupName -StorageAccountName $StorageAccountName `
-                -Domain $domain -DomainAccountType "ComputerAccount" `
-                -OrganizationalUnitDistinguishedName $organizationalUnitDistinguishedName `
-                -ADObjectNameOverride $adObjectName -SamAccountName $samAccountName `
-                -ErrorAction Stop
-            
-            $adObject = Get-AzStorageAccountADObject -ResourceGroupName $ResourceGroupName `
-                -StorageAccountName $StorageAccountName -ErrorAction Stop
-        } else {
-            Set-StorageAccountDomainProperties `
-                -ADObjectName $adObjectName `
-                -ResourceGroupName $ResourceGroupName `
-                -StorageAccountName $StorageAccountName `
-                -Domain $domain `
-                -Force
+            "computer" {
+                Write-Verbose -Message "Set AD computer object '$($adObject.DistinguishedName)' to use AES256 for Kerberos authentication"
+                Set-ADComputer -Identity $adObject.DistinguishedName -Server $domain `
+                    -KerberosEncryptionType "AES256" -ErrorAction Stop
+            }
         }
-
-        Write-Verbose -Message "Set AD object '$($adObject.DistinguishedName)' to use AES256 for Kerberos authentication"
-        Set-ADComputer -Identity $adObject.DistinguishedName -Server $domain `
-            -KerberosEncryptionType "AES256" -ErrorAction Stop
 
         Update-AzStorageAccountADObjectPassword -ResourceGroupname $ResourceGroupName -StorageAccountName $StorageAccountName `
             -RotateToKerbKey kerb2 -ErrorAction Stop
@@ -4437,12 +4425,6 @@ function Join-AzStorageAccount {
             Write-Error `
                     -Message "Only one of OrganizationalUnitName and OrganizationalUnitDistinguishedName should be specified." `
                     -ErrorAction Stop
-        }
-
-        if (($DomainAccountType -ieq "ServiceLogonAccount") -and ($EncryptionType -contains "AES256")) {
-            $message = "Parameter -DomainAccountType is 'ServiceLogonAccount'," `
-                + " which will not be supported AES256 encryption for Kerberos tickets."
-            Write-Warning -Message $message
         }
 
         if ($PSCmdlet.ParameterSetName -eq "StorageAccount") {
