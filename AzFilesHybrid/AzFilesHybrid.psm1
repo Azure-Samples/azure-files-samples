@@ -2710,7 +2710,10 @@ function Get-AzStorageAccountADObject {
         [Parameter(Mandatory=$true, Position=0, ParameterSetName="ADObjectName")]
         [string]$ADObjectName,
 
-        [Parameter(Mandatory=$false, Position=1, ParameterSetName="ADObjectName")]
+        [Parameter(Mandatory=$true, Position=1, ParameterSetName="ADObjectName")]
+        [string]$SPNValue,
+
+        [Parameter(Mandatory=$false, Position=2, ParameterSetName="ADObjectName")]
         [string]$Domain
     )
 
@@ -2759,14 +2762,29 @@ function Get-AzStorageAccountADObject {
             }    
         } else {
             Write-Verbose -Message "Looking for an object with name '$ADObjectName' in domain '$Domain'"
-            $obj = Get-ADObject -Server $Domain -Filter "Name -eq '$ADObjectName'" -ErrorAction Stop
 
-            if ($null -eq $obj) {
+            $computerSpnMatch = Get-ADComputer `
+                    -Filter "ServicePrincipalNames -eq '$SPNValue'" `
+                    -Server $Domain
+
+            $userSpnMatch = Get-ADUser `
+                    -Filter "ServicePrincipalNames -eq '$SPNValue'" `
+                    -Server $Domain
+
+            if (($null -ne $computerSpnMatch) -and ($null -ne $userSpnMatch)) {
                 $message = "Cannot find an object with a '$ADObjectname' in domain '$Domain'." `
                     + " Please verify that the storage account has been domain-joined through the steps" `
                     + " in Microsoft documentation:" `
                     + " https://docs.microsoft.com/en-us/azure/storage/files/storage-files-identity-auth-active-directory-enable#12-domain-join-your-storage-account"
                 Write-Error -Message $message -ErrorAction Stop
+            } 
+            elseif ($null -ne $computerSpnMatch) 
+            {
+                return $computerSpnMatch
+            } 
+            else
+            {
+                return $userSpnMatch
             }    
         }
 
@@ -3835,15 +3853,16 @@ function Set-StorageAccountDomainProperties {
         
         Write-Verbose "Set-StorageAccountDomainProperties: Enabling the feature on the storage account and providing the required properties to the storage service"
 
-        if ([System.String]::IsNullOrEmpty($Domain)) {
-            $domainInformation = Get-ADDomain
-            $Domain = $domainInformation.DnsRoot
-        } else {
-            $domainInformation = Get-ADDomain -Server $Domain
-        }
+
+        $domainInformation = Get-ADDomain -Server $Domain
+        $spnValue = Get-ServicePrincipalName `
+            -StorageAccountName $StorageAccountName `
+            -ResourceGroupName $ResourceGroupName `
+            -ErrorAction Stop
 
         $azureStorageIdentity = Get-AzStorageAccountADObject `
             -ADObjectName $ADObjectName `
+            -SPNValue $spnValue `
             -Domain $Domain `
             -ErrorAction Stop
         $azureStorageSid = $azureStorageIdentity.SID.Value
