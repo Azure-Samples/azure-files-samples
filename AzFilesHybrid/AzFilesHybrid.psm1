@@ -2644,7 +2644,11 @@ function New-ADAccountForStorageAccount {
 
     Write-Verbose "New-ADAccountForStorageAccount: Complete"
 
-    return $ADObjectName
+    $packedResult = @{}
+    $packedResult.add( "ADObjectName", $ADObjectName )
+    $packedResult.add( "Domain", $Domain )
+
+    return $packedResult
 }
 
 function Get-AzStorageAccountADObject {
@@ -3792,7 +3796,7 @@ function Set-StorageAccountDomainProperties {
         [Parameter(Mandatory=$false, Position=2)]
         [string]$ADObjectName,
 
-        [Parameter(Mandatory=$false, Position=3)]
+        [Parameter(Mandatory=$true, Position=3)]
         [string]$Domain,
 
         [Parameter(Mandatory=$false, Position=4)]
@@ -4582,7 +4586,9 @@ function Join-AzStorageAccount {
                 $newParams += @{ "OverwriteExistingADObject" = $OverwriteExistingADObject }
             }
 
-            $ADObjectNameOverride = New-ADAccountForStorageAccount @newParams -ErrorAction Stop
+            $packedResult = New-ADAccountForStorageAccount @newParams -ErrorAction Stop
+            $ADObjectNameOverride = $packedResult["ADObjectName"]
+            $Domain = $packedResult["Domain"]
 
             Write-Verbose "Created AD object $ADObjectNameOverride"
 
