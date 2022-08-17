@@ -3945,6 +3945,9 @@ function Test-AzStorageAccountADObjectPasswordIsKerbKey {
         $oneKeyMatches = $false
         $keyMatches = [KerbKeyMatch[]]@()
         foreach ($key in $kerbKeys) {
+            
+            if ($null -eq $key.KeyName) { continue }
+
             if ($null -ne (New-Object Directoryservices.DirectoryEntry "", $userName, $key.Value).PsBase.Name) {
                 Write-Verbose "Found that $($key.KeyName) matches password for $StorageAccountName in AD."
                 $oneKeyMatches = $true
