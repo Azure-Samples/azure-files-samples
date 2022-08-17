@@ -1203,6 +1203,46 @@ function Get-RandomString {
     return $acc.GetInternalObject()
 }
 
+function Get-ParentContainer {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$True, Position=0)]
+        [string]$DistinguishedName
+    )
+
+    begin {}
+
+    Process {
+
+        $min_idx = 0
+        $attributes = 'DC','CN','OU','O','STREET','L','ST','C',"UID"
+        $indices = New-Object -TypeName 'System.Collections.ArrayList';
+
+
+        foreach ($attr in $attributes)
+        {  
+            $attr = "," + $attr + "="  # Ex: ",DC="
+            
+            $idx = $DistinguishedName.IndexOf($attr) # Find first occurance
+
+            if ($idx -eq -1) { continue }
+            
+            $null = $indices.Add($idx)
+        }
+
+        $sortedIndices = $indices | Sort-Object
+
+        if ($indices.Count -ne 0)
+        {
+            $min_idx = $sortedIndices[0] + 1
+        }
+
+        $ParentContainer = $DistinguishedName.Substring($min_idx)
+
+        return $ParentContainer
+    }
+}
+
 function Get-ADDomainInternal {
     [CmdletBinding()]
     
@@ -2420,7 +2460,7 @@ function New-ADAccountForStorageAccount {
                 Write-Error -Message "Could not find computer '$($Env:COMPUTERNAME)' in domain '$Domain'" -ErrorAction Stop
             }
 
-            $OrganizationalUnitDistinguishedName = $currentComputer.DistinguishedName.Substring($currentComputer.DistinguishedName.IndexOf(',') + 1)
+            $OrganizationalUnitDistinguishedName = Get-ParentContainer -DistinguishedName $currentComputer.DistinguishedName
         } else { # "ServiceLogonAccount"
             $currentUser = Get-ADUser -Identity $($Env:USERNAME) -Server $Domain
 
@@ -2428,7 +2468,7 @@ function New-ADAccountForStorageAccount {
                 Write-Error -Message "Could not find user '$($Env:USERNAME)' in domain '$Domain'" -ErrorAction Stop
             }
 
-            $OrganizationalUnitDistinguishedName = $currentUser.DistinguishedName.Substring($currentUser.DistinguishedName.IndexOf(',') + 1)
+            $OrganizationalUnitDistinguishedName = Get-ParentContainer -DistinguishedName $currentUser.DistinguishedName
         }
     }
 
@@ -4339,7 +4379,7 @@ function Update-AzStorageAccountAuthForAES256 {
 
             Remove-ADObject -Identity $adObject.DistinguishedName -Server $domain -Confirm:$false -ErrorAction Stop
 
-            $organizationalUnitDistinguishedName = $adObject.DistinguishedName.Substring($adObject.DistinguishedName.IndexOf(',') + 1)
+            $organizationalUnitDistinguishedName = Get-ParentContainer -DistinguishedName $adObject.DistinguishedName
             $samAccountName = $adObject.SamAccountName.TrimEnd("$")
 
             $message = "Join storage account '$StorageAccountName' to domain '$domain'" `
