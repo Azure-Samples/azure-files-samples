@@ -2522,7 +2522,7 @@ function New-ADAccountForStorageAccount {
 
     Write-Verbose -Message "AD object name is $ADObjectName, SamAccountName is $SamAccountName."
 
-    $UserPrincipalName = "$spnValue@$Domain"
+    $userPrincipalName = "$spnValue@$Domain"
     # Create the identity in Active Directory.    
     try
     {
@@ -2548,7 +2548,7 @@ function New-ADAccountForStorageAccount {
                         -ServicePrincipalNames $spnValue `
                         -Server $Domain `
                         -Enabled $true `
-                        -UserPrincipalName $UserPrincipalName `
+                        -UserPrincipalName $userPrincipalName `
                         -ErrorAction Stop 
                 }
 
@@ -4297,18 +4297,21 @@ function Update-AzStorageAccountAuthForAES256 {
             -ResourceGroupName $ResourceGroupName -StorageAccountName $StorageAccountName -ErrorAction Stop
         $domain = $activeDirectoryProperties.DomainName
 
-        Set-StorageAccountDomainProperties `
-            -ADObjectName $adObjectName `
-            -ResourceGroupName $ResourceGroupName `
-            -StorageAccountName $StorageAccountName `
-            -Domain $domain `
-            -Force
-
         switch($adObject.ObjectClass) {
             "user" {
                 Write-Verbose -Message "Set AD user object '$($adObject.DistinguishedName)' to use AES256 for Kerberos authentication"
+                $userPrincipalName = $adObject.UserPrincipalName
+                if ([string]::IsNullOrEmpty($userPrincipalName)) {
+                    $spnValue = Get-ServicePrincipalName `
+                    -StorageAccountName $StorageAccountName `
+                    -ResourceGroupName $ResourceGroupName `
+                    -ErrorAction Stop
+
+                    $userPrincipalName = "$spnValue@$domain"
+                    Write-Verbose -Message "AD user does not have a userPrincipalName, set userPrincipalName to $userPrincipalName"
+                }
                 Set-ADUser -Identity $adObject.DistinguishedName -Server $domain `
-                    -KerberosEncryptionType "AES256" -ErrorAction Stop
+                    -KerberosEncryptionType "AES256" -UserPrincipalName $userPrincipalName -ErrorAction Stop
             }
 
             "computer" {
@@ -4317,6 +4320,13 @@ function Update-AzStorageAccountAuthForAES256 {
                     -KerberosEncryptionType "AES256" -ErrorAction Stop
             }
         }
+
+        Set-StorageAccountDomainProperties `
+            -ADObjectName $adObjectName `
+            -ResourceGroupName $ResourceGroupName `
+            -StorageAccountName $StorageAccountName `
+            -Domain $domain `
+            -Force
 
         Update-AzStorageAccountADObjectPassword -ResourceGroupname $ResourceGroupName -StorageAccountName $StorageAccountName `
             -RotateToKerbKey kerb2 -ErrorAction Stop
