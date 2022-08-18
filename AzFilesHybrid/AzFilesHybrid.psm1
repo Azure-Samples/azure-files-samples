@@ -4301,6 +4301,7 @@ function Update-AzStorageAccountAuthForAES256 {
             "user" {
                 Write-Verbose -Message "Set AD user object '$($adObject.DistinguishedName)' to use AES256 for Kerberos authentication"
                 $userPrincipalName = $adObject.UserPrincipalName
+
                 if ([string]::IsNullOrEmpty($userPrincipalName)) {
                     $spnValue = Get-ServicePrincipalName `
                     -StorageAccountName $StorageAccountName `
@@ -4308,8 +4309,10 @@ function Update-AzStorageAccountAuthForAES256 {
                     -ErrorAction Stop
 
                     $userPrincipalName = "$spnValue@$domain"
+
                     Write-Verbose -Message "AD user does not have a userPrincipalName, set userPrincipalName to $userPrincipalName"
                 }
+
                 Set-ADUser -Identity $adObject.DistinguishedName -Server $domain `
                     -KerberosEncryptionType "AES256" -UserPrincipalName $userPrincipalName -ErrorAction Stop
             }
