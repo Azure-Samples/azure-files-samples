@@ -2459,7 +2459,7 @@ function New-ADAccountForStorageAccount {
             if ($null -eq $currentComputer) {
                 Write-Error -Message "Could not find computer '$($Env:COMPUTERNAME)' in domain '$Domain'" -ErrorAction Stop
             }
-
+            
             $OrganizationalUnitDistinguishedName = Get-ParentContainer -DistinguishedName $currentComputer.DistinguishedName
         } else { # "ServiceLogonAccount"
             $currentUser = Get-ADUser -Identity $($Env:USERNAME) -Server $Domain
@@ -2500,11 +2500,6 @@ function New-ADAccountForStorageAccount {
     $path = $ou.DistinguishedName
 
     Write-Verbose "New-ADAccountForStorageAccount: Creating a AD account under $path in domain:$Domain to represent the storage account:$StorageAccountName"
-
-    if ($path -and $path -contains '*')
-    {
-        Write-Error -Message "Unsupported: the path in domain contains the '*' character." -ErrorAction Stop
-    }
 
     #
     # Get the kerb key and convert it to a secure string password.
@@ -4013,7 +4008,7 @@ function Test-AzStorageAccountADObjectPasswordIsKerbKey {
         $oneKeyMatches = $false
         $keyMatches = [KerbKeyMatch[]]@()
         foreach ($key in $kerbKeys) {
-
+            
             if ($null -eq $key.KeyName) { continue }
 
             if ($null -ne (New-Object Directoryservices.DirectoryEntry "", $userName, $key.Value).PsBase.Name) {
@@ -4153,6 +4148,13 @@ function Update-AzStorageAccountADObjectPassword {
         
         $adObj = Get-AzStorageAccountADObject -StorageAccount $StorageAccount
         $domain = $storageAccount.AzureFilesIdentityBasedAuth.ActiveDirectoryProperties.DomainName
+
+        if ($adObj -and `
+            $adObj.DistinguishedName -and `
+            $adObj.DistinguishedName.Contains('*'))
+        {
+            Write-Error -Message "Unsupported: There is a '*' character in the DistinguishedName." -ErrorAction Stop
+        }
 
         $caption = ("Set password on AD object " + $adObj.SamAccountName + `
             " for " + $StorageAccount.StorageAccountName + " to value of $RotateToKerbKey.")
