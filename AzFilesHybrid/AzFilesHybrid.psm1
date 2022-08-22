@@ -4300,17 +4300,26 @@ function Update-AzStorageAccountAuthForAES256 {
         switch($adObject.ObjectClass) {
             "user" {
                 Write-Verbose -Message "Set AD user object '$($adObject.DistinguishedName)' to use AES256 for Kerberos authentication"
+                
+                $spnValue = Get-ServicePrincipalName `
+                -StorageAccountName $StorageAccountName `
+                -ResourceGroupName $ResourceGroupName `
+                -ErrorAction Stop
+
+                $userPrincipalNameForAES256 = "$spnValue@$domain"
+
                 $userPrincipalName = $adObject.UserPrincipalName
 
                 if ([string]::IsNullOrEmpty($userPrincipalName)) {
-                    $spnValue = Get-ServicePrincipalName `
-                    -StorageAccountName $StorageAccountName `
-                    -ResourceGroupName $ResourceGroupName `
-                    -ErrorAction Stop
-
-                    $userPrincipalName = "$spnValue@$domain"
+                    $userPrincipalName = $userPrincipalNameForAES256
 
                     Write-Verbose -Message "AD user does not have a userPrincipalName, set userPrincipalName to $userPrincipalName"
+                }
+
+                if ($userPrincipalName -ne $userPrincipalNameForAES256) {
+                    Write-Error `
+                            -Message "The format of UserPrincipalName:$userPrincipalName is incorrect. please change it to: $userPrincipalNameForAES256 for AES256" `
+                            -ErrorAction stop
                 }
 
                 Set-ADUser -Identity $adObject.DistinguishedName -Server $domain `
