@@ -1227,9 +1227,19 @@ function Get-RandomString {
 }
 
 function Get-ParentContainer {
+    <#
+    .SYNOPSIS
+    Parse the parent container of the given DistinguishedName
+    .DESCRIPTION
+    This cmdlet parses the parent container of the given DistinguishedName
+    .EXAMPLE
+    Get-ParentContainer -DistinguishedName "CN=abcef,OU=Domain Controllers,DC=defgh,DC=com" 
+    # output: "OU=Domain Controllers,DC=defgh,DC=com"
+    #>
+
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory=$True, Position=0)]
+        [Parameter(Mandatory=$true, Position=0)]
         [string]$DistinguishedName
     )
 
