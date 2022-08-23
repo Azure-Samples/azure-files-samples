@@ -3704,6 +3704,17 @@ function Debug-AzStorageAccountAuth {
                 $issues | ForEach-Object { Write-Host -ForegroundColor Red "---- $($_.Name) ----`n$($_.Issue)" }
             }
         }
+        
+        $message = "********************`r`n" `
+                + "If above checks are not helpful and further investigation/debugging is needed from the Azure Files team.`r`n" `
+                + "Please prepare the full console log from the cmdlet and Wireshark traces for any mount or access errors to`r`n" `
+                + "help reproducing the issue and speed up the investigation.`r`n"`
+                + "`r`n"`
+                + "Wireshark: https://www.wireshark.org/ `r`n"`
+                + "********************`r`n" 
+
+        Write-Host $message
+
     }
 }
 
