@@ -2501,11 +2501,6 @@ function New-ADAccountForStorageAccount {
 
     Write-Verbose "New-ADAccountForStorageAccount: Creating a AD account under $path in domain:$Domain to represent the storage account:$StorageAccountName"
 
-    if ($path -and $path -contains '*')
-    {
-        Write-Error -Message "Unsupported: the path in domain contains the '*' character." -ErrorAction Stop
-    }
-
     #
     # Get the kerb key and convert it to a secure string password.
     #
@@ -4013,7 +4008,7 @@ function Test-AzStorageAccountADObjectPasswordIsKerbKey {
         $oneKeyMatches = $false
         $keyMatches = [KerbKeyMatch[]]@()
         foreach ($key in $kerbKeys) {
-
+            
             if ($null -eq $key.KeyName) { continue }
 
             if ($null -ne (New-Object Directoryservices.DirectoryEntry "", $userName, $key.Value).PsBase.Name) {
