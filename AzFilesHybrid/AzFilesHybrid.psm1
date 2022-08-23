@@ -219,6 +219,29 @@ function Assert-IsDomainJoined {
     }
 }
 
+function Assert-IsSupportedDistinguishedName {
+    <#
+    .SYNOPSIS
+    Check if distinguished name is in the form that we supported
+    .DESCRIPTION
+    This cmdlet throws an error message to the user if the distinguished name has '*'
+    .EXAMPLE
+    Assert-IsSupportedDistinguishedName -DistinguishedName "CN=abcef,OU=Domain Controllers,DC=defgh,DC=com" 
+    #>
+
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory=$true, Position=0)]
+        [string]$DistinguishedName
+    )
+
+    if ($DistinguishedName.Contains('*'))
+    {
+        Write-Error -Message "Unsupported: There is a '*' character in the DistinguishedName." -ErrorAction Stop
+    }
+        
+}
+
 function Get-OSVersion {
     <#
     .SYNOPSIS
@@ -2501,6 +2524,8 @@ function New-ADAccountForStorageAccount {
 
     Write-Verbose "New-ADAccountForStorageAccount: Creating a AD account under $path in domain:$Domain to represent the storage account:$StorageAccountName"
 
+    Assert-IsSupportedDistinguishedName -DistinguishedName $path
+
     #
     # Get the kerb key and convert it to a secure string password.
     #
@@ -4149,6 +4174,8 @@ function Update-AzStorageAccountADObjectPassword {
         $adObj = Get-AzStorageAccountADObject -StorageAccount $StorageAccount
         $domain = $storageAccount.AzureFilesIdentityBasedAuth.ActiveDirectoryProperties.DomainName
 
+        Assert-IsSupportedDistinguishedName -DistinguishedName $adObj.DistinguishedName
+        
         $caption = ("Set password on AD object " + $adObj.SamAccountName + `
             " for " + $StorageAccount.StorageAccountName + " to value of $RotateToKerbKey.")
         $verboseConfirmMessage = ("This action will change the password for the indicated AD object " + `
@@ -4385,6 +4412,8 @@ function Update-AzStorageAccountAuthForAES256 {
             -StorageAccountName $StorageAccountName -ErrorAction Stop
 
         $adObjectName = $adObject.Name
+
+        Assert-IsSupportedDistinguishedName -DistinguishedName $adObject.DistinguishedName
  
         $activeDirectoryProperties = Get-AzStorageAccountActiveDirectoryProperties `
             -ResourceGroupName $ResourceGroupName -StorageAccountName $StorageAccountName -ErrorAction Stop
