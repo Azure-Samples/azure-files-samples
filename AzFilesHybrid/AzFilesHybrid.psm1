@@ -4367,8 +4367,22 @@ function Update-AzStorageAccountAuthForAES256 {
         }
 
         Write-Verbose -Message "Set AD object '$($adObject.DistinguishedName)' to use AES256 for Kerberos authentication"
-        Set-ADComputer -Identity $adObject.DistinguishedName -Server $domain `
-            -KerberosEncryptionType "AES256" -ErrorAction Stop
+        try
+        {
+            Set-ADComputer -Identity $adObject.DistinguishedName -Server $domain `
+                -KerberosEncryptionType "AES256" -ErrorAction Stop
+        } 
+        catch 
+        {
+            if (!$_.Exception.Message.Contains("Insufficient access rights to perform the operation"))
+            {
+                Write-Error -Message "Please make sure the creator of the AD object has grants you the 'Full Control' permission to perform the operation on this AD Object. This can be done on the Active Directory Administrative Center." -ErrorAction Stop
+            }
+            else
+            {
+                Write-Error -Message "$_" -ErrorAction Stop
+            }
+        }
 
         Update-AzStorageAccountADObjectPassword -ResourceGroupname $ResourceGroupName -StorageAccountName $StorageAccountName `
             -RotateToKerbKey kerb2 -ErrorAction Stop
