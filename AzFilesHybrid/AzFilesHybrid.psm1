@@ -3889,7 +3889,14 @@ function Set-StorageAccountDomainProperties {
         $samAccountName = $azureStorageIdentity.SamAccountName.TrimEnd("$")
         $domainGuid = $domainInformation.ObjectGUID.ToString()
         $domainName = $domainInformation.DnsRoot
-        $domainSid = $domainInformation.DomainSID.Value
+        if ($domainInformation.DomainSID -and $domainInformation.DomainSID.GetType().Name -eq "String")
+        {
+            $domainSid = $domainInformation.DomainSID
+        }
+        else 
+        {
+            $domainSid = $domainInformation.DomainSID.Value
+        }
         $forestName = $domainInformation.Forest
         $netBiosDomainName = $domainInformation.DnsRoot
         $accountType = ""
