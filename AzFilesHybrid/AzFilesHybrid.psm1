@@ -219,16 +219,16 @@ function Assert-IsDomainJoined {
     }
 }
 
-function Assert-IsNotAADDS {
+function Assert_IsNativeAD {
     <#
     .SYNOPSIS
-    Check if the storage account is using AADDS or AADKERB and throw error if yes.
+    Check if the storage account is native AD. If not, throws error
     .DESCRIPTION
-    This cmdlet uses the Get-OSPlatform cmdlet to throw a nice error message to the user if the session isn't Windows.
+    This cmdlet throws error if the storage account is not native AD.
     .EXAMPLE
-    Assert-IsNotAADDS -StorageAccountName "YOUR_STORAGE_ACCOUNT_NAME" -ResourceGroupName "YOUR_RESOURCE_GROUP_NAME"
+    Assert_IsNativeAD -StorageAccountName "YOUR_STORAGE_ACCOUNT_NAME" -ResourceGroupName "YOUR_RESOURCE_GROUP_NAME"
     or
-    Assert-IsNotAADDS -StorageAccount $YOUR_STORAGE_ACCOUNT_OBJECT
+    Assert_IsNativeAD -StorageAccount $YOUR_STORAGE_ACCOUNT_OBJECT
     #>
 
     [CmdletBinding()]
@@ -257,18 +257,15 @@ function Assert-IsNotAADDS {
     if (
         $null -ne $StorageAccount.AzureFilesIdentityBasedAuth -and`
         $null -ne $StorageAccount.AzureFilesIdentityBasedAuth.DirectoryServiceOptions -and `
-        !(
-            "AADDS" -eq $StorageAccount.AzureFilesIdentityBasedAuth.DirectoryServiceOptions -or `
-            "AADKERB" -eq $StorageAccount.AzureFilesIdentityBasedAuth.DirectoryServiceOptions
-        )
+        "AD" -ne $StorageAccount.AzureFilesIdentityBasedAuth.DirectoryServiceOptions
     )
     {
         $DirectoryServiceOptions = $StorageAccount.AzureFilesIdentityBasedAuth.DirectoryServiceOptions
         Write-Error `
             -Message (`
-            "Failed to switch the password of the AD object representing the storage account to the indicated kerb key. The storage account: " + `
-            "'$StorageAccountName' has the DirectoryServiceOptions being : '$DirectoryServiceOptions'. " + `
-            "The DirectoryServiceOptions for the account cannot be either 'AADDS' or 'AADKERB'"
+            "The cmdlet is stopped due to the storage account '$StorageAccountName'" + `
+            " having the DirectoryServiceOptions value: '$DirectoryServiceOptions'. " + `
+            "The DirectoryServiceOptions for the account needs to be 'AD' in order to run the cmdlet."
             ) 
             -ErrorAction Stop
     }
@@ -4119,7 +4116,7 @@ function Update-AzStorageAccountADObjectPassword {
                 -ErrorAction Stop
         }
 
-        Assert-IsNotAADDS -StorageAccount $StorageAccount
+        Assert_IsNativeAD -StorageAccount $StorageAccount
 
         if ($null -eq $StorageAccount.AzureFilesIdentityBasedAuth.ActiveDirectoryProperties) {
             Write-Error `
@@ -4250,7 +4247,7 @@ function Invoke-AzStorageAccountADObjectPasswordRotation {
         switch ($PSCmdlet.ParameterSetName) {
             "StorageAccountName" {
                 
-                Assert-IsNotAADDS -StorageAccountName $StorageAccountName -ResourceGroupName $ResourceGroupName
+                Assert_IsNativeAD -StorageAccountName $StorageAccountName -ResourceGroupName $ResourceGroupName
 
                 $testParams += @{ 
                     "ResourceGroupName" = $ResourceGroupName; 
@@ -4265,7 +4262,7 @@ function Invoke-AzStorageAccountADObjectPasswordRotation {
 
             "StorageAccount" {
                 
-                Assert-IsNotAADDS -StorageAccount $StorageAccount
+                Assert_IsNativeAD -StorageAccount $StorageAccount
 
                 $testParams += @{ 
                     "StorageAccount" = $StorageAccount 
@@ -4378,7 +4375,7 @@ function Update-AzStorageAccountAuthForAES256 {
             $ResourceGroupName = $StorageAccount.ResourceGroupName
         }
 
-        Assert-IsNotAADDS -StorageAccountName $StorageAccountName -ResourceGroupName $ResourceGroupName
+        Assert_IsNativeAD -StorageAccountName $StorageAccountName -ResourceGroupName $ResourceGroupName
 
         $adObject = Get-AzStorageAccountADObject -ResourceGroupName $ResourceGroupName `
             -StorageAccountName $StorageAccountName -ErrorAction Stop
@@ -4571,7 +4568,7 @@ function Join-AzStorageAccount {
                     -ErrorAction Stop
             }
             
-            Assert-IsNotAADDS -StorageAccount $StorageAccount
+            Assert_IsNativeAD -StorageAccount $StorageAccount
 
             # Ensure the storage account has a "kerb1" key.
             Ensure-KerbKeyExists -ResourceGroupName $ResourceGroupName -StorageAccountName $StorageAccountName -ErrorAction Stop
