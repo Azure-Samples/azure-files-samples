@@ -2455,6 +2455,9 @@ function New-ADAccountForStorageAccount {
         [switch]$OverwriteExistingADObject,
 
         [Parameter(Mandatory=$false, Position=7)]
+        [string]$OverwriteADObjectName,
+
+        [Parameter(Mandatory=$false, Position=8)]
         [string]$SamAccountName
     )
 
@@ -2576,8 +2579,8 @@ function New-ADAccountForStorageAccount {
             Write-Error -Message "An AD object '$($computerSpnMatch.DistinguishedName)' with a Service Principal Name of $spnValue already exists within AD. This might happen because you are rejoining a new storage account that shares names with an existing storage account, or if the domain join operation for a storage account failed in an incomplete state. Delete this AD object (or remove the SPN) to continue or specify a switch -OverwriteExistingADObject when calling this cmdlet. See https://docs.microsoft.com/azure/storage/files/storage-troubleshoot-windows-file-connection-problems for more information." -ErrorAction Stop
         }
 
-        $ADObjectName = $computerSpnMatch.Name
-        Write-Verbose -Message "Overwriting an existing AD $ObjectType object $ADObjectName with a Service Principal Name of $spnValue in domain $Domain."
+        $ExistingADObjectName = $computerSpnMatch.Name
+        Write-Verbose -Message "Overwriting an existing AD $ObjectType object $ExistingADObjectName with a Service Principal Name of $spnValue in domain $Domain."
     } elseif ($null -ne $userSpnMatch) {
         if ($ObjectType -ieq "ComputerAccount") {
             Write-Error -Message "It is not supported to create an AD object of type 'ComputerAccount' when there is already an AD object '$($userSpnMatch.DistinguishedName)' of type 'ServiceLogonAccount'." -ErrorAction Stop
@@ -2587,8 +2590,8 @@ function New-ADAccountForStorageAccount {
             Write-Error -Message "An AD object '$($userSpnMatch.DistinguishedName)' with a Service Principal Name of $spnValue already exists within AD. This might happen because you are rejoining a new storage account that shares names with an existing storage account, or if the domain join operation for a storage account failed in an incomplete state. Delete this AD object (or remove the SPN) to continue or specify a switch -OverwriteExistingADObject when calling this cmdlet. See https://docs.microsoft.com/azure/storage/files/storage-troubleshoot-windows-file-connection-problems for more information." -ErrorAction Stop
         }
 
-        $ADObjectName = $userSpnMatch.Name
-        Write-Verbose -Message "Overwriting an existing AD $ObjectType object $ADObjectName with a Service Principal Name of $spnValue in domain $Domain."
+        $ExistingADObjectName = $userSpnMatch.Name
+        Write-Verbose -Message "Overwriting an existing AD $ObjectType object $ExistingADObjectName with a Service Principal Name of $spnValue in domain $Domain."
     }
 
     if ([System.String]::IsNullOrEmpty($SamAccountName)) {
@@ -2610,6 +2613,10 @@ function New-ADAccountForStorageAccount {
                     $userSpnMatch.Description = "Service logon account for Azure storage account $StorageAccountName."
                     $userSpnMatch.Enabled = $true
                     Set-ADUser -Instance $userSpnMatch -ErrorAction Stop
+                    if ($OverwriteADObjectName)
+                    {
+                        Rename-ADObject -Identity $userSpnMatch -NewName $ADObjectName
+                    }
                 } else {
                     New-ADUser `
                         -SamAccountName $SamAccountName `
@@ -2637,6 +2644,10 @@ function New-ADAccountForStorageAccount {
                     $computerSpnMatch.Description = "Computer account object for Azure storage account $StorageAccountName."
                     $computerSpnMatch.Enabled = $true
                     Set-ADComputer -Instance $computerSpnMatch -ErrorAction Stop
+                    if ($OverwriteADObjectName)
+                    {
+                        Rename-ADObject -Identity $computerSpnMatch -NewName $ADObjectName
+                    }
                 } else {
                     New-ADComputer `
                         -SAMAccountName $SamAccountName `
@@ -4644,6 +4655,10 @@ function Join-AzStorageAccount {
 
             if ($PSBoundParameters.ContainsKey("OverwriteExistingADObject")) {
                 $newParams += @{ "OverwriteExistingADObject" = $OverwriteExistingADObject }
+                if ($PSBoundParameters.ContainsKey("ADObjectNameOverride"))
+                {
+                    $newParams += @{ "OverwriteADObjectName" = $true }
+                }
             }
 
             $packedResult = New-ADAccountForStorageAccount @newParams -ErrorAction Stop
