@@ -3163,7 +3163,7 @@ function Debug-KerberosTicketEncryption
     process
     {
         $storageAccount = Validate-StorageAccount -ResourceGroupName $ResourceGroupName `
-        -StorageAccountName $StorageAccountName -ErrorAction Stop
+            -StorageAccountName $StorageAccountName -ErrorAction Stop
 
         $protocolSettings = (Get-AzStorageFileServiceProperty -StorageAccount $storageAccount -ErrorAction Stop).ProtocolSettings.Smb
 
