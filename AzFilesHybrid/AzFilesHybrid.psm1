@@ -3194,10 +3194,34 @@ function Debug-KerberosTicketEncryption
             'None' -eq $kerberosTicketEncryptionClient.Value.ToString()
             )
         {
-            Write-Error -Message "No Kerberos Ticket Encryption is supported on the client side" -ErrorAction Stop
+            # Now try to look for the supported kerberos ticket encryption using klist
+            $klistResult = klist
+            $kerberosTicketEncryptionClient = @()
+            foreach($line in $klistResult){
+                if(!$line.Contains("KerbTicket Encryption Type"))
+                {
+                    continue
+                }
+                if (!($kerberosTicketEncryptionClient.Contains("AES-256")) -and $line.Contains("AES-256"))
+                {
+                    $kerberosTicketEncryptionClient += "AES-256"
+                }
+                if (!($kerberosTicketEncryptionClient.Contains("RC4-HMAC")) -and $line.Contains("RC4-HMAC"))
+                {
+                    $kerberosTicketEncryptionClient += "RC4-HMAC"
+                }
+            }
+
+            if ($kerberosTicketEncryptionClient.Count -eq 0)
+            {
+                Write-Error -Message "No Kerberos Ticket Encryption is supported on the client side" -ErrorAction Stop
+            }
         }
 
-        $kerberosTicketEncryptionClient = $kerberosTicketEncryptionClient.Value.ToString().replace(' ', '') -split ','
+        if ($kerberosTicketEncryptionClient.Value)
+        {
+            $kerberosTicketEncryptionClient = $kerberosTicketEncryptionClient.Value.ToString().replace(' ', '') -split ','
+        }
 
 
         $kerberosTicketEncryptionServer = $protocolSettings.KerberosTicketEncryption
@@ -3247,6 +3271,12 @@ function Debug-ChannelEncryption
         $storageAccount = Validate-StorageAccount -ResourceGroupName $ResourceGroupName -StorageAccountName $StorageAccountName -ErrorAction Stop
 
         $protocolSettings = (Get-AzStorageFileServiceProperty -StorageAccount $storageAccount -ErrorAction Stop).ProtocolSettings.Smb
+
+        $cmdletNeeded = "Get-SmbServerConfiguration"
+        if(!(Get-Command $cmdletNeeded -ErrorAction SilentlyContinue))
+        {
+            Write-Error -Message "Your system does not have or support the command needed for the check '$cmdletNeeded'." -ErrorAction Stop
+        }
 
         $channelEncryptionsClient = (Get-SmbServerConfiguration).EncryptionCiphers.replace("_", "-")
 
