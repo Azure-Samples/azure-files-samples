@@ -3272,12 +3272,6 @@ function Debug-ChannelEncryption
 
         $protocolSettings = (Get-AzStorageFileServiceProperty -StorageAccount $storageAccount -ErrorAction Stop).ProtocolSettings.Smb
 
-        $cmdletNeeded = "Get-SmbServerConfiguration"
-        if(!(Get-Command $cmdletNeeded -ErrorAction SilentlyContinue))
-        {
-            Write-Error -Message "Your system does not have or support the command needed for the check '$cmdletNeeded'." -ErrorAction Stop
-        }
-
         $channelEncryptionsClient = (Get-SmbServerConfiguration).EncryptionCiphers.replace("_", "-")
 
         $channelEncryptionsServer = $protocolSettings.ChannelEncryption
@@ -3591,6 +3585,13 @@ function Debug-AzStorageAccountAuth {
                 Write-Verbose "CheckChannelEncryption - START"
 
                 Assert-IsElevatedSession
+
+                $cmdletNeeded = "Get-SmbServerConfiguration"
+                if(!(Get-Command $cmdletNeeded -ErrorAction SilentlyContinue))
+                {
+                    Write-Verbose -Message "Your system does not have or support the command needed for the check '$cmdletNeeded'." -ErrorAction Stop
+                    $checks["CheckChannelEncryption"].Result = "Skipped"
+                }
 
                 if(!(Get-SmbServerConfiguration).PSobject.Properties.Name -contains "EncryptionCiphers")
                 {
