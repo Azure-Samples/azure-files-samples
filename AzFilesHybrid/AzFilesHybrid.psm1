@@ -1379,6 +1379,42 @@ function Get-ADComputerInternal {
     }
 }
 
+function Rename-ADObjectWithConfirmation {
+    <#
+    .SYNOPSIS
+    Rename an ADObject with extra confirmation if the new name is different than the original name
+    .DESCRIPTION
+    Rename an ADObject with extra confirmation if the new name is different than the original name. If the names are equivalent, nothing happens.
+    .EXAMPLE
+    Rename-ADObjectWithConfirmation -ADObject $ADOBJECT -NewName $SOME_STRING
+    # 
+    #>
+    [CmdletBinding()]
+    
+    param(
+        [Parameter(Mandatory=$true)]
+        [object]$ADObject,
+
+        [Parameter(Mandatory=$true)]
+        [string]$NewName
+    )
+
+    $existingADObjectName = $ADObject.Name
+    if ($NewName -ne $existingADObjectName)
+    {
+        Write-Host "Existing AD Object Name: $existingADObjectName ; New AD Object Name: $NewName"
+        $message = "`nWould you like to replace the AD Object Name with $NewName instead?"
+        $options = [System.Management.Automation.Host.ChoiceDescription[]]("&Yes", "&No")
+        $result = $host.ui.PromptForChoice($title, $message, $options, 0)
+        if ($result -eq 0)
+        {
+            Rename-ADObject -Identity $ADObject -NewName $NewName
+        }
+    }
+
+}
+
+
 function ConvertTo-EncodedJson {
     [CmdletBinding()]
     
@@ -2560,7 +2596,7 @@ function New-ADAccountForStorageAccount {
             -Filter "ServicePrincipalNames -eq '$spnValue'" `
             -Server $Domain
 
-    if (($null -ne $computerSpnMatch) -and ($null -ne $userSpnMatch)) {
+    if (($null -eq $computerSpnMatch) -and ($null -eq $userSpnMatch)) {
         $message = [System.Text.StringBuilder]::new()
         $message.AppendLine("There are already two AD objects with a Service Principal Name of $spnValue in domain $($Domain):")
         $message.AppendLine($computerSpnMatch.DistinguishedName)
@@ -2611,18 +2647,7 @@ function New-ADAccountForStorageAccount {
                     $userSpnMatch.Description = "Service logon account for Azure storage account $StorageAccountName."
                     $userSpnMatch.Enabled = $true
                     Set-ADUser -Instance $userSpnMatch -ErrorAction Stop
-                    if ($ADObjectName -ne $existingADObjectName)
-                    {
-                        Write-Host "Existing AD Object Name: $existingADObjectName ; New AD Object Name: $ADObjectName"
-                        $message = "`nWould you like to replace the AD Object Name with $ADObjectName instead?"
-                        $options = [System.Management.Automation.Host.ChoiceDescription[]]("&Yes", "&No")
-                        $result = $host.ui.PromptForChoice($title, $message, $options, 0)
-                        if ($result -eq 1)
-                        {
-                            $ADObjectName = $existingADObjectName
-                        }
-                    }
-                    Rename-ADObject -Identity $userSpnMatch -NewName $ADObjectName
+                    Rename-ADObjectWithConfirmation -ADObject $userSpnMatch -NewName $ADObjectName
                 } else {
                     New-ADUser `
                         -SamAccountName $SamAccountName `
@@ -2651,18 +2676,7 @@ function New-ADAccountForStorageAccount {
                     $computerSpnMatch.Description = "Computer account object for Azure storage account $StorageAccountName."
                     $computerSpnMatch.Enabled = $true
                     Set-ADComputer -Instance $computerSpnMatch -ErrorAction Stop
-                    if ($ADObjectName -ne $existingADObjectName)
-                    {
-                        Write-Host "Existing AD Object Name: $existingADObjectName ; New AD Object Name: $ADObjectName"
-                        $message = "`nWould you like to replace the AD Object Name with $ADObjectName instead?"
-                        $options = [System.Management.Automation.Host.ChoiceDescription[]]("&Yes", "&No")
-                        $result = $host.ui.PromptForChoice($title, $message, $options, 0)
-                        if ($result -eq 1)
-                        {
-                            $ADObjectName = $existingADObjectName
-                        }
-                    }
-                    Rename-ADObject -Identity $computerSpnMatch -NewName $ADObjectName
+                    Rename-ADObjectWithConfirmation -ADObject $computerSpnMatch -NewName $ADObjectName
                 } else {
                     New-ADComputer `
                         -SAMAccountName $SamAccountName `
