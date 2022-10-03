@@ -2522,7 +2522,7 @@ function New-ADAccountForStorageAccount {
 
     Write-Verbose -Message "AD object name is $ADObjectName, SamAccountName is $SamAccountName."
 
-    $userPrincipalName = "$spnValue@$Domain"
+    $userPrincipalNameForAES256 = "$spnValue@$Domain"
     # Create the identity in Active Directory.    
     try
     {
@@ -2531,10 +2531,24 @@ function New-ADAccountForStorageAccount {
                 Write-Verbose -Message "`$ServiceAccountName is $StorageAccountName"
 
                 if ($null -ne $userSpnMatch) {
+                    $userPrincipalName = $userSpnMatch.UserPrincipalName
+
+                    if ([string]::IsNullOrEmpty($userPrincipalName)) {
+                        Write-Verbose -Message "AD user does not have a userPrincipalName, set userPrincipalName to $userPrincipalNameForAES256 for AES256"
+                    }
+
+                    if ($userPrincipalName -ne $userPrincipalNameForAES256) {
+                        Write-Error `
+                                -Message "The format of UserPrincipalName:$userPrincipalName is incorrect. please change it to: $userPrincipalNameForAES256 for AES256" `
+                                -ErrorAction stop
+                    }
+
                     $userSpnMatch.AllowReversiblePasswordEncryption = $false
                     $userSpnMatch.PasswordNeverExpires = $true
                     $userSpnMatch.Description = "Service logon account for Azure storage account $StorageAccountName."
                     $userSpnMatch.Enabled = $true
+                    $userSpnMatch.KerberosEncryptionType = "AES256"
+                    $userSpnMatch.UserPrincipalName = $userPrincipalNameForAES256
                     Set-ADUser -Instance $userSpnMatch -ErrorAction Stop
                 } else {
                     New-ADUser `
@@ -2548,7 +2562,8 @@ function New-ADAccountForStorageAccount {
                         -ServicePrincipalNames $spnValue `
                         -Server $Domain `
                         -Enabled $true `
-                        -UserPrincipalName $userPrincipalName `
+                        -UserPrincipalName $userPrincipalNameForAES256 `
+                        -KerberosEncryptionType "AES256" `
                         -ErrorAction Stop 
                 }
 
@@ -2563,6 +2578,7 @@ function New-ADAccountForStorageAccount {
                     $computerSpnMatch.AllowReversiblePasswordEncryption = $false
                     $computerSpnMatch.Description = "Computer account object for Azure storage account $StorageAccountName."
                     $computerSpnMatch.Enabled = $true
+                    $computerSpnMatch.KerberosEncryptionType = "AES256"
                     Set-ADComputer -Instance $computerSpnMatch -ErrorAction Stop
                 } else {
                     New-ADComputer `
@@ -2575,6 +2591,7 @@ function New-ADAccountForStorageAccount {
                         -ServicePrincipalNames $spnValue `
                         -Server $Domain `
                         -Enabled $true `
+                        -KerberosEncryptionType "AES256" `
                         -ErrorAction Stop
                 }
             }
