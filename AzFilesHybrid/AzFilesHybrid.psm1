@@ -230,6 +230,27 @@ function Assert-IsNativeAD {
     or
     Assert-IsNativeAD -StorageAccount $YOUR_STORAGE_ACCOUNT_OBJECT
     #>
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory=$true, Position=0)]
+        [string]$DistinguishedName
+    )
+
+    if ($DistinguishedName.Contains('*'))
+    {
+        Write-Error -Message "Unsupported: There is a '*' character in the DistinguishedName." -ErrorAction Stop
+    }
+}
+
+function Assert-IsSupportedDistinguishedName {
+    <#
+    .SYNOPSIS
+    Check if distinguished name is in the form that we supported
+    .DESCRIPTION
+    This cmdlet throws an error message to the user if the distinguished name has '*'
+    .EXAMPLE
+    Assert-IsSupportedDistinguishedName -DistinguishedName "CN=abcef,OU=Domain Controllers,DC=defgh,DC=com" 
+    #>
 
     [CmdletBinding()]
     param (
@@ -1255,6 +1276,56 @@ function Get-RandomString {
     return $acc.GetInternalObject()
 }
 
+function Get-ParentContainer {
+    <#
+    .SYNOPSIS
+    Parse the parent container of the given DistinguishedName
+    .DESCRIPTION
+    This cmdlet parses the parent container of the given DistinguishedName
+    .EXAMPLE
+    Get-ParentContainer -DistinguishedName "CN=abcef,OU=Domain Controllers,DC=defgh,DC=com" 
+    # output: "OU=Domain Controllers,DC=defgh,DC=com"
+    #>
+
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true, Position=0)]
+        [string]$DistinguishedName
+    )
+
+    begin {}
+
+    Process {
+
+        $min_idx = 0
+        $attributes = 'DC','CN','OU','O','STREET','L','ST','C',"UID"
+        $indices = New-Object -TypeName 'System.Collections.ArrayList';
+
+
+        foreach ($attr in $attributes)
+        {  
+            $attr = "," + $attr + "="  # Ex: ",DC="
+            
+            $idx = $DistinguishedName.IndexOf($attr) # Find first occurance
+
+            if ($idx -eq -1) { continue }
+            
+            $null = $indices.Add($idx)
+        }
+
+        $sortedIndices = $indices | Sort-Object
+
+        if ($indices.Count -ne 0)
+        {
+            $min_idx = $sortedIndices[0] + 1
+        }
+
+        $ParentContainer = $DistinguishedName.Substring($min_idx)
+
+        return $ParentContainer
+    }
+}
+
 function Get-ADDomainInternal {
     [CmdletBinding()]
     
@@ -1357,6 +1428,42 @@ function Get-ADComputerInternal {
         }
     }
 }
+
+function Rename-ADObjectWithConfirmation {
+    <#
+    .SYNOPSIS
+    Rename an ADObject with extra confirmation if the new name is different than the original name
+    .DESCRIPTION
+    Rename an ADObject with extra confirmation if the new name is different than the original name. If the names are equivalent, nothing happens.
+    .EXAMPLE
+    Rename-ADObjectWithConfirmation -ADObject $ADOBJECT -NewName $SOME_STRING
+    # 
+    #>
+    [CmdletBinding()]
+    
+    param(
+        [Parameter(Mandatory=$true)]
+        [object]$ADObject,
+
+        [Parameter(Mandatory=$true)]
+        [string]$NewName
+    )
+
+    $existingADObjectName = $ADObject.Name
+    if ($NewName -ne $existingADObjectName)
+    {
+        Write-Host "Existing AD Object Name: $existingADObjectName ; New AD Object Name: $NewName"
+        $message = "`nWould you like to replace the AD Object Name with $NewName instead?"
+        $options = [System.Management.Automation.Host.ChoiceDescription[]]("&Yes", "&No")
+        $result = $host.ui.PromptForChoice($title, $message, $options, 0)
+        if ($result -eq 0)
+        {
+            Rename-ADObject -Identity $ADObject -NewName $NewName
+        }
+    }
+
+}
+
 
 function ConvertTo-EncodedJson {
     [CmdletBinding()]
@@ -1976,7 +2083,7 @@ function Copy-RemoteModule {
                 foreach($moduleFile in $moduleFiles) {
                     $filePath = [System.IO.Path]::Combine($modulePath, $moduleFile.Name)
                     $fileContent = $moduleFile.Content
-                    Set-Content -Path $filePath -Value $fileContent
+                    Set-Content -Path $filePath -Value $fil,eContent
                 }
             }
 }
@@ -2472,7 +2579,7 @@ function New-ADAccountForStorageAccount {
                 Write-Error -Message "Could not find computer '$($Env:COMPUTERNAME)' in domain '$Domain'" -ErrorAction Stop
             }
 
-            $OrganizationalUnitDistinguishedName = $currentComputer.DistinguishedName.Substring($currentComputer.DistinguishedName.IndexOf(',') + 1)
+            $OrganizationalUnitDistinguishedName = Get-ParentContainer -DistinguishedName $currentComputer.DistinguishedName
         } else { # "ServiceLogonAccount"
             $currentUser = Get-ADUser -Identity $($Env:USERNAME) -Server $Domain
 
@@ -2480,7 +2587,7 @@ function New-ADAccountForStorageAccount {
                 Write-Error -Message "Could not find user '$($Env:USERNAME)' in domain '$Domain'" -ErrorAction Stop
             }
 
-            $OrganizationalUnitDistinguishedName = $currentUser.DistinguishedName.Substring($currentUser.DistinguishedName.IndexOf(',') + 1)
+            $OrganizationalUnitDistinguishedName = Get-ParentContainer -DistinguishedName $currentUser.DistinguishedName
         }
     }
 
@@ -2513,6 +2620,8 @@ function New-ADAccountForStorageAccount {
 
     Write-Verbose "New-ADAccountForStorageAccount: Creating a AD account under $path in domain:$Domain to represent the storage account:$StorageAccountName"
 
+    Assert-IsSupportedDistinguishedName -DistinguishedName $path
+
     #
     # Get the kerb key and convert it to a secure string password.
     #
@@ -2537,7 +2646,7 @@ function New-ADAccountForStorageAccount {
             -Filter "ServicePrincipalNames -eq '$spnValue'" `
             -Server $Domain
 
-    if (($null -ne $computerSpnMatch) -and ($null -ne $userSpnMatch)) {
+    if (($null -eq $computerSpnMatch) -and ($null -eq $userSpnMatch)) {
         $message = [System.Text.StringBuilder]::new()
         $message.AppendLine("There are already two AD objects with a Service Principal Name of $spnValue in domain $($Domain):")
         $message.AppendLine($computerSpnMatch.DistinguishedName)
@@ -2553,8 +2662,8 @@ function New-ADAccountForStorageAccount {
             Write-Error -Message "An AD object '$($computerSpnMatch.DistinguishedName)' with a Service Principal Name of $spnValue already exists within AD. This might happen because you are rejoining a new storage account that shares names with an existing storage account, or if the domain join operation for a storage account failed in an incomplete state. Delete this AD object (or remove the SPN) to continue or specify a switch -OverwriteExistingADObject when calling this cmdlet. See https://docs.microsoft.com/azure/storage/files/storage-troubleshoot-windows-file-connection-problems for more information." -ErrorAction Stop
         }
 
-        $ADObjectName = $computerSpnMatch.Name
-        Write-Verbose -Message "Overwriting an existing AD $ObjectType object $ADObjectName with a Service Principal Name of $spnValue in domain $Domain."
+        $existingADObjectName = $computerSpnMatch.Name
+        Write-Verbose -Message "Overwriting an existing AD $ObjectType object $existingADObjectName with a Service Principal Name of $spnValue in domain $Domain."
     } elseif ($null -ne $userSpnMatch) {
         if ($ObjectType -ieq "ComputerAccount") {
             Write-Error -Message "It is not supported to create an AD object of type 'ComputerAccount' when there is already an AD object '$($userSpnMatch.DistinguishedName)' of type 'ServiceLogonAccount'." -ErrorAction Stop
@@ -2564,8 +2673,8 @@ function New-ADAccountForStorageAccount {
             Write-Error -Message "An AD object '$($userSpnMatch.DistinguishedName)' with a Service Principal Name of $spnValue already exists within AD. This might happen because you are rejoining a new storage account that shares names with an existing storage account, or if the domain join operation for a storage account failed in an incomplete state. Delete this AD object (or remove the SPN) to continue or specify a switch -OverwriteExistingADObject when calling this cmdlet. See https://docs.microsoft.com/azure/storage/files/storage-troubleshoot-windows-file-connection-problems for more information." -ErrorAction Stop
         }
 
-        $ADObjectName = $userSpnMatch.Name
-        Write-Verbose -Message "Overwriting an existing AD $ObjectType object $ADObjectName with a Service Principal Name of $spnValue in domain $Domain."
+        $existingADObjectName = $userSpnMatch.Name
+        Write-Verbose -Message "Overwriting an existing AD $ObjectType object $existingADObjectName with a Service Principal Name of $spnValue in domain $Domain."
     }
 
     if ([System.String]::IsNullOrEmpty($SamAccountName)) {
@@ -2574,6 +2683,7 @@ function New-ADAccountForStorageAccount {
 
     Write-Verbose -Message "AD object name is $ADObjectName, SamAccountName is $SamAccountName."
 
+    $userPrincipalNameForAES256 = "$spnValue@$Domain"
     # Create the identity in Active Directory.    
     try
     {
@@ -2582,11 +2692,26 @@ function New-ADAccountForStorageAccount {
                 Write-Verbose -Message "`$ServiceAccountName is $StorageAccountName"
 
                 if ($null -ne $userSpnMatch) {
+                    $userPrincipalName = $userSpnMatch.UserPrincipalName
+
+                    if ([string]::IsNullOrEmpty($userPrincipalName)) {
+                        Write-Verbose -Message "AD user does not have a userPrincipalName, set userPrincipalName to $userPrincipalNameForAES256 for AES256"
+                    }
+
+                    if ($userPrincipalName -ne $userPrincipalNameForAES256) {
+                        Write-Error `
+                                -Message "The format of UserPrincipalName:$userPrincipalName is incorrect. please change it to: $userPrincipalNameForAES256 for AES256" `
+                                -ErrorAction stop
+                    }
+
                     $userSpnMatch.AllowReversiblePasswordEncryption = $false
                     $userSpnMatch.PasswordNeverExpires = $true
                     $userSpnMatch.Description = "Service logon account for Azure storage account $StorageAccountName."
                     $userSpnMatch.Enabled = $true
+                    $userSpnMatch.KerberosEncryptionType = "AES256"
+                    $userSpnMatch.UserPrincipalName = $userPrincipalNameForAES256
                     Set-ADUser -Instance $userSpnMatch -ErrorAction Stop
+                    Rename-ADObjectWithConfirmation -ADObject $userSpnMatch -NewName $ADObjectName
                 } else {
                     New-ADUser `
                         -SamAccountName $SamAccountName `
@@ -2599,7 +2724,9 @@ function New-ADAccountForStorageAccount {
                         -ServicePrincipalNames $spnValue `
                         -Server $Domain `
                         -Enabled $true `
-                        -ErrorAction Stop
+                        -UserPrincipalName $userPrincipalNameForAES256 `
+                        -KerberosEncryptionType "AES256" `
+                        -ErrorAction Stop 
                 }
 
                 #
@@ -2613,7 +2740,9 @@ function New-ADAccountForStorageAccount {
                     $computerSpnMatch.AllowReversiblePasswordEncryption = $false
                     $computerSpnMatch.Description = "Computer account object for Azure storage account $StorageAccountName."
                     $computerSpnMatch.Enabled = $true
+                    $computerSpnMatch.KerberosEncryptionType = "AES256"
                     Set-ADComputer -Instance $computerSpnMatch -ErrorAction Stop
+                    Rename-ADObjectWithConfirmation -ADObject $computerSpnMatch -NewName $ADObjectName
                 } else {
                     New-ADComputer `
                         -SAMAccountName $SamAccountName `
@@ -2625,6 +2754,7 @@ function New-ADAccountForStorageAccount {
                         -ServicePrincipalNames $spnValue `
                         -Server $Domain `
                         -Enabled $true `
+                        -KerberosEncryptionType "AES256" `
                         -ErrorAction Stop
                 }
             }
@@ -2651,7 +2781,11 @@ function New-ADAccountForStorageAccount {
 
     Write-Verbose "New-ADAccountForStorageAccount: Complete"
 
-    return $ADObjectName
+    $packedResult = @{}
+    $packedResult.add( "ADObjectName", $ADObjectName )
+    $packedResult.add( "Domain", $Domain )
+
+    return $packedResult
 }
 
 function Get-AzStorageAccountADObject {
@@ -2713,7 +2847,10 @@ function Get-AzStorageAccountADObject {
         [Parameter(Mandatory=$true, Position=0, ParameterSetName="ADObjectName")]
         [string]$ADObjectName,
 
-        [Parameter(Mandatory=$false, Position=1, ParameterSetName="ADObjectName")]
+        [Parameter(Mandatory=$true, Position=1, ParameterSetName="ADObjectName")]
+        [string]$SPNValue,
+
+        [Parameter(Mandatory=$false, Position=2, ParameterSetName="ADObjectName")]
         [string]$Domain
     )
 
@@ -2762,14 +2899,29 @@ function Get-AzStorageAccountADObject {
             }    
         } else {
             Write-Verbose -Message "Looking for an object with name '$ADObjectName' in domain '$Domain'"
-            $obj = Get-ADObject -Server $Domain -Filter "Name -eq '$ADObjectName'" -ErrorAction Stop
 
-            if ($null -eq $obj) {
+            $computerSpnMatch = Get-ADComputer `
+                    -Filter "ServicePrincipalNames -eq '$SPNValue'" `
+                    -Server $Domain
+
+            $userSpnMatch = Get-ADUser `
+                    -Filter "ServicePrincipalNames -eq '$SPNValue'" `
+                    -Server $Domain
+
+            if (($null -ne $computerSpnMatch) -and ($null -ne $userSpnMatch)) {
                 $message = "Cannot find an object with a '$ADObjectname' in domain '$Domain'." `
                     + " Please verify that the storage account has been domain-joined through the steps" `
                     + " in Microsoft documentation:" `
                     + " https://docs.microsoft.com/en-us/azure/storage/files/storage-files-identity-auth-active-directory-enable#12-domain-join-your-storage-account"
                 Write-Error -Message $message -ErrorAction Stop
+            } 
+            elseif ($null -ne $computerSpnMatch) 
+            {
+                return $computerSpnMatch
+            } 
+            else
+            {
+                return $userSpnMatch
             }    
         }
 
@@ -2780,7 +2932,7 @@ function Get-AzStorageAccountADObject {
                 $computer = Get-ADComputer `
                     -Identity $obj.DistinguishedName `
                     -Server $Domain `
-                    -Properties "ServicePrincipalNames" `
+                    -Properties "ServicePrincipalNames", "KerberosEncryptionType" `
                     -ErrorAction Stop
                 
                 return $computer
@@ -2790,7 +2942,7 @@ function Get-AzStorageAccountADObject {
                 $user = Get-ADUser `
                     -Identity $obj.DistinguishedName `
                     -Server $Domain `
-                    -Properties "ServicePrincipalNames" `
+                    -Properties "ServicePrincipalNames", "KerberosEncryptionType" `
                     -ErrorAction Stop
                 
                 return $user
@@ -3198,6 +3350,188 @@ function Debug-AzStorageAccountADObject
     }
 }
 
+function Debug-KerberosTicketEncryption
+{
+    [CmdletBinding()]
+
+    param (
+        [Parameter(Mandatory=$True, Position=0, HelpMessage="Storage account name")]
+        [string]$StorageAccountName,
+
+        [Parameter(Mandatory=$True, Position=1, HelpMessage="Resource group name")]
+        [string]$ResourceGroupName
+    )
+
+    process
+    {
+        $storageAccount = Validate-StorageAccount -ResourceGroupName $ResourceGroupName `
+            -StorageAccountName $StorageAccountName -ErrorAction Stop
+
+        $protocolSettings = (Get-AzStorageFileServiceProperty -StorageAccount $storageAccount -ErrorAction Stop).ProtocolSettings.Smb
+
+        $adObject = Get-AzStorageAccountADObject -StorageAccountName $StorageAccountName `
+            -ResourceGroupName $ResourceGroupName -ErrorAction Stop
+
+        Write-Verbose "Validating the security protocol settings has 'Kerberos' as one of the Smb Authentication Methods"
+
+        $authenticationMethods = $protocolSettings.AuthenticationMethods
+        if ($null -eq $authenticationMethods)
+        {
+            # if null, all types are supported for the storage account
+            $authenticationMethods = "NTLMv2", "Kerberos"
+        }
+        $authenticationMethods = [String]::Join(", ", $authenticationMethods)
+
+        if(!$authenticationMethods.Contains("Kerberos"))
+        {
+            Write-Error -Message "The protocol settings on the storage account does not support 'Kerberos' as one of the Smb Authentication Methods" -ErrorAction Stop
+        }
+
+        Write-Verbose "Validating Kerberos Ticket Encryption setting on the client side is supported"
+        
+        $kerberosTicketEncryptionClient = $adObject.KerberosEncryptionType
+        if(
+            $null -eq $kerberosTicketEncryptionClient -or `
+            0 -eq $kerberosTicketEncryptionClient.Count -or `
+            'None' -eq $kerberosTicketEncryptionClient.Value.ToString()
+            )
+        {
+            # Now try to look for the supported kerberos ticket encryption using klist
+            $klistResult = klist
+            $kerberosTicketEncryptionClient = @()
+            foreach($line in $klistResult){
+                if(!$line.Contains("KerbTicket Encryption Type"))
+                {
+                    continue
+                }
+                if (!($kerberosTicketEncryptionClient.Contains("AES-256")) -and $line.Contains("AES-256"))
+                {
+                    $kerberosTicketEncryptionClient += "AES-256"
+                }
+                if (!($kerberosTicketEncryptionClient.Contains("RC4-HMAC")) -and $line.Contains("RC4-HMAC"))
+                {
+                    $kerberosTicketEncryptionClient += "RC4-HMAC"
+                }
+            }
+
+            if ($kerberosTicketEncryptionClient.Count -eq 0)
+            {
+                Write-Error -Message "No Kerberos Ticket Encryption is supported on the client side" -ErrorAction Stop
+            }
+        }
+
+        if ($kerberosTicketEncryptionClient.Value)
+        {
+            $kerberosTicketEncryptionClient = $kerberosTicketEncryptionClient.Value.ToString().replace(' ', '') -split ','
+        }
+
+
+        $kerberosTicketEncryptionServer = $protocolSettings.KerberosTicketEncryption
+        if($null -eq $kerberosTicketEncryptionServer)
+        {
+            $kerberosTicketEncryptionServer = "RC4-HMAC", "AES-256" # null(default): all values are accepted on the server
+        }
+        $kerberosTicketEncryptionServer = [String]::Join(", ", $kerberosTicketEncryptionServer)
+        $kerberosTicketEncryptionServerNoDash = $kerberosTicketEncryptionServer.replace('-','')
+
+        Write-Verbose "Kerberos Ticket Encryption supported on the client side: $kerberosTicketEncryptionClient"
+        Write-Verbose "Kerberos Ticket Encryption supported on the server side: $kerberosTicketEncryptionServerNoDash"
+        
+        $found = $false
+        foreach($type in $kerberosTicketEncryptionClient)
+        {
+            if ($kerberosTicketEncryptionServerNoDash.Contains($type)) 
+            {
+                $found = $true
+                break
+            }
+        }
+
+        if (!$found) 
+        {
+            Write-Error -Message "The server side and the client side do not have a Kerberos Ticket Encryption type in common." -ErrorAction Stop
+        }
+
+    }
+}
+
+function Debug-ChannelEncryption
+{
+    [CmdletBinding()]
+
+    param (
+        [Parameter(Mandatory=$True, Position=0, HelpMessage="Storage account name")]
+        [string]$StorageAccountName,
+
+        [Parameter(Mandatory=$True, Position=1, HelpMessage="Resource group name")]
+        [string]$ResourceGroupName
+    )
+
+    process
+    {
+
+        $storageAccount = Validate-StorageAccount -ResourceGroupName $ResourceGroupName -StorageAccountName $StorageAccountName -ErrorAction Stop
+
+        $protocolSettings = (Get-AzStorageFileServiceProperty -StorageAccount $storageAccount -ErrorAction Stop).ProtocolSettings.Smb
+
+        $channelEncryptionsClient = (Get-SmbServerConfiguration).EncryptionCiphers.replace("_", "-")
+
+        $channelEncryptionsServer = $protocolSettings.ChannelEncryption
+        if ($null -eq $channelEncryptionsServer)
+        {
+            # if null, all types are supported for the storage account
+            $channelEncryptionsServer = "AES-128-CCM", "AES-128-GCM", "AES-256-GCM"
+        }
+        $channelEncryptionsServerWithComma = [String]::Join(", ", $channelEncryptionsServer)
+
+        Write-Host "Channel Encryption Supported on the Client Side: $channelEncryptionsClient"
+        Write-Host "Channel Encryption Supported on the Server Side: $channelEncryptionsServerWithComma"
+
+        $found = $false
+        foreach($type in $channelEncryptionsServer)
+        {
+            if($channelEncryptionsClient.Contains($type))
+            {
+                $found = $true
+                break    
+            }
+        }
+
+        if(!$found)
+        {
+            Write-Error -Message "The server side and the client side do not have a Channel Encryption type in common." -ErrorAction Stop
+        }
+        
+    }
+}
+
+function Debug-DomainLineOfSight
+{
+    [CmdletBinding()]
+
+    param (
+        [Parameter(Mandatory=$True, Position=0, HelpMessage="Storage account name")]
+        [string]$StorageAccountName,
+
+        [Parameter(Mandatory=$True, Position=1, HelpMessage="Resource group name")]
+        [string]$ResourceGroupName
+    )
+
+    process
+    {
+        $storageAccount = Get-AzStorageAccount -ResourceGroupName $ResourceGroupName -Name $StorageAccountName
+        $fullyQualifiedDomainName = $storageAccount.AzureFilesIdentityBasedAuth.ActiveDirectoryProperties.DomainName
+        Write-Host "Fully Qualified Domain Name: $fullyQualifiedDomainName"
+        $checkResult = nltest /dsgetdc:$fullyQualifiedDomainName | Out-String
+
+        if([string]::IsNullOrEmpty($checkResult))
+        {
+            Write-Error -Message "There is no line of sight to the domain controller; Hence, you will not be able to get the Kerberos ticket." -ErrorAction Stop
+        }
+
+    }
+}
+
 function Get-OnPremAdUser {
     [CmdletBinding()]
     param (
@@ -3325,6 +3659,9 @@ function Debug-AzStorageAccountAuth {
             "CheckDomainJoined" = [CheckResult]::new("CheckDomainJoined");
             "CheckADObject" = [CheckResult]::new("CheckADObject");
             "CheckGetKerberosTicket" = [CheckResult]::new("CheckGetKerberosTicket");
+            "CheckKerberosTicketEncryption" = [CheckResult]::new("CheckKerberosTicketEncryption");
+            "CheckChannelEncryption" = [CheckResult]::new("CheckChannelEncryption");
+            "CheckDomainLineOfSight" = [CheckResult]::new("CheckDomainLineOfSight");
             "CheckADObjectPasswordIsCorrect" = [CheckResult]::new("CheckADObjectPasswordIsCorrect");
             "CheckSidHasAadUser" = [CheckResult]::new("CheckSidHasAadUser");
             "CheckAadUserHasSid" = [CheckResult]::new("CheckAadUserHasSid");
@@ -3420,6 +3757,80 @@ function Debug-AzStorageAccountAuth {
                 $checks["CheckGetKerberosTicket"].Result = "Failed"
                 $checks["CheckGetKerberosTicket"].Issue = $_
                 Write-Error "CheckGetKerberosTicket - FAILED"
+                Write-Error $_
+            }
+        }
+
+        if (!$filterIsPresent -or $Filter -match "CheckKerberosTicketEncryption")
+        {
+            try {
+                $checksExecuted += 1;
+                Write-Verbose "CheckKerberosTicketEncryption - START"
+
+                Debug-KerberosTicketEncryption -StorageAccountName $StorageAccountName `
+                    -ResourceGroupName $ResourceGroupName -ErrorAction Stop
+
+                $checks["CheckKerberosTicketEncryption"].Result = "Passed"
+                Write-Verbose "CheckKerberosTicketEncryption - SUCCESS"
+            } catch {
+                $checks["CheckKerberosTicketEncryption"].Result = "Failed"
+                $checks["CheckKerberosTicketEncryption"].Issue = $_
+                Write-Error "CheckKerberosTicketEncryption - FAILED"
+                Write-Error $_
+            }
+        }
+
+        if (!$filterIsPresent -or $Filter -match "CheckChannelEncryption")
+        {
+            try {
+                $checksExecuted += 1;
+                Write-Verbose "CheckChannelEncryption - START"
+
+                Assert-IsElevatedSession
+
+                $cmdletNeeded = "Get-SmbServerConfiguration"
+                if(!(Get-Command $cmdletNeeded -ErrorAction SilentlyContinue))
+                {
+                    Write-Verbose -Message "Your system does not have or support the command needed for the check '$cmdletNeeded'." -ErrorAction Stop
+                    $checks["CheckChannelEncryption"].Result = "Skipped"
+                }
+
+                if(!(Get-SmbServerConfiguration).PSobject.Properties.Name -contains "EncryptionCiphers")
+                {
+                    Write-Verbose -Message "Your operating system does not support the property 'EncryptionCiphers' of the cmdlet 'Get-SmbServerConfiguration'. Please refer to 'https://docs.microsoft.com/en-us/powershell/module/smbshare/set-smbserverconfiguration?view=windowsserver2022-ps'"
+                    $checks["CheckChannelEncryption"].Result = "Skipped"
+                }
+                else 
+                {
+                    Debug-ChannelEncryption -StorageAccountName $StorageAccountName `
+                    -ResourceGroupName $ResourceGroupName -ErrorAction Stop
+
+                    $checks["CheckChannelEncryption"].Result = "Passed"
+                    Write-Verbose "CheckChannelEncryption - SUCCESS"
+                }
+            } catch {
+                $checks["CheckChannelEncryption"].Result = "Failed"
+                $checks["CheckChannelEncryption"].Issue = $_
+                Write-Error "CheckChannelEncryption - FAILED"
+                Write-Error $_
+            }
+        }
+
+        if (!$filterIsPresent -or $Filter -match "CheckDomainLineOfSight")
+        {
+            try {
+                $checksExecuted += 1;
+                Write-Verbose "CheckDomainLineOfSight - START"
+
+                Debug-DomainLineOfSight -StorageAccountName $StorageAccountName `
+                    -ResourceGroupName $ResourceGroupName -ErrorAction Stop
+
+                $checks["CheckDomainLineOfSight"].Result = "Passed"
+                Write-Verbose "CheckDomainLineOfSight - SUCCESS"
+            } catch {
+                $checks["CheckDomainLineOfSight"].Result = "Failed"
+                $checks["CheckDomainLineOfSight"].Issue = $_
+                Write-Error "CheckDomainLineOfSight - FAILED"
                 Write-Error $_
             }
         }
@@ -3756,6 +4167,17 @@ function Debug-AzStorageAccountAuth {
                 $issues | ForEach-Object { Write-Host -ForegroundColor Red "---- $($_.Name) ----`n$($_.Issue)" }
             }
         }
+        
+        $message = "********************`r`n" `
+                + "If above checks are not helpful and further investigation/debugging is needed from the Azure Files team.`r`n" `
+                + "Please prepare the full console log from the cmdlet and Wireshark traces for any mount or access errors to`r`n" `
+                + "help reproducing the issue and speed up the investigation.`r`n"`
+                + "`r`n"`
+                + "Wireshark: https://www.wireshark.org/ `r`n"`
+                + "********************`r`n" 
+
+        Write-Host $message
+
     }
 }
 
@@ -3799,7 +4221,7 @@ function Set-StorageAccountDomainProperties {
         [Parameter(Mandatory=$false, Position=2)]
         [string]$ADObjectName,
 
-        [Parameter(Mandatory=$false, Position=3)]
+        [Parameter(Mandatory=$true, Position=3)]
         [string]$Domain,
 
         [Parameter(Mandatory=$false, Position=4)]
@@ -3838,22 +4260,30 @@ function Set-StorageAccountDomainProperties {
         
         Write-Verbose "Set-StorageAccountDomainProperties: Enabling the feature on the storage account and providing the required properties to the storage service"
 
-        if ([System.String]::IsNullOrEmpty($Domain)) {
-            $domainInformation = Get-ADDomain
-            $Domain = $domainInformation.DnsRoot
-        } else {
-            $domainInformation = Get-ADDomain -Server $Domain
-        }
+
+        $domainInformation = Get-ADDomain -Server $Domain
+        $spnValue = Get-ServicePrincipalName `
+            -StorageAccountName $StorageAccountName `
+            -ResourceGroupName $ResourceGroupName `
+            -ErrorAction Stop
 
         $azureStorageIdentity = Get-AzStorageAccountADObject `
             -ADObjectName $ADObjectName `
+            -SPNValue $spnValue `
             -Domain $Domain `
             -ErrorAction Stop
         $azureStorageSid = $azureStorageIdentity.SID.Value
         $samAccountName = $azureStorageIdentity.SamAccountName.TrimEnd("$")
         $domainGuid = $domainInformation.ObjectGUID.ToString()
         $domainName = $domainInformation.DnsRoot
-        $domainSid = $domainInformation.DomainSID.Value
+        if ($domainInformation.DomainSID -and $domainInformation.DomainSID.GetType().Name -eq "String")
+        {
+            $domainSid = $domainInformation.DomainSID
+        }
+        else 
+        {
+            $domainSid = $domainInformation.DomainSID.Value
+        }
         $forestName = $domainInformation.Forest
         $netBiosDomainName = $domainInformation.DnsRoot
         $accountType = ""
@@ -3997,6 +4427,9 @@ function Test-AzStorageAccountADObjectPasswordIsKerbKey {
         $oneKeyMatches = $false
         $keyMatches = [KerbKeyMatch[]]@()
         foreach ($key in $kerbKeys) {
+            
+            if ($null -eq $key.KeyName) { continue }
+
             if ($null -ne (New-Object Directoryservices.DirectoryEntry "", $userName, $key.Value).PsBase.Name) {
                 Write-Verbose "Found that $($key.KeyName) matches password for $StorageAccountName in AD."
                 $oneKeyMatches = $true
@@ -4137,6 +4570,8 @@ function Update-AzStorageAccountADObjectPassword {
         $adObj = Get-AzStorageAccountADObject -StorageAccount $StorageAccount
         $domain = $storageAccount.AzureFilesIdentityBasedAuth.ActiveDirectoryProperties.DomainName
 
+        Assert-IsSupportedDistinguishedName -DistinguishedName $adObj.DistinguishedName
+        
         $caption = ("Set password on AD object " + $adObj.SamAccountName + `
             " for " + $StorageAccount.StorageAccountName + " to value of $RotateToKerbKey.")
         $verboseConfirmMessage = ("This action will change the password for the indicated AD object " + `
@@ -4381,45 +4816,55 @@ function Update-AzStorageAccountAuthForAES256 {
             -StorageAccountName $StorageAccountName -ErrorAction Stop
 
         $adObjectName = $adObject.Name
+
+        Assert-IsSupportedDistinguishedName -DistinguishedName $adObject.DistinguishedName
  
         $activeDirectoryProperties = Get-AzStorageAccountActiveDirectoryProperties `
             -ResourceGroupName $ResourceGroupName -StorageAccountName $StorageAccountName -ErrorAction Stop
         $domain = $activeDirectoryProperties.DomainName
 
-        if ($adObject.ObjectClass -ine "computer") {
-            $message = "Removing object '$($adObject.DistinguishedName)' of type '$adObject.ObjectClass' from domain '$domain'." `
-                + " AES256 is only supported for computer objects."
-            Write-Verbose -Message $message
-
-            Remove-ADObject -Identity $adObject.DistinguishedName -Server $domain -Confirm:$false -ErrorAction Stop
-
-            $organizationalUnitDistinguishedName = $adObject.DistinguishedName.Substring($adObject.DistinguishedName.IndexOf(',') + 1)
-            $samAccountName = $adObject.SamAccountName.TrimEnd("$")
-
-            $message = "Join storage account '$StorageAccountName' to domain '$domain'" `
-                + " as a computer object under '$organizationalUnitDistinguishedName'"
-            Write-Verbose -Message $message
-
-            Join-AzStorageAccount -ResourceGroupName $ResourceGroupName -StorageAccountName $StorageAccountName `
-                -Domain $domain -DomainAccountType "ComputerAccount" `
-                -OrganizationalUnitDistinguishedName $organizationalUnitDistinguishedName `
-                -ADObjectNameOverride $adObjectName -SamAccountName $samAccountName `
-                -ErrorAction Stop
-            
-            $adObject = Get-AzStorageAccountADObject -ResourceGroupName $ResourceGroupName `
-                -StorageAccountName $StorageAccountName -ErrorAction Stop
-        } else {
-            Set-StorageAccountDomainProperties `
-                -ADObjectName $adObjectName `
-                -ResourceGroupName $ResourceGroupName `
+        switch($adObject.ObjectClass) {
+            "user" {
+                Write-Verbose -Message "Set AD user object '$($adObject.DistinguishedName)' to use AES256 for Kerberos authentication"
+                
+                $spnValue = Get-ServicePrincipalName `
                 -StorageAccountName $StorageAccountName `
-                -Domain $domain `
-                -Force
+                -ResourceGroupName $ResourceGroupName `
+                -ErrorAction Stop
+
+                $userPrincipalNameForAES256 = "$spnValue@$domain"
+
+                $userPrincipalName = $adObject.UserPrincipalName
+
+                if ([string]::IsNullOrEmpty($userPrincipalName)) {
+                    $userPrincipalName = $userPrincipalNameForAES256
+
+                    Write-Verbose -Message "AD user does not have a userPrincipalName, set userPrincipalName to $userPrincipalName"
+                }
+
+                if ($userPrincipalName -ne $userPrincipalNameForAES256) {
+                    Write-Error `
+                            -Message "The format of UserPrincipalName:$userPrincipalName is incorrect. please change it to: $userPrincipalNameForAES256 for AES256" `
+                            -ErrorAction stop
+                }
+
+                Set-ADUser -Identity $adObject.DistinguishedName -Server $domain `
+                    -KerberosEncryptionType "AES256" -UserPrincipalName $userPrincipalName -ErrorAction Stop
+            }
+
+            "computer" {
+                Write-Verbose -Message "Set AD computer object '$($adObject.DistinguishedName)' to use AES256 for Kerberos authentication"
+                Set-ADComputer -Identity $adObject.DistinguishedName -Server $domain `
+                    -KerberosEncryptionType "AES256" -ErrorAction Stop
+            }
         }
 
-        Write-Verbose -Message "Set AD object '$($adObject.DistinguishedName)' to use AES256 for Kerberos authentication"
-        Set-ADComputer -Identity $adObject.DistinguishedName -Server $domain `
-            -KerberosEncryptionType "AES256" -ErrorAction Stop
+        Set-StorageAccountDomainProperties `
+            -ADObjectName $adObjectName `
+            -ResourceGroupName $ResourceGroupName `
+            -StorageAccountName $StorageAccountName `
+            -Domain $domain `
+            -Force
 
         Update-AzStorageAccountADObjectPassword -ResourceGroupname $ResourceGroupName -StorageAccountName $StorageAccountName `
             -RotateToKerbKey kerb2 -ErrorAction Stop
@@ -4530,13 +4975,7 @@ function Join-AzStorageAccount {
                     -ErrorAction Stop
         }
 
-        if (($DomainAccountType -ieq "ServiceLogonAccount") -and ($EncryptionType -contains "AES256")) {
-            $message = "Parameter -DomainAccountType is 'ServiceLogonAccount'," `
-                + " which will not be supported AES256 encryption for Kerberos tickets."
-            Write-Warning -Message $message
-        }
-
-        if ($PSCmdlet.ParameterSetName -eq "StorageAccount") {
+        if ($PSCmdlet.ParameterSetName -eq "StorageAccount") {,
             $StorageAccountName = $StorageAccount.StorageAccountName
             $ResourceGroupName = $StorageAccount.ResourceGroupName
         }
@@ -4598,7 +5037,9 @@ function Join-AzStorageAccount {
                 $newParams += @{ "OverwriteExistingADObject" = $OverwriteExistingADObject }
             }
 
-            $ADObjectNameOverride = New-ADAccountForStorageAccount @newParams -ErrorAction Stop
+            $packedResult = New-ADAccountForStorageAccount @newParams -ErrorAction Stop
+            $ADObjectNameOverride = $packedResult["ADObjectName"]
+            $Domain = $packedResult["Domain"]
 
             Write-Verbose "Created AD object $ADObjectNameOverride"
 
@@ -6239,7 +6680,7 @@ function Move-OnPremSharePermissionsToAzureFileShare
 
     $roleAssignmentsDoneList = New-Object System.Collections.Generic.List[Microsoft.Azure.Commands.Resources.Models.Authorization.PSRoleAssignment]
     $roleAssignmentsSkippedAccountsForMissingRoles = New-Object System.Collections.Generic.List[CimInstance]
-    $roleAssignmentsSkippedAccountsForMissingIdentity = New-Object System.Collections.Generic.List[CimInstance]
+    $roleAssignmentsSkippedAccountsForMissingIdentity = New-Object System.C,ollections.Generic.List[CimInstance]
     $roleAssignmentsSkippedAccountsForHavingRoleAlready = New-Object System.Collections.Generic.List[CimInstance]
     $roleAssignmentsDoneAccounts = New-Object System.Collections.Generic.List[CimInstance]
     $roleAssignmentsPossibleWithoutAnySkips = $True
