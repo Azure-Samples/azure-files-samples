@@ -219,6 +219,29 @@ function Assert-IsDomainJoined {
     }
 }
 
+function Assert-IsSupportedDistinguishedName {
+    <#
+    .SYNOPSIS
+    Check if distinguished name is in the form that we supported
+    .DESCRIPTION
+    This cmdlet throws an error message to the user if the distinguished name has '*'
+    .EXAMPLE
+    Assert-IsSupportedDistinguishedName -DistinguishedName "CN=abcef,OU=Domain Controllers,DC=defgh,DC=com" 
+    #>
+
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory=$true, Position=0)]
+        [string]$DistinguishedName
+    )
+
+    if ($DistinguishedName.Contains('*'))
+    {
+        Write-Error -Message "Unsupported: There is a '*' character in the DistinguishedName." -ErrorAction Stop
+    }
+        
+}
+
 function Get-OSVersion {
     <#
     .SYNOPSIS
@@ -1203,6 +1226,56 @@ function Get-RandomString {
     return $acc.GetInternalObject()
 }
 
+function Get-ParentContainer {
+    <#
+    .SYNOPSIS
+    Parse the parent container of the given DistinguishedName
+    .DESCRIPTION
+    This cmdlet parses the parent container of the given DistinguishedName
+    .EXAMPLE
+    Get-ParentContainer -DistinguishedName "CN=abcef,OU=Domain Controllers,DC=defgh,DC=com" 
+    # output: "OU=Domain Controllers,DC=defgh,DC=com"
+    #>
+
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true, Position=0)]
+        [string]$DistinguishedName
+    )
+
+    begin {}
+
+    Process {
+
+        $min_idx = 0
+        $attributes = 'DC','CN','OU','O','STREET','L','ST','C',"UID"
+        $indices = New-Object -TypeName 'System.Collections.ArrayList';
+
+
+        foreach ($attr in $attributes)
+        {  
+            $attr = "," + $attr + "="  # Ex: ",DC="
+            
+            $idx = $DistinguishedName.IndexOf($attr) # Find first occurance
+
+            if ($idx -eq -1) { continue }
+            
+            $null = $indices.Add($idx)
+        }
+
+        $sortedIndices = $indices | Sort-Object
+
+        if ($indices.Count -ne 0)
+        {
+            $min_idx = $sortedIndices[0] + 1
+        }
+
+        $ParentContainer = $DistinguishedName.Substring($min_idx)
+
+        return $ParentContainer
+    }
+}
+
 function Get-ADDomainInternal {
     [CmdletBinding()]
     
@@ -1305,6 +1378,42 @@ function Get-ADComputerInternal {
         }
     }
 }
+
+function Rename-ADObjectWithConfirmation {
+    <#
+    .SYNOPSIS
+    Rename an ADObject with extra confirmation if the new name is different than the original name
+    .DESCRIPTION
+    Rename an ADObject with extra confirmation if the new name is different than the original name. If the names are equivalent, nothing happens.
+    .EXAMPLE
+    Rename-ADObjectWithConfirmation -ADObject $ADOBJECT -NewName $SOME_STRING
+    # 
+    #>
+    [CmdletBinding()]
+    
+    param(
+        [Parameter(Mandatory=$true)]
+        [object]$ADObject,
+
+        [Parameter(Mandatory=$true)]
+        [string]$NewName
+    )
+
+    $existingADObjectName = $ADObject.Name
+    if ($NewName -ne $existingADObjectName)
+    {
+        Write-Host "Existing AD Object Name: $existingADObjectName ; New AD Object Name: $NewName"
+        $message = "`nWould you like to replace the AD Object Name with $NewName instead?"
+        $options = [System.Management.Automation.Host.ChoiceDescription[]]("&Yes", "&No")
+        $result = $host.ui.PromptForChoice($title, $message, $options, 0)
+        if ($result -eq 0)
+        {
+            Rename-ADObject -Identity $ADObject -NewName $NewName
+        }
+    }
+
+}
+
 
 function ConvertTo-EncodedJson {
     [CmdletBinding()]
@@ -2420,7 +2529,7 @@ function New-ADAccountForStorageAccount {
                 Write-Error -Message "Could not find computer '$($Env:COMPUTERNAME)' in domain '$Domain'" -ErrorAction Stop
             }
 
-            $OrganizationalUnitDistinguishedName = $currentComputer.DistinguishedName.Substring($currentComputer.DistinguishedName.IndexOf(',') + 1)
+            $OrganizationalUnitDistinguishedName = Get-ParentContainer -DistinguishedName $currentComputer.DistinguishedName
         } else { # "ServiceLogonAccount"
             $currentUser = Get-ADUser -Identity $($Env:USERNAME) -Server $Domain
 
@@ -2428,7 +2537,7 @@ function New-ADAccountForStorageAccount {
                 Write-Error -Message "Could not find user '$($Env:USERNAME)' in domain '$Domain'" -ErrorAction Stop
             }
 
-            $OrganizationalUnitDistinguishedName = $currentUser.DistinguishedName.Substring($currentUser.DistinguishedName.IndexOf(',') + 1)
+            $OrganizationalUnitDistinguishedName = Get-ParentContainer -DistinguishedName $currentUser.DistinguishedName
         }
     }
 
@@ -2461,6 +2570,8 @@ function New-ADAccountForStorageAccount {
 
     Write-Verbose "New-ADAccountForStorageAccount: Creating a AD account under $path in domain:$Domain to represent the storage account:$StorageAccountName"
 
+    Assert-IsSupportedDistinguishedName -DistinguishedName $path
+
     #
     # Get the kerb key and convert it to a secure string password.
     #
@@ -2485,7 +2596,7 @@ function New-ADAccountForStorageAccount {
             -Filter "ServicePrincipalNames -eq '$spnValue'" `
             -Server $Domain
 
-    if (($null -ne $computerSpnMatch) -and ($null -ne $userSpnMatch)) {
+    if (($null -eq $computerSpnMatch) -and ($null -eq $userSpnMatch)) {
         $message = [System.Text.StringBuilder]::new()
         $message.AppendLine("There are already two AD objects with a Service Principal Name of $spnValue in domain $($Domain):")
         $message.AppendLine($computerSpnMatch.DistinguishedName)
@@ -2501,8 +2612,8 @@ function New-ADAccountForStorageAccount {
             Write-Error -Message "An AD object '$($computerSpnMatch.DistinguishedName)' with a Service Principal Name of $spnValue already exists within AD. This might happen because you are rejoining a new storage account that shares names with an existing storage account, or if the domain join operation for a storage account failed in an incomplete state. Delete this AD object (or remove the SPN) to continue or specify a switch -OverwriteExistingADObject when calling this cmdlet. See https://docs.microsoft.com/azure/storage/files/storage-troubleshoot-windows-file-connection-problems for more information." -ErrorAction Stop
         }
 
-        $ADObjectName = $computerSpnMatch.Name
-        Write-Verbose -Message "Overwriting an existing AD $ObjectType object $ADObjectName with a Service Principal Name of $spnValue in domain $Domain."
+        $existingADObjectName = $computerSpnMatch.Name
+        Write-Verbose -Message "Overwriting an existing AD $ObjectType object $existingADObjectName with a Service Principal Name of $spnValue in domain $Domain."
     } elseif ($null -ne $userSpnMatch) {
         if ($ObjectType -ieq "ComputerAccount") {
             Write-Error -Message "It is not supported to create an AD object of type 'ComputerAccount' when there is already an AD object '$($userSpnMatch.DistinguishedName)' of type 'ServiceLogonAccount'." -ErrorAction Stop
@@ -2512,8 +2623,8 @@ function New-ADAccountForStorageAccount {
             Write-Error -Message "An AD object '$($userSpnMatch.DistinguishedName)' with a Service Principal Name of $spnValue already exists within AD. This might happen because you are rejoining a new storage account that shares names with an existing storage account, or if the domain join operation for a storage account failed in an incomplete state. Delete this AD object (or remove the SPN) to continue or specify a switch -OverwriteExistingADObject when calling this cmdlet. See https://docs.microsoft.com/azure/storage/files/storage-troubleshoot-windows-file-connection-problems for more information." -ErrorAction Stop
         }
 
-        $ADObjectName = $userSpnMatch.Name
-        Write-Verbose -Message "Overwriting an existing AD $ObjectType object $ADObjectName with a Service Principal Name of $spnValue in domain $Domain."
+        $existingADObjectName = $userSpnMatch.Name
+        Write-Verbose -Message "Overwriting an existing AD $ObjectType object $existingADObjectName with a Service Principal Name of $spnValue in domain $Domain."
     }
 
     if ([System.String]::IsNullOrEmpty($SamAccountName)) {
@@ -2550,6 +2661,7 @@ function New-ADAccountForStorageAccount {
                     $userSpnMatch.KerberosEncryptionType = "AES256"
                     $userSpnMatch.UserPrincipalName = $userPrincipalNameForAES256
                     Set-ADUser -Instance $userSpnMatch -ErrorAction Stop
+                    Rename-ADObjectWithConfirmation -ADObject $userSpnMatch -NewName $ADObjectName
                 } else {
                     New-ADUser `
                         -SamAccountName $SamAccountName `
@@ -2580,6 +2692,7 @@ function New-ADAccountForStorageAccount {
                     $computerSpnMatch.Enabled = $true
                     $computerSpnMatch.KerberosEncryptionType = "AES256"
                     Set-ADComputer -Instance $computerSpnMatch -ErrorAction Stop
+                    Rename-ADObjectWithConfirmation -ADObject $computerSpnMatch -NewName $ADObjectName
                 } else {
                     New-ADComputer `
                         -SAMAccountName $SamAccountName `
@@ -2618,7 +2731,11 @@ function New-ADAccountForStorageAccount {
 
     Write-Verbose "New-ADAccountForStorageAccount: Complete"
 
-    return $ADObjectName
+    $packedResult = @{}
+    $packedResult.add( "ADObjectName", $ADObjectName )
+    $packedResult.add( "Domain", $Domain )
+
+    return $packedResult
 }
 
 function Get-AzStorageAccountADObject {
@@ -2680,7 +2797,10 @@ function Get-AzStorageAccountADObject {
         [Parameter(Mandatory=$true, Position=0, ParameterSetName="ADObjectName")]
         [string]$ADObjectName,
 
-        [Parameter(Mandatory=$false, Position=1, ParameterSetName="ADObjectName")]
+        [Parameter(Mandatory=$true, Position=1, ParameterSetName="ADObjectName")]
+        [string]$SPNValue,
+
+        [Parameter(Mandatory=$false, Position=2, ParameterSetName="ADObjectName")]
         [string]$Domain
     )
 
@@ -2729,14 +2849,29 @@ function Get-AzStorageAccountADObject {
             }    
         } else {
             Write-Verbose -Message "Looking for an object with name '$ADObjectName' in domain '$Domain'"
-            $obj = Get-ADObject -Server $Domain -Filter "Name -eq '$ADObjectName'" -ErrorAction Stop
 
-            if ($null -eq $obj) {
+            $computerSpnMatch = Get-ADComputer `
+                    -Filter "ServicePrincipalNames -eq '$SPNValue'" `
+                    -Server $Domain
+
+            $userSpnMatch = Get-ADUser `
+                    -Filter "ServicePrincipalNames -eq '$SPNValue'" `
+                    -Server $Domain
+
+            if (($null -ne $computerSpnMatch) -and ($null -ne $userSpnMatch)) {
                 $message = "Cannot find an object with a '$ADObjectname' in domain '$Domain'." `
                     + " Please verify that the storage account has been domain-joined through the steps" `
                     + " in Microsoft documentation:" `
                     + " https://docs.microsoft.com/en-us/azure/storage/files/storage-files-identity-auth-active-directory-enable#12-domain-join-your-storage-account"
                 Write-Error -Message $message -ErrorAction Stop
+            } 
+            elseif ($null -ne $computerSpnMatch) 
+            {
+                return $computerSpnMatch
+            } 
+            else
+            {
+                return $userSpnMatch
             }    
         }
 
@@ -3766,7 +3901,7 @@ function Set-StorageAccountDomainProperties {
         [Parameter(Mandatory=$false, Position=2)]
         [string]$ADObjectName,
 
-        [Parameter(Mandatory=$false, Position=3)]
+        [Parameter(Mandatory=$true, Position=3)]
         [string]$Domain,
 
         [Parameter(Mandatory=$false, Position=4)]
@@ -3805,22 +3940,30 @@ function Set-StorageAccountDomainProperties {
         
         Write-Verbose "Set-StorageAccountDomainProperties: Enabling the feature on the storage account and providing the required properties to the storage service"
 
-        if ([System.String]::IsNullOrEmpty($Domain)) {
-            $domainInformation = Get-ADDomain
-            $Domain = $domainInformation.DnsRoot
-        } else {
-            $domainInformation = Get-ADDomain -Server $Domain
-        }
+
+        $domainInformation = Get-ADDomain -Server $Domain
+        $spnValue = Get-ServicePrincipalName `
+            -StorageAccountName $StorageAccountName `
+            -ResourceGroupName $ResourceGroupName `
+            -ErrorAction Stop
 
         $azureStorageIdentity = Get-AzStorageAccountADObject `
             -ADObjectName $ADObjectName `
+            -SPNValue $spnValue `
             -Domain $Domain `
             -ErrorAction Stop
         $azureStorageSid = $azureStorageIdentity.SID.Value
         $samAccountName = $azureStorageIdentity.SamAccountName.TrimEnd("$")
         $domainGuid = $domainInformation.ObjectGUID.ToString()
         $domainName = $domainInformation.DnsRoot
-        $domainSid = $domainInformation.DomainSID.Value
+        if ($domainInformation.DomainSID -and $domainInformation.DomainSID.GetType().Name -eq "String")
+        {
+            $domainSid = $domainInformation.DomainSID
+        }
+        else 
+        {
+            $domainSid = $domainInformation.DomainSID.Value
+        }
         $forestName = $domainInformation.Forest
         $netBiosDomainName = $domainInformation.DnsRoot
         $accountType = ""
@@ -3964,6 +4107,9 @@ function Test-AzStorageAccountADObjectPasswordIsKerbKey {
         $oneKeyMatches = $false
         $keyMatches = [KerbKeyMatch[]]@()
         foreach ($key in $kerbKeys) {
+            
+            if ($null -eq $key.KeyName) { continue }
+
             if ($null -ne (New-Object Directoryservices.DirectoryEntry "", $userName, $key.Value).PsBase.Name) {
                 Write-Verbose "Found that $($key.KeyName) matches password for $StorageAccountName in AD."
                 $oneKeyMatches = $true
@@ -4102,6 +4248,8 @@ function Update-AzStorageAccountADObjectPassword {
         $adObj = Get-AzStorageAccountADObject -StorageAccount $StorageAccount
         $domain = $storageAccount.AzureFilesIdentityBasedAuth.ActiveDirectoryProperties.DomainName
 
+        Assert-IsSupportedDistinguishedName -DistinguishedName $adObj.DistinguishedName
+        
         $caption = ("Set password on AD object " + $adObj.SamAccountName + `
             " for " + $StorageAccount.StorageAccountName + " to value of $RotateToKerbKey.")
         $verboseConfirmMessage = ("This action will change the password for the indicated AD object " + `
@@ -4338,6 +4486,8 @@ function Update-AzStorageAccountAuthForAES256 {
             -StorageAccountName $StorageAccountName -ErrorAction Stop
 
         $adObjectName = $adObject.Name
+
+        Assert-IsSupportedDistinguishedName -DistinguishedName $adObject.DistinguishedName
  
         $activeDirectoryProperties = Get-AzStorageAccountActiveDirectoryProperties `
             -ResourceGroupName $ResourceGroupName -StorageAccountName $StorageAccountName -ErrorAction Stop
@@ -4555,7 +4705,9 @@ function Join-AzStorageAccount {
                 $newParams += @{ "OverwriteExistingADObject" = $OverwriteExistingADObject }
             }
 
-            $ADObjectNameOverride = New-ADAccountForStorageAccount @newParams -ErrorAction Stop
+            $packedResult = New-ADAccountForStorageAccount @newParams -ErrorAction Stop
+            $ADObjectNameOverride = $packedResult["ADObjectName"]
+            $Domain = $packedResult["Domain"]
 
             Write-Verbose "Created AD object $ADObjectNameOverride"
 
