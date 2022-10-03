@@ -2882,7 +2882,7 @@ function Get-AzStorageAccountADObject {
                 $computer = Get-ADComputer `
                     -Identity $obj.DistinguishedName `
                     -Server $Domain `
-                    -Properties "ServicePrincipalNames" `
+                    -Properties "ServicePrincipalNames", "KerberosEncryptionType" `
                     -ErrorAction Stop
                 
                 return $computer
@@ -2892,7 +2892,7 @@ function Get-AzStorageAccountADObject {
                 $user = Get-ADUser `
                     -Identity $obj.DistinguishedName `
                     -Server $Domain `
-                    -Properties "ServicePrincipalNames" `
+                    -Properties "ServicePrincipalNames", "KerberosEncryptionType" `
                     -ErrorAction Stop
                 
                 return $user
@@ -3300,6 +3300,188 @@ function Debug-AzStorageAccountADObject
     }
 }
 
+function Debug-KerberosTicketEncryption
+{
+    [CmdletBinding()]
+
+    param (
+        [Parameter(Mandatory=$True, Position=0, HelpMessage="Storage account name")]
+        [string]$StorageAccountName,
+
+        [Parameter(Mandatory=$True, Position=1, HelpMessage="Resource group name")]
+        [string]$ResourceGroupName
+    )
+
+    process
+    {
+        $storageAccount = Validate-StorageAccount -ResourceGroupName $ResourceGroupName `
+            -StorageAccountName $StorageAccountName -ErrorAction Stop
+
+        $protocolSettings = (Get-AzStorageFileServiceProperty -StorageAccount $storageAccount -ErrorAction Stop).ProtocolSettings.Smb
+
+        $adObject = Get-AzStorageAccountADObject -StorageAccountName $StorageAccountName `
+            -ResourceGroupName $ResourceGroupName -ErrorAction Stop
+
+        Write-Verbose "Validating the security protocol settings has 'Kerberos' as one of the Smb Authentication Methods"
+
+        $authenticationMethods = $protocolSettings.AuthenticationMethods
+        if ($null -eq $authenticationMethods)
+        {
+            # if null, all types are supported for the storage account
+            $authenticationMethods = "NTLMv2", "Kerberos"
+        }
+        $authenticationMethods = [String]::Join(", ", $authenticationMethods)
+
+        if(!$authenticationMethods.Contains("Kerberos"))
+        {
+            Write-Error -Message "The protocol settings on the storage account does not support 'Kerberos' as one of the Smb Authentication Methods" -ErrorAction Stop
+        }
+
+        Write-Verbose "Validating Kerberos Ticket Encryption setting on the client side is supported"
+        
+        $kerberosTicketEncryptionClient = $adObject.KerberosEncryptionType
+        if(
+            $null -eq $kerberosTicketEncryptionClient -or `
+            0 -eq $kerberosTicketEncryptionClient.Count -or `
+            'None' -eq $kerberosTicketEncryptionClient.Value.ToString()
+            )
+        {
+            # Now try to look for the supported kerberos ticket encryption using klist
+            $klistResult = klist
+            $kerberosTicketEncryptionClient = @()
+            foreach($line in $klistResult){
+                if(!$line.Contains("KerbTicket Encryption Type"))
+                {
+                    continue
+                }
+                if (!($kerberosTicketEncryptionClient.Contains("AES-256")) -and $line.Contains("AES-256"))
+                {
+                    $kerberosTicketEncryptionClient += "AES-256"
+                }
+                if (!($kerberosTicketEncryptionClient.Contains("RC4-HMAC")) -and $line.Contains("RC4-HMAC"))
+                {
+                    $kerberosTicketEncryptionClient += "RC4-HMAC"
+                }
+            }
+
+            if ($kerberosTicketEncryptionClient.Count -eq 0)
+            {
+                Write-Error -Message "No Kerberos Ticket Encryption is supported on the client side" -ErrorAction Stop
+            }
+        }
+
+        if ($kerberosTicketEncryptionClient.Value)
+        {
+            $kerberosTicketEncryptionClient = $kerberosTicketEncryptionClient.Value.ToString().replace(' ', '') -split ','
+        }
+
+
+        $kerberosTicketEncryptionServer = $protocolSettings.KerberosTicketEncryption
+        if($null -eq $kerberosTicketEncryptionServer)
+        {
+            $kerberosTicketEncryptionServer = "RC4-HMAC", "AES-256" # null(default): all values are accepted on the server
+        }
+        $kerberosTicketEncryptionServer = [String]::Join(", ", $kerberosTicketEncryptionServer)
+        $kerberosTicketEncryptionServerNoDash = $kerberosTicketEncryptionServer.replace('-','')
+
+        Write-Verbose "Kerberos Ticket Encryption supported on the client side: $kerberosTicketEncryptionClient"
+        Write-Verbose "Kerberos Ticket Encryption supported on the server side: $kerberosTicketEncryptionServerNoDash"
+        
+        $found = $false
+        foreach($type in $kerberosTicketEncryptionClient)
+        {
+            if ($kerberosTicketEncryptionServerNoDash.Contains($type)) 
+            {
+                $found = $true
+                break
+            }
+        }
+
+        if (!$found) 
+        {
+            Write-Error -Message "The server side and the client side do not have a Kerberos Ticket Encryption type in common." -ErrorAction Stop
+        }
+
+    }
+}
+
+function Debug-ChannelEncryption
+{
+    [CmdletBinding()]
+
+    param (
+        [Parameter(Mandatory=$True, Position=0, HelpMessage="Storage account name")]
+        [string]$StorageAccountName,
+
+        [Parameter(Mandatory=$True, Position=1, HelpMessage="Resource group name")]
+        [string]$ResourceGroupName
+    )
+
+    process
+    {
+
+        $storageAccount = Validate-StorageAccount -ResourceGroupName $ResourceGroupName -StorageAccountName $StorageAccountName -ErrorAction Stop
+
+        $protocolSettings = (Get-AzStorageFileServiceProperty -StorageAccount $storageAccount -ErrorAction Stop).ProtocolSettings.Smb
+
+        $channelEncryptionsClient = (Get-SmbServerConfiguration).EncryptionCiphers.replace("_", "-")
+
+        $channelEncryptionsServer = $protocolSettings.ChannelEncryption
+        if ($null -eq $channelEncryptionsServer)
+        {
+            # if null, all types are supported for the storage account
+            $channelEncryptionsServer = "AES-128-CCM", "AES-128-GCM", "AES-256-GCM"
+        }
+        $channelEncryptionsServerWithComma = [String]::Join(", ", $channelEncryptionsServer)
+
+        Write-Host "Channel Encryption Supported on the Client Side: $channelEncryptionsClient"
+        Write-Host "Channel Encryption Supported on the Server Side: $channelEncryptionsServerWithComma"
+
+        $found = $false
+        foreach($type in $channelEncryptionsServer)
+        {
+            if($channelEncryptionsClient.Contains($type))
+            {
+                $found = $true
+                break    
+            }
+        }
+
+        if(!$found)
+        {
+            Write-Error -Message "The server side and the client side do not have a Channel Encryption type in common." -ErrorAction Stop
+        }
+        
+    }
+}
+
+function Debug-DomainLineOfSight
+{
+    [CmdletBinding()]
+
+    param (
+        [Parameter(Mandatory=$True, Position=0, HelpMessage="Storage account name")]
+        [string]$StorageAccountName,
+
+        [Parameter(Mandatory=$True, Position=1, HelpMessage="Resource group name")]
+        [string]$ResourceGroupName
+    )
+
+    process
+    {
+        $storageAccount = Get-AzStorageAccount -ResourceGroupName $ResourceGroupName -Name $StorageAccountName
+        $fullyQualifiedDomainName = $storageAccount.AzureFilesIdentityBasedAuth.ActiveDirectoryProperties.DomainName
+        Write-Host "Fully Qualified Domain Name: $fullyQualifiedDomainName"
+        $checkResult = nltest /dsgetdc:$fullyQualifiedDomainName | Out-String
+
+        if([string]::IsNullOrEmpty($checkResult))
+        {
+            Write-Error -Message "There is no line of sight to the domain controller; Hence, you will not be able to get the Kerberos ticket." -ErrorAction Stop
+        }
+
+    }
+}
+
 function Get-OnPremAdUser {
     [CmdletBinding()]
     param (
@@ -3427,6 +3609,9 @@ function Debug-AzStorageAccountAuth {
             "CheckDomainJoined" = [CheckResult]::new("CheckDomainJoined");
             "CheckADObject" = [CheckResult]::new("CheckADObject");
             "CheckGetKerberosTicket" = [CheckResult]::new("CheckGetKerberosTicket");
+            "CheckKerberosTicketEncryption" = [CheckResult]::new("CheckKerberosTicketEncryption");
+            "CheckChannelEncryption" = [CheckResult]::new("CheckChannelEncryption");
+            "CheckDomainLineOfSight" = [CheckResult]::new("CheckDomainLineOfSight");
             "CheckADObjectPasswordIsCorrect" = [CheckResult]::new("CheckADObjectPasswordIsCorrect");
             "CheckSidHasAadUser" = [CheckResult]::new("CheckSidHasAadUser");
             "CheckAadUserHasSid" = [CheckResult]::new("CheckAadUserHasSid");
@@ -3522,6 +3707,80 @@ function Debug-AzStorageAccountAuth {
                 $checks["CheckGetKerberosTicket"].Result = "Failed"
                 $checks["CheckGetKerberosTicket"].Issue = $_
                 Write-Error "CheckGetKerberosTicket - FAILED"
+                Write-Error $_
+            }
+        }
+
+        if (!$filterIsPresent -or $Filter -match "CheckKerberosTicketEncryption")
+        {
+            try {
+                $checksExecuted += 1;
+                Write-Verbose "CheckKerberosTicketEncryption - START"
+
+                Debug-KerberosTicketEncryption -StorageAccountName $StorageAccountName `
+                    -ResourceGroupName $ResourceGroupName -ErrorAction Stop
+
+                $checks["CheckKerberosTicketEncryption"].Result = "Passed"
+                Write-Verbose "CheckKerberosTicketEncryption - SUCCESS"
+            } catch {
+                $checks["CheckKerberosTicketEncryption"].Result = "Failed"
+                $checks["CheckKerberosTicketEncryption"].Issue = $_
+                Write-Error "CheckKerberosTicketEncryption - FAILED"
+                Write-Error $_
+            }
+        }
+
+        if (!$filterIsPresent -or $Filter -match "CheckChannelEncryption")
+        {
+            try {
+                $checksExecuted += 1;
+                Write-Verbose "CheckChannelEncryption - START"
+
+                Assert-IsElevatedSession
+
+                $cmdletNeeded = "Get-SmbServerConfiguration"
+                if(!(Get-Command $cmdletNeeded -ErrorAction SilentlyContinue))
+                {
+                    Write-Verbose -Message "Your system does not have or support the command needed for the check '$cmdletNeeded'." -ErrorAction Stop
+                    $checks["CheckChannelEncryption"].Result = "Skipped"
+                }
+
+                if(!(Get-SmbServerConfiguration).PSobject.Properties.Name -contains "EncryptionCiphers")
+                {
+                    Write-Verbose -Message "Your operating system does not support the property 'EncryptionCiphers' of the cmdlet 'Get-SmbServerConfiguration'. Please refer to 'https://docs.microsoft.com/en-us/powershell/module/smbshare/set-smbserverconfiguration?view=windowsserver2022-ps'"
+                    $checks["CheckChannelEncryption"].Result = "Skipped"
+                }
+                else 
+                {
+                    Debug-ChannelEncryption -StorageAccountName $StorageAccountName `
+                    -ResourceGroupName $ResourceGroupName -ErrorAction Stop
+
+                    $checks["CheckChannelEncryption"].Result = "Passed"
+                    Write-Verbose "CheckChannelEncryption - SUCCESS"
+                }
+            } catch {
+                $checks["CheckChannelEncryption"].Result = "Failed"
+                $checks["CheckChannelEncryption"].Issue = $_
+                Write-Error "CheckChannelEncryption - FAILED"
+                Write-Error $_
+            }
+        }
+
+        if (!$filterIsPresent -or $Filter -match "CheckDomainLineOfSight")
+        {
+            try {
+                $checksExecuted += 1;
+                Write-Verbose "CheckDomainLineOfSight - START"
+
+                Debug-DomainLineOfSight -StorageAccountName $StorageAccountName `
+                    -ResourceGroupName $ResourceGroupName -ErrorAction Stop
+
+                $checks["CheckDomainLineOfSight"].Result = "Passed"
+                Write-Verbose "CheckDomainLineOfSight - SUCCESS"
+            } catch {
+                $checks["CheckDomainLineOfSight"].Result = "Failed"
+                $checks["CheckDomainLineOfSight"].Issue = $_
+                Write-Error "CheckDomainLineOfSight - FAILED"
                 Write-Error $_
             }
         }
@@ -3858,6 +4117,17 @@ function Debug-AzStorageAccountAuth {
                 $issues | ForEach-Object { Write-Host -ForegroundColor Red "---- $($_.Name) ----`n$($_.Issue)" }
             }
         }
+        
+        $message = "********************`r`n" `
+                + "If above checks are not helpful and further investigation/debugging is needed from the Azure Files team.`r`n" `
+                + "Please prepare the full console log from the cmdlet and Wireshark traces for any mount or access errors to`r`n" `
+                + "help reproducing the issue and speed up the investigation.`r`n"`
+                + "`r`n"`
+                + "Wireshark: https://www.wireshark.org/ `r`n"`
+                + "********************`r`n" 
+
+        Write-Host $message
+
     }
 }
 
