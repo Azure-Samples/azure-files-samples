@@ -230,27 +230,6 @@ function Assert-IsNativeAD {
     or
     Assert-IsNativeAD -StorageAccount $YOUR_STORAGE_ACCOUNT_OBJECT
     #>
-    [CmdletBinding()]
-    param (
-        [Parameter(Mandatory=$true, Position=0)]
-        [string]$DistinguishedName
-    )
-
-    if ($DistinguishedName.Contains('*'))
-    {
-        Write-Error -Message "Unsupported: There is a '*' character in the DistinguishedName." -ErrorAction Stop
-    }
-}
-
-function Assert-IsSupportedDistinguishedName {
-    <#
-    .SYNOPSIS
-    Check if distinguished name is in the form that we supported
-    .DESCRIPTION
-    This cmdlet throws an error message to the user if the distinguished name has '*'
-    .EXAMPLE
-    Assert-IsSupportedDistinguishedName -DistinguishedName "CN=abcef,OU=Domain Controllers,DC=defgh,DC=com" 
-    #>
 
     [CmdletBinding()]
     param (
@@ -290,6 +269,28 @@ function Assert-IsSupportedDistinguishedName {
             ) 
             -ErrorAction Stop
     }
+}
+
+function Assert-IsSupportedDistinguishedName {
+    <#
+    .SYNOPSIS
+    Check if distinguished name is in the form that we supported
+    .DESCRIPTION
+    This cmdlet throws an error message to the user if the distinguished name has '*'
+    .EXAMPLE
+    Assert-IsSupportedDistinguishedName -DistinguishedName "CN=abcef,OU=Domain Controllers,DC=defgh,DC=com" 
+    #>
+    
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory=$true, Position=0)]
+        [string]$DistinguishedName
+    )
+
+    if ($DistinguishedName.Contains('*'))
+    {
+        Write-Error -Message "Unsupported: There is a '*' character in the DistinguishedName." -ErrorAction Stop
+    }   
 }
 
 function Get-OSVersion {
@@ -2083,7 +2084,7 @@ function Copy-RemoteModule {
                 foreach($moduleFile in $moduleFiles) {
                     $filePath = [System.IO.Path]::Combine($modulePath, $moduleFile.Name)
                     $fileContent = $moduleFile.Content
-                    Set-Content -Path $filePath -Value $fil,eContent
+                    Set-Content -Path $filePath -Value $fileContent
                 }
             }
 }
@@ -4975,7 +4976,7 @@ function Join-AzStorageAccount {
                     -ErrorAction Stop
         }
 
-        if ($PSCmdlet.ParameterSetName -eq "StorageAccount") {,
+        if ($PSCmdlet.ParameterSetName -eq "StorageAccount") {
             $StorageAccountName = $StorageAccount.StorageAccountName
             $ResourceGroupName = $StorageAccount.ResourceGroupName
         }
@@ -6680,7 +6681,7 @@ function Move-OnPremSharePermissionsToAzureFileShare
 
     $roleAssignmentsDoneList = New-Object System.Collections.Generic.List[Microsoft.Azure.Commands.Resources.Models.Authorization.PSRoleAssignment]
     $roleAssignmentsSkippedAccountsForMissingRoles = New-Object System.Collections.Generic.List[CimInstance]
-    $roleAssignmentsSkippedAccountsForMissingIdentity = New-Object System.C,ollections.Generic.List[CimInstance]
+    $roleAssignmentsSkippedAccountsForMissingIdentity = New-Object System.Collections.Generic.List[CimInstance]
     $roleAssignmentsSkippedAccountsForHavingRoleAlready = New-Object System.Collections.Generic.List[CimInstance]
     $roleAssignmentsDoneAccounts = New-Object System.Collections.Generic.List[CimInstance]
     $roleAssignmentsPossibleWithoutAnySkips = $True
