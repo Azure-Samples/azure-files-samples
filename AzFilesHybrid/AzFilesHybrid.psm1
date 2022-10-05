@@ -219,29 +219,6 @@ function Assert-IsDomainJoined {
     }
 }
 
-function Assert-IsNativeAD {
-    <#
-    .SYNOPSIS
-    Check if the storage account is native AD. If not, throws error
-    .DESCRIPTION
-    This cmdlet throws error if the storage account is not native AD.
-    .EXAMPLE
-    Assert-IsNativeAD -StorageAccountName "YOUR_STORAGE_ACCOUNT_NAME" -ResourceGroupName "YOUR_RESOURCE_GROUP_NAME"
-    or
-    Assert-IsNativeAD -StorageAccount $YOUR_STORAGE_ACCOUNT_OBJECT
-    #>
-    [CmdletBinding()]
-    param (
-        [Parameter(Mandatory=$true, Position=0)]
-        [string]$DistinguishedName
-    )
-
-    if ($DistinguishedName.Contains('*'))
-    {
-        Write-Error -Message "Unsupported: There is a '*' character in the DistinguishedName." -ErrorAction Stop
-    }
-}
-
 function Assert-IsSupportedDistinguishedName {
     <#
     .SYNOPSIS
@@ -254,42 +231,15 @@ function Assert-IsSupportedDistinguishedName {
 
     [CmdletBinding()]
     param (
-        [Parameter(Mandatory=$true, Position=0, ParameterSetName="StorageAccountName")]
-        [string]$ResourceGroupName,
-
-        [Parameter(Mandatory=$true, Position=1, ParameterSetName="StorageAccountName")]
-        [string]$StorageAccountName,
-
-        [Parameter(
-            Mandatory=$true, 
-            Position=0, 
-            ParameterSetName="StorageAccount", 
-            ValueFromPipeline=$true)]
-        [Microsoft.Azure.Commands.Management.Storage.Models.PSStorageAccount]$StorageAccount
+        [Parameter(Mandatory=$true, Position=0)]
+        [string]$DistinguishedName
     )
 
-    if ($PSCmdlet.ParameterSetName -eq "StorageAccountName") {
-        $StorageAccount = Validate-StorageAccount `
-            -ResourceGroupName $ResourceGroupName `
-            -StorageAccountName $StorageAccountName `
-            -ErrorAction Stop
-    }
-
-    if (
-        $null -ne $StorageAccount.AzureFilesIdentityBasedAuth -and`
-        $null -ne $StorageAccount.AzureFilesIdentityBasedAuth.DirectoryServiceOptions -and `
-        "AD" -ne $StorageAccount.AzureFilesIdentityBasedAuth.DirectoryServiceOptions
-    )
+    if ($DistinguishedName.Contains('*'))
     {
-        $DirectoryServiceOptions = $StorageAccount.AzureFilesIdentityBasedAuth.DirectoryServiceOptions
-        Write-Error `
-            -Message (`
-            "The cmdlet is stopped due to the storage account '$StorageAccountName'" + `
-            " having the DirectoryServiceOptions value: '$DirectoryServiceOptions'. " + `
-            "The DirectoryServiceOptions for the account needs to be 'AD' in order to run the cmdlet."
-            ) 
-            -ErrorAction Stop
+        Write-Error -Message "Unsupported: There is a '*' character in the DistinguishedName." -ErrorAction Stop
     }
+        
 }
 
 function Get-OSVersion {
@@ -2083,7 +2033,7 @@ function Copy-RemoteModule {
                 foreach($moduleFile in $moduleFiles) {
                     $filePath = [System.IO.Path]::Combine($modulePath, $moduleFile.Name)
                     $fileContent = $moduleFile.Content
-                    Set-Content -Path $filePath -Value $fil,eContent
+                    Set-Content -Path $filePath -Value $fileContent
                 }
             }
 }
@@ -4549,8 +4499,6 @@ function Update-AzStorageAccountADObjectPassword {
                 -ErrorAction Stop
         }
 
-        Assert-IsNativeAD -StorageAccount $StorageAccount
-
         if ($null -eq $StorageAccount.AzureFilesIdentityBasedAuth.ActiveDirectoryProperties) {
             Write-Error `
                 -Message ("Storage account " + $StorageAccount.StorageAccountName + " has not been domain joined.") `
@@ -4681,9 +4629,6 @@ function Invoke-AzStorageAccountADObjectPasswordRotation {
         $updateParams = @{}
         switch ($PSCmdlet.ParameterSetName) {
             "StorageAccountName" {
-                
-                Assert-IsNativeAD -StorageAccountName $StorageAccountName -ResourceGroupName $ResourceGroupName
-
                 $testParams += @{ 
                     "ResourceGroupName" = $ResourceGroupName; 
                     "StorageAccountName" = $StorageAccountName 
@@ -4696,9 +4641,6 @@ function Invoke-AzStorageAccountADObjectPasswordRotation {
             }
 
             "StorageAccount" {
-                
-                Assert-IsNativeAD -StorageAccount $StorageAccount
-
                 $testParams += @{ 
                     "StorageAccount" = $StorageAccount 
                 }
@@ -4809,8 +4751,6 @@ function Update-AzStorageAccountAuthForAES256 {
             $StorageAccountName = $StorageAccount.StorageAccountName
             $ResourceGroupName = $StorageAccount.ResourceGroupName
         }
-
-        Assert-IsNativeAD -StorageAccountName $StorageAccountName -ResourceGroupName $ResourceGroupName
 
         $adObject = Get-AzStorageAccountADObject -ResourceGroupName $ResourceGroupName `
             -StorageAccountName $StorageAccountName -ErrorAction Stop
@@ -4975,7 +4915,7 @@ function Join-AzStorageAccount {
                     -ErrorAction Stop
         }
 
-        if ($PSCmdlet.ParameterSetName -eq "StorageAccount") {,
+        if ($PSCmdlet.ParameterSetName -eq "StorageAccount") {
             $StorageAccountName = $StorageAccount.StorageAccountName
             $ResourceGroupName = $StorageAccount.ResourceGroupName
         }
@@ -5006,8 +4946,6 @@ function Join-AzStorageAccount {
                     -StorageAccountName $StorageAccountName `
                     -ErrorAction Stop
             }
-            
-            Assert-IsNativeAD -StorageAccount $StorageAccount
 
             # Ensure the storage account has a "kerb1" key.
             Ensure-KerbKeyExists -ResourceGroupName $ResourceGroupName -StorageAccountName $StorageAccountName -ErrorAction Stop
@@ -6680,7 +6618,7 @@ function Move-OnPremSharePermissionsToAzureFileShare
 
     $roleAssignmentsDoneList = New-Object System.Collections.Generic.List[Microsoft.Azure.Commands.Resources.Models.Authorization.PSRoleAssignment]
     $roleAssignmentsSkippedAccountsForMissingRoles = New-Object System.Collections.Generic.List[CimInstance]
-    $roleAssignmentsSkippedAccountsForMissingIdentity = New-Object System.C,ollections.Generic.List[CimInstance]
+    $roleAssignmentsSkippedAccountsForMissingIdentity = New-Object System.Collections.Generic.List[CimInstance]
     $roleAssignmentsSkippedAccountsForHavingRoleAlready = New-Object System.Collections.Generic.List[CimInstance]
     $roleAssignmentsDoneAccounts = New-Object System.Collections.Generic.List[CimInstance]
     $roleAssignmentsPossibleWithoutAnySkips = $True
