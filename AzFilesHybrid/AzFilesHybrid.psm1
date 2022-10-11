@@ -2647,7 +2647,7 @@ function New-ADAccountForStorageAccount {
             -Filter "ServicePrincipalNames -eq '$spnValue'" `
             -Server $Domain
 
-    if (($null -eq $computerSpnMatch) -and ($null -eq $userSpnMatch)) {
+    if (($null -ne $computerSpnMatch) -and ($null -ne $userSpnMatch)) {
         $message = [System.Text.StringBuilder]::new()
         $message.AppendLine("There are already two AD objects with a Service Principal Name of $spnValue in domain $($Domain):")
         $message.AppendLine($computerSpnMatch.DistinguishedName)
@@ -2909,7 +2909,7 @@ function Get-AzStorageAccountADObject {
                     -Filter "ServicePrincipalNames -eq '$SPNValue'" `
                     -Server $Domain
 
-            if (($null -ne $computerSpnMatch) -and ($null -ne $userSpnMatch)) {
+            if (($null -eq $computerSpnMatch) -and ($null -eq $userSpnMatch)) {
                 $message = "Cannot find an object with a '$ADObjectname' in domain '$Domain'." `
                     + " Please verify that the storage account has been domain-joined through the steps" `
                     + " in Microsoft documentation:" `
@@ -4824,39 +4824,53 @@ function Update-AzStorageAccountAuthForAES256 {
             -ResourceGroupName $ResourceGroupName -StorageAccountName $StorageAccountName -ErrorAction Stop
         $domain = $activeDirectoryProperties.DomainName
 
-        switch($adObject.ObjectClass) {
-            "user" {
-                Write-Verbose -Message "Set AD user object '$($adObject.DistinguishedName)' to use AES256 for Kerberos authentication"
-                
-                $spnValue = Get-ServicePrincipalName `
-                -StorageAccountName $StorageAccountName `
-                -ResourceGroupName $ResourceGroupName `
-                -ErrorAction Stop
+        try
+        {
+            switch($adObject.ObjectClass) {
+                "user" {
+                    Write-Verbose -Message "Set AD user object '$($adObject.DistinguishedName)' to use AES256 for Kerberos authentication"
+                    
+                    $spnValue = Get-ServicePrincipalName `
+                    -StorageAccountName $StorageAccountName `
+                    -ResourceGroupName $ResourceGroupName `
+                    -ErrorAction Stop
 
-                $userPrincipalNameForAES256 = "$spnValue@$domain"
+                    $userPrincipalNameForAES256 = "$spnValue@$domain"
 
-                $userPrincipalName = $adObject.UserPrincipalName
+                    $userPrincipalName = $adObject.UserPrincipalName
 
-                if ([string]::IsNullOrEmpty($userPrincipalName)) {
-                    $userPrincipalName = $userPrincipalNameForAES256
+                    if ([string]::IsNullOrEmpty($userPrincipalName)) {
+                        $userPrincipalName = $userPrincipalNameForAES256
 
-                    Write-Verbose -Message "AD user does not have a userPrincipalName, set userPrincipalName to $userPrincipalName"
+                        Write-Verbose -Message "AD user does not have a userPrincipalName, set userPrincipalName to $userPrincipalName"
+                    }
+
+                    if ($userPrincipalName -ne $userPrincipalNameForAES256) {
+                        Write-Error `
+                                -Message "The format of UserPrincipalName:$userPrincipalName is incorrect. please change it to: $userPrincipalNameForAES256 for AES256" `
+                                -ErrorAction stop
+                    }
+
+                    Set-ADUser -Identity $adObject.DistinguishedName -Server $domain `
+                        -KerberosEncryptionType "AES256" -UserPrincipalName $userPrincipalName -ErrorAction Stop
                 }
 
-                if ($userPrincipalName -ne $userPrincipalNameForAES256) {
-                    Write-Error `
-                            -Message "The format of UserPrincipalName:$userPrincipalName is incorrect. please change it to: $userPrincipalNameForAES256 for AES256" `
-                            -ErrorAction stop
+                "computer" {
+                    Write-Verbose -Message "Set AD computer object '$($adObject.DistinguishedName)' to use AES256 for Kerberos authentication"
+                    Set-ADComputer -Identity $adObject.DistinguishedName -Server $domain `
+                        -KerberosEncryptionType "AES256" -ErrorAction Stop
                 }
-
-                Set-ADUser -Identity $adObject.DistinguishedName -Server $domain `
-                    -KerberosEncryptionType "AES256" -UserPrincipalName $userPrincipalName -ErrorAction Stop
             }
-
-            "computer" {
-                Write-Verbose -Message "Set AD computer object '$($adObject.DistinguishedName)' to use AES256 for Kerberos authentication"
-                Set-ADComputer -Identity $adObject.DistinguishedName -Server $domain `
-                    -KerberosEncryptionType "AES256" -ErrorAction Stop
+        }
+        catch
+        {
+            if (!$_.Exception.Message.Contains("Insufficient access rights to perform the operation"))
+            {
+                Write-Error -Message "Please make sure the creator of the AD object has grants you the 'Full Control' permission to perform the operation on this AD Object. This can be done on the Active Directory Administrative Center." -ErrorAction Stop
+            }
+            else
+            {
+                Write-Error -Message "$_" -ErrorAction Stop
             }
         }
 
@@ -5051,6 +5065,9 @@ function Join-AzStorageAccount {
                 -StorageAccountName $StorageAccountName `
                 -Domain $Domain `
                 -Force
+
+            Update-AzStorageAccountADObjectPassword -ResourceGroupname $ResourceGroupName -StorageAccountName $StorageAccountName `
+            -RotateToKerbKey kerb2 -ErrorAction Stop
         }
     }
 }
