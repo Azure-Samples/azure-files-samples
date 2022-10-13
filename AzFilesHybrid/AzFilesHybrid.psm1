@@ -2596,7 +2596,7 @@ function New-ADAccountForStorageAccount {
             -Filter "ServicePrincipalNames -eq '$spnValue'" `
             -Server $Domain
 
-    if (($null -eq $computerSpnMatch) -and ($null -eq $userSpnMatch)) {
+    if (($null -ne $computerSpnMatch) -and ($null -ne $userSpnMatch)) {
         $message = [System.Text.StringBuilder]::new()
         $message.AppendLine("There are already two AD objects with a Service Principal Name of $spnValue in domain $($Domain):")
         $message.AppendLine($computerSpnMatch.DistinguishedName)
@@ -2841,7 +2841,7 @@ function Get-AzStorageAccountADObject {
                     -Filter "ServicePrincipalNames -eq '$SPNValue'" `
                     -Server $Domain
 
-            if (($null -ne $computerSpnMatch) -and ($null -ne $userSpnMatch)) {
+            if (($null -eq $computerSpnMatch) -and ($null -eq $userSpnMatch)) {
                 $message = "Cannot find an object with a '$ADObjectname' in domain '$Domain'." `
                     + " Please verify that the storage account has been domain-joined through the steps" `
                     + " in Microsoft documentation:" `
