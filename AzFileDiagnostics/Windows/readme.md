@@ -63,6 +63,10 @@ Alternatively, you can specify optional parameters when running the script if yo
 
 - Firewall: Verify local firewall rules are not blocking connectivity to Azure file share.
 
+- Validate Azure storage account security protocol settings with client configurations.
+
+- To perform protocol settings validation user should be able to install azure module on powershell and login to azure storage account through azure powershell commands.
+
 - If all validations pass, map the drive on behalf of the user. User can also choose turn on the diagnostics to collect more logs.
 
 ### Sample Output
