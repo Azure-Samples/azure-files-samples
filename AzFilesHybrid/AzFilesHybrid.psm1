@@ -1193,23 +1193,31 @@ function Get-RandomString {
     <#
     .SYNOPSIS
     Generate a random string for the purposes of password generation or random characters for unique names.
+    
     .DESCRIPTION
     Generate a random string for the purposes of password generation or random characters for unique names.
+    
     .PARAMETER StringLength
     The length of the string to generate.
+    
     .PARAMETER AlphanumericOnly
     The string should only include alphanumeric characters.
+    
     .PARAMETER CaseSensitive
     Distinguishes between the same characters of different case. 
+    
     .PARAMETER IncludeSimilarCharacters
     Include characters that might easily be mistaken for each other (depending on the font): 1, l, I.
+    
     .PARAMETER ExcludeCharacters
     Don't include these characters in the random string.
     
     .PARAMETER AsSecureString
     Return the object as a secure string rather than a regular string.
+    
     .EXAMPLE
     Get-RandomString -StringLength 10 -AlphanumericOnly -AsSecureString
+    
     .OUTPUTS
     System.String
     System.Security.SecureString
@@ -6943,10 +6951,13 @@ function Invoke-ModuleConfigPopulate {
     <#
     .SYNOPSIS
     Populate module configuration parameters.
+
     .DESCRIPTION
     This cmdlet wraps the PrivateData object as defined in AzureFilesHybrid.psd1, as well as module parameter OverrideModuleConfig. If an override is specified, that value will be used, otherwise, the value from the PrivateData object will be used.
+    
     .PARAMETER OverrideModuleConfig
     The OverrideModuleConfig specified in the parameters of the module, at the beginning of the module.
+    
     .EXAMPLE
     Invoke-ModuleConfigPopulate -OverrideModuleConfig @{}
     #>
