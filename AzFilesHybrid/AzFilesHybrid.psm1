@@ -1027,13 +1027,10 @@ function Assert-DotNetFrameworkVersion {
     <#
     .SYNOPSIS
     Require a particular .NET Framework version or throw an error if it's not available. 
-
     .DESCRIPTION
     This cmdlet makes it possible to throw an error if a particular .NET Framework version is not installed on Windows. It wraps the registry using the information about .NET Framework here: https://docs.microsoft.com/en-us/dotnet/framework/migration-guide/how-to-determine-which-versions-are-installed#query-the-registry-using-code. This cmdlet is not PowerShell 5.1 only, since it's reasonable to imagine a case where a PS6+ cmdlet/module would want to require a particular version of .NET.
-
     .PARAMETER DotNetFrameworkVersion
     The minimum version of .NET Framework to require. If a newer version is found, that will satisify the request.
-
     .EXAMPLE 
     Assert-DotNetFrameworkVersion
     #>
@@ -1196,31 +1193,23 @@ function Get-RandomString {
     <#
     .SYNOPSIS
     Generate a random string for the purposes of password generation or random characters for unique names.
-
     .DESCRIPTION
     Generate a random string for the purposes of password generation or random characters for unique names.
-
     .PARAMETER StringLength
     The length of the string to generate.
-
     .PARAMETER AlphanumericOnly
     The string should only include alphanumeric characters.
-
     .PARAMETER CaseSensitive
     Distinguishes between the same characters of different case. 
-
     .PARAMETER IncludeSimilarCharacters
     Include characters that might easily be mistaken for each other (depending on the font): 1, l, I.
-
     .PARAMETER ExcludeCharacters
     Don't include these characters in the random string.
     
     .PARAMETER AsSecureString
     Return the object as a secure string rather than a regular string.
-
     .EXAMPLE
     Get-RandomString -StringLength 10 -AlphanumericOnly -AsSecureString
-
     .OUTPUTS
     System.String
     System.Security.SecureString
@@ -3396,22 +3385,30 @@ function Debug-KerberosTicketEncryption
             0 -eq $kerberosTicketEncryptionClient.Count -or `
             'None' -eq $kerberosTicketEncryptionClient.Value.ToString()
             )
-        {
+        {   
             # Now try to look for the supported kerberos ticket encryption using klist
-            $klistResult = klist
+            Write-Verbose "The corresponding AD object does not have the field 'KerberosEncryptionType' set. Will try to find the settings using klist..."
+            
+            $spnValue = Get-ServicePrincipalName -StorageAccountName $StorageAccountName `
+            -ResourceGroupName $ResourceGroupName -ErrorAction Stop
+
+            Write-Verbose "Running command 'klist.exe get $spnValue'"
+
+            $klistResult = klist.exe get $spnValue
+
             $kerberosTicketEncryptionClient = @()
             foreach($line in $klistResult){
                 if(!$line.Contains("KerbTicket Encryption Type"))
                 {
                     continue
                 }
-                if (!($kerberosTicketEncryptionClient.Contains("AES-256")) -and $line.Contains("AES-256"))
+                if (!($kerberosTicketEncryptionClient.Contains("AES256")) -and $line.Contains("AES-256"))
                 {
-                    $kerberosTicketEncryptionClient += "AES-256"
+                    $kerberosTicketEncryptionClient += "AES256"
                 }
-                if (!($kerberosTicketEncryptionClient.Contains("RC4-HMAC")) -and $line.Contains("RC4-HMAC"))
+                if (!($kerberosTicketEncryptionClient.Contains("RC4HMAC")) -and $line.Contains("RC4-HMAC"))
                 {
-                    $kerberosTicketEncryptionClient += "RC4-HMAC"
+                    $kerberosTicketEncryptionClient += "RC4HMAC"
                 }
             }
 
@@ -4277,14 +4274,7 @@ function Set-StorageAccountDomainProperties {
         $samAccountName = $azureStorageIdentity.SamAccountName.TrimEnd("$")
         $domainGuid = $domainInformation.ObjectGUID.ToString()
         $domainName = $domainInformation.DnsRoot
-        if ($domainInformation.DomainSID -and $domainInformation.DomainSID.GetType().Name -eq "String")
-        {
-            $domainSid = $domainInformation.DomainSID
-        }
-        else 
-        {
-            $domainSid = $domainInformation.DomainSID.Value
-        }
+        $domainSid = $domainInformation.DomainSID.Value
         $forestName = $domainInformation.Forest
         $netBiosDomainName = $domainInformation.DnsRoot
         $accountType = ""
@@ -6953,13 +6943,10 @@ function Invoke-ModuleConfigPopulate {
     <#
     .SYNOPSIS
     Populate module configuration parameters.
-
     .DESCRIPTION
     This cmdlet wraps the PrivateData object as defined in AzureFilesHybrid.psd1, as well as module parameter OverrideModuleConfig. If an override is specified, that value will be used, otherwise, the value from the PrivateData object will be used.
-
     .PARAMETER OverrideModuleConfig
     The OverrideModuleConfig specified in the parameters of the module, at the beginning of the module.
-
     .EXAMPLE
     Invoke-ModuleConfigPopulate -OverrideModuleConfig @{}
     #>
