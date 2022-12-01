@@ -3398,20 +3398,28 @@ function Debug-KerberosTicketEncryption
             )
         {
             # Now try to look for the supported kerberos ticket encryption using klist
-            $klistResult = klist
+            Write-Verbose "The corresponding AD object does not have the field 'KerberosEncryptionType' set. Will try to find the settings using klist..."
+
+            $spnValue = Get-ServicePrincipalName -StorageAccountName $StorageAccountName `
+                -ResourceGroupName $ResourceGroupName -ErrorAction Stop
+
+            Write-Verbose "Running command 'klist.exe get $spnValue'"
+
+            $klistResult = klist.exe get $spnValue
+
             $kerberosTicketEncryptionClient = @()
             foreach($line in $klistResult){
                 if(!$line.Contains("KerbTicket Encryption Type"))
                 {
                     continue
                 }
-                if (!($kerberosTicketEncryptionClient.Contains("AES-256")) -and $line.Contains("AES-256"))
+                if (!($kerberosTicketEncryptionClient.Contains("AES256")) -and $line.Contains("AES-256"))
                 {
-                    $kerberosTicketEncryptionClient += "AES-256"
+                    $kerberosTicketEncryptionClient += "AES256"
                 }
-                if (!($kerberosTicketEncryptionClient.Contains("RC4-HMAC")) -and $line.Contains("RC4-HMAC"))
+                if (!($kerberosTicketEncryptionClient.Contains("RC4HMAC")) -and $line.Contains("RC4-HMAC"))
                 {
-                    $kerberosTicketEncryptionClient += "RC4-HMAC"
+                    $kerberosTicketEncryptionClient += "RC4HMAC"
                 }
             }
 
@@ -4277,14 +4285,7 @@ function Set-StorageAccountDomainProperties {
         $samAccountName = $azureStorageIdentity.SamAccountName.TrimEnd("$")
         $domainGuid = $domainInformation.ObjectGUID.ToString()
         $domainName = $domainInformation.DnsRoot
-        if ($domainInformation.DomainSID -and $domainInformation.DomainSID.GetType().Name -eq "String")
-        {
-            $domainSid = $domainInformation.DomainSID
-        }
-        else 
-        {
-            $domainSid = $domainInformation.DomainSID.Value
-        }
+        $domainSid = $domainInformation.DomainSID.Value
         $forestName = $domainInformation.Forest
         $netBiosDomainName = $domainInformation.DnsRoot
         $accountType = ""
