@@ -3408,19 +3408,26 @@ function Debug-KerberosTicketEncryption
             $klistResult = klist.exe get $spnValue
 
             $kerberosTicketEncryptionClient = @()
-            foreach($line in $klistResult){
-                if(!$line.Contains("KerbTicket Encryption Type"))
+
+            $lastLine = ""
+            foreach($currLine in $klistResult){
+
+                if($lastLine.Contains($spnValue))
                 {
-                    continue
+                    if($currLine.Contains("AES-256"))
+                    {
+                        $kerberosTicketEncryptionClient += "AES256"
+                        break
+                    }
+
+                    if($currLine.Contains("RC4-HMAC"))
+                    {
+                        $kerberosTicketEncryptionClient += "RC4HMAC"
+                        break
+                    }
+
                 }
-                if (!($kerberosTicketEncryptionClient.Contains("AES256")) -and $line.Contains("AES-256"))
-                {
-                    $kerberosTicketEncryptionClient += "AES256"
-                }
-                if (!($kerberosTicketEncryptionClient.Contains("RC4HMAC")) -and $line.Contains("RC4-HMAC"))
-                {
-                    $kerberosTicketEncryptionClient += "RC4HMAC"
-                }
+                $lastLine = $currLine
             }
 
             if ($kerberosTicketEncryptionClient.Count -eq 0)
