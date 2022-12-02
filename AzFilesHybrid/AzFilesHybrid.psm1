@@ -3398,8 +3398,17 @@ function Debug-KerberosTicketEncryption
             )
         {
             # Now try to look for the supported kerberos ticket encryption using klist
-            $klistResult = klist
+            Write-Verbose "The corresponding AD object does not have the field 'KerberosEncryptionType' set. Will try to find the settings using klist..."
+
+            $spnValue = Get-ServicePrincipalName -StorageAccountName $StorageAccountName `
+                -ResourceGroupName $ResourceGroupName -ErrorAction Stop
+
+            Write-Verbose "Running command 'klist.exe get $spnValue'"
+
+            $klistResult = klist.exe get $spnValue
+
             $kerberosTicketEncryptionClient = @()
+
             $lastLine = ""
             foreach($currLine in $klistResult){
 
@@ -3416,6 +3425,7 @@ function Debug-KerberosTicketEncryption
                         $kerberosTicketEncryptionClient += "RC4HMAC"
                         break
                     }
+
                 }
                 $lastLine = $currLine
             }
@@ -4282,14 +4292,7 @@ function Set-StorageAccountDomainProperties {
         $samAccountName = $azureStorageIdentity.SamAccountName.TrimEnd("$")
         $domainGuid = $domainInformation.ObjectGUID.ToString()
         $domainName = $domainInformation.DnsRoot
-        if ($domainInformation.DomainSID -and $domainInformation.DomainSID.GetType().Name -eq "String")
-        {
-            $domainSid = $domainInformation.DomainSID
-        }
-        else 
-        {
-            $domainSid = $domainInformation.DomainSID.Value
-        }
+        $domainSid = $domainInformation.DomainSID.Value
         $forestName = $domainInformation.Forest
         $netBiosDomainName = $domainInformation.DnsRoot
         $accountType = ""
