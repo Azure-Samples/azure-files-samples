@@ -261,13 +261,7 @@ function Assert-IsNativeAD {
     )
     {
         $DirectoryServiceOptions = $StorageAccount.AzureFilesIdentityBasedAuth.DirectoryServiceOptions
-        Write-Error `
-            -Message (`
-            "The cmdlet is stopped due to the storage account '$StorageAccountName'" + `
-            " having the DirectoryServiceOptions value: '$DirectoryServiceOptions'. " + `
-            "The DirectoryServiceOptions for the account needs to be 'AD' in order to run the cmdlet."
-            ) 
-            -ErrorAction Stop
+        Write-Error -Message "The cmdlet is stopped due to the storage account '$StorageAccountName' having the DirectoryServiceOptions value: '$DirectoryServiceOptions'. The DirectoryServiceOptions for the account needs to be 'AD' in order to run the cmdlet." -ErrorAction Stop
     }
 }
 
