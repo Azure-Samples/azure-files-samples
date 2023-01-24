@@ -3388,7 +3388,7 @@ function Debug-KerberosTicketEncryption
         if(
             $null -eq $kerberosTicketEncryptionClient -or `
             0 -eq $kerberosTicketEncryptionClient.Count -or `
-            'None' -eq $kerberosTicketEncryptionClient.Value.ToString()
+            ($kerberosTicketEncryptionClient.Value -and 'None' -eq $kerberosTicketEncryptionClient.Value.ToString())
             )
         {
             # Now try to look for the supported kerberos ticket encryption using klist
@@ -3805,7 +3805,7 @@ function Debug-AzStorageAccountAuth {
                     $checks["CheckChannelEncryption"].Result = "Skipped"
                 }
 
-                if(!(Get-SmbServerConfiguration).PSobject.Properties.Name -contains "EncryptionCiphers")
+                if(!((Get-SmbServerConfiguration).PSobject.Properties.Name -contains "EncryptionCiphers"))
                 {
                     Write-Verbose -Message "Your operating system does not support the property 'EncryptionCiphers' of the cmdlet 'Get-SmbServerConfiguration'. Please refer to 'https://docs.microsoft.com/en-us/powershell/module/smbshare/set-smbserverconfiguration?view=windowsserver2022-ps'"
                     $checks["CheckChannelEncryption"].Result = "Skipped"
@@ -4282,11 +4282,11 @@ function Set-StorageAccountDomainProperties {
             -SPNValue $spnValue `
             -Domain $Domain `
             -ErrorAction Stop
-        $azureStorageSid = $azureStorageIdentity.SID.Value
+        $azureStorageSid = $azureStorageIdentity.SID
         $samAccountName = $azureStorageIdentity.SamAccountName.TrimEnd("$")
         $domainGuid = $domainInformation.ObjectGUID.ToString()
         $domainName = $domainInformation.DnsRoot
-        $domainSid = $domainInformation.DomainSID.Value
+        $domainSid = $domainInformation.DomainSID
         $forestName = $domainInformation.Forest
         $netBiosDomainName = $domainInformation.DnsRoot
         $accountType = ""
@@ -4615,7 +4615,7 @@ function Update-AzStorageAccountADObjectPassword {
             # if ($Force.ToBool()) {
                 Write-Verbose -Message ("Attempt reset on " + $adObj.SamAccountName + " to $RotateToKerbKey")
                 Set-ADAccountPassword `
-                    -Identity $adObj `
+                    -Identity $adObj.DistinguishedName `
                     -Reset `
                     -NewPassword $newPassword `
                     -Server $domain `
