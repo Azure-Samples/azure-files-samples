@@ -3981,10 +3981,10 @@ function Debug-AzStorageAccountAuth {
 
                 $sidNames = @{}
                 $user = Get-OnPremAdUser -Identity $UserName -Domain $Domain -ErrorAction Stop
-                $sidNames[$user.SID.Value] = $user.DistinguishedName
+                $sidNames[$user.SID] = $user.DistinguishedName
 
                 $groups = Get-OnPremAdUserGroups -Identity $user.SID -Domain $Domain -ErrorAction Stop
-                $groups | ForEach-Object { $sidNames[$_.SID.Value] = $_.DistinguishedName }
+                $groups | ForEach-Object { $sidNames[$_.SID] = $_.DistinguishedName }
 
                 # The user needs following role assignments to have the share-level access.
                 # Currently only three roles are defined, but new ones may be added in future,
