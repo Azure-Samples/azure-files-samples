@@ -254,15 +254,79 @@ function Assert-IsNativeAD {
             -ErrorAction Stop
     }
 
+    $DirectoryServiceOptions = Get-DirectoryServiceOptions -StorageAccount $StorageAccount
+
+    if ("AD" -ne $DirectoryServiceOptions)
+    {
+        Write-Error -ErrorAction Stop -Message (
+            "The cmdlet is stopped due to the storage account '$StorageAccountName' having the DirectoryServiceOptions value: '$DirectoryServiceOptions'. " +
+            "The DirectoryServiceOptions for the account needs to be 'AD' in order to run the cmdlet."
+        )            
+    }
+}
+
+function Assert-IsUnconfiguredOrNativeAD {
+    <#
+    .SYNOPSIS
+    Check if the storage account is native AD or not configured for AD auth. If not, throws error
+    .DESCRIPTION
+    This cmdlet throws error if the storage account is anything else than native AD or not configured for AD auth.
+    .EXAMPLE
+    Assert-IsUnconfiguredOrNativeAD -StorageAccountName "YOUR_STORAGE_ACCOUNT_NAME" -ResourceGroupName "YOUR_RESOURCE_GROUP_NAME"
+    or
+    Assert-IsUnconfiguredOrNativeAD -StorageAccount $YOUR_STORAGE_ACCOUNT_OBJECT
+    #>
+
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory=$true, Position=0, ParameterSetName="StorageAccountName")]
+        [string]$ResourceGroupName,
+
+        [Parameter(Mandatory=$true, Position=1, ParameterSetName="StorageAccountName")]
+        [string]$StorageAccountName,
+
+        [Parameter(
+            Mandatory=$true, 
+            Position=0, 
+            ParameterSetName="StorageAccount", 
+            ValueFromPipeline=$true)]
+        [Microsoft.Azure.Commands.Management.Storage.Models.PSStorageAccount]$StorageAccount
+    )
+
+    if ($PSCmdlet.ParameterSetName -eq "StorageAccountName") {
+        $StorageAccount = Validate-StorageAccount `
+            -ResourceGroupName $ResourceGroupName `
+            -StorageAccountName $StorageAccountName `
+            -ErrorAction Stop
+    }
+    
+    $DirectoryServiceOptions = Get-DirectoryServiceOptions -StorageAccount $StorageAccount
+
     if (
-        $null -ne $StorageAccount.AzureFilesIdentityBasedAuth -and`
-        $null -ne $StorageAccount.AzureFilesIdentityBasedAuth.DirectoryServiceOptions -and `
-        "AD" -ne $StorageAccount.AzureFilesIdentityBasedAuth.DirectoryServiceOptions
+        $null -ne $DirectoryServiceOptions -and `
+        "None" -ne $DirectoryServiceOptions -and `
+        "AD" -ne $DirectoryServiceOptions
     )
     {
-        $DirectoryServiceOptions = $StorageAccount.AzureFilesIdentityBasedAuth.DirectoryServiceOptions
-        Write-Error -Message "The cmdlet is stopped due to the storage account '$StorageAccountName' having the DirectoryServiceOptions value: '$DirectoryServiceOptions'. The DirectoryServiceOptions for the account needs to be 'AD' in order to run the cmdlet." -ErrorAction Stop
+        Write-Error -ErrorAction Stop -Message (
+            "The cmdlet is stopped due to the storage account '$StorageAccountName' having the DirectoryServiceOptions value: '$DirectoryServiceOptions'. " +
+             "The DirectoryServiceOptions for the account needs to be 'AD', 'None' or null in order to run the cmdlet."
+        )
     }
+}
+
+function Get-DirectoryServiceOptions {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory=$true, Position=0, ValueFromPipeline=$true)]
+        [Microsoft.Azure.Commands.Management.Storage.Models.PSStorageAccount]$StorageAccount
+    )
+
+    if ($null -eq $StorageAccount.AzureFilesIdentityBasedAuth) {
+        return $null
+    }
+
+    return $StorageAccount.AzureFilesIdentityBasedAuth.DirectoryServiceOptions
 }
 
 function Assert-IsSupportedDistinguishedName {
@@ -5024,7 +5088,7 @@ function Join-AzStorageAccount {
                     -ErrorAction Stop
             }
             
-            Assert-IsNativeAD -StorageAccount $StorageAccount
+            Assert-IsUnconfiguredOrNativeAD -StorageAccount $StorageAccount
 
             # Ensure the storage account has a "kerb1" key.
             Ensure-KerbKeyExists -ResourceGroupName $ResourceGroupName -StorageAccountName $StorageAccountName -ErrorAction Stop
