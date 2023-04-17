@@ -259,7 +259,7 @@ function Assert-IsNativeAD {
     if ("AD" -ne $DirectoryServiceOptions)
     {
         Write-Error -ErrorAction Stop -Message (
-            "The cmdlet is stopped due to the storage account '$StorageAccountName' having the DirectoryServiceOptions value: '$DirectoryServiceOptions'. " +
+            "The cmdlet is stopped due to the storage account '$($StorageAccount.StorageAccountName)' having the DirectoryServiceOptions value: '$DirectoryServiceOptions'. " +
             "The DirectoryServiceOptions for the account needs to be 'AD' in order to run the cmdlet."
         )            
     }
@@ -309,7 +309,7 @@ function Assert-IsUnconfiguredOrNativeAD {
     )
     {
         Write-Error -ErrorAction Stop -Message (
-            "The cmdlet is stopped due to the storage account '$StorageAccountName' having the DirectoryServiceOptions value: '$DirectoryServiceOptions'. " +
+            "The cmdlet is stopped due to the storage account '$($StorageAccount.StorageAccountName)' having the DirectoryServiceOptions value: '$DirectoryServiceOptions'. " +
              "The DirectoryServiceOptions for the account needs to be 'AD', 'None' or null in order to run the cmdlet."
         )
     }
