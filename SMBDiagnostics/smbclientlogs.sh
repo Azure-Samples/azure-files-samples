@@ -20,12 +20,40 @@ if [ $? == 1 ]; then
 	exit 1
 fi
 
+dump_debug_stats() {
+	echo -e "\nDate: `date -u`" >> cifs_diag.txt
+	echo -e "\n======= CIFS Stats from /proc/fs/cifs/Stats =======" >> cifs_diag.txt
+	cat /proc/fs/cifs/Stats >> cifs_diag.txt
+	echo -e "\n======= CIFS DebugData from /proc/fs/cifs/DebugData =======" >> cifs_diag.txt
+	cat /proc/fs/cifs/DebugData >> cifs_diag.txt
+	echo -e "\n======= CIFS Open files from /proc/fs/cifs/open_files =======" >> cifs_diag.txt
+	cat /proc/fs/cifs/open_files >> cifs_diag.txt
+	echo -e "\n======= CIFS Mounts =======" >> cifs_diag.txt
+	mount -t cifs >> cifs_diag.txt
+	echo -e "\n======= CIFS TCP Connections =======" >> cifs_diag.txt
+	ss -t | grep microsoft >> cifs_diag.txt
+}
+
+dump_os_information() {
+	echo "======= Distro details =======" > os_details.txt
+	cat /etc/os-release >> os_details.txt
+	echo -e "\nKernel version: `uname -a`" >> os_details.txt
+	echo -e "\nLast reboot:" >> os_details.txt
+	last reboot -5 >> os_details.txt
+	echo -e "\nSystem Uptime:" >> os_details.txt
+	cat /proc/uptime >> os_details.txt
+}
+
 start() {
 	dmesg -c > /dev/null
 	echo 'module cifs +p' > /sys/kernel/debug/dynamic_debug/control
 	echo 'file fs/cifs/* +p' > /sys/kernel/debug/dynamic_debug/control
 	echo 7 > /proc/fs/cifs/cifsFYI
 	rm -f cifs_traffic.pcap
+	dump_os_information
+	echo "======= Dumping CIFS Debug Stats at start =======" > cifs_diag.txt
+	dump_debug_stats
+	echo "=================================================" >> cifs_diag.txt
 	retry=0
 	if [ -f "$pidfile" ]; then
 		read pid < $pidfile;
@@ -110,9 +138,11 @@ stop() {
 		rm -f $pidfile
 		return 1
 	fi
-	sudo dmesg -c > cifs_dmesg
+	echo -e "\n\n======= Dumping CIFS Debug Stats at the end =======" >> cifs_diag.txt
+	dump_debug_stats
+	sudo dmesg -Tc > cifs_dmesg
 	echo 0 > /proc/fs/cifs/cifsFYI
-	zip cifs_debug.zip cifs_dmesg cifs_trace cifs_traffic.pcap
+	zip cifs_debug.zip cifs_dmesg cifs_trace cifs_traffic.pcap cifs_diag.txt os_details.txt
 	return 0;
 }
 
