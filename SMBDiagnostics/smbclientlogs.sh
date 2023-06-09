@@ -16,8 +16,15 @@ progfile2="nohup $ABSOLUTE_PATH"
 # Sanity to check whether trace-cmd is installed.
 which trace-cmd > /dev/null
 if [ $? == 1 ]; then
-	echo "trace-cmd is not installed."
+	echo "trace-cmd is not installed, please install trace-cmd to continue"
 	exit 1
+fi
+
+# Sanity to check whether zip is installed.
+which zip > /dev/null
+if [ $? == 1 ]; then
+        echo "zip is not installed, please install zip to continue"
+        exit 1
 fi
 
 dump_debug_stats() {
@@ -38,6 +45,9 @@ dump_os_information() {
 	echo "======= Distro details =======" > os_details.txt
 	cat /etc/os-release >> os_details.txt
 	echo -e "\nKernel version: `uname -a`" >> os_details.txt
+	echo -e "\nSMB/CIFS Kernel Module information:" >> os_details.txt
+	modinfo cifs >> os_details.txt
+	echo -e "\nMount.cifs version: `mount.cifs -V`" >> os_details.txt
 	echo -e "\nLast reboot:" >> os_details.txt
 	last reboot -5 >> os_details.txt
 	echo -e "\nSystem Uptime:" >> os_details.txt
