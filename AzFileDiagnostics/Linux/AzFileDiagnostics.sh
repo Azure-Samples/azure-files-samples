@@ -6,6 +6,7 @@ UNCPATH=''
 ACCOUNT=''
 SHARE=''
 ENVIRONMENT='AzureCloud'
+SUBSCRIPTION=''
 SAFQDN=''
 IPREGION=''
 VALIDATESRVCFG=1
@@ -255,6 +256,12 @@ validate_server_cfg()
 			exit 1
 		fi
 
+		while [ -z "$SUBSCRIPTION" ];
+		do
+			print_log "Type the subscription name, followed by [ENTER]:" "info"
+			read SUBSCRIPTION
+		done
+
 		#Check if user has already logged into azure cli
 		az account show  > /dev/null 2>&1
 		retVal=$?
@@ -271,6 +278,7 @@ validate_server_cfg()
                                     print_log "Account requires Multi-Factor Authentication to read account & subscription details. Executing 'az login --tenant $tenantid'" "warning"
                                     print_log "Please follow the below steps to authenticate again\n" "info"
                                     az login --tenant $tenantid
+				    az account set --subscription "$SUBSCRIPTION"
                                 else
                                     print_log "Account requires Multi-Factor Authentication. Please get the tenant id from azure portal and execute 'az login --tenant TENANTID'"
                                     print_log "Refer this page for more details: https://docs.microsoft.com/en-us/azure/active-directory/fundamentals/active-directory-how-to-find-tenant#find-tenant-id-through-the-azure-portal"
@@ -280,6 +288,7 @@ validate_server_cfg()
 			rm -f /tmp/azlog.txt
 		else
 			print_log "Already logged into Azure command line interface" "info"
+			az account set --subscription "$SUBSCRIPTION"
 			az account show
 		fi
 		print_log "Please verify account details and proceed further" "info"
@@ -310,8 +319,8 @@ if [ $# -gt 0 ] ; then
 		NEWGETOPT=true
 	fi
 
-	SHORT_OPTS=u:a:s:e:h
-	LONG_OPTS=uncpath:,storageaccount:,share:,azureenvironment:,help
+	SHORT_OPTS=u:a:s:e:S:h
+	LONG_OPTS=uncpath:,account:,share:,azureenvironment:,subscription:,help
 
 	## Use getopt to sanitize the arguments first.
 	if [ "$NEWGETOPT" ]; then
@@ -335,6 +344,7 @@ if [ $# -gt 0 ] ; then
 			-a | --account)  ACCOUNT="$2"; shift;;
 			-s | --share)  SHARE="$2"; shift;;
 			-e | --azureenvironment)  ENVIRONMENT="$2"; shift;;
+			-S | --subscription)  SUBSCRIPTION="$2"; shift;;
 			-h | --help)
 				usage
 				exit 0;;
