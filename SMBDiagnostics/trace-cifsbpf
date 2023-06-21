@@ -3,6 +3,8 @@ from bcc import BPF
 from bcc.utils import printb
 from time import sleep
 import os
+from sys import argv
+from datetime import datetime
 
 # define BPF program
 bpf_text= """
@@ -103,6 +105,7 @@ knownErrors = [-2, -11, -61];
 class stop_and_collapse(Exception):
     pass
 
+print(f"[{str(datetime.now())}] Running Anomaly")
 while 1:
     try:
         sleep(1);
@@ -125,17 +128,27 @@ while 1:
     except stop_and_collapse:
         break;
 
+
+output_dir = argv[1]
+print(f"[{str(datetime.now())}] Exiting Anomaly")
 fd=open("/tmp/smbclientlog.pid", "r");
-trace_pid=fd.readline();
+# trace_pid=fd.readline();
 tcpdump_pid=fd.readline();
 print(tcpdump_pid)
 command = "kill -INT %s" % (tcpdump_pid)
 os.system(command);
-command = "kill -INT %s" % (trace_pid)
+# command = "kill -INT %s" % (trace_pid)
+command = "trace-cmd stop"
 os.system(command);
 sleep(3)
-os.system("trace-cmd report 2>&1 > cifs_trace")
-os.system("sudo dmesg -c > cifs_dmesg")
-os.system("zip cifs_debug.zip cifs_dmesg cifs_trace cifs_traffic.pcap")
+os.system(f"trace-cmd report 2>&1 > {output_dir}/cifs_trace")
+os.system("trace-cmd reset")
+os.system(f"sudo dmesg -c > {output_dir}/nfs_dmesg")
+os.system(f"mv cifs_diag.txt {output_dir}")
+os.system(f"mv os_details.txt {output_dir}")
+command = f"zip -r $(basename {output_dir}).zip {output_dir}"
+# os.system("zip cifs_debug.zip cifs_dmesg cifs_trace cifs_traffic.pcap")
+os.system(command)
+
 os.system("rm -rf /tmp/smbclientlog.pid")
 

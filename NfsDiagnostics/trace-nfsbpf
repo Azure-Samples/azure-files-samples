@@ -3,7 +3,7 @@ from bcc import BPF
 from bcc.utils import printb
 from time import sleep
 import os
-
+from sys import argv
 # define BPF program
 bpf_text= """
 #include <linux/sched.h>
@@ -90,7 +90,7 @@ b.attach_tracepoint(tp="nfs:nfs_commit_error", fn_name="trace_page_error")
 b.attach_tracepoint(tp="nfs:nfs_pgio_error", fn_name="trace_pgio_error")
 b.attach_tracepoint(tp="nfs:nfs_writeback_page_exit", fn_name="trace_inode_event")
 b.attach_tracepoint(tp="nfs:nfs_writeback_inode_exit", fn_name="trace_inode_event")
-
+print("Running Anomaly")
 class stop_and_collapse(Exception):
     pass
 
@@ -108,17 +108,23 @@ while 1:
     except stop_and_collapse:
         break;
 
+output_dir = argv[1]
+print("Exiting Anomaly")
 fd=open("/tmp/nfsclientlog.pid", "r");
-trace_pid=fd.readline();
+# trace_pid=fd.readline();
 tcpdump_pid=fd.readline();
 print(tcpdump_pid)
 command = "kill -INT %s" % (tcpdump_pid)
 os.system(command);
-command = "kill -INT %s" % (trace_pid)
+# command = "kill -INT %s" % (trace_pid)
+command = "trace-cmd stop"
 os.system(command);
 sleep(3)
-os.system("trace-cmd report 2>&1 > nfs_trace")
-os.system("sudo dmesg -c > nfs_dmesg")
-os.system("zip nfs_debug.zip nfs_dmesg nfs_trace nfs_traffic.pcap")
-os.system("rm -rf /tmp/nfsclientlog.pid")
+os.system(f"trace-cmd report 2>&1 > {output_dir}/nfs_trace")
+os.system("trace-cmd reset")
+os.system(f"sudo dmesg -c > {output_dir}/nfs_dmesg")
+command = f"zip -r $(basename {output_dir}).zip {output_dir}"
+# os.system(f"zip -r $(basename {argv[1]}).zip {argv[1]}")
+os.system(command)
 
+os.system("rm -rf /tmp/nfsclientlog.pid")

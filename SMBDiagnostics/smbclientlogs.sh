@@ -1,10 +1,15 @@
 #!/bin/bash
 
 #pid file
-pidfile="/tmp/smbclientlog.pid"
 
+PIDFILE="/tmp/smbclientlog.pid"
+DIRNAME="./output"
 # prog file
 progfile="nohup trace-cmd record -e cifs"
+
+if [ ! -d "$DIRNAME" ]; then
+  mkdir -p "$DIRNAME"
+fi
 
 # tcpdump
 progfile1="nohup tcpdump -p -s 0 -w cifs_traffic.pcap port 445"
@@ -54,105 +59,88 @@ dump_os_information() {
 	cat /proc/uptime >> os_details.txt
 }
 
-start() {
-	dmesg -c > /dev/null
+init() { 
+  dmesg -Tc > /dev/null
+  rm -f "${DIRNAME}/cifs_dmesg" 
+  rm -f "${DIRNAME}/cifs_trace"
+  rm -f "${DIRNAME}/cifs_traffic.pcap"
+}
+
+
+start_trace() {
 	echo 'module cifs +p' > /sys/kernel/debug/dynamic_debug/control
 	echo 'file fs/cifs/* +p' > /sys/kernel/debug/dynamic_debug/control
 	echo 7 > /proc/fs/cifs/cifsFYI
-	rm -f cifs_traffic.pcap
+  trace-cmd start -e cifs
+}
+
+stop_trace() {
+  trace-cmd extract
+  sleep 1
+  trace-cmd report > "${DIRNAME}/cifs_trace"
+  trace-cmd stop 
+  trace-cmd reset
+  rm -rf trace.dat* 
+	echo 0 > /proc/fs/cifs/cifsFYI
+}
+
+capture_network() {
+  nohup tcpdump -p -s 0 port 445 -w "${DIRNAME}/cifs_traffic.pcap" &
+  echo $! > "${PIDFILE}"
+}
+
+stop_capture_network() {
+  [ ! -f "${PIDFILE}" ]  && return 1
+  read -r pid < "${PIDFILE}"
+  [ ! "${pid}" ] && return 1
+  ps -p "${pid}" > /dev/null
+  [ $? != 0 ] && return 1
+
+  kill -INT ${pid}
+  retry=0
+  while [ $? == 0 ] && [ $retry -lt 10 ]
+  do
+      retry=$((retry + 1))
+      sleep 1
+      ps -p "${pid}" > /dev/null
+    done
+  ps -p "${pid}" > /dev/null
+  [ $? == 0 ] && echo "Error closing tcpdump" >&2
+  rm -f ${PIDFILE}
+}
+
+start() {
+  init
+  start_trace
 	dump_os_information
 	echo "======= Dumping CIFS Debug Stats at start =======" > cifs_diag.txt
 	dump_debug_stats
 	echo "=================================================" >> cifs_diag.txt
-	retry=0
-	if [ -f "$pidfile" ]; then
-		read pid < $pidfile;
-		pgrep_pid=`pgrep trace-cmd | head -1`
-		if [ "$pid" == "$pgrep_pid" ]
-		then
-			echo "[error] [`date +'%FT%H:%M:%S%z'`] trace-cmd is already running, restarting trace-cmd."
-			kill -INT $pid
-			ps -p "$pid" > /dev/null
-			while [ $? == 0 ] && [ $retry -lt 10 ]
-			do
-				retry=`expr $retry + 1`
-				sleep 1
-				ps -p "$pid" > /dev/null
-			done
-			if [ $retry -eq 10 ]; then
-				echo "[error] [`date +'%FT%H:%M:%S%z'`] Restarting trace-cmd failed. Exiting.."
-				exit 1
-			fi
-			rm -rf trace.dat*
-		fi
-	fi
 
-	$progfile 0<&- > /dev/null 2>&1 &
-
-	# save the pid to a file
-	echo $! > $pidfile
 
 	if [ "$1" == "CaptureNetwork" ] || [ "$2" == "CaptureNetwork" ]; then
-		$progfile1 0<&- > /dev/null 2>&1 &
-		echo $! >> $pidfile
+    capture_network
+		# $progfile1 0<&- > /dev/null 2>&1 &
 	fi
 
 	if [ "$1" == "OnAnomaly" ] || [ "$2" == "OnAnomaly" ]; then
-		$progfile2 0<&- > /dev/null 2>&1 &
+    echo "OnAnomaly Running"
+		$progfile2 "${DIRNAME}" &
 	fi	
+
 }
 
 stop() {
-	retry=0
-	rm -rf cifs_trace
-	if [ -f "$pidfile" ]; then
-		while read -r line
-		do
-			read -r tcpdump_pid
-			pid=$line
-		done < $pidfile;
-		pgrep_pid=`pgrep trace-cmd | head -1`
-		if [ "$pid" != "" ] && [ "$pid" == "$pgrep_pid" ]
-		then
-			kill -INT $pid
-			ps -p "$pid" > /dev/null
-			while [ $? == 0 ] && [ $retry -lt 10 ]
-			do
-				retry=`expr $retry + 1`
-				sleep 1
-				ps -p "$pid" > /dev/null
-			done
-			trace-cmd report > cifs_trace
-			if [ $? != 0 ]; then
-				rm -f $pidfile
-				return 1
-			fi
-			rm -f $pidfile
-		else
-			rm -f $pidfile
-			return 1
-		fi
-		pgrep_tcpdump_pid=`pgrep tcpdump | head -1`
-		if [ "$tcpdump_pid" == "$pgrep_tcpdump_pid" ] && [ "$tcpdump_pid" != "" ]
-		then
-			kill -INT $tcpdump_pid
-			ps -p "$tcpdump_pid" > /dev/null
-			while [ $? == 0 ] && [ $retry -lt 10 ]
-			do
-				retry=`expr $retry + 1`
-				sleep 1
-				ps -p "$pid" > /dev/null
-			done
-		fi
-	else
-		rm -f $pidfile
-		return 1
-	fi
+  dmesg -T > "${DIRNAME}/cifs_dmesg"
+  stop_trace
+  stop_capture_network
+
 	echo -e "\n\n======= Dumping CIFS Debug Stats at the end =======" >> cifs_diag.txt
 	dump_debug_stats
-	sudo dmesg -Tc > cifs_dmesg
-	echo 0 > /proc/fs/cifs/cifsFYI
-	zip cifs_debug.zip cifs_dmesg cifs_trace cifs_traffic.pcap cifs_diag.txt os_details.txt
+  mv cifs_diag.txt "${DIRNAME}"
+  mv os_details.txt "${DIRNAME}"
+  zip -r "$(basename ${DIRNAME}).zip" "${DIRNAME}" 
+	# zip cifs_debug.zip cifs_dmesg cifs_trace cifs_traffic.pcap cifs_diag.txt os_details.txt
 	return 0;
 }
 
@@ -160,12 +148,12 @@ case $1 in
 	start)
 		if [ "$2" != "" ]; then
 			if [ "$3" != "" ]; then
-				start $2 $3
+				start $2 $3 0<&- > "${DIRNAME}/stdlog.txt" 2>&1
 			else
-				start $2
+				start $2 0<&- > "${DIRNAME}/stdlog.txt" 2>&1
 			fi
 		else
-			start
+			start 0<&- > "${DIRNAME}/stdlog.txt" 2>&1
 		fi
 		;;
 	stop)
