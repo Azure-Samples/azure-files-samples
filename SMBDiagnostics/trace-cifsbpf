@@ -6,6 +6,7 @@ import os
 from sys import argv
 from datetime import datetime
 from ctypes import c_int
+from errno import ENOENT, EAGAIN, ENODATA
 
 # define BPF program
 bpf_text= """
@@ -102,7 +103,7 @@ b.attach_tracepoint(tp="cifs:smb3_zero_err", fn_name="trace_zero_err")
 b.attach_tracepoint(tp="cifs:smb3_falloc_err", fn_name="trace_falloc_err")
 b.attach_tracepoint(tp="cifs:smb3_cmd_err", fn_name="trace_cmd_err")
 
-knownErrors = [-2, -11, -61];
+knownErrors = [ENOENT, EAGAIN, ENODATA]
 class stop_and_collapse(Exception):
     pass
 
@@ -121,7 +122,7 @@ while 1:
         for k,v in b["callers_falloc"].items():
             raise stop_and_collapse
         for k,v in b["callers_cmd"].items():
-            if c_int(v.value).value in knownErrors:
+            if -c_int(v.value).value in knownErrors:
                 continue;
             raise stop_and_collapse
     except KeyboardInterrupt:
