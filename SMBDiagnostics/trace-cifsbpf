@@ -5,6 +5,7 @@ from time import sleep
 import os
 from sys import argv
 from datetime import datetime
+from ctypes import c_int
 
 # define BPF program
 bpf_text= """
@@ -105,7 +106,7 @@ knownErrors = [-2, -11, -61];
 class stop_and_collapse(Exception):
     pass
 
-print(f"[{str(datetime.now())}] Running Anomaly")
+print(f"[{str(datetime.now())}] Running Anomaly Mode")
 while 1:
     try:
         sleep(1);
@@ -120,7 +121,7 @@ while 1:
         for k,v in b["callers_falloc"].items():
             raise stop_and_collapse
         for k,v in b["callers_cmd"].items():
-            if v.value in knownErrors:
+            if c_int(v.value).value in knownErrors:
                 continue;
             raise stop_and_collapse
     except KeyboardInterrupt:
@@ -130,7 +131,7 @@ while 1:
 
 
 output_dir = argv[1]
-print(f"[{str(datetime.now())}] Exiting Anomaly")
+print(f"[{str(datetime.now())}] Exiting Anomaly Mode")
 fd=open("/tmp/smbclientlog.pid", "r");
 # trace_pid=fd.readline();
 tcpdump_pid=fd.readline();
