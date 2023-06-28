@@ -6784,8 +6784,7 @@ function Move-OnPremSharePermissionsToAzureFileShare
         #Geting the OID of domain user/group using its SID
         try
         {
-            # if not connected to MsGraph, will ask user to call Connect-MgGraph in error message, need User.Read.All scope.
-            # eg: Connect-MgGraph -TenantId <TenantId> -Scopes "User.Read.All"
+            Request-ConnectMsGraph -Scopes "User.Read.All"
             $aadUser = Get-MgUser -Filter "OnPremisesSecurityIdentifier eq '$strSID'"
         }
         catch
