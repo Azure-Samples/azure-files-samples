@@ -5252,7 +5252,7 @@ function Request-ConnectMsGraph {
     .SYNOPSIS
     Connect to an Azure AD tenant using the MsGraph cmdlets.
     .DESCRIPTION
-    Correctly import the MsGraph module for your PowerShell version and then sign in using the same tenant is the currently signed in Az user. This wrapper is necessary as 1. AzureAD is not directly compatible with PowerShell 6 (though this can be achieved through the WindowsCompatibility module), and 2. AzureAD doesn't necessarily log you into the same tenant as the Az cmdlets according to their documentation (although it's not clear when it doesn't).
+    Correctly import the MsGraph module for your PowerShell version and then sign in using the same tenant is the currently signed in Az user.
     .EXAMPLE
     Request-ConnectMsGraph
     #>
