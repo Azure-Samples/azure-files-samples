@@ -4046,10 +4046,10 @@ function Debug-AzStorageAccountAuth {
                     # This API has a known issue. Not all directory objects returned are the full objects containing all their properties.
                     # https://learn.microsoft.com/en-us/graph/api/directoryobject-getbyids?view=graph-rest-1.0&tabs=http#:~:text=This%20API%20has%20a%20known%20issue.%20Not%20all%20directory%20objects%20returned%20are%20the%20full%20objects%20containing%20all%20their%20properties.
                     # so we use Get-MgUser and Get-MgGroup
-                    if ($roleAssignments.ObjectType -eq 'User') {
+                    if ($assignment.ObjectType -eq 'User') {
                         $aadObject = Get-MgUser -UserId $assignment.ObjectId -Property OnPremisesSecurityIdentifier
                     }
-                    if ($roleAssignments.ObjectType -eq 'Group') {
+                    if ($assignment.ObjectType -eq 'Group') {
                         $aadObject = Get-MgGroup -GroupId $assignment.ObjectId -Property OnPremisesSecurityIdentifier
                     }
 
