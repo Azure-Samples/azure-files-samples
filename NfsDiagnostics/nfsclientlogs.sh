@@ -1,144 +1,138 @@
 #!/bin/bash
 
-#pid file
-pidfile="/tmp/nfsclientlog.pid"
+PIDFILE="/tmp/nfsclientlog.pid"
+DIRNAME="./output"
+NFS_PORT=2049
+TRACE_NFSBPF_ABS_PATH="$(cd "$(dirname "trace-nfsbpf")" && pwd)/$(basename "trace-nfsbpf")"
+PYTHON_PROG='python'
+STDLOG_FILE='/dev/null'
 
-# prog file
-progfile="nohup trace-cmd record -e nfs"
 
-# tcpdump
-if [ $1 == "v3b" ]
-then
-	progfile1="nohup tcpdump -p -s 0 -w nfs_traffic.pcap port 111"
-else
-	progfile1="nohup tcpdump -p -s 0 -w nfs_traffic.pcap port 2049"
-fi
+main() {
+  if [[ "$*" =~ "v3b" ]]
+  then
+    NFS_PORT=111
+  else
+    NFS_PORT=2049
+  fi
 
-# trace-nfsbpf
-ABSOLUTE_PATH="$(cd "$(dirname "trace-nfsbpf")" && pwd)/$(basename "trace-nfsbpf")"
-progfile2="nohup $ABSOLUTE_PATH"
+  if [[ "$*" =~ "start" ]]
+  then
+    start "$@" 0<&- > "${STDLOG_FILE}" 2>&1
+  elif [[  "$*" =~ "stop" ]]
+  then
+    stop 0<&- > "${STDLOG_FILE}" 2>&1
+  else
+    echo "Usage: ./nfsclientlogs.sh <v3b | v4> <> <start | stop> <CaptureNetwork> <OnAnomaly>"
+    exit 1
+  fi
 
-# Sanity to check whether trace-cmd is installed.
-which trace-cmd > /dev/null
-if [ $? == 1 ]; then
-	echo "trace-cmd is not installed."
-	exit 1
-fi
+  exit $?
+}
 
 start() {
-	dmesg -Tc > /dev/null
-	rm -f nfs_traffic.pcap
-	rpcdebug -m rpc -s all
-	rpcdebug -m nfs -s all
-	retry=0
-	if [ -f "$pidfile" ]; then
-		read pid < $pidfile;
-		pgrep_pid=`pgrep trace-cmd | head -1`
-		if [ "$pid" == "$pgrep_pid" ]
-		then
-			echo "[error] [`date +'%FT%H:%M:%S%z'`] trace-cmd is already running, restarting trace-cmd."
-			kill -INT $pid
-			ps -p "$pid" > /dev/null
-			while [ $? == 0 ] && [ $retry -lt 10 ]
-			do
-				retry=`expr $retry + 1`
-				sleep 1
-				ps -p "$pid" > /dev/null
-			done
-			if [ $retry -eq 10 ]; then
-				echo "[error] [`date +'%FT%H:%M:%S%z'`] Restarting trace-cmd failed. Exiting.."
-				exit 1
-			fi
-			rm -rf trace.dat*
-		fi
-	fi
+  init
+  start_trace
 
-	$progfile 0<&- > /dev/null 2>&1 &
+  if [[ "$*" =~ "CaptureNetwork" ]]; then
+    capture_network
+  fi
 
-	# save the pid to a file
-	echo $! > $pidfile
+  if [[ "$*" =~ "OnAnomaly" ]]; then
+    trace_nfsbpf
+  fi
+}
 
-	if [ "$1" == "CaptureNetwork" ] || [ "$2" == "CaptureNetwork" ]; then
-		$progfile1 0<&- > /dev/null 2>&1 &
-		echo $! >> $pidfile
-	fi
+init() {
+  check_utils
+  rm -r "$DIRNAME" 
+  mkdir -p "$DIRNAME"
 
-	if [ "$1" == "OnAnomaly" ] || [ "$2" == "OnAnomaly" ]; then
-		$progfile2 0<&- > /dev/null 2>&1 &
-	fi	
+  dmesg -Tc > /dev/null
+  # rm -f "${DIRNAME}/nfs_dmesg"
+  # rm -f "${DIRNAME}/nfs_trace"
+  # rm -f "${DIRNAME}/nfs_traffic.pcap"
+}
+
+check_utils() {
+  which trace-cmd > /dev/null
+  if [ $? == 1 ]; then
+    echo "trace-cmd is not installed, please install trace-cmd"
+    exit 1
+  fi
+
+  which zip > /dev/null
+  if [ $? == 1 ]; then
+    echo "zip is not installed, please install zip to continue"
+    exit 1
+  fi
+
+  which python > /dev/null
+  if [ $? == 1 ]; then
+    which python3 > /dev/null
+    if [ $? == 1 ]; then
+      echo "python is not installed, please install python to continue"
+      exit 1
+    else PYTHON_PROG='python3'
+    fi
+  fi
+}
+
+start_trace() {
+  rpcdebug -m rpc -s all
+  rpcdebug -m nfs -s all
+
+  trace-cmd start -e nfs
+}
+
+capture_network() {
+  nohup tcpdump -p -s 0 port ${NFS_PORT} -w "${DIRNAME}/nfs_traffic.pcap" &
+  echo $! > "${PIDFILE}"
+}
+
+trace_nfsbpf() {
+  nohup "${PYTHON_PROG}" "${TRACE_NFSBPF_ABS_PATH}" "${DIRNAME}" 0<&- 2>&1 &
 }
 
 stop() {
-	retry=0
-	rm -rf nfs_trace
-	if [ -f "$pidfile" ]; then
-		while read -r line
-		do
-			read -r tcpdump_pid
-			pid=$line
-		done < $pidfile;
-		pgrep_pid=`pgrep trace-cmd | head -1`
-		if [ "$pid" != "" ] && [ "$pid" == "$pgrep_pid" ]
-		then
-			kill -INT $pid
-			ps -p "$pid" > /dev/null
-			while [ $? == 0 ] && [ $retry -lt 10 ]
-			do
-				retry=`expr $retry + 1`
-				sleep 1
-				ps -p "$pid" > /dev/null
-			done
-			trace-cmd report > nfs_trace
-			if [ $? != 0 ]; then
-				rm -f $pidfile
-				return 1
-			fi
-			rm -f $pidfile
-		else
-			rm -f $pidfile
-			return 1
-		fi
-		pgrep_tcpdump_pid=`pgrep tcpdump | head -1`
-		if [ "$tcpdump_pid" == "$pgrep_tcpdump_pid" ] && [ "$tcpdump_pid" != "" ]
-		then
-			sudo kill -INT $tcpdump_pid
-			ps -p "$tcpdump_pid" > /dev/null
-			while [ $? == 0 ] && [ $retry -lt 10 ]
-			do
-				retry=`expr $retry + 1`
-				sleep 1
-				ps -p "$pid" > /dev/null
-			done
-		fi
-	else
-		rm -f $pidfile
-		return 1
-	fi
-	rpcdebug -m rpc -c all
-	rpcdebug -m nfs -c all
-	dmesg -T > nfs_dmesg
-	zip nfs_debug.zip nfs_dmesg nfs_trace nfs_traffic.pcap
-	return 0;
+  dmesg -T > "${DIRNAME}/nfs_dmesg"
+  stop_trace
+  stop_capture_network
+
+  zip -r "$(basename ${DIRNAME}).zip" "${DIRNAME}"
+  return 0;
 }
 
-case $2 in
-	start)
-		if [ "$3" != "" ]; then
-			if [ "$4" != "" ]; then
-				start $3 $4
-			else
-				start $3
-			fi
-		else
-			start
-		fi
-		;;
-	stop)
-		stop
-		;;
-	*)
-		echo "Usage: ./nfsclientlogs.sh <v3b | v4> <> <start | stop> <CaptureNetwork> <OnAnomaly>"
-		;;
-esac
+stop_trace() {
+  trace-cmd extract
+  sleep 1
+  trace-cmd report > "${DIRNAME}/nfs_trace"
+  trace-cmd stop
+  trace-cmd reset
+  rpcdebug -m rpc -c all
+  rpcdebug -m nfs -c all
+  rm -rf trace.dat*
+}
 
-exit $?
+stop_capture_network() {
+  [ ! -f "${PIDFILE}" ]  && return 1
+  read -r pid < "${PIDFILE}"
+  [ ! "${pid}" ] && return 1
+  ps -p "${pid}" > /dev/null
+  [ $? != 0 ] && return 1
+
+  kill -INT ${pid}
+  retry=0
+  while [ $? == 0 ] && [ $retry -lt 10 ]
+  do
+    retry=$((retry + 1))
+    sleep 1
+    ps -p "${pid}" > /dev/null
+  done
+  ps -p "${pid}" > /dev/null
+  [ $? == 0 ] && echo "Error closing tcpdump" >&2
+  rm -f ${PIDFILE}
+}
+
+
+main "$@"

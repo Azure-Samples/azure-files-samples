@@ -1,179 +1,166 @@
 #!/bin/bash
 
-#pid file
-pidfile="/tmp/smbclientlog.pid"
+PIDFILE="/tmp/smbclientlog.pid"
+DIRNAME="./output"
+CIFS_PORT=445
+TRACE_CIFSBPF_ABS_PATH="$(cd "$(dirname "trace-cifsbpf")" && pwd)/$(basename "trace-cifsbpf")"
+PYTHON_PROG='python'
+STDLOG_FILE='/dev/null'
 
-# prog file
-progfile="nohup trace-cmd record -e cifs"
 
-# tcpdump
-progfile1="nohup tcpdump -p -s 0 -w cifs_traffic.pcap port 445"
+main() {
+  if [[ "$*" =~ "start" ]]
+  then
+    start "$@" 0<&- > "${STDLOG_FILE}" 2>&1
+  elif [[  "$*" =~ "stop" ]]
+  then
+    stop 0<&- > "${STDLOG_FILE}" 2>&1
+  else
+    echo "Usage: ./smbclientlogs.sh <start | stop> <CaptureNetwork>"
+    exit 1
+  fi
 
-# trace-cifsbpf
-ABSOLUTE_PATH="$(cd "$(dirname "trace-cifsbpf")" && pwd)/$(basename "trace-cifsbpf")"
-progfile2="nohup $ABSOLUTE_PATH"
-
-# Sanity to check whether trace-cmd is installed.
-which trace-cmd > /dev/null
-if [ $? == 1 ]; then
-	echo "trace-cmd is not installed, please install trace-cmd to continue"
-	exit 1
-fi
-
-# Sanity to check whether zip is installed.
-which zip > /dev/null
-if [ $? == 1 ]; then
-        echo "zip is not installed, please install zip to continue"
-        exit 1
-fi
-
-dump_debug_stats() {
-	echo -e "\nDate: `date -u`" >> cifs_diag.txt
-	echo -e "\n======= CIFS Stats from /proc/fs/cifs/Stats =======" >> cifs_diag.txt
-	cat /proc/fs/cifs/Stats >> cifs_diag.txt
-	echo -e "\n======= CIFS DebugData from /proc/fs/cifs/DebugData =======" >> cifs_diag.txt
-	cat /proc/fs/cifs/DebugData >> cifs_diag.txt
-	echo -e "\n======= CIFS Open files from /proc/fs/cifs/open_files =======" >> cifs_diag.txt
-	cat /proc/fs/cifs/open_files >> cifs_diag.txt
-	echo -e "\n======= CIFS Mounts =======" >> cifs_diag.txt
-	mount -t cifs >> cifs_diag.txt
-	echo -e "\n======= CIFS TCP Connections =======" >> cifs_diag.txt
-	ss -t | grep microsoft >> cifs_diag.txt
-}
-
-dump_os_information() {
-	echo "======= Distro details =======" > os_details.txt
-	cat /etc/os-release >> os_details.txt
-	echo -e "\nKernel version: `uname -a`" >> os_details.txt
-	echo -e "\nSMB/CIFS Kernel Module information:" >> os_details.txt
-	modinfo cifs >> os_details.txt
-	echo -e "\nMount.cifs version: `mount.cifs -V`" >> os_details.txt
-	echo -e "\nLast reboot:" >> os_details.txt
-	last reboot -5 >> os_details.txt
-	echo -e "\nSystem Uptime:" >> os_details.txt
-	cat /proc/uptime >> os_details.txt
+  exit $?
 }
 
 start() {
-	dmesg -c > /dev/null
-	echo 'module cifs +p' > /sys/kernel/debug/dynamic_debug/control
-	echo 'file fs/cifs/* +p' > /sys/kernel/debug/dynamic_debug/control
-	echo 7 > /proc/fs/cifs/cifsFYI
-	rm -f cifs_traffic.pcap
-	dump_os_information
-	echo "======= Dumping CIFS Debug Stats at start =======" > cifs_diag.txt
-	dump_debug_stats
-	echo "=================================================" >> cifs_diag.txt
-	retry=0
-	if [ -f "$pidfile" ]; then
-		read pid < $pidfile;
-		pgrep_pid=`pgrep trace-cmd | head -1`
-		if [ "$pid" == "$pgrep_pid" ]
-		then
-			echo "[error] [`date +'%FT%H:%M:%S%z'`] trace-cmd is already running, restarting trace-cmd."
-			kill -INT $pid
-			ps -p "$pid" > /dev/null
-			while [ $? == 0 ] && [ $retry -lt 10 ]
-			do
-				retry=`expr $retry + 1`
-				sleep 1
-				ps -p "$pid" > /dev/null
-			done
-			if [ $retry -eq 10 ]; then
-				echo "[error] [`date +'%FT%H:%M:%S%z'`] Restarting trace-cmd failed. Exiting.."
-				exit 1
-			fi
-			rm -rf trace.dat*
-		fi
-	fi
+  init
+  start_trace
+  dump_os_information
+  echo "======= Dumping CIFS Debug Stats at start =======" > cifs_diag.txt
+  dump_debug_stats
+  echo "=================================================" >> cifs_diag.txt
 
-	$progfile 0<&- > /dev/null 2>&1 &
 
-	# save the pid to a file
-	echo $! > $pidfile
+  if [[ "$*" =~ "CaptureNetwork" ]]; then
+    capture_network
+  fi
 
-	if [ "$1" == "CaptureNetwork" ] || [ "$2" == "CaptureNetwork" ]; then
-		$progfile1 0<&- > /dev/null 2>&1 &
-		echo $! >> $pidfile
-	fi
+  if [[ "$*" =~ "OnAnomaly" ]]; then
+    trace_cifsbpf
+  fi
+}
 
-	if [ "$1" == "OnAnomaly" ] || [ "$2" == "OnAnomaly" ]; then
-		$progfile2 0<&- > /dev/null 2>&1 &
-	fi	
+init() {
+  check_utils
+  rm -r "$DIRNAME" 
+  mkdir -p "$DIRNAME"
+
+  dmesg -Tc > /dev/null
+  # rm -f "${DIRNAME}/cifs_dmesg"
+  # rm -f "${DIRNAME}/cifs_trace"
+  # rm -f "${DIRNAME}/cifs_traffic.pcap"
+}
+
+check_utils() {
+  which trace-cmd > /dev/null
+  if [ $? == 1 ]; then
+    echo "trace-cmd is not installed, please install trace-cmd"
+    exit 1
+  fi
+
+  which zip > /dev/null
+  if [ $? == 1 ]; then
+    echo "zip is not installed, please install zip to continue"
+    exit 1
+  fi
+
+  which python > /dev/null
+  if [ $? == 1 ]; then
+    which python3 > /dev/null
+    if [ $? == 1 ]; then
+      echo "python is not installed, please install python to continue"
+      exit 1
+    else PYTHON_PROG='python3'
+    fi
+  fi
+}
+
+start_trace() {
+  echo 'module cifs +p' > /sys/kernel/debug/dynamic_debug/control
+  echo 'file fs/cifs/* +p' > /sys/kernel/debug/dynamic_debug/control
+  echo 7 > /proc/fs/cifs/cifsFYI
+  trace-cmd start -e cifs
+}
+
+dump_os_information() {
+  echo "======= Distro details =======" > os_details.txt
+  cat /etc/os-release >> os_details.txt
+  echo -e "\nKernel version: `uname -a`" >> os_details.txt
+  echo -e "\nSMB/CIFS Kernel Module information:" >> os_details.txt
+  modinfo cifs >> os_details.txt
+  echo -e "\nMount.cifs version: `mount.cifs -V`" >> os_details.txt
+  echo -e "\nLast reboot:" >> os_details.txt
+  last reboot -5 >> os_details.txt
+  echo -e "\nSystem Uptime:" >> os_details.txt
+  cat /proc/uptime >> os_details.txt
+}
+
+dump_debug_stats() {
+  echo -e "\nDate: `date -u`" >> cifs_diag.txt
+  echo -e "\n======= CIFS Stats from /proc/fs/cifs/Stats =======" >> cifs_diag.txt
+  cat /proc/fs/cifs/Stats >> cifs_diag.txt
+  echo -e "\n======= CIFS DebugData from /proc/fs/cifs/DebugData =======" >> cifs_diag.txt
+  cat /proc/fs/cifs/DebugData >> cifs_diag.txt
+  echo -e "\n======= CIFS Open files from /proc/fs/cifs/open_files =======" >> cifs_diag.txt
+  cat /proc/fs/cifs/open_files >> cifs_diag.txt
+  echo -e "\n======= CIFS Mounts =======" >> cifs_diag.txt
+  mount -t cifs >> cifs_diag.txt
+  echo -e "\n======= CIFS TCP Connections =======" >> cifs_diag.txt
+  ss -t | grep microsoft >> cifs_diag.txt
+}
+
+
+capture_network() {
+  nohup tcpdump -p -s 0 port ${CIFS_PORT} -w "${DIRNAME}/cifs_traffic.pcap" &
+  echo $! > "${PIDFILE}"
+}
+
+trace_cifsbpf() {
+  nohup "${PYTHON_PROG}" "${TRACE_CIFSBPF_ABS_PATH}" "${DIRNAME}" 0<&- 2>&1 &
 }
 
 stop() {
-	retry=0
-	rm -rf cifs_trace
-	if [ -f "$pidfile" ]; then
-		while read -r line
-		do
-			read -r tcpdump_pid
-			pid=$line
-		done < $pidfile;
-		pgrep_pid=`pgrep trace-cmd | head -1`
-		if [ "$pid" != "" ] && [ "$pid" == "$pgrep_pid" ]
-		then
-			kill -INT $pid
-			ps -p "$pid" > /dev/null
-			while [ $? == 0 ] && [ $retry -lt 10 ]
-			do
-				retry=`expr $retry + 1`
-				sleep 1
-				ps -p "$pid" > /dev/null
-			done
-			trace-cmd report > cifs_trace
-			if [ $? != 0 ]; then
-				rm -f $pidfile
-				return 1
-			fi
-			rm -f $pidfile
-		else
-			rm -f $pidfile
-			return 1
-		fi
-		pgrep_tcpdump_pid=`pgrep tcpdump | head -1`
-		if [ "$tcpdump_pid" == "$pgrep_tcpdump_pid" ] && [ "$tcpdump_pid" != "" ]
-		then
-			kill -INT $tcpdump_pid
-			ps -p "$tcpdump_pid" > /dev/null
-			while [ $? == 0 ] && [ $retry -lt 10 ]
-			do
-				retry=`expr $retry + 1`
-				sleep 1
-				ps -p "$pid" > /dev/null
-			done
-		fi
-	else
-		rm -f $pidfile
-		return 1
-	fi
-	echo -e "\n\n======= Dumping CIFS Debug Stats at the end =======" >> cifs_diag.txt
-	dump_debug_stats
-	sudo dmesg -Tc > cifs_dmesg
-	echo 0 > /proc/fs/cifs/cifsFYI
-	zip cifs_debug.zip cifs_dmesg cifs_trace cifs_traffic.pcap cifs_diag.txt os_details.txt
-	return 0;
+  dmesg -T > "${DIRNAME}/cifs_dmesg"
+  stop_trace
+  stop_capture_network
+  echo -e "\n\n======= Dumping CIFS Debug Stats at the end =======" >> cifs_diag.txt
+  dump_debug_stats
+  mv cifs_diag.txt "${DIRNAME}"
+  mv os_details.txt "${DIRNAME}"
+  zip -r "$(basename ${DIRNAME}).zip" "${DIRNAME}"
+  return 0;
 }
 
-case $1 in
-	start)
-		if [ "$2" != "" ]; then
-			if [ "$3" != "" ]; then
-				start $2 $3
-			else
-				start $2
-			fi
-		else
-			start
-		fi
-		;;
-	stop)
-		stop
-		;;
-	*)
-		echo "Usage: ./smbclientlogs.sh <start | stop> <CaptureNetwork>"
-		;;
-esac
+stop_trace() {
+  trace-cmd extract
+  sleep 1
+  trace-cmd report > "${DIRNAME}/cifs_trace"
+  trace-cmd stop
+  trace-cmd reset
+  echo 0 > /proc/fs/cifs/cifsFYI
+  rm -rf trace.dat*
+}
 
-exit $?
+stop_capture_network() {
+  [ ! -f "${PIDFILE}" ]  && return 1
+  read -r pid < "${PIDFILE}"
+  [ ! "${pid}" ] && return 1
+  ps -p "${pid}" > /dev/null
+  [ $? != 0 ] && return 1
+
+  kill -INT ${pid}
+  retry=0
+  while [ $? == 0 ] && [ $retry -lt 10 ]
+  do
+    retry=$((retry + 1))
+    sleep 1
+    ps -p "${pid}" > /dev/null
+  done
+  ps -p "${pid}" > /dev/null
+  [ $? == 0 ] && echo "Error closing tcpdump" >&2
+  rm -f ${PIDFILE}
+}
+
+
+main "$@"

@@ -3,6 +3,10 @@ from bcc import BPF
 from bcc.utils import printb
 from time import sleep
 import os
+from sys import argv
+from datetime import datetime
+from ctypes import c_int
+from errno import ENOENT, EAGAIN, ENODATA
 
 # define BPF program
 bpf_text= """
@@ -99,10 +103,11 @@ b.attach_tracepoint(tp="cifs:smb3_zero_err", fn_name="trace_zero_err")
 b.attach_tracepoint(tp="cifs:smb3_falloc_err", fn_name="trace_falloc_err")
 b.attach_tracepoint(tp="cifs:smb3_cmd_err", fn_name="trace_cmd_err")
 
-knownErrors = [-2, -11, -61];
+knownErrors = [ENOENT, EAGAIN, ENODATA]
 class stop_and_collapse(Exception):
     pass
 
+print(f"[{str(datetime.now())}] Running Anomaly Mode")
 while 1:
     try:
         sleep(1);
@@ -117,7 +122,7 @@ while 1:
         for k,v in b["callers_falloc"].items():
             raise stop_and_collapse
         for k,v in b["callers_cmd"].items():
-            if v.value in knownErrors:
+            if -c_int(v.value).value in knownErrors:
                 continue;
             raise stop_and_collapse
     except KeyboardInterrupt:
@@ -125,17 +130,27 @@ while 1:
     except stop_and_collapse:
         break;
 
+
+output_dir = argv[1]
+print(f"[{str(datetime.now())}] Exiting Anomaly Mode")
 fd=open("/tmp/smbclientlog.pid", "r");
-trace_pid=fd.readline();
+# trace_pid=fd.readline();
 tcpdump_pid=fd.readline();
 print(tcpdump_pid)
 command = "kill -INT %s" % (tcpdump_pid)
 os.system(command);
-command = "kill -INT %s" % (trace_pid)
+# command = "kill -INT %s" % (trace_pid)
+command = "trace-cmd stop"
 os.system(command);
 sleep(3)
-os.system("trace-cmd report 2>&1 > cifs_trace")
-os.system("sudo dmesg -c > cifs_dmesg")
-os.system("zip cifs_debug.zip cifs_dmesg cifs_trace cifs_traffic.pcap")
+os.system(f"trace-cmd report 2>&1 > {output_dir}/cifs_trace")
+os.system("trace-cmd reset")
+os.system(f"sudo dmesg -c > {output_dir}/nfs_dmesg")
+os.system(f"mv cifs_diag.txt {output_dir}")
+os.system(f"mv os_details.txt {output_dir}")
+command = f"zip -r $(basename {output_dir}).zip {output_dir}"
+# os.system("zip cifs_debug.zip cifs_dmesg cifs_trace cifs_traffic.pcap")
+os.system(command)
+
 os.system("rm -rf /tmp/smbclientlog.pid")
 
