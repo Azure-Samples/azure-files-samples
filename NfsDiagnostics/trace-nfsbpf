@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 from bcc import BPF
 from bcc.utils import printb
 from time import sleep

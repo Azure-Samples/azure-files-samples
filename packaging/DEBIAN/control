@@ -1,0 +1,5 @@
+Package: $PKG_NAME
+Version: $VERSION
+Maintainer: Microsoft
+Architecture: all
+Description: Diagnostics scripts for CIFS and NFS. 
