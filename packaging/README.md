@@ -1,4 +1,4 @@
-
-1. Run `make debian` to generate .deb package
-2. Run `make rpm` to generate .rpm package
-3. Run `make clean` once the packages are created.
+Run `make` to generate both .deb and .rpm packages and clean the build directories or individually run the following.
+Run `make debian` to generate .deb package
+Run `make rpm` to generate .rpm package
+Run `make clean` once the packages are created.

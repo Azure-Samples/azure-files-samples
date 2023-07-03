@@ -16,7 +16,7 @@ main() {
   then
     stop 0<&- > "${STDLOG_FILE}" 2>&1
   else
-    echo "Usage: ./smbclientlogs.sh <start | stop> <CaptureNetwork>"
+    echo "Usage: diag-main.sh cifs <start | stop> <CaptureNetwork> <OnAnomaly>"
     exit 1
   fi
 

@@ -12,17 +12,17 @@ Diagnostics scripts for NFS and CIFS
 
 %install
 # Install script and related files
-# install -m 454 ~/opt/xstore/bin/wrapper.sh %{buildroot}/opt/xstore/bin/wrapper.sh 
+# install -m 454 ~/opt/xstore/bin/diag-main.sh %{buildroot}/opt/xstore/bin/diag-main.sh 
 cp -r ~/rpmbuild/SOURCES/opt %{buildroot}
 echo %{buildroot}
 
 %post 
-chmod 454 $SYS_DIR/bin/wrapper.sh
+chmod 454 $SYS_DIR/bin/diag-main.sh
 
 %files
 # List all the files that are part of the package
-# /opt/xstore/bin/wrapper.sh
-$SYS_DIR/bin/wrapper.sh
+# /opt/xstore/bin/diag-main.sh
+$SYS_DIR/bin/diag-main.sh
 $SYS_DIR/lib/NfsDiagnostics/README
 $SYS_DIR/lib/NfsDiagnostics/nfsclientlogs.sh
 $SYS_DIR/lib/NfsDiagnostics/trace-nfsbpf

@@ -23,7 +23,7 @@ main() {
   then
     stop 0<&- > "${STDLOG_FILE}" 2>&1
   else
-    echo "Usage: ./nfsclientlogs.sh <v3b | v4> <> <start | stop> <CaptureNetwork> <OnAnomaly>"
+    echo "Usage: diag-main.sh nfs <v3b | v4> <start | stop> <CaptureNetwork> <OnAnomaly>"
     exit 1
   fi
 
