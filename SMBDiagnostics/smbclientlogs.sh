@@ -117,7 +117,7 @@ capture_network() {
 }
 
 trace_cifsbpf() {
-  nohup "${PYTHON_PROG}" "${TRACE_CIFSBPF_ABS_PATH}" "${DIRNAME}" 0<&- 2>&1 &
+  nohup /usr/bin/env "${PYTHON_PROG}" "${TRACE_CIFSBPF_ABS_PATH}" "${DIRNAME}" 0<&- 2>&1 &
 }
 
 stop() {

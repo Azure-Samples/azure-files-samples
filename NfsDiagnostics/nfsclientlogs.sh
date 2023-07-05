@@ -91,7 +91,7 @@ capture_network() {
 }
 
 trace_nfsbpf() {
-  nohup "${PYTHON_PROG}" "${TRACE_NFSBPF_ABS_PATH}" "${DIRNAME}" 0<&- 2>&1 &
+  nohup /usr/bin/env "${PYTHON_PROG}" "${TRACE_NFSBPF_ABS_PATH}" "${DIRNAME}" 0<&- 2>&1 &
 }
 
 stop() {
