@@ -16,7 +16,7 @@ main() {
   then
     stop 0<&- > "${STDLOG_FILE}" 2>&1
   else
-    echo "Usage: ./smbclientlogs.sh <start | stop> <CaptureNetwork>"
+    echo "Usage: ./smbclientlogs.sh <start | stop> <CaptureNetwork> <VerboseLogs>"
     exit 1
   fi
 
@@ -25,7 +25,7 @@ main() {
 
 start() {
   init
-  start_trace
+  start_trace $@
   dump_os_information
   echo "======= Dumping CIFS Debug Stats at start =======" > cifs_diag.txt
   dump_debug_stats
@@ -77,9 +77,11 @@ check_utils() {
 }
 
 start_trace() {
-  echo 'module cifs +p' > /sys/kernel/debug/dynamic_debug/control
-  echo 'file fs/cifs/* +p' > /sys/kernel/debug/dynamic_debug/control
-  echo 7 > /proc/fs/cifs/cifsFYI
+  if [[ "$*" =~ "VerboseLogs" ]]; then
+    echo 'module cifs +p' > /sys/kernel/debug/dynamic_debug/control
+    echo 'file fs/cifs/* +p' > /sys/kernel/debug/dynamic_debug/control
+    echo 7 > /proc/fs/cifs/cifsFYI
+  fi
   trace-cmd start -e cifs
 }
 
