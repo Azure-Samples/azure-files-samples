@@ -10,10 +10,10 @@ Edit `Makefile` to make changes to PKG_NAME, RELEASE or VERSION, etc.
 
 # Installation:
 Debian: 
-    `sudo dpkg -i azure-files-diag.deb`
+    `sudo apt install -f ./azure-files-diag.deb`
 
 RPM:
-    `sudo rpm -i azure-files-diag-*.x86_64.rpm`
+    `sudo dnf install ./azure-files-diag-*.x86_64.rpm`
 
 Add `/opt/xstore/bin/diag-main.sh` to `PATH` for root user. __[Optional]__
 
@@ -34,4 +34,4 @@ Debian:
     `sudo apt remove azure-files-diag`
 
 RPM:
-    `sudo rpm -e azure-files-diag`
+    `sudo dnf remove azure-files-diag`

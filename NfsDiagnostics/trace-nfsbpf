@@ -4,6 +4,7 @@ from bcc.utils import printb
 from time import sleep
 import os
 from sys import argv
+from datetime import datetime
 # define BPF program
 bpf_text= """
 #include <linux/sched.h>
@@ -90,10 +91,10 @@ b.attach_tracepoint(tp="nfs:nfs_commit_error", fn_name="trace_page_error")
 b.attach_tracepoint(tp="nfs:nfs_pgio_error", fn_name="trace_pgio_error")
 b.attach_tracepoint(tp="nfs:nfs_writeback_page_exit", fn_name="trace_inode_event")
 b.attach_tracepoint(tp="nfs:nfs_writeback_inode_exit", fn_name="trace_inode_event")
-print("Running Anomaly")
 class stop_and_collapse(Exception):
     pass
 
+print(f"[{str(datetime.now())}] Running Anomaly Mode")
 while 1:
     try:
         sleep(1);
@@ -109,17 +110,18 @@ while 1:
         break;
 
 output_dir = argv[1]
-print("Exiting Anomaly")
-fd=open("/tmp/nfsclientlog.pid", "r");
-# trace_pid=fd.readline();
-tcpdump_pid=fd.readline();
-print(tcpdump_pid)
-command = "kill -INT %s" % (tcpdump_pid)
-os.system(command);
-# command = "kill -INT %s" % (trace_pid)
+print(f"[{str(datetime.now())}] Exiting Anomaly Mode")
+if(os.path.exists("/tmp/nfsclientlog.pid")):
+    fd=open("/tmp/nfsclientlog.pid", "r");
+    tcpdump_pid=fd.readline();
+    command = "kill -INT %s" % (tcpdump_pid)
+    os.system(command);
+
 command = "trace-cmd stop"
 os.system(command);
 sleep(3)
+
+os.system(f"trace-cmd extract")
 os.system(f"trace-cmd report 2>&1 > {output_dir}/nfs_trace")
 os.system("trace-cmd reset")
 os.system(f"sudo dmesg -c > {output_dir}/nfs_dmesg")

@@ -3,10 +3,18 @@
 PIDFILE="/tmp/nfsclientlog.pid"
 DIRNAME="./output"
 NFS_PORT=2049
-TRACE_NFSBPF_ABS_PATH="$(cd "$(dirname "trace-nfsbpf")" && pwd)/$(basename "trace-nfsbpf")"
+#TRACE_NFSBPF_ABS_PATH="$(cd "$(dirname "trace-nfsbpf")" && pwd)/$(basename "trace-nfsbpf")"
+TRACE_NFSBPF_ABS_PATH="/opt/xstore/lib/NfsDiagnostics/trace-nfsbpf"
 PYTHON_PROG='python'
 STDLOG_FILE='/dev/null'
 
+
+# to enable backward compatibility.
+_trace_nfsfsbpf_alt_path="$(cd "$(dirname "trace-nfsbpf")" && pwd)/$(basename "trace-nfsbpf")"
+if [[ -f "${_trace_nfsbpf_alt_path}" ]];
+then
+  TRACE_NFSBPF_ABS_PATH="${_trace_nfsbpf_alt_path}"
+fi
 
 main() {
   if [[ "$*" =~ "v3b" ]]
@@ -45,7 +53,7 @@ start() {
 
 init() {
   check_utils
-  rm -r "$DIRNAME" 
+  rm -rf "$DIRNAME" 
   mkdir -p "$DIRNAME"
 
   dmesg -Tc > /dev/null

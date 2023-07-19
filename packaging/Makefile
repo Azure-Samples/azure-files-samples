@@ -1,6 +1,6 @@
 export PKG_NAME=azure-files-diag
 export RELEASE=1
-export VERSION=1
+VERSION := $(shell cat ./VERSION.txt)
 export SYS_DIR=/opt/xstore
 export SRC_DIR=..
 # export PKG_BUILD=$(PKG_NAME)$(sles)-$(RELEASE)-1.x86_64
@@ -13,6 +13,8 @@ build: init debian rpm clean
 	echo "Building deb and rpm packages"
 
 init: 
+	# if [ -f VERSION.txt ]; then echo "file present";VERSION=$(shell cat ./VERSION.txt); fi
+	echo "Building Version: ${VERSION}"
 	mkdir -p $(OPT_DIR)/bin 
 	mkdir -p $(OPT_DIR)/lib
 	cp -r ../NfsDiagnostics $(OPT_DIR)/lib
@@ -39,6 +41,9 @@ rpm: init
 	rpmbuild -bb spec.spec
 	mv ~/rpmbuild/RPMS/x86_64/*.rpm .
 	rm -r ~/rpmbuild
+
+post:
+	expr ${VERSION} + 1 > VERSION.txt
 
 clean:
 	rm -rf ./$(PKG_DIR) spec.spec

@@ -5,6 +5,12 @@ Summary:        Diagnostics scripts for NFS and CIFS
 License:        GPL
 URL:            https://example.com
 
+Requires: tcpdump
+Requires: trace-cmd
+Requires: rpcdebug
+Requires: bcc 
+
+
 %description
 Diagnostics scripts for NFS and CIFS
 

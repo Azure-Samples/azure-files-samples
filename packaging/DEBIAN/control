@@ -3,3 +3,4 @@ Version: $VERSION
 Maintainer: Microsoft
 Architecture: all
 Description: Diagnostics scripts for CIFS and NFS. 
+Depends: tcpdump, trace-cmd, nfs-common, bpfcc-tools
