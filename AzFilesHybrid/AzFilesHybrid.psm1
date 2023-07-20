@@ -934,66 +934,39 @@ function Request-PowerShellGetModule {
     Remove-Module -Name PackageManagement -ErrorAction SilentlyContinue
 }
 
-function Request-AzureADModule {
+function Request-MSGraphModule {
     [CmdletBinding(SupportsShouldProcess, ConfirmImpact="High")]
     param()
 
-    if ($PSVersionTable.PSVersion -gt [Version]::new(6,0,0)) {
-        $winCompat = Get-Module -Name WindowsCompatibility -ListAvailable
-    }
+    $requiredModules = @("Microsoft.Graph.Users", "Microsoft.Graph.Groups", "Microsoft.Graph.Identity.DirectoryManagement")
+    $missingModules = @()
 
-    $azureADModule = Get-Module -Name AzureAD -ListAvailable
-    if ($PSVersionTable.PSVersion -gt [Version]::new(6,0,0) -and $null -ne $winCompat) {
-        $azureADModule = Invoke-WinCommand -Verbose:$false -ScriptBlock { 
-            Get-Module -Name AzureAD -ListAvailable 
+    foreach ($module in $requiredModules) {
+        $installedModule = Get-Module -Name $module -ListAvailable
+        if ($null -eq $installedModule) {
+            Write-Host "Missing module: $module"
+            $missingModules += $module
         }
     }
 
-    if (
-        ($PSVersionTable.PSVersion -gt [Version]::new(6,0,0,0) -and $null -eq $winCompat) -or 
-        $null -eq $azureADModule
-    ) {
-        $caption = "Install AzureAD PowerShell module"
-        $verboseConfirmMessage = "This cmdlet requires the Azure AD PowerShell module. This can be automatically installed now if you are running in an elevated sessions."
+    if ($missingModules.Count -gt 0) {
+        $caption = "Install missing Microsoft.Graph PowerShell modules"
+        $verboseConfirmMessage = "This cmdlet requires the Microsoft.Graph PowerShell modules. The missing ones can be automatically installed now if you are running in an elevated sessions."
         
         if ($PSCmdlet.ShouldProcess($verboseConfirmMessage, $verboseConfirmMessage, $caption)) {
             if (!(Get-IsElevatedSession)) {
                 Write-Error `
-                        -Message "To install AzureAD, you must run this cmdlet as an administrator. This cmdlet may not generally require administrator privileges." `
+                        -Message "To install the missing Microsoft.Graph modules, you must run this cmdlet as an administrator. This cmdlet may not generally require administrator privileges." `
                         -ErrorAction Stop
-            }
-
-            if ($PSVersionTable.PSVersion -gt [Version]::new(6,0,0) -and $null -eq $winCompat) {
-                Install-Module `
-                        -Name WindowsCompatibility `
-                        -Repository PSGallery `
-                        -AllowClobber `
-                        -Force `
-                        -ErrorAction Stop
-
-                Import-Module -Name WindowsCompatibility
             }
             
-            $scriptBlock = { 
-                $azureADModule = Get-Module -Name AzureAD -ListAvailable
-                if ($null -eq $azureADModule) {
-                    Install-Module `
-                            -Name AzureAD `
-                            -Repository PSGallery `
-                            -AllowClobber `
-                            -Force `
-                            -ErrorAction Stop
-                }
-            }
-
-            if ($PSVersionTable.PSVersion -gt [Version]::new(6,0,0)) {
-                Invoke-WinCommand `
-                        -ScriptBlock $scriptBlock `
-                        -Verbose:$false `
-                        -ErrorAction Stop
-            } else {
-                $scriptBlock.Invoke()
-            }
+            Write-Host "Installing missing modules: $($missingModules -join ', ')"
+            Install-Module `
+                -Name $missingModules `
+                -Repository PSGallery `
+                -AllowClobber `
+                -Force `
+                -ErrorAction Stop
         }
     }
 
@@ -3313,9 +3286,9 @@ function Get-AadUserForSid {
         [string]$sid
     )
 
-    Request-ConnectAzureAD
+    Request-ConnectMsGraph -Scopes "User.Read.All"
 
-    $aadUser = Get-AzureADUser -Filter "OnPremisesSecurityIdentifier eq '$sid'"
+    $aadUser = Get-MgUser -Filter "OnPremisesSecurityIdentifier eq '$sid'"
 
     if ($null -eq $aadUser)
     {
@@ -3978,7 +3951,7 @@ function Debug-AzStorageAccountAuth {
 
                     Write-Verbose "CheckAadUserHasSid for object ID $ObjectId in domain $Domain"
 
-                    $aadUser = Get-AzureADUser -ObjectId $ObjectId
+                    $aadUser = Get-MgUser -Filter "Id eq '$ObjectId'" -Property OnPremisesSecurityIdentifier
 
                     if ($null -eq $aadUser) {
                         $message = "Cannot find an Azure AD user with ObjectId $ObjectId. Please check" `
@@ -4041,7 +4014,7 @@ function Debug-AzStorageAccountAuth {
                 $checksExecuted += 1
                 Write-Verbose "CheckUserRbacAssignment - START"
 
-                Request-ConnectAzureAD
+                Request-ConnectMsGraph -Scopes "User.Read.All", "GroupMember.Read.All"
 
                 $sidNames = @{}
                 $user = Get-OnPremAdUser -Identity $UserName -Domain $Domain -ErrorAction Stop
@@ -4069,7 +4042,16 @@ function Debug-AzStorageAccountAuth {
                 $assignedAdObjects = @{}
 
                 foreach ($assignment in $roleAssignments) {
-                    $aadObject = Get-AzureADObjectByObjectId -ObjectId $assignment.ObjectId
+                    # Get-MgDirectoryObjectById should be the alternative. However, its invoke action getByIds,
+                    # This API has a known issue. Not all directory objects returned are the full objects containing all their properties.
+                    # https://learn.microsoft.com/en-us/graph/api/directoryobject-getbyids?view=graph-rest-1.0&tabs=http#:~:text=This%20API%20has%20a%20known%20issue.%20Not%20all%20directory%20objects%20returned%20are%20the%20full%20objects%20containing%20all%20their%20properties.
+                    # so we use Get-MgUser and Get-MgGroup
+                    if ($assignment.ObjectType -eq 'User') {
+                        $aadObject = Get-MgUser -UserId $assignment.ObjectId -Property OnPremisesSecurityIdentifier
+                    }
+                    if ($assignment.ObjectType -eq 'Group') {
+                        $aadObject = Get-MgGroup -GroupId $assignment.ObjectId -Property OnPremisesSecurityIdentifier
+                    }
 
                     if (($null -ne $aadObject) `
                         -and (-not [string]::IsNullOrEmpty($aadObject.OnPremisesSecurityIdentifier)) `
@@ -5265,79 +5247,27 @@ function Compress-AzResourceId {
     }
 }
 
-function Request-ConnectAzureAD {
+function Request-ConnectMsGraph {
     <#
     .SYNOPSIS
-    Connect to an Azure AD tenant using the AzureAD cmdlets.
+    Connect to an Azure AD tenant using the MsGraph cmdlets.
     .DESCRIPTION
-    Correctly import the AzureAD module for your PowerShell version and then sign in using the same tenant is the currently signed in Az user. This wrapper is necessary as 1. AzureAD is not directly compatible with PowerShell 6 (though this can be achieved through the WindowsCompatibility module), and 2. AzureAD doesn't necessarily log you into the same tenant as the Az cmdlets according to their documentation (although it's not clear when it doesn't).
+    Correctly import the MsGraph module for your PowerShell version and then sign in using the same tenant is the currently signed in Az user.
     .EXAMPLE
-    Request-ConnectAzureAD
-    #>
-
-    [CmdletBinding()]
-    param()
-
-    Assert-IsWindows
-    Request-AzureADModule
-
-    $aadModule = Get-Module | Where-Object { $_.Name -like "AzureAD" }
-    if ($null -eq $aadModule) {
-        if ($PSVersionTable.PSVersion -ge [Version]::new(6,0,0,0)) {
-            Import-WinModule -Name AzureAD -Verbose:$false
-        } else {
-            Import-Module -Name AzureAD
-        }
-    }
-
-    try {
-        Get-AzureADTenantDetail -ErrorAction Stop | Out-Null
-    } catch {
-        $context = Get-AzContext
-        Connect-AzureAD `
-                -TenantId $context.Tenant.Id `
-                -AccountId $context.Account.Id `
-                -AzureEnvironmentName $context.Environment.Name | `
-            Out-Null
-    }
-}
-
-function Get-AzureADDomainInternal {
-    <#
-    .SYNOPSIS
-    Get the Azure AD domains associated with this Azure AD tenant.
-    .DESCRIPTION
-    This cmdlet is a wrapper around Get-AzureADDomain that is provided to future proof for adding cross-platform support, as AzureAD is not a cross-platform PowerShell module.
-    .PARAMETER Name
-    Specifies the name of a domain.
-    .EXAMPLE
-    $domains = Get-AzureADDomainInternal
-    .EXAMPLE
-    $specificDomain = Get-AzureADDomainInternal -Name "contoso.com"
-    .OUTPUTS
-    Microsoft.Open.AzureAD.Model.Domain
-    Deserialized.Microsoft.Open.AzureAD.Model.Domain, if accessed through the WindowsCompatibility module
+    Request-ConnectMsGraph
     #>
 
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory=$false, ValueFromPipeline=$true, ValueFromPipelineByPropertyName=$true)]
-        [string]$Name
+        [Parameter(Mandatory=$true)]
+        [string[]]$Scopes
     )
 
-    begin {
-        Assert-IsWindows
-        Request-ConnectAzureAD
-    }
+    Assert-IsWindows
+    Request-MSGraphModule
 
-    process {
-        $getParams = @{}
-        if ($PSBoundParameters.ContainsKey("Name")) {
-            $getParams += @{ "Name" = $Name}
-        }
-
-        return (Get-AzureADDomain @Name)
-    }
+    $context = Get-AzContext
+    Connect-MgGraph -Scopes $Scopes -TenantId $context.Tenant.Id | Out-Null
 }
 
 function Get-AzCurrentAzureADUser {
@@ -5359,8 +5289,10 @@ function Get-AzCurrentAzureADUser {
     $friendlyLogin = $context.Account.Id
     $friendlyLoginSplit = $friendlyLogin.Split("@")
 
-    $domains = Get-AzureADDomainInternal
-    $domainNames = $domains | Select-Object -ExpandProperty Name
+    Request-ConnectMsGraph -Scopes "Domain.Read.All"
+
+    $domains = Get-MgDomain
+    $domainNames = $domains | Select-Object -ExpandProperty Id
 
     if ($friendlyLoginSplit[1] -in $domainNames) {
         return $friendlyLogin
@@ -5368,7 +5300,7 @@ function Get-AzCurrentAzureADUser {
         $username = ($friendlyLoginSplit[0] + "_" + $friendlyLoginSplit[1] + "#EXT#")
 
         foreach($domain in $domains) {
-            $possibleName = ($username + "@" + $domain.Name) 
+            $possibleName = ($username + "@" + $domain.Id)
             $foundUser = Get-AzADUser -UserPrincipalName $possibleName
             if ($null -ne $foundUser) {
                 return $possibleName
@@ -6852,7 +6784,8 @@ function Move-OnPremSharePermissionsToAzureFileShare
         #Geting the OID of domain user/group using its SID
         try
         {
-            $aadUser = Get-AzureADUser -Filter "OnPremisesSecurityIdentifier eq '$strSID'"
+            Request-ConnectMsGraph -Scopes "User.Read.All"
+            $aadUser = Get-MgUser -Filter "OnPremisesSecurityIdentifier eq '$strSID'"
         }
         catch
         {
