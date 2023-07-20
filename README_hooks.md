@@ -6,5 +6,5 @@
 
 # GitHub Actions
 - Github actions are stored in .github/workflow
-- To modify automatic packaging process (for cifs and nfs diagnostic scripts), make changes to .github/workflow/packaging-action.yaml
+- To modify automatic packaging process (for cifs and nfs diagnostic scripts), make changes to `.github/workflow/packaging-action.yaml`
 - New validations can be added here.
