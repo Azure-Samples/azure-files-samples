@@ -11,4 +11,4 @@
 # Note:
 - crashdumps can be enabled without a restart.
 - disabling crashdumps require a restart.
-- moduleB is a copy of moduleA. We need two copies because when the buggy module is inserted, it cannot be removed from kernel by running `rmmod <i>Module Name</i>`. So instead of inserting, removing and reinserting the same module, we instead use a copy of the same module.
+- moduleB is a copy of moduleA. We need two copies because when the buggy module is inserted, it cannot be removed from kernel by running `rmmod MODULE_NAME`. So instead of inserting, removing and reinserting the same module, we instead use a copy of the same module.
