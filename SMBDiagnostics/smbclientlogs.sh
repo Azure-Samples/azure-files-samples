@@ -3,10 +3,18 @@
 PIDFILE="/tmp/smbclientlog.pid"
 DIRNAME="./output"
 CIFS_PORT=445
-TRACE_CIFSBPF_ABS_PATH="$(cd "$(dirname "trace-cifsbpf")" && pwd)/$(basename "trace-cifsbpf")"
+# TRACE_CIFSBPF_ABS_PATH="$(cd "$(dirname "trace-cifsbpf")" && pwd)/$(basename "trace-cifsbpf")"
+TRACE_CIFSBPF_ABS_PATH="/opt/xstore/lib/SMBDiagnostics/trace-cifsbpf"
 PYTHON_PROG='python'
 STDLOG_FILE='/dev/null'
 
+
+# to enable backward compatibility.
+_trace_cifsbpf_alt_path="$(cd "$(dirname "trace-cifsbpf")" && pwd)/$(basename "trace-cifsbpf")"
+if [[ -f "${_trace_cifsbpf_alt_path}" ]];
+then
+  TRACE_CIFSBPF_ABS_PATH="${_trace_cifsbpf_alt_path}"
+fi
 
 main() {
   if [[ "$*" =~ "start" ]]
@@ -16,7 +24,7 @@ main() {
   then
     stop 0<&- > "${STDLOG_FILE}" 2>&1
   else
-    echo "Usage: ./smbclientlogs.sh <start | stop> <CaptureNetwork>"
+    echo "Usage: diag-main.sh cifs <start | stop> <CaptureNetwork> <OnAnomaly>"
     exit 1
   fi
 
@@ -43,7 +51,7 @@ start() {
 
 init() {
   check_utils
-  rm -r "$DIRNAME" 
+  rm -rf "$DIRNAME" 
   mkdir -p "$DIRNAME"
 
   dmesg -Tc > /dev/null
@@ -117,7 +125,7 @@ capture_network() {
 }
 
 trace_cifsbpf() {
-  nohup "${PYTHON_PROG}" "${TRACE_CIFSBPF_ABS_PATH}" "${DIRNAME}" 0<&- 2>&1 &
+  nohup /usr/bin/env "${PYTHON_PROG}" "${TRACE_CIFSBPF_ABS_PATH}" "${DIRNAME}" 0<&- 2>&1 &
 }
 
 stop() {

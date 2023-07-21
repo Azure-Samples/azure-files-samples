@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 from bcc import BPF
 from bcc.utils import printb
 from time import sleep
@@ -133,19 +133,21 @@ while 1:
 
 output_dir = argv[1]
 print(f"[{str(datetime.now())}] Exiting Anomaly Mode")
-fd=open("/tmp/smbclientlog.pid", "r");
-# trace_pid=fd.readline();
-tcpdump_pid=fd.readline();
-print(tcpdump_pid)
-command = "kill -INT %s" % (tcpdump_pid)
-os.system(command);
-# command = "kill -INT %s" % (trace_pid)
+
+if(os.path.exists("/tmp/smbclientlog.pid")):
+    fd=open("/tmp/smbclientlog.pid", "r");
+    tcpdump_pid=fd.readline();
+    command = "kill -INT %s" % (tcpdump_pid)
+    os.system(command);
+
 command = "trace-cmd stop"
 os.system(command);
 sleep(3)
+
+os.system(f"trace-cmd extract")
 os.system(f"trace-cmd report 2>&1 > {output_dir}/cifs_trace")
 os.system("trace-cmd reset")
-os.system(f"sudo dmesg -c > {output_dir}/nfs_dmesg")
+os.system(f"sudo dmesg -c > {output_dir}/cifs_dmesg")
 os.system(f"mv cifs_diag.txt {output_dir}")
 os.system(f"mv os_details.txt {output_dir}")
 command = f"zip -r $(basename {output_dir}).zip {output_dir}"

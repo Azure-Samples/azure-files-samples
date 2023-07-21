@@ -1,0 +1,54 @@
+name: Package NFS and CIFS diagnostic scripts
+run-name: Package NFS and CIFS diagnostic scripts
+on: [push]
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+
+    steps:
+      # - name: Download version artifact
+      #   continue-on-error: true
+      #   uses: actions/download-artifact@v3
+      #   with:
+      #     name: version
+      #     path: packaging 
+
+
+      - name: Set up environment
+        run: |
+          sudo apt install -y shellcheck
+          sudo apt install -y rpm
+          sudo apt install -y build-essential
+          sudo apt install -y debhelper
+
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: ShellCheck-Validation
+        run: |
+          if ! shellcheck -S error NfsDiagnostics/nfsclientlogs.sh SMBDiagnostics/smbclientlogs.sh; then echo "ShellCheck Failed"; exit 1; fi
+
+      - name: Build Packages
+        run: |
+          cd packaging
+          make
+
+      - name: Upload Debian Package
+        uses: actions/upload-artifact@v3
+        with:
+          name: debian-package
+          path: packaging/*.deb
+
+      - name: Upload RPM Package
+        uses: actions/upload-artifact@v3
+        with:
+          name: rpm-package
+          path: packaging/*.rpm
+
+      # - name: Update Future Version
+      #   uses: actions/upload-artifact@v3
+      #   with:
+      #     name: version
+      #     path: packaging/VERSION.txt
+        
