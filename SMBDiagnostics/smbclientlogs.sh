@@ -6,7 +6,7 @@ CIFS_PORT=445
 TRACE_CIFSBPF_ABS_PATH="$(cd "$(dirname "trace-cifsbpf")" && pwd)/$(basename "trace-cifsbpf")"
 PYTHON_PROG='python'
 STDLOG_FILE='/dev/null'
-
+CIFS_FYI_ENABLED=0
 
 main() {
   if [[ "$*" =~ "start" ]]
@@ -81,6 +81,7 @@ start_trace() {
     echo 'module cifs +p' > /sys/kernel/debug/dynamic_debug/control
     echo 'file fs/cifs/* +p' > /sys/kernel/debug/dynamic_debug/control
     echo 7 > /proc/fs/cifs/cifsFYI
+    CIFS_FYI_ENABLED=1
   fi
   trace-cmd start -e cifs
 }
@@ -140,7 +141,9 @@ stop_trace() {
   trace-cmd report > "${DIRNAME}/cifs_trace"
   trace-cmd stop
   trace-cmd reset
-  echo 0 > /proc/fs/cifs/cifsFYI
+  if [ $CIFS_FYI_ENABLED -ne 0 ]; then
+    echo 0 > /proc/fs/cifs/cifsFYI
+  fi
   rm -rf trace.dat*
 }
 
