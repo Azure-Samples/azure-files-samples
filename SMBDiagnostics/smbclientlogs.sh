@@ -76,6 +76,12 @@ check_utils() {
     exit 1
   fi
 
+  if (( ($(which apt |egrep -c apt) > 0) && ($(which zgrep |egrep -c zgrep) == 0) ));
+  then
+    echo "zgrep is not installed, please install zgrep"
+    exit 1
+  fi
+
   which tcpdump > /dev/null
   if [ $? != 0 ]; then
     echo "tcpdump is not installed. Please install tcpdump if you intend to capture network traces."
@@ -118,10 +124,16 @@ dump_os_information() {
   echo -e "\nSystem Uptime:" >> os_details.txt
   cat /proc/uptime >> os_details.txt
   echo -e "\npackage install details:" >> os_details.txt
-  which rpm && rpm -qa --last | grep keyutils >> os_details.txt
-  which rpm && rpm -qa --last | grep cifs-utils >> os_details.txt
-  which apt-get && zgrep -B5 -A5 keyutils /var/log/apt/history.log* >> os_details.txt
-  which apt-get && zgrep -B5 -A5 cifs-utils /var/log/apt/history.log* >> os_details.txt
+  if (( $(which rpm |egrep -c rpm) > 0));
+  then
+    rpm -qa --last |grep keyutils >> os_details.txt
+    rpm -qa --last |grep cifs-utils >> os_details.txt
+  elif (( $(which apt |egrep -c apt) > 0 ));
+  then
+    zgrep -B5 -A5 keyutils /var/log/apt/history.log* >> os_details.txt
+    zgrep -B5 -A5 cifs-utils /var/log/apt/history.log* >> os_details.txt
+  fi
+
 }
 
 dump_debug_stats() {
