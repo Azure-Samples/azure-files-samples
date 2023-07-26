@@ -1,49 +1,42 @@
 Steps to collect the logs:
 --------------------------
-Copy smbclientlogs.sh(Shell script) and trace-cifsbpf(eBPF script) to linux machine where we need to collect logs.
+Copy smbclientlogs.sh (Shell script) and trace-cifsbpf (eBPF script) to linux machine where we need to collect logs.
 
 Dependencies:
-Install trace-cmd, tcpdump, zip, bpfcc-tools.
+Install packages trace-cmd and zip.
+If using CaptureNetwork option (see below), install tcpdump.
+If using OnAnomaly mode (see below), install bpfcc-tools.
 
-If issue can easily reproducible:
-	1) Open linux terminal or ssh to linux machine.
-	2) Cd to script location
-	3) Sudo ./smbclientlogs.sh start (or) sudo ./smbclientlogs.sh start CaptureNetwork -- For collecting network packet traces which will help in debugging kerberos issues.
-	4) Repro the issue
-	5) Sudo ./smbclientlogs.sh stop
-	6) Above command generates cifs_debug.zip
-	7) To debug the logs, unzip the file which contains the dmesg logs, packet traces and trace-cmd o/p.
+If issue can be easily reproduced:
+1) Open linux terminal or ssh to linux machine or the AKS node.
+2) Run the command "sudo bash" to gain root privileges.
+3) Cd to script location and run the command
+   "chmod +x ./smbclientlogs.sh"
+4) Run the command
+   "./smbclientlogs.sh start"
+   (or)
+   "./smbclientlogs.sh start CaptureNetwork" (in case Microsoft instructs you to use this option)
+5) Repro the issue.
+6) Run "./smbclientlogs.sh stop"
+7) Above command generates output.zip
+8) Send the output.zip file to Microsoft support against your support case.
 
 If issue is sporadic in nature and want script to auto detect the issue, use below steps:
-	1) Open linux terminal or ssh to linux machine.
-	2) Install BPF from source. Refer installation steps below.
-	3) Cd to script location
-	4) Sudo ./smbclientlogs.sh start OnAnomaly (or) sudo ./smbclientlogs.sh start CaptureNetwork OnAnomaly 
-	5) When issue occurs, eBPF script will auto detect and collect the traces and generate Zip file. No action needed here.
-	6) To debug the logs, unzip the file which contains the dmesg logs, packet traces and trace-cmd o/p.
-
-With OnAnomaly option, eBPF script will listen on all error trace points and if error is detected tracing gets stopped and cifs_debug.zip file gets generated.
+1) Open linux terminal or ssh to linux machine or the AKS node.
+2) Run the command "sudo bash" to gain root privileges.
+3) Cd to script location and run the command
+   "chmod +x ./smbclientlogs.sh"
+4) Run the command
+   "./smbclientlogs.sh start OnAnomaly"
+   (or)
+   "./smbclientlogs.sh start CaptureNetwork OnAnomaly" (in case Microsoft instructs you to use this option)
+5) When issue occurs, the eBPF script (trace-cifsbpf) will auto detect and collect the traces and generate output.zip automatically. No action needed here.
+6) Send the output.zip file to Microsoft support against your support case.
 
 Contents of Zip file:
-root@codespacevm:/home/lxsmbadmin# unzip cifs_debug.zip
-Archive:  cifs_debug.zip
-  inflating: cifs_dmesg
-  inflating: cifs_trace
-  inflating: cifs_traffic.pcap
-root@codespacevm:/home/lxsmbadmin#
+1) cifs_diag.txt - Internal debug data and stats from the SMB client.
+2) cifs_dmesg - System logs since the last reboot.
+3) cifs_trace - Output of trace-cmd, which contain the kernel event logs.
+4) os_details.txt - Info about the operating system, which will help developers to understand which features/fixes are missing. 
+5) cifs_traffic.pcap - network capture of SMB traffic in case CaptureNetwork option was used.
 
-Installation of BPF from source:
-	1) sudo apt-get -y install bison build-essential cmake flex git libedit-dev \
-	  llvm clang libclang-12-dev python zlib1g-dev libelf-dev python3-distutils
-	2) git clone https://github.com/iovisor/bcc.git
-	3) mkdir bcc/build; cd bcc/build
-	4) cmake ..
-	5) make
-	6) sudo make install
-	7) cmake -DPYTHON_CMD=python3 .. # build python3 binding
-	8) pushd src/python/
-	9) make
-	10) sudo make install
-	11) Popd
-
-Refer "https://github.com/iovisor/bcc/blob/master/INSTALL.md" if you face any issues during installation.
