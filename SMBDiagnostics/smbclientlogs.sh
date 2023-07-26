@@ -28,7 +28,7 @@ main() {
 
   if [[ "$*" =~ "start" ]]
   then
-    start
+    start "$@"
   elif [[  "$*" =~ "stop" ]]
   then
     stop
