@@ -19,13 +19,6 @@ am_i_root() {
 main() {
   am_i_root
 
-  local cifs_modcount=$(lsmod |egrep -c cifs)
-  if (( $cifs_modcount == 0 ));
-  then
-      echo "cifs.ko not loaded, exiting"
-      exit
-  fi
-
   if [[ "$*" =~ "start" ]]
   then
     start "$@"
@@ -65,8 +58,6 @@ init() {
     rm -rf "$DIRNAME"
   fi
   mkdir -p "$DIRNAME"
-
-  dmesg -Tc > /dev/null
 }
 
 check_utils() {
