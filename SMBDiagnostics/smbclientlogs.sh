@@ -7,14 +7,31 @@ TRACE_CIFSBPF_ABS_PATH="$(cd "$(dirname "trace-cifsbpf")" && pwd)/$(basename "tr
 PYTHON_PROG='python'
 STDLOG_FILE='/dev/null'
 
+am_i_root() {
+    local euid=$(id -u)
+    if (( $euid != 0 ));
+    then
+        echo "Please run $0 as root";
+        exit
+    fi
+}
 
 main() {
+  am_i_root
+
+  local cifs_modcount=$(lsmod |egrep -c cifs)
+  if (( $cifs_modcount == 0 ));
+  then
+      echo "cifs.ko not loaded, exiting"
+      exit
+  fi
+
   if [[ "$*" =~ "start" ]]
   then
-    start "$@" 0<&- > "${STDLOG_FILE}" 2>&1
+    start
   elif [[  "$*" =~ "stop" ]]
   then
-    stop 0<&- > "${STDLOG_FILE}" 2>&1
+    stop
   else
     echo "Usage: ./smbclientlogs.sh <start | stop> <CaptureNetwork>"
     exit 1
@@ -43,13 +60,13 @@ start() {
 
 init() {
   check_utils
-  rm -r "$DIRNAME" 
+  if [[ -f $DIRNAME ]];
+  then
+    rm -rf "$DIRNAME"
+  fi
   mkdir -p "$DIRNAME"
 
   dmesg -Tc > /dev/null
-  # rm -f "${DIRNAME}/cifs_dmesg"
-  # rm -f "${DIRNAME}/cifs_trace"
-  # rm -f "${DIRNAME}/cifs_traffic.pcap"
 }
 
 check_utils() {
@@ -57,6 +74,12 @@ check_utils() {
   if [ $? == 1 ]; then
     echo "trace-cmd is not installed, please install trace-cmd"
     exit 1
+  fi
+
+  which tcpdump > /dev/null
+  if [ $? != 0 ]; then
+    echo "tcpdump is not installed. Please install tcpdump if you intend to capture network traces."
+    #Not exiting since packet capture is optional
   fi
 
   which zip > /dev/null
