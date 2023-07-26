@@ -2,51 +2,43 @@ Steps to collect the logs:
 --------------------------
 Copy nfsclientlogs.sh(Shell script) and trace-nfsbpf(eBPF script) to linux machine where we need to collect logs.
 
-Install trace-cmd, tcpdump, zip.
+Dependencies:
+Install packages trace-cmd and zip.
+If using CaptureNetwork option (see below), install tcpdump.
+If using OnAnomaly mode (see below), install bpfcc-tools.
 
-If issue can easily reproducible:
-	1) Open linux terminal or ssh to linux machine.
-	2) Cd to script location
-	3) chmod +x ./nfsclientlogs.sh
-	4) Sudo ./nfsclientlogs.sh v3 start (or) src\tools\ -- For collecting network packet traces which will help in debugging kerberos issues.
-	5) For Nfsv3 Blob service,  use sudo ./nfsclientlogs.sh v3b start (or) sudo ./nfsclientlogs.sh v3b start CaptureNetwork
-	6) For Nfsv4 use sudo ./nfsclientlogs.sh v4 start (or) sudo ./nfsclientlogs.sh v4 start CaptureNetwork
-	7) Repro the issue
-	8) Sudo ./nfsclientlogs.sh v4 stop. For Nfsv3 blob, sudo ./nfsclientlogs.sh v3b stop
-	9) Above command generates nfs_debug.zip
-	10) To debug the logs, unzip the file which contains the dmesg logs, packet traces and trace-cmd o/p.
+If issue can be easily reproduced:
+1) Open linux terminal or ssh to linux machine or the AKS node.
+2) Run the command "sudo bash" to gain root privileges.
+3) Cd to script location and run the command
+   "chmod +x ./nfsclientlogs.sh"
+4) Run the command
+   "./nfsclientlogs.sh v4 start"
+   (or)
+   "./nfsclientlogs.sh v4 start CaptureNetwork" (in case Microsoft instructs you to use this option)
+   (or)
+   In case the service is Azure NFSv3 blob service, replace v4 above with v3b.
+5) Repro the issue.
+6) Run "./smbclientlogs.sh stop"
+7) Above command generates output.zip
+8) Send the output.zip file to Microsoft support against your support case.
 
 If issue is sporadic in nature and want script to auto detect the issue, use below steps:
-	1) Open linux terminal or ssh to linux machine.
-	2) Install BPF from source. Refer installation steps below.
-	3) Cd to script location
-	4) Sudo ./nfsclientlogs.sh v4 start OnAnomaly (or) sudo ./nfsclientlogs.sh v4 start CaptureNetwork OnAnomaly 
-	5) When issue occurs, eBPF script will auto detect and collect the traces and generate Zip file. No action needed here.
-	6) To debug the logs, unzip the file which contains the dmesg logs, packet traces and trace-cmd o/p.
-
-With OnAnomaly option, eBPF script will listen on all error trace points and if error is detected tracing gets stopped and nfs_debug.zip file gets generated.
+1) Open linux terminal or ssh to linux machine or the AKS node.
+2) Run the command "sudo bash" to gain root privileges.
+3) Cd to script location.
+4) Run the command
+   "./nfsclientlogs.sh v4 start OnAnomaly"
+   (or)
+   "./nfsclientlogs.sh v4 start CaptureNetwork OnAnomaly" (in case Microsoft instructs you to use this option)
+   (or)
+   In case the service is Azure NFSv3 blob service, replace v4 above with v3b.
+5) When issue occurs, the eBPF script (trace-cifsbpf) will auto detect and collect the traces and generate output.zip automatically. No action needed here.
+6) Send the output.zip file to Microsoft support against your support case.
 
 Contents of Zip file:
-root@codespacevm:/home/lxsmbadmin# unzip nfs_debug.zip
-Archive:  nfs_debug.zip
-  inflating: nfs_dmesg
-  inflating: nfs_trace
-  inflating: nfs_traffic.pcap
-root@codespacevm:/home/lxsmbadmin#
-
-Installation of BPF from source:
-	1) sudo apt-get -y install bison build-essential cmake flex git libedit-dev \
-	  llvm clang libclang-12-dev python zlib1g-dev libelf-dev python3-distutils
-	2) git clone https://github.com/iovisor/bcc.git
-	3) mkdir bcc/build; cd bcc/build
-	4) cmake ..
-	5) make
-	6) sudo make install
-	7) cmake -DPYTHON_CMD=python3 .. # build python3 binding
-	8) pushd src/python/
-	9) make
-	10) sudo make install
-	11) Popd
-
-Refer "https://github.com/iovisor/bcc/blob/master/INSTALL.md" if you face any issues during installation.
+1) nfs_dmesg - System logs since the last reboot.
+2) cifs_trace - Output of trace-cmd, which contain the kernel event logs.
+3) os_details.txt - Info about the operating system, which will help developers to understand which features/fixes are missing. 
+4) nfs_traffic.pcap - network capture of NFS traffic in case CaptureNetwork option was used.
 
