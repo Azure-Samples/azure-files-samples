@@ -94,6 +94,11 @@ dump_os_information() {
   last reboot -5 >> os_details.txt
   echo -e "\nSystem Uptime:" >> os_details.txt
   cat /proc/uptime >> os_details.txt
+  echo -e "\npackage install details:" >> os_details.txt
+  which rpm && rpm -qa --last | grep keyutils >> os_details.txt
+  which rpm && rpm -qa --last | grep cifs-utils >> os_details.txt
+  which apt-get && zgrep -B5 -A5 keyutils /var/log/apt/history.log* >> os_details.txt
+  which apt-get && zgrep -B5 -A5 cifs-utils /var/log/apt/history.log* >> os_details.txt
 }
 
 dump_debug_stats() {
