@@ -1828,7 +1828,7 @@ function Invoke-StartInternal
         Invoke-TraceUpdate $prefix "tcp" "eb004a05-9b1a-11d4-9123-0050047759bc" "0x1000" "2"
     }
 
-    if ($settings.LogChannels -icontains 'network')
+    if ($settings.LogChannels -icontains 'networkcapture')
     {
         Invoke-CaptureNetworkStart $directory $prefix
     }
