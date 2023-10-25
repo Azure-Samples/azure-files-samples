@@ -3661,7 +3661,8 @@ function Debug-AzStorageAccountAuth {
     <#
     .SYNOPSIS
     Executes a sequence of checks to identify common problems with Azure Files Authentication issues.
-    This function is applicable for only ADDS authentication, Does not work for AADDS and AAD Kerberos.
+    This function is applicable for only ADDS authentication, does not work for AADDS and Microsoft 
+    Entra Kerberos.
     
     .DESCRIPTION
     This cmdlet will query the client computer for Kerberos service tickets to Azure storage accounts.
