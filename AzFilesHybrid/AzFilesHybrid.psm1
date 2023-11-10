@@ -3661,6 +3661,117 @@ function Debug-AzStorageAccountAuth {
     <#
     .SYNOPSIS
     Executes a sequence of checks to identify common problems with Azure Files Authentication issues.
+    This function auto-detects the Auth method (AD DS, AAD DS, AAD Kerberos)
+    
+    .DESCRIPTION
+    This cmdlet will query the client computer for Kerberos service tickets to Azure storage accounts.
+    It will return an array of these objects, each object having a property 'Azure Files Health Status'
+    which tells the health of the ticket.  It will error when there are no ticketsfound or if there are 
+    unhealthy tickets found.
+    .OUTPUTS
+    Object[] of PSCustomObject containing klist ticket output.
+    .EXAMPLE
+    PS> Debug-AzStorageAccountAuth
+    #>
+
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory=$True, Position=0, HelpMessage="Storage account name")]
+        [string]$StorageAccountName,
+
+        [Parameter(Mandatory=$True, Position=1, HelpMessage="Resource group name")]
+        [string]$ResourceGroupName,
+
+        [Parameter(Mandatory=$False, Position=2, HelpMessage="Filter")]
+        [string]$Filter,
+
+        [Parameter(Mandatory=$False, Position=3, HelpMessage="Optional parameter for filter 'CheckSidHasAadUser' and 'CheckUserFileAccess'. The user name to check.")]
+        [string]$UserName,
+
+        [Parameter(Mandatory=$False, Position=4, HelpMessage="Optional parameter for filter 'CheckSidHasAadUser', 'CheckUserFileAccess' and 'CheckAadUserHasSid'. The domain name to look up the user.")]
+        [string]$Domain,
+
+        [Parameter(Mandatory=$False, Position=5, HelpMessage="Required parameter for filter 'CheckAadUserHasSid'. The Azure object ID or user principal name to check.")]
+        [string]$ObjectId,
+
+        [Parameter(Mandatory=$False, Position=6, HelpMessage="Required parameter for filter 'CheckUserFileAccess'. The SMB file path on the Azure file share mounted locally using storage account key.")]
+        [string]$FilePath
+    )
+
+    process
+    {
+        $VerifyAD = get-AzStorageAccount -ResourceGroupName $ResourceGroupName -StorageAccountName $StorageAccountName  
+        $directoryServiceOptions = $VerifyAD.AzureFilesIdentityBasedAuth.DirectoryServiceOptions
+
+        if ($directoryServiceOptions -eq "ADDS")
+        {
+            Debug-AzStorageAccountAdDsAuth `
+                -StorageAccountName $StorageAccountName `
+                -ResourceGroupName $ResourceGroupName `
+                -Filter $Filter `
+                -UserName $UserName `
+                -Domain $Domain `
+                -ObjectId $ObjectId `
+                -FilePath $FilePath
+        }
+        elseif ($directoryServiceOptions -eq "AADKERB")
+        {
+            Debug-AzStorageAccountAAdKerbAuth`
+                -StorageAccountName $StorageAccountName `
+                -ResourceGroupName $ResourceGroupName `
+                -Filter $Filter `
+                -UserName $UserName `
+                -Domain $Domain `
+                -ObjectId $ObjectId `
+                -FilePath $FilePath
+        }
+        elseif ($directoryServiceOptions -eq "AADDS")
+        {
+            Write-Error "This cmdlet doesnt support Microsoft Entra Domain service authentication yet, Run Debug-AzStorageAccountADDSAuth to run the AD DS authenbtication checks. note that not all checks are expected to pass for Microsoft Entra Kerberos enabled account  "
+        }
+        else
+        {
+            Write-Error "Storage account is not being configured with any of the authetication option."
+        }
+    }
+}
+
+function Debug-AzStorageAccountAAdKerbAuth {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory=$True, Position=0, HelpMessage="Storage account name")]
+        [string]$StorageAccountName,
+
+        [Parameter(Mandatory=$True, Position=1, HelpMessage="Resource group name")]
+        [string]$ResourceGroupName,
+
+        [Parameter(Mandatory=$False, Position=2, HelpMessage="Filter")]
+        [string]$Filter,
+
+        [Parameter(Mandatory=$False, Position=3, HelpMessage="Optional parameter for filter 'CheckSidHasAadUser' and 'CheckUserFileAccess'. The user name to check.")]
+        [string]$UserName,
+
+        [Parameter(Mandatory=$False, Position=4, HelpMessage="Optional parameter for filter 'CheckSidHasAadUser', 'CheckUserFileAccess' and 'CheckAadUserHasSid'. The domain name to look up the user.")]
+        [string]$Domain,
+
+        [Parameter(Mandatory=$False, Position=5, HelpMessage="Required parameter for filter 'CheckAadUserHasSid'. The Azure object ID or user principal name to check.")]
+        [string]$ObjectId,
+
+        [Parameter(Mandatory=$False, Position=6, HelpMessage="Required parameter for filter 'CheckUserFileAccess'. The SMB file path on the Azure file share mounted locally using storage account key.")]
+        [string]$FilePath
+    )
+
+    process
+    {
+        Write-Error "This cmdlet doesnt support Microsoft kerbersos authentication yet, Run Debug-AzStorageAccountADDSAuth to run the AD DS authenbtication checks. note that not all checks are expected to pass for Microsoft Entra Kerberos enabled account " -ErrorAction Stop
+    }
+}
+
+
+function Debug-AzStorageAccountADDSAuth {
+    <#
+    .SYNOPSIS
+    Executes a sequence of checks to identify common problems with Azure Files Authentication issues.
     This function is applicable for only ADDS authentication, does not work for AADDS and Microsoft 
     Entra Kerberos.
     
