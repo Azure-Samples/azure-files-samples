@@ -3727,7 +3727,7 @@ function Debug-AzStorageAccountAuth {
         }
         elseif ($directoryServiceOptions -eq "AADDS")
         {
-            Write-Error "This cmdlet doesnt support Microsoft Entra Domain service authentication yet, Run Debug-AzStorageAccountADDSAuth to run the AD DS authenbtication checks. note that not all checks are expected to pass for Microsoft Entra Kerberos enabled account  "
+            Write-Error "This cmdlet doesnt support Microsoft Entra Domain service authentication yet, Run Debug-AzStorageAccountADDSAuth to run the AD DS authenbtication checks. Note that not all checks are expected to pass for Microsoft Entra Kerberos enabled account  "
         }
         else
         {
@@ -3813,7 +3813,7 @@ function Debug-AzStorageAccountAAdKerbAuth {
             }
         }
 
-        Write-Error "This cmdlet doesnt support all the checks for Microsoft kerbersos authentication yet, Run Debug-AzStorageAccountADDSAuth to run the AD DS authenbtication checks. note that not all checks are not expected to pass for Microsoft Entra Kerberos enabled account " -ErrorAction Stop
+        Write-Error "This cmdlet doesnt support all the checks for Microsoft kerbersos authentication yet, Run Debug-AzStorageAccountADDSAuth to run the AD DS authenbtication checks. Note that not all checks are not expected to pass for Microsoft Entra Kerberos enabled account " -ErrorAction Stop
     }
 }
 
