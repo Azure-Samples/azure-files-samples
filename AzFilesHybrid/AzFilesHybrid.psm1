@@ -3767,7 +3767,7 @@ function Debug-AzStorageAccountAAdKerbAuth {
         $filterIsPresent = ![string]::IsNullOrEmpty($Filter);
         $checks = @{
             "CheckPort445Connectivity" = [CheckResult]::new("CheckPort445Connectivity");
-
+            "CheckAADConnectivity" = [CheckResult]::new("CheckAADConnectivity");
         }
         #
         # Port 445 check 
@@ -3791,6 +3791,28 @@ function Debug-AzStorageAccountAAdKerbAuth {
                 Write-Error $_
             }
         }
+        if (!$filterIsPresent -or $Filter -match "CheckAADConnectivity")
+        {
+            try {
+                $checksExecuted += 1;
+                Write-Verbose "CheckAADConnectivity - START"
+                $TenantID = Get-AzContext
+                $Tenant = $TenantID.Tenant
+                $Response = Invoke-WebRequest -Method POST https://login.microsoftonline.com/$Tenant/kerberos
+                if ($Response.StatusCode == 200)
+                {
+                    $checks["CheckAADConnectivity"].Result = "Passed"
+                    Write-Verbose "CheckAADConnectivity - SUCCESS"
+                }
+                
+            } catch {
+                $checks["CheckAADConnectivity"].Result = "Failed"
+                $checks["CheckAADConnectivity"].Issue = $_
+                Write-Error "CheckAADConnectivity - FAILED"
+                Write-Error $_
+            }
+        }
+
         Write-Error "This cmdlet doesnt support all the checks for Microsoft kerbersos authentication yet, Run Debug-AzStorageAccountADDSAuth to run the AD DS authenbtication checks. note that not all checks are not expected to pass for Microsoft Entra Kerberos enabled account " -ErrorAction Stop
     }
 }
