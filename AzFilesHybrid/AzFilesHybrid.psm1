@@ -3763,7 +3763,35 @@ function Debug-AzStorageAccountAAdKerbAuth {
 
     process
     {
-        Write-Error "This cmdlet doesnt support Microsoft kerbersos authentication yet, Run Debug-AzStorageAccountADDSAuth to run the AD DS authenbtication checks. note that not all checks are expected to pass for Microsoft Entra Kerberos enabled account " -ErrorAction Stop
+        $checksExecuted = 0;
+        $filterIsPresent = ![string]::IsNullOrEmpty($Filter);
+        $checks = @{
+            "CheckPort445Connectivity" = [CheckResult]::new("CheckPort445Connectivity");
+
+        }
+        #
+        # Port 445 check 
+        #
+        
+        if (!$filterIsPresent -or $Filter -match "CheckPort445Connectivity")
+        {
+            try {
+                $checksExecuted += 1;
+                Write-Verbose "CheckPort445Connectivity - START"
+
+                Test-Port445Connectivity -StorageAccountName $StorageAccountName `
+                    -ResourceGroupName $ResourceGroupName -ErrorAction Stop
+
+                $checks["CheckPort445Connectivity"].Result = "Passed"
+                Write-Verbose "CheckPort445Connectivity - SUCCESS"
+            } catch {
+                $checks["CheckPort445Connectivity"].Result = "Failed"
+                $checks["CheckPort445Connectivity"].Issue = $_
+                Write-Error "CheckPort445Connectivity - FAILED"
+                Write-Error $_
+            }
+        }
+        Write-Error "This cmdlet doesnt support all the checks for Microsoft kerbersos authentication yet, Run Debug-AzStorageAccountADDSAuth to run the AD DS authenbtication checks. note that not all checks are not expected to pass for Microsoft Entra Kerberos enabled account " -ErrorAction Stop
     }
 }
 
