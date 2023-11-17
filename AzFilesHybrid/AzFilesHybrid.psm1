@@ -3755,10 +3755,16 @@ function Debug-AzStorageAccountAuth {
         
                 if (!(Get-IsDomainJoined))
                 {
-                    $message = "Machine is not domain-joined. Mounting to Azure Files through" `
-                        + " Active Directory Authentication is only supported when the computer is joined to" `
-                        + " an Active Directory domain, which is synced to Azure AD with Azure AD Connect" `
-                        + " (https://docs.microsoft.com/en-us/azure/storage/files/storage-files-identity-auth-active-directory-enable#prerequisites)"
+                    $message = "Machine is not domain-joined." `
+                        + "Machine is not domain-joined.\n\n" `
+ 
+                        + "Being domain-joined to an AD DS domain is a prerequisite for mounting" `
+                        + " Azure file shares without having to explicitly provide user credentials at every mount." `
+                        + " (https://docs.microsoft.com/en-us/azure/storage/files/storage-files-identity-auth-active-directory-enable#prerequisites).\n\n" `
+                         
+                        + " Mounting through a machine that isn't domain-joined is also supported," `
+                        + " but you must (1) have line of sight to the domain controller, and (2) explicitly provide AD DS user credentials when mounting.\n"
+                        + " https://learn.microsoft.com/en-us/azure/storage/files/storage-files-identity-ad-ds-mount-file-share#mount-the-file-share-from-a-non-domain-joined-vm-or-a-vm-joined-to-a-different-ad-domain"
                     Write-Error -Message $message -ErrorAction Stop
                 }
 
