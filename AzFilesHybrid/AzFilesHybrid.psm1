@@ -3716,7 +3716,7 @@ function Debug-AzStorageAccountAuth {
         }
         elseif ($directoryServiceOptions -eq "AADKERB")
         {
-            Debug-AzStorageAccountAAdKerbAuth`
+            Debug-AzStorageAccountEntraKerbAuth`
                 -StorageAccountName $StorageAccountName `
                 -ResourceGroupName $ResourceGroupName `
                 -Filter $Filter `
@@ -3727,16 +3727,16 @@ function Debug-AzStorageAccountAuth {
         }
         elseif ($directoryServiceOptions -eq "AADDS")
         {
-            Write-Error "This cmdlet doesnt support Microsoft Entra Domain service authentication yet, Run Debug-AzStorageAccountADDSAuth to run the AD DS authenbtication checks. Note that not all checks are expected to pass for Microsoft Entra Kerberos enabled account  "
+            Write-Host "This cmdlet does not support Microsoft Entra Domain Services authentication yet, You can run Debug-AzStorageAccountAdDsAuth to run the AD DS authentication checks instead, but note that while some checks may provide useful information, not all AD DS checks are expected to pass for a storage account with Microsoft Entra Domain Services authentication."
         }
         else
         {
-            Write-Error "Storage account is not being configured with any of the authetication option."
+            Write-Host "Storage account is not being configured with any of the authetication option."
         }
     }
 }
 
-function Debug-AzStorageAccountAAdKerbAuth {
+function Debug-AzStorageAccountEntraKerbAuth {
     [CmdletBinding()]
     param (
         [Parameter(Mandatory=$True, Position=0, HelpMessage="Storage account name")]
@@ -3796,13 +3796,17 @@ function Debug-AzStorageAccountAAdKerbAuth {
             try {
                 $checksExecuted += 1;
                 Write-Verbose "CheckAADConnectivity - START"
-                $TenantID = Get-AzContext
-                $Tenant = $TenantID.Tenant
-                $Response = Invoke-WebRequest -Method POST https://login.microsoftonline.com/$Tenant/kerberos
+                $Context = Get-AzContext
+                $TenantId = $Context.Tenant
+                $Response = Invoke-WebRequest -Method POST https://login.microsoftonline.com/$TenantId/kerberos
                 if ($Response.StatusCode == 200)
                 {
                     $checks["CheckAADConnectivity"].Result = "Passed"
                     Write-Verbose "CheckAADConnectivity - SUCCESS"
+                }
+                else{
+                    $checks["CheckAADConnectivity"].Result = "Failed"
+                    Write-Error "CheckAADConnectivity - FAILED"
                 }
                 
             } catch {
@@ -3813,7 +3817,7 @@ function Debug-AzStorageAccountAAdKerbAuth {
             }
         }
 
-        Write-Error "This cmdlet doesnt support all the checks for Microsoft kerbersos authentication yet, Run Debug-AzStorageAccountADDSAuth to run the AD DS authenbtication checks. Note that not all checks are not expected to pass for Microsoft Entra Kerberos enabled account " -ErrorAction Stop
+        Write-Host "This cmdlet does not support all the checks for Microsoft Entra Kerberos authentication yet, You can run Debug-AzStorageAccountAdDsAuth to run the AD DS authentication checks instead, but note that while some checks may provide useful information, not all AD DS checks are expected to pass for a storage account with Microsoft Entra Kerberos authentication."
     }
 }
 
