@@ -14,8 +14,8 @@
    Note - this script might report false positive i.e. a file name is supported but this script might say its not supported.
           This is by design to keep the script simple and allow customer to rename such files proactively.
 
-   Version 5.2
-   Last Modified Date: November 3, 2021
+   Version 5.4
+   Last Modified Date: November 7th, 2023
 
    Note: Please open powershell in full screen mode to avoid output truncation.
 
@@ -191,9 +191,6 @@ public class ListFiles
     // Unsupported chars blocked list
     private static List<int> disallowedChars = new List<int>();
 
-    // Chars may not work in combination with others
-    private static List<int> combinationFailureChars = new List<int>();
-
     public Dictionary<string, InvalidCharInfo> InvalidCharFileInformation = new Dictionary<string, InvalidCharInfo>();
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
@@ -224,6 +221,18 @@ public class ListFiles
     [return: MarshalAs(UnmanagedType.Bool)]
     internal static extern bool FindClose(IntPtr hFindFile);
 
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    internal static extern bool MoveFileEx(string lpExistingFileName, 
+    string lpNewFileName, MoveFileFlags dwFlags);
+
+    internal enum MoveFileFlags
+    {
+        MOVEFILE_REPLACE_EXISTING = 1,
+        MOVEFILE_COPY_ALLOWED = 2,
+        MOVEFILE_DELAY_UNTIL_REBOOT = 4,
+        MOVEFILE_WRITE_THROUGH = 8
+    }
+
     public ListFiles()
     {
         disallowedChars.Add(0x0000002A); // 0x0000002A  = '*'
@@ -235,48 +244,6 @@ public class ListFiles
         disallowedChars.Add(0x0000007C); // 0x0000007C  = '|'
         disallowedChars.Add(0x0000002F); // 0x0000002F  = '/'
         disallowedChars.Add(0x0000005C); // 0x0000005C  = '\'
-        disallowedChars.Add(0x0000007F); // 0x0000007F  = del delete
-
-        // Unsupported control chars
-        disallowedChars.Add(0x00000081); // high octet preset)
-        disallowedChars.Add(0x0000008D); // ri reverse line feed
-        disallowedChars.Add(0x0000008F); // ss3 single shift three
-        disallowedChars.Add(0x00000090); // dcs device control string
-        disallowedChars.Add(0x0000009D); // osc operating system command
-
-        // Following chars may not work with combination of other chars
-        combinationFailureChars.Add(0x1FFFE);
-        combinationFailureChars.Add(0x1FFFF);
-        combinationFailureChars.Add(0x2FFFE);
-        combinationFailureChars.Add(0x2FFFF);
-        combinationFailureChars.Add(0x3FFFE);
-        combinationFailureChars.Add(0x3FFFF);
-        combinationFailureChars.Add(0x4FFFE);
-        combinationFailureChars.Add(0x4FFFF);
-        combinationFailureChars.Add(0x5FFFE);
-        combinationFailureChars.Add(0x5FFFF);
-        combinationFailureChars.Add(0x6FFFE);
-        combinationFailureChars.Add(0x6FFFF);
-        combinationFailureChars.Add(0x7FFFE);
-        combinationFailureChars.Add(0x7FFFF);
-        combinationFailureChars.Add(0x8FFFE);
-        combinationFailureChars.Add(0x8FFFF);
-        combinationFailureChars.Add(0x9FFFE);
-        combinationFailureChars.Add(0x9FFFF);
-        combinationFailureChars.Add(0xAFFFE);
-        combinationFailureChars.Add(0xAFFFF);
-        combinationFailureChars.Add(0xBFFFE);
-        combinationFailureChars.Add(0xBFFFF);
-        combinationFailureChars.Add(0xCFFFE);
-        combinationFailureChars.Add(0xCFFFF);
-        combinationFailureChars.Add(0xDFFFE);
-        combinationFailureChars.Add(0xDFFFF);
-        combinationFailureChars.Add(0xEFFFE);
-        combinationFailureChars.Add(0xEFFFF);
-        combinationFailureChars.Add(0xFFFFE);
-        combinationFailureChars.Add(0xFFFFF);
-        combinationFailureChars.Add(0x10FFFE);
-        combinationFailureChars.Add(0x10FFFF);
     }
 
     public static bool IsExcluded(string itemName)
@@ -298,32 +265,14 @@ public class ListFiles
     public static int IsSupported(string charString)
     {
         int CodePoint = Char.ConvertToUtf32(charString, 0);
-        if ((0x1F <= CodePoint && CodePoint <= 0xD7FF) ||
-            (0xE000 <= CodePoint && CodePoint <= 0xF8FF) ||
-            (0xF900 <= CodePoint && CodePoint <= 0xFDCF) ||  // FDD0 not supported
-            (0xFDD1 <= CodePoint && CodePoint <= 0xFDDC) ||  // FDDD not supported
-            (0xFDDE <= CodePoint && CodePoint <= 0xFFFD) ||
-            (0x10000 <= CodePoint && CodePoint <= 0x4FFFD) ||
-            (0x50000 <= CodePoint && CodePoint <= 0x8FFFD) ||
-            (0x90000 <= CodePoint && CodePoint <= 0xCFFFD) ||
-            (0xD0000 <= CodePoint && CodePoint <= 0x10FFFD))
+
+        if ((0x1F <= CodePoint && CodePoint <= 0x10FFFD))
         {
-            // The character is withing the range of valid characters supported by XStore,
+            // The character is within the range of valid characters supported by XStore,
             // hence it is supported, unless it is part of the exception list
             if (disallowedChars.Contains(CodePoint))
             {
                 Console.WriteLine("Unsupported char code point: " + CodePoint);
-                return CodePoint;
-            }
-            else if ((0x80 <= CodePoint && CodePoint <= 0x9F) ||
-                     (0xFDD0 <= CodePoint && CodePoint <= 0xFFFF) ||
-                     combinationFailureChars.Contains(CodePoint))
-            {
-                // These are supported codepoints, but they might not work in combination of other chars
-                // The char combination that fails the REST call for the item could be anywhere in the path
-                // so instead of making this scanner more complicated to identify which combination might work
-                // we are over cautious and remove these from file/directory names
-                Console.WriteLine("Code point might not work in combination of other chars: " + CodePoint);
                 return CodePoint;
             }
             else
@@ -439,24 +388,7 @@ public class ListFiles
             // Convert from string builder to string
             string updatedFileName = newFileName.ToString();
 
-            if (updatedFileName.EndsWith(@".")) // Filenames with trailing dots are not supported
-            {
-                updatedFileName = updatedFileName.TrimEnd(new char [] {'.'}) + ReplacementString;
-            }
-
             return filePath.Substring(0, fileNameIndex + 1) + updatedFileName.ToString();
-        }
-        else if (fileName.EndsWith(@".")) // Filenames with trailing dots are not supported
-        {
-            InvalidCharInfo info = new InvalidCharInfo();
-
-            info.Code = 0x0000002E;
-            info.Position = filePath.Length;
-            info.Message = "File name ends with '.'";
-
-            InvalidCharFileInformation.Add(filePath, info);
-            fileName = fileName.TrimEnd(new char [] {'.'});
-            return filePath.Substring(0, fileNameIndex + 1) + fileName + ReplacementString;
         }
         else
         {
@@ -517,6 +449,7 @@ public class ListFiles
                         }
                         catch(Exception ex)
                         {
+                            // If FindFilesAndDirs call fails, skip it instead of breaking the scan
                             Console.WriteLine("Failed to process directory :" + dirPath + " Exception: " + ex);
                         }
                     }
@@ -592,15 +525,37 @@ public class ListFiles
         {
             try
             {
-                FileAttributes attr = File.GetAttributes(item.OriginalFilePath);
+                bool fileMoved = MoveFileEx(item.OriginalFilePath, item.FixedFileName, MoveFileFlags.MOVEFILE_WRITE_THROUGH);
 
-                if ((attr & FileAttributes.Directory) == FileAttributes.Directory)
+                if (!fileMoved)
                 {
-                    System.IO.Directory.Move(item.OriginalFilePath, item.FixedFileName);
-                }
-                else
-                {
-                    System.IO.File.Move(item.OriginalFilePath, item.FixedFileName);
+                    string errorMessage = string.Empty;
+                    int gle = Marshal.GetLastWin32Error();
+
+                    try
+                    {
+                        errorMessage = new Win32Exception(gle).Message;
+                    }
+                    catch
+                    {
+                    }
+
+                    if (string.IsNullOrEmpty(errorMessage))
+                    {
+                        if (gle == 0)
+                        {
+                            gle = -1;
+                        }
+
+                        errorMessage = "Unknown error: " + gle;
+                    }
+
+                    Console.WriteLine(" Could not rename item:" + item.OriginalFilePath + " Error Message: " + errorMessage);
+
+                    FilesFailedToRename.Add(item);
+
+                    Console.WriteLine("Exception " + errorMessage);
+                    Console.WriteLine("Failed to rename {0} to {1}", item.OriginalFilePath, item.FixedFileName);
                 }
             }
             catch(Exception ex)
