@@ -3768,6 +3768,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
         $checks = @{
             "CheckPort445Connectivity" = [CheckResult]::new("CheckPort445Connectivity");
             "CheckAADConnectivity" = [CheckResult]::new("CheckAADConnectivity");
+            "CheckAADObject" = [CheckResult]::new("CheckAADObject");
         }
         #
         # Port 445 check 
@@ -3806,7 +3807,8 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 }
                 else{
                     $checks["CheckAADConnectivity"].Result = "Failed"
-                    Write-Error "CheckAADConnectivity - FAILED"
+                    $checks["CheckAADConnectivity"].Issue = "Expected response is 200, but we got $($Response.StatusCode)"
+                    Write-Error "Unexpected failure"
                 }
                 
             } catch {
@@ -3816,6 +3818,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 Write-Error $_
             }
         }
+
 
         Write-Host "This cmdlet does not support all the checks for Microsoft Entra Kerberos authentication yet, You can run Debug-AzStorageAccountAdDsAuth to run the AD DS authentication checks instead, but note that while some checks may provide useful information, not all AD DS checks are expected to pass for a storage account with Microsoft Entra Kerberos authentication."
     }
