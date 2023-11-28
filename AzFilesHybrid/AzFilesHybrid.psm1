@@ -3661,6 +3661,175 @@ function Debug-AzStorageAccountAuth {
     <#
     .SYNOPSIS
     Executes a sequence of checks to identify common problems with Azure Files Authentication issues.
+    This function auto-detects the Auth method (AD DS, AAD DS, AAD Kerberos)
+    
+    .DESCRIPTION
+    This cmdlet will query the client computer for Kerberos service tickets to Azure storage accounts.
+    It will return an array of these objects, each object having a property 'Azure Files Health Status'
+    which tells the health of the ticket.  It will error when there are no ticketsfound or if there are 
+    unhealthy tickets found.
+    .OUTPUTS
+    Object[] of PSCustomObject containing klist ticket output.
+    .EXAMPLE
+    PS> Debug-AzStorageAccountAuth
+    #>
+
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory=$True, Position=0, HelpMessage="Storage account name")]
+        [string]$StorageAccountName,
+
+        [Parameter(Mandatory=$True, Position=1, HelpMessage="Resource group name")]
+        [string]$ResourceGroupName,
+
+        [Parameter(Mandatory=$False, Position=2, HelpMessage="Filter")]
+        [string]$Filter,
+
+        [Parameter(Mandatory=$False, Position=3, HelpMessage="Optional parameter for filter 'CheckSidHasAadUser' and 'CheckUserFileAccess'. The user name to check.")]
+        [string]$UserName,
+
+        [Parameter(Mandatory=$False, Position=4, HelpMessage="Optional parameter for filter 'CheckSidHasAadUser', 'CheckUserFileAccess' and 'CheckAadUserHasSid'. The domain name to look up the user.")]
+        [string]$Domain,
+
+        [Parameter(Mandatory=$False, Position=5, HelpMessage="Required parameter for filter 'CheckAadUserHasSid'. The Azure object ID or user principal name to check.")]
+        [string]$ObjectId,
+
+        [Parameter(Mandatory=$False, Position=6, HelpMessage="Required parameter for filter 'CheckUserFileAccess'. The SMB file path on the Azure file share mounted locally using storage account key.")]
+        [string]$FilePath
+    )
+
+    process
+    {
+        $VerifyAD = get-AzStorageAccount -ResourceGroupName $ResourceGroupName -StorageAccountName $StorageAccountName  
+        $directoryServiceOptions = $VerifyAD.AzureFilesIdentityBasedAuth.DirectoryServiceOptions
+
+        if ($directoryServiceOptions -eq "ADDS")
+        {
+            Debug-AzStorageAccountAdDsAuth `
+                -StorageAccountName $StorageAccountName `
+                -ResourceGroupName $ResourceGroupName `
+                -Filter $Filter `
+                -UserName $UserName `
+                -Domain $Domain `
+                -ObjectId $ObjectId `
+                -FilePath $FilePath
+        }
+        elseif ($directoryServiceOptions -eq "AADKERB")
+        {
+            Debug-AzStorageAccountEntraKerbAuth`
+                -StorageAccountName $StorageAccountName `
+                -ResourceGroupName $ResourceGroupName `
+                -Filter $Filter `
+                -UserName $UserName `
+                -Domain $Domain `
+                -ObjectId $ObjectId `
+                -FilePath $FilePath
+        }
+        elseif ($directoryServiceOptions -eq "AADDS")
+        {
+            Write-Host "This cmdlet does not support Microsoft Entra Domain Services authentication yet, You can run Debug-AzStorageAccountAdDsAuth to run the AD DS authentication checks instead, but note that while some checks may provide useful information, not all AD DS checks are expected to pass for a storage account with Microsoft Entra Domain Services authentication."
+        }
+        else
+        {
+            Write-Host "Storage account is not being configured with any of the authetication option."
+        }
+    }
+}
+
+function Debug-AzStorageAccountEntraKerbAuth {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory=$True, Position=0, HelpMessage="Storage account name")]
+        [string]$StorageAccountName,
+
+        [Parameter(Mandatory=$True, Position=1, HelpMessage="Resource group name")]
+        [string]$ResourceGroupName,
+
+        [Parameter(Mandatory=$False, Position=2, HelpMessage="Filter")]
+        [string]$Filter,
+
+        [Parameter(Mandatory=$False, Position=3, HelpMessage="Optional parameter for filter 'CheckSidHasAadUser' and 'CheckUserFileAccess'. The user name to check.")]
+        [string]$UserName,
+
+        [Parameter(Mandatory=$False, Position=4, HelpMessage="Optional parameter for filter 'CheckSidHasAadUser', 'CheckUserFileAccess' and 'CheckAadUserHasSid'. The domain name to look up the user.")]
+        [string]$Domain,
+
+        [Parameter(Mandatory=$False, Position=5, HelpMessage="Required parameter for filter 'CheckAadUserHasSid'. The Azure object ID or user principal name to check.")]
+        [string]$ObjectId,
+
+        [Parameter(Mandatory=$False, Position=6, HelpMessage="Required parameter for filter 'CheckUserFileAccess'. The SMB file path on the Azure file share mounted locally using storage account key.")]
+        [string]$FilePath
+    )
+
+    process
+    {
+        $checksExecuted = 0;
+        $filterIsPresent = ![string]::IsNullOrEmpty($Filter);
+        $checks = @{
+            "CheckPort445Connectivity" = [CheckResult]::new("CheckPort445Connectivity");
+            "CheckAADConnectivity" = [CheckResult]::new("CheckAADConnectivity");
+            "CheckAADObject" = [CheckResult]::new("CheckAADObject");
+        }
+        #
+        # Port 445 check 
+        #
+        
+        if (!$filterIsPresent -or $Filter -match "CheckPort445Connectivity")
+        {
+            try {
+                $checksExecuted += 1;
+                Write-Verbose "CheckPort445Connectivity - START"
+
+                Test-Port445Connectivity -StorageAccountName $StorageAccountName `
+                    -ResourceGroupName $ResourceGroupName -ErrorAction Stop
+
+                $checks["CheckPort445Connectivity"].Result = "Passed"
+                Write-Verbose "CheckPort445Connectivity - SUCCESS"
+            } catch {
+                $checks["CheckPort445Connectivity"].Result = "Failed"
+                $checks["CheckPort445Connectivity"].Issue = $_
+                Write-Error "CheckPort445Connectivity - FAILED"
+                Write-Error $_
+            }
+        }
+        if (!$filterIsPresent -or $Filter -match "CheckAADConnectivity")
+        {
+            try {
+                $checksExecuted += 1;
+                Write-Verbose "CheckAADConnectivity - START"
+                $Context = Get-AzContext
+                $TenantId = $Context.Tenant
+                $Response = Invoke-WebRequest -Method POST https://login.microsoftonline.com/$TenantId/kerberos
+                if ($Response.StatusCode == 200)
+                {
+                    $checks["CheckAADConnectivity"].Result = "Passed"
+                    Write-Verbose "CheckAADConnectivity - SUCCESS"
+                }
+                else{
+                    $checks["CheckAADConnectivity"].Result = "Failed"
+                    $checks["CheckAADConnectivity"].Issue = "Expected response is 200, but we got $($Response.StatusCode)"
+                    Write-Error "CheckAADConnectivity - FAILED"
+
+                }
+                
+            } catch {
+                $checks["CheckAADConnectivity"].Result = "Failed"
+                $checks["CheckAADConnectivity"].Issue = $_
+                Write-Error "CheckAADConnectivity - FAILED"
+                Write-Error $_
+            }
+        }
+
+
+        Write-Host "This cmdlet does not support all the checks for Microsoft Entra Kerberos authentication yet, You can run Debug-AzStorageAccountAdDsAuth to run the AD DS authentication checks instead, but note that while some checks may provide useful information, not all AD DS checks are expected to pass for a storage account with Microsoft Entra Kerberos authentication."
+    }
+}
+
+
+function Debug-AzStorageAccountADDSAuth {
+    <#
+    .SYNOPSIS
+    Executes a sequence of checks to identify common problems with Azure Files Authentication issues.
     This function is applicable for only ADDS authentication, does not work for AADDS and Microsoft 
     Entra Kerberos.
     
