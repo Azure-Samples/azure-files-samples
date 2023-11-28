@@ -3808,7 +3808,8 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 else{
                     $checks["CheckAADConnectivity"].Result = "Failed"
                     $checks["CheckAADConnectivity"].Issue = "Expected response is 200, but we got $($Response.StatusCode)"
-                    Write-Error "Unexpected failure"
+                    Write-Error "CheckAADConnectivity - FAILED"
+
                 }
                 
             } catch {
