@@ -4969,8 +4969,6 @@ function Join-AzStorageAccount {
     .PARAMETER OverwriteExistingADObject
     The switch to indicate whether to overwrite the existing AD object for the storage account. Default is $false and the script
     will stop if find an existing AD object for the storage account.
-    .PARAMETER EncryptionType
-    The type of encryption algorithm for the Kerberos ticket. Default is "'RC4','AES256'" which supports both 'RC4' and 'AES256' encryptions.
     .EXAMPLE
     PS> Join-AzStorageAccount -ResourceGroupName "myResourceGroup" -StorageAccountName "myStorageAccount" -Domain "subsidiary.corp.contoso.com" -DomainAccountType ComputerAccount -OrganizationalUnitName "StorageAccountsOU"
     .EXAMPLE 
@@ -5015,9 +5013,6 @@ function Join-AzStorageAccount {
 
         [Parameter(Mandatory=$false, Position=6)]
         [switch]$OverwriteExistingADObject,
-
-        [Parameter(Mandatory=$false, Position=7)]
-        [System.Collections.Generic.HashSet[string]]$EncryptionType = @("RC4","AES256"),
 
         [Parameter(Mandatory=$false, Position=8)]
         [string]$SamAccountName
