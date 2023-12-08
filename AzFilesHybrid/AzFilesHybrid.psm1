@@ -5117,7 +5117,7 @@ function Join-AzStorageAccount {
                 -Force
 
             Update-AzStorageAccountADObjectPassword -ResourceGroupname $ResourceGroupName -StorageAccountName $StorageAccountName `
-                -RotateToKerbKey kerb2 -ErrorAction Stop
+                -RotateToKerbKey kerb2 -Force -ErrorAction Stop
         }
     }
 }
