@@ -4579,10 +4579,10 @@ function Update-AzStorageAccountADObjectPassword {
         [Microsoft.Azure.Commands.Management.Storage.Models.PSStorageAccount]$StorageAccount,
 
         [Parameter(Mandatory=$false)]
-        [switch]$SkipKeyRegeneration
+        [switch]$SkipKeyRegeneration,
 
-        #[Parameter(Mandatory=$false)]
-        #[switch]$Force
+        [Parameter(Mandatory=$false)]
+        [switch]$Force
     )
 
     begin {
@@ -4631,7 +4631,7 @@ function Update-AzStorageAccountADObjectPassword {
             "account before being set), wait several hours, and then rotate back to kerb1 " + `
             "(this cmdlet will likewise regenerate kerb1).")
 
-        if ($PSCmdlet.ShouldProcess($verboseConfirmMessage, $verboseConfirmMessage, $caption)) {
+        if ($Force -or $PSCmdlet.ShouldProcess($verboseConfirmMessage, $verboseConfirmMessage, $caption)) {
             Write-Verbose -Message "Desire to rotate password confirmed."
             
             Write-Verbose -Message ("Regenerate $RotateToKerbKey on " + $StorageAccount.StorageAccountName)
