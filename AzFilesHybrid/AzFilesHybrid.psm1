@@ -3134,7 +3134,7 @@ function Get-AzStorageKerberosTicketStatus {
             elseif ($line -match "0x80090342")
             {
                 #
-                # SEC_E_KDC_UNKNOWN_ETYPE
+                # SEC_E_KDC_UNKNOWN_ETYPE  
                 # The encryption type requested is not supported by the KDC.
                 #
 
@@ -3769,6 +3769,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
             "CheckPort445Connectivity" = [CheckResult]::new("CheckPort445Connectivity");
             "CheckAADConnectivity" = [CheckResult]::new("CheckAADConnectivity");
             "CheckAADObject" = [CheckResult]::new("CheckAADObject");
+            "CheckRegKey" = [CheckResult]::new("CheckRegKey");
         }
         #
         # Port 445 check 
@@ -3792,6 +3793,9 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 Write-Error $_
             }
         }
+        #
+        # AAD Connectivity check 
+        #
         if (!$filterIsPresent -or $Filter -match "CheckAADConnectivity")
         {
             try {
@@ -3808,8 +3812,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 else{
                     $checks["CheckAADConnectivity"].Result = "Failed"
                     $checks["CheckAADConnectivity"].Issue = "Expected response is 200, but we got $($Response.StatusCode)"
-                    Write-Error "CheckAADConnectivity - FAILED"
-
+                    Write-Error "Unexpected failure"
                 }
                 
             } catch {
@@ -3819,7 +3822,57 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 Write-Error $_
             }
         }
+        #
+        # AAD Object check 
+        #
+        if (!$filterIsPresent -or $Filter -match "CheckAADObject")
+        {
+            try {
+                $checksExecuted += 1;
+                Write-Verbose "CheckADObject - START"
+                $Context = Get-AzContext
+                $TenantId = $Context.Tenant
+                Connect-MgGraph -Scopes "Application.Read.All" -TenantId $TenantId
+                Get-MgApplication -Filter "identifierUris/any (uri:uri eq 'api://${TenantId}/CIFS/${StorageAccountName}.file.core.windows.net')" -ConsistencyLevel eventual
+                Get-MgServicePrincipal -Filter "servicePrincipalNames/any (name:name eq 'api://$TenantId/CIFS/$StorageAccountName.file.core.windows.net')" -ConsistencyLevel eventual
 
+                $checks["CheckADObject"].Result = "Passed"
+                Write-Verbose "CheckADObject - SUCCESS"
+            } catch {
+                $checks["CheckADObject"].Result = "Failed"
+                $checks["CheckADObject"].Issue = $_
+                Write-Error "CheckADObject - FAILED"
+                Write-Error $_
+            }
+        }
+        #
+        #Check if Reg key is enabled
+        #
+        if (!$filterIsPresent -or $Filter -match "CheckRegKey")
+        {
+            try {
+                $checksExecuted += 1;
+                Write-Verbose "CheckRegKey - START"
+                $RegKey = Get-ItemProperty -Path Registry::HKLM\SYSTEM\CurrentControlSet\Control\Lsa\Kerberos\Parameters
+                if($RegKey.CloudKerberosTicketRetrievalEnabled -eq "1")
+                {
+                    $checks["CheckRegKey"].Result = "Passed"
+                    Write-Verbose "CheckRegKey - SUCCESS"
+                }
+                else {
+                    $checks["CheckRegKey"].Result = "Failed"
+                    $checks["CheckRegKey"].Issue = "The CloudKerberosTicketRetrievalEnabled need to be enabled to get kerberos ticket"
+                    Write-Error "CheckRegKey - FAILED"
+                    Write-Error "Configure the clients to retrieve Kerberos tickets. Follow [https://learn.microsoft.com/en-us/azure/storage/files/storage-files-identity-auth-hybrid-identities-enable?tabs=azure-portal#configure-the-clients-to-retrieve-kerberos-tickets]"
+                }
+                
+            } catch {
+                $checks["CheckRegKey"].Result = "Failed"
+                $checks["CheckRegKey"].Issue = $_
+                Write-Error "CheckRegKey - FAILED"
+                Write-Error $_
+            }
+        }
 
         Write-Host "This cmdlet does not support all the checks for Microsoft Entra Kerberos authentication yet, You can run Debug-AzStorageAccountAdDsAuth to run the AD DS authentication checks instead, but note that while some checks may provide useful information, not all AD DS checks are expected to pass for a storage account with Microsoft Entra Kerberos authentication."
     }
