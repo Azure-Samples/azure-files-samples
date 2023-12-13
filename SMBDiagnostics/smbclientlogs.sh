@@ -118,6 +118,8 @@ dump_os_information() {
   last reboot -5 >> os_details.txt
   echo -e "\nSystem Uptime:" >> os_details.txt
   cat /proc/uptime >> os_details.txt
+  echo -e "\nList all cifs mounts:" >> os_details.txt
+  mount -t cifs | sed -e 's/username=[^\,]*//g' -e 's/password=[^\,]*//g' >> os_details.txt
   echo -e "\npackage install details:" >> os_details.txt
   if (( $(which rpm |egrep -c rpm) > 0));
   then
