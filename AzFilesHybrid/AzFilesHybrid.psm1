@@ -3834,10 +3834,32 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 $TenantId = $Context.Tenant
                 Connect-MgGraph -Scopes "Application.Read.All" -TenantId $TenantId
                 Get-MgApplication -Filter "identifierUris/any (uri:uri eq 'api://${TenantId}/CIFS/${StorageAccountName}.file.core.windows.net')" -ConsistencyLevel eventual
-                Get-MgServicePrincipal -Filter "servicePrincipalNames/any (name:name eq 'api://$TenantId/CIFS/$StorageAccountName.file.core.windows.net')" -ConsistencyLevel eventual
-
-                $checks["CheckADObject"].Result = "Passed"
-                Write-Verbose "CheckADObject - SUCCESS"
+                $SPNValue = Get-MgServicePrincipal -Filter "servicePrincipalNames/any (name:name eq 'api://$TenantId/CIFS/$StorageAccountName.file.core.windows.net')" -ConsistencyLevel eventual
+                if(-not $SPNValue.AccountEnabled)
+                {
+                    $checks["CheckADObject"].Result = "Failed"
+                    $checks["CheckADObject"].Issue = "SPN Value is not Set correctly."
+                    Write-Error "CheckADObject - FAILED"
+                    Write-Error "SPN Value is not set correctly, It should be 'CIFS/Storageaccountname.file.core.windows.net'"
+                }
+                elseif(-not $SPNValue.ServicePrincipalNames.Contains("CIFS/${StorageAccountName}.file.core.windows.net")  )
+                {
+                    $checks["CheckADObject"].Result = "Failed"
+                    $checks["CheckADObject"].Issue = "SPN Value is not Set correctly."
+                    Write-Error "CheckADObject - FAILED"
+                    Write-Error "SPN Value is not set correctly, It should be 'CIFS/Storageaccountname.file.core.windows.net'"
+                }
+                
+                elseif (-not $SPNValue.ServicePrincipalNames.Contains("api://${TenantId}/CIFS/${StorageAccountName}.file.core.windows.net")) 
+                {
+                    $checks["CheckADObject"].Result = "Partial"
+                    Write-Warning "It is okay to not have this value for now, but it is good to have this configured in future if you want to continue getting kerberos tickets."
+                    Write-Verbose "CheckADObject - SUCCESS"
+                }
+                else {
+                    $checks["CheckADObject"].Result = "Passed"
+                    Write-Verbose "CheckADObject - SUCCESS" 
+                }
             } catch {
                 $checks["CheckADObject"].Result = "Failed"
                 $checks["CheckADObject"].Issue = $_
