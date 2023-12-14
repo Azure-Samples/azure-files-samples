@@ -3718,7 +3718,39 @@ function Debug-AzStorageAccountAuth {
             "CheckUserRbacAssignment" = [CheckResult]::new("CheckUserRbacAssignment");
             "CheckUserFileAccess" = [CheckResult]::new("CheckUserFileAccess");
             "CheckDefaultSharePermission" = [CheckResult]::new("CheckDefaultSharePermission");
+            "CheckonRegKey" = [CheckResult]::new("CheckonRegKey");
         }
+        
+        #
+        # Regkey check 
+        #
+        if (!$filterIsPresent -or $Filter -match "CheckonRegKey")
+        {
+            try {
+                $checksExecuted += 1;
+                Write-Verbose "CheckonRegKey - START"
+                $RegKey = Get-ItemProperty -Path Registry::HKLM\SYSTEM\CurrentControlSet\Control\Lsa\Kerberos\Parameters
+
+                if(( $RegKey -eq $null) -or ($RegKey.CloudKerberosTicketRetrievalEnabled -eq $null) -or ($RegKey.CloudKerberosTicketRetrievalEnabled -eq "0"))
+                {
+                    $checks["CheckonRegKey"].Result = "Passed"
+                    Write-Verbose "CheckonRegKey - SUCCESS"
+                }
+                
+                else 
+                {
+                    $checks["CheckonRegKey"].Result = "Failed"
+                    $checks["CheckonRegKey"].Issue = "Reg key is enabled. Disable the Reg key to retrieve Kerberos tickets."
+                    Write-Error "CheckonRegKey - FAILED"
+                    Write-Error "Disable the Reg key to retrieve Kerberos tickets follow-> [https://learn.microsoft.com/en-us/azure/storage/files/storage-files-identity-auth-hybrid-identities-enable?tabs=azure-portal#undo-the-client-configuration-to-retrieve-kerberos-tickets]"
+                }
+                
+            } catch {
+                $checks["CheckonRegKey"].Result = "Failed"
+                $checks["CheckonRegKey"].Issue = $_
+                Write-Error "CheckonRegKey - FAILED"
+                Write-Error $_
+            }
 
         #
         # Port 445 check 
@@ -4206,6 +4238,7 @@ function Debug-AzStorageAccountAuth {
                 Write-Error $_
             }
         }
+
 
         if ($filterIsPresent -and $checksExecuted -eq 0)
         {
