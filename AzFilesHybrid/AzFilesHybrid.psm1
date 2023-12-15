@@ -3853,7 +3853,9 @@ function Debug-AzStorageAccountEntraKerbAuth {
 
                 {
                     $checks["CheckADObject"].Result = "Partial"
+                    Write-Warning "Service Principal is missing SPN 'api://${TenantId}/CIFS/${StorageAccountName}.file.core.windows.net'."
                     Write-Warning "It is okay to not have this value for now, but it is good to have this configured in future if you want to continue getting kerberos tickets."
+
                     Write-Verbose "CheckADObject - SUCCESS"
                 }
                 else {
