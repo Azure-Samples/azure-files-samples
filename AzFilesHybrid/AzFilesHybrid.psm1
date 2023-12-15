@@ -3849,8 +3849,8 @@ function Debug-AzStorageAccountEntraKerbAuth {
                     Write-Error "CheckADObject - FAILED"
                     Write-Error "SPN Value is not set correctly, It should be 'CIFS/Storageaccountname.file.core.windows.net'"
                 }
-                
                 elseif (-not $SPNValue.ServicePrincipalNames.Contains("api://${TenantId}/CIFS/${StorageAccountName}.file.core.windows.net")) 
+
                 {
                     $checks["CheckADObject"].Result = "Partial"
                     Write-Warning "It is okay to not have this value for now, but it is good to have this configured in future if you want to continue getting kerberos tickets."
