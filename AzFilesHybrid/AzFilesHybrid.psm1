@@ -3885,7 +3885,10 @@ function Debug-AzStorageAccountEntraKerbAuth {
                     $checks["CheckRegKey"].Result = "Failed"
                     $checks["CheckRegKey"].Issue = "The CloudKerberosTicketRetrievalEnabled need to be enabled to get kerberos ticket"
                     Write-Error "CheckRegKey - FAILED"
-                    Write-Error "Configure the clients to retrieve Kerberos tickets. Follow [https://learn.microsoft.com/en-us/azure/storage/files/storage-files-identity-auth-hybrid-identities-enable?tabs=azure-portal#configure-the-clients-to-retrieve-kerberos-tickets]"
+                    Write-Error "The registry key HKLM\SYSTEM\CurrentControlSet\Control\Lsa\Kerberos\Parameters\CloudKerberosTicketRetrievalEnabled was non-existent or 0."
+                    Write-Error "For AAD Kerberos authentication, it should be set to 1."
+                    Write-Error "To fix this error, enable the registry key and reboot the machine."
+                    Write-Error "See https://learn.microsoft.com/en-us/azure/storage/files/storage-files-identity-auth-hybrid-identities-enable?tabs=azure-portal#configure-the-clients-to-retrieve-kerberos-tickets"
                 }
                 
             } catch {
