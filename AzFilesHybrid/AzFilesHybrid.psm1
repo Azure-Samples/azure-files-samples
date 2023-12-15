@@ -3845,7 +3845,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 elseif(-not $SPNValue.ServicePrincipalNames.Contains("CIFS/${StorageAccountName}.file.core.windows.net")  )
                 {
                     $checks["CheckADObject"].Result = "Failed"
-                    $checks["CheckADObject"].Issue = "SPN Value is not Set correctly."
+                    $checks["CheckADObject"].Issue = "Service Principal is missing SPN ' CIFS/${StorageAccountName}.file.core.windows.net'."
                     Write-Error "CheckADObject - FAILED"
                     Write-Error "SPN Value is not set correctly, It should be 'CIFS/Storageaccountname.file.core.windows.net'"
                 }
