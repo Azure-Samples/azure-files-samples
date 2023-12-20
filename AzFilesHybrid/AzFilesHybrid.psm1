@@ -3718,8 +3718,10 @@ function Debug-AzStorageAccountAuth {
             "CheckUserRbacAssignment" = [CheckResult]::new("CheckUserRbacAssignment");
             "CheckUserFileAccess" = [CheckResult]::new("CheckUserFileAccess");
             "CheckDefaultSharePermission" = [CheckResult]::new("CheckDefaultSharePermission");
+            "CheckAadKerberosRegistryKeyIsOff" = [CheckResult]::new("CheckAadKerberosRegistryKeyIsOff");
         }
-
+        
+        
         #
         # Port 445 check 
         #
@@ -4207,6 +4209,7 @@ function Debug-AzStorageAccountAuth {
             }
         }
 
+
         if ($filterIsPresent -and $checksExecuted -eq 0)
         {
             $message = "Filter '$Filter' provided does not match any options. No checks were executed." `
@@ -4225,6 +4228,39 @@ function Debug-AzStorageAccountAuth {
                 $issues | ForEach-Object { Write-Host -ForegroundColor Red "---- $($_.Name) ----`n$($_.Issue)" }
             }
         }
+
+        #
+        # Check if Aad Kerberos Registry Key Is Off  
+        #
+        if (!$filterIsPresent -or $Filter -match "CheckAadKerberosRegistryKeyIsOff")
+        {
+            try {
+                $checksExecuted += 1;
+                Write-Verbose "CheckAadKerberosRegistryKeyIsOff - START"
+                $RegKey = Get-ItemProperty -Path Registry::HKLM\SYSTEM\CurrentControlSet\Control\Lsa\Kerberos\Parameters
+
+                if(( $RegKey -eq $null) -or ($RegKey.CloudKerberosTicketRetrievalEnabled -eq $null) -or ($RegKey.CloudKerberosTicketRetrievalEnabled -eq "0"))
+                {
+                    $checks["CheckAadKerberosRegistryKeyIsOff"].Result = "Passed"
+                    Write-Verbose "CheckAadKerberosRegistryKeyIsOff - SUCCESS"
+                }
+                
+                else 
+                {
+                    $checks["CheckAadKerberosRegistryKeyIsOff"].Result = "Failed"
+                    $checks["CheckAadKerberosRegistryKeyIsOff"].Issue = "CloudKerberosTicketRetrievalEnabled registry key is enabled. Disable it to retrieve Kerberos tickets from AD DS."
+
+                    Write-Error "CheckAadKerberosRegistryKeyIsOff - FAILED"
+                    Write-Error "For AD DS authentication, you must disable the registry key for retrieving Kerberos tickets from AAD. See https://learn.microsoft.com/en-us/azure/storage/files/storage-files-identity-auth-hybrid-identities-enable?tabs=azure-portal#undo-the-client-configuration-to-retrieve-kerberos-tickets"
+                }
+                
+            } catch {
+                $checks["CheckAadKerberosRegistryKeyIsOff"].Result = "Failed"
+                $checks["CheckAadKerberosRegistryKeyIsOff"].Issue = $_
+                Write-Error "CheckAadKerberosRegistryKeyIsOff - FAILED"
+                Write-Error $_
+            }
+        }
         
         $message = "********************`r`n" `
                 + "If above checks are not helpful and further investigation/debugging is needed from the Azure Files team.`r`n" `
@@ -4237,7 +4273,9 @@ function Debug-AzStorageAccountAuth {
         Write-Host $message
 
     }
+
 }
+
 
 
 function Set-StorageAccountDomainProperties {
