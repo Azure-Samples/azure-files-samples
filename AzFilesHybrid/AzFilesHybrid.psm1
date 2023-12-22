@@ -4208,27 +4208,6 @@ function Debug-AzStorageAccountAuth {
                 Write-Error $_
             }
         }
-
-
-        if ($filterIsPresent -and $checksExecuted -eq 0)
-        {
-            $message = "Filter '$Filter' provided does not match any options. No checks were executed." `
-                + " Available filters are {$($checks.Keys -join ', ')}"
-            Write-Error -Message $message -ErrorAction Stop
-        }
-        else
-        {
-            Write-Host "Summary of checks:"
-            $checks.Values | Format-Table -Property Name,Result
-            
-            $issues = $checks.Values | Where-Object { $_.Result -ieq "Failed" }
-
-            if ($issues.Length -gt 0) {
-                Write-Host "Issues found:"
-                $issues | ForEach-Object { Write-Host -ForegroundColor Red "---- $($_.Name) ----`n$($_.Issue)" }
-            }
-        }
-
         #
         # Check if Aad Kerberos Registry Key Is Off  
         #
@@ -4260,7 +4239,27 @@ function Debug-AzStorageAccountAuth {
                 Write-Error $_
             }
         }
-        
+
+
+        if ($filterIsPresent -and $checksExecuted -eq 0)
+        {
+            $message = "Filter '$Filter' provided does not match any options. No checks were executed." `
+                + " Available filters are {$($checks.Keys -join ', ')}"
+            Write-Error -Message $message -ErrorAction Stop
+        }
+        else
+        {
+            Write-Host "Summary of checks:"
+            $checks.Values | Format-Table -Property Name,Result
+            
+            $issues = $checks.Values | Where-Object { $_.Result -ieq "Failed" }
+
+            if ($issues.Length -gt 0) {
+                Write-Host "Issues found:"
+                $issues | ForEach-Object { Write-Host -ForegroundColor Red "---- $($_.Name) ----`n$($_.Issue)" }
+            }
+        }
+
         $message = "********************`r`n" `
                 + "If above checks are not helpful and further investigation/debugging is needed from the Azure Files team.`r`n" `
                 + "Please prepare the full console log from the cmdlet and Wireshark traces for any mount or access errors to`r`n" `
@@ -4616,10 +4615,10 @@ function Update-AzStorageAccountADObjectPassword {
         [Microsoft.Azure.Commands.Management.Storage.Models.PSStorageAccount]$StorageAccount,
 
         [Parameter(Mandatory=$false)]
-        [switch]$SkipKeyRegeneration
+        [switch]$SkipKeyRegeneration,
 
-        #[Parameter(Mandatory=$false)]
-        #[switch]$Force
+        [Parameter(Mandatory=$false)]
+        [switch]$Force
     )
 
     begin {
@@ -4668,7 +4667,7 @@ function Update-AzStorageAccountADObjectPassword {
             "account before being set), wait several hours, and then rotate back to kerb1 " + `
             "(this cmdlet will likewise regenerate kerb1).")
 
-        if ($PSCmdlet.ShouldProcess($verboseConfirmMessage, $verboseConfirmMessage, $caption)) {
+        if ($Force -or $PSCmdlet.ShouldProcess($verboseConfirmMessage, $verboseConfirmMessage, $caption)) {
             Write-Verbose -Message "Desire to rotate password confirmed."
             
             Write-Verbose -Message ("Regenerate $RotateToKerbKey on " + $StorageAccount.StorageAccountName)
@@ -4969,7 +4968,7 @@ function Update-AzStorageAccountAuthForAES256 {
             -Force
 
         Update-AzStorageAccountADObjectPassword -ResourceGroupname $ResourceGroupName -StorageAccountName $StorageAccountName `
-            -RotateToKerbKey kerb2 -ErrorAction Stop
+            -RotateToKerbKey kerb2 -Force -ErrorAction Stop
     }
 }
 
@@ -5006,8 +5005,6 @@ function Join-AzStorageAccount {
     .PARAMETER OverwriteExistingADObject
     The switch to indicate whether to overwrite the existing AD object for the storage account. Default is $false and the script
     will stop if find an existing AD object for the storage account.
-    .PARAMETER EncryptionType
-    The type of encryption algorithm for the Kerberos ticket. Default is "'RC4','AES256'" which supports both 'RC4' and 'AES256' encryptions.
     .EXAMPLE
     PS> Join-AzStorageAccount -ResourceGroupName "myResourceGroup" -StorageAccountName "myStorageAccount" -Domain "subsidiary.corp.contoso.com" -DomainAccountType ComputerAccount -OrganizationalUnitName "StorageAccountsOU"
     .EXAMPLE 
@@ -5052,9 +5049,6 @@ function Join-AzStorageAccount {
 
         [Parameter(Mandatory=$false, Position=6)]
         [switch]$OverwriteExistingADObject,
-
-        [Parameter(Mandatory=$false, Position=7)]
-        [System.Collections.Generic.HashSet[string]]$EncryptionType = @("RC4","AES256"),
 
         [Parameter(Mandatory=$false, Position=8)]
         [string]$SamAccountName
@@ -5154,7 +5148,7 @@ function Join-AzStorageAccount {
                 -Force
 
             Update-AzStorageAccountADObjectPassword -ResourceGroupname $ResourceGroupName -StorageAccountName $StorageAccountName `
-                -RotateToKerbKey kerb2 -ErrorAction Stop
+                -RotateToKerbKey kerb2 -Force -ErrorAction Stop
         }
     }
 }
