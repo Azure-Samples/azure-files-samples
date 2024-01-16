@@ -95,7 +95,23 @@ trace_nfsbpf() {
 }
 
 stop() {
-  dmesg -T  rm -rf trace.dat*
+  dmesg -T > "${DIRNAME}/nfs_dmesg"
+  stop_trace
+  stop_capture_network
+
+  zip -r "$(basename ${DIRNAME}).zip" "${DIRNAME}"
+  return 0;
+}
+
+stop_trace() {
+  trace-cmd extract
+  sleep 1
+  trace-cmd report > "${DIRNAME}/nfs_trace"
+  trace-cmd stop
+  trace-cmd reset
+  rpcdebug -m rpc -c all
+  rpcdebug -m nfs -c all
+  rm -rf trace.dat*
 }
 
 stop_capture_network() {
