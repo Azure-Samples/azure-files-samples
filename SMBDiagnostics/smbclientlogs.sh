@@ -86,6 +86,12 @@ check_utils() {
     exit 1
   fi
 
+  which ss > /dev/null
+  if [ $? == 1 ]; then
+    echo "ss is not installed, please install ss to continue"
+    exit 1
+  fi
+
   which python > /dev/null
   if [ $? == 1 ]; then
     which python3 > /dev/null
