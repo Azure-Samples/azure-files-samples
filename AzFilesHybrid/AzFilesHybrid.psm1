@@ -3840,20 +3840,22 @@ function Debug-AzStorageAccountEntraKerbAuth {
                     $checks["CheckADObject"].Result = "Failed"
                     $checks["CheckADObject"].Issue = "SPN Value is not Set correctly."
                     Write-Error "CheckADObject - FAILED"
-                    Write-Error "SPN Value is not set correctly, It should be 'CIFS/Storageaccountname.file.core.windows.net'"
+                    Write-Error "The service principal should have AccountEnabled set to true"
                 }
                 elseif(-not $SPNValue.ServicePrincipalNames.Contains("CIFS/${StorageAccountName}.file.core.windows.net")  )
                 {
                     $checks["CheckADObject"].Result = "Failed"
-                    $checks["CheckADObject"].Issue = "SPN Value is not Set correctly."
+                    $checks["CheckADObject"].Issue = "Service Principal is missing SPN ' CIFS/${StorageAccountName}.file.core.windows.net'."
                     Write-Error "CheckADObject - FAILED"
                     Write-Error "SPN Value is not set correctly, It should be 'CIFS/Storageaccountname.file.core.windows.net'"
                 }
-                
                 elseif (-not $SPNValue.ServicePrincipalNames.Contains("api://${TenantId}/CIFS/${StorageAccountName}.file.core.windows.net")) 
+
                 {
                     $checks["CheckADObject"].Result = "Partial"
+                    Write-Warning "Service Principal is missing SPN 'api://${TenantId}/CIFS/${StorageAccountName}.file.core.windows.net'."
                     Write-Warning "It is okay to not have this value for now, but it is good to have this configured in future if you want to continue getting kerberos tickets."
+
                     Write-Verbose "CheckADObject - SUCCESS"
                 }
                 else {
@@ -3876,7 +3878,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 $checksExecuted += 1;
                 Write-Verbose "CheckRegKey - START"
                 $RegKey = Get-ItemProperty -Path Registry::HKLM\SYSTEM\CurrentControlSet\Control\Lsa\Kerberos\Parameters
-                if($RegKey.CloudKerberosTicketRetrievalEnabled -eq "1")
+                if($RegKey -ne $null -and $RegKey.CloudKerberosTicketRetrievalEnabled -eq "1")
                 {
                     $checks["CheckRegKey"].Result = "Passed"
                     Write-Verbose "CheckRegKey - SUCCESS"
@@ -3885,7 +3887,10 @@ function Debug-AzStorageAccountEntraKerbAuth {
                     $checks["CheckRegKey"].Result = "Failed"
                     $checks["CheckRegKey"].Issue = "The CloudKerberosTicketRetrievalEnabled need to be enabled to get kerberos ticket"
                     Write-Error "CheckRegKey - FAILED"
-                    Write-Error "Configure the clients to retrieve Kerberos tickets. Follow [https://learn.microsoft.com/en-us/azure/storage/files/storage-files-identity-auth-hybrid-identities-enable?tabs=azure-portal#configure-the-clients-to-retrieve-kerberos-tickets]"
+                    Write-Error "The registry key HKLM\SYSTEM\CurrentControlSet\Control\Lsa\Kerberos\Parameters\CloudKerberosTicketRetrievalEnabled was non-existent or 0."
+                    Write-Error "For AAD Kerberos authentication, it should be set to 1."
+                    Write-Error "To fix this error, enable the registry key and reboot the machine."
+                    Write-Error "See https://learn.microsoft.com/en-us/azure/storage/files/storage-files-identity-auth-hybrid-identities-enable?tabs=azure-portal#configure-the-clients-to-retrieve-kerberos-tickets"
                 }
                 
             } catch {
