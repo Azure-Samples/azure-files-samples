@@ -3768,7 +3768,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
         $checks = @{
             "CheckPort445Connectivity" = [CheckResult]::new("CheckPort445Connectivity");
             "CheckAADConnectivity" = [CheckResult]::new("CheckAADConnectivity");
-            "CheckAADObject" = [CheckResult]::new("CheckAADObject");
+            "CheckEntraObject" = [CheckResult]::new("CheckEntraObject");
             "CheckRegKey" = [CheckResult]::new("CheckRegKey");
         }
         #
@@ -3825,47 +3825,62 @@ function Debug-AzStorageAccountEntraKerbAuth {
         #
         # AAD Object check 
         #
-        if (!$filterIsPresent -or $Filter -match "CheckAADObject")
+        if (!$filterIsPresent -or $Filter -match "CheckEntraObject")
         {
             try {
                 $checksExecuted += 1;
-                Write-Verbose "CheckADObject - START"
+                Write-Verbose "CheckEntraObject - START"
                 $Context = Get-AzContext
                 $TenantId = $Context.Tenant
-                Connect-MgGraph -Scopes "Application.Read.All" -TenantId $TenantId
-                Get-MgApplication -Filter "identifierUris/any (uri:uri eq 'api://${TenantId}/CIFS/${StorageAccountName}.file.core.windows.net')" -ConsistencyLevel eventual
-                $SPNValue = Get-MgServicePrincipal -Filter "servicePrincipalNames/any (name:name eq 'api://$TenantId/CIFS/$StorageAccountName.file.core.windows.net')" -ConsistencyLevel eventual
-                if(-not $SPNValue.AccountEnabled)
+                Connect-MgGraph -Environment Global -Scopes "Application.Read.All" -TenantId $TenantId
+                $Application = Get-MgApplication -Filter "identifierUris/any (uri:uri eq 'api://${TenantId}/CIFS/${StorageAccountName}.file.core.windows.net')" -ConsistencyLevel eventual
+                if($null -eq $Application)
                 {
-                    $checks["CheckADObject"].Result = "Failed"
-                    $checks["CheckADObject"].Issue = "SPN Value is not Set correctly."
-                    Write-Error "CheckADObject - FAILED"
-                    Write-Error "The service principal should have AccountEnabled set to true"
+                    $checks["CheckEntraObject"].Result = "Failed"
+                    $checks["CheckEntraObject"].Issue = "Could not find the application with SPN ' api://${TenantId}/CIFS/${StorageAccountName}.file.core.windows.net'."
+                    Write-Error "CheckEntraObject - FAILED"
+                    Write-Error "Could not find the application with SPN 'api://${TenantId}/CIFS/${StorageAccountName}.file.core.windows.net' "
                 }
-                elseif(-not $SPNValue.ServicePrincipalNames.Contains("CIFS/${StorageAccountName}.file.core.windows.net")  )
+                $ServicePrincipal = Get-MgServicePrincipal -Filter "servicePrincipalNames/any (name:name eq 'api://$TenantId/CIFS/$StorageAccountName.file.core.windows.net')" -ConsistencyLevel eventual
+                if($null -eq $ServicePrincipal)
                 {
-                    $checks["CheckADObject"].Result = "Failed"
-                    $checks["CheckADObject"].Issue = "Service Principal is missing SPN ' CIFS/${StorageAccountName}.file.core.windows.net'."
-                    Write-Error "CheckADObject - FAILED"
+                    $checks["CheckEntraObject"].Result = "Failed"
+                    $checks["CheckEntraObject"].Issue = "Service Principal is missing SPN ' CIFS/${StorageAccountName}.file.core.windows.net'."
+                    Write-Error "CheckEntraObject - FAILED"
                     Write-Error "SPN Value is not set correctly, It should be 'CIFS/Storageaccountname.file.core.windows.net'"
                 }
-                elseif (-not $SPNValue.ServicePrincipalNames.Contains("api://${TenantId}/CIFS/${StorageAccountName}.file.core.windows.net")) 
+                }
+                if(-not $ServicePrincipal.AccountEnabled)
+                {
+                    $checks["CheckEntraObject"].Result = "Failed"
+                    $checks["CheckEntraObject"].Issue = "SPN Value is not Set correctly."
+                    Write-Error "CheckEntraObject - FAILED"
+                    Write-Error "The service principal should have AccountEnabled set to true"
+                }
+                elseif(-not $ServicePrincipal.ServicePrincipalNames.Contains("CIFS/${StorageAccountName}.file.core.windows.net")  )
+                {
+                    $checks["CheckEntraObject"].Result = "Failed"
+                    $checks["CheckEntraObject"].Issue = "Service Principal is missing SPN ' CIFS/${StorageAccountName}.file.core.windows.net'."
+                    Write-Error "CheckEntraObject - FAILED"
+                    Write-Error "SPN Value is not set correctly, It should be 'CIFS/Storageaccountname.file.core.windows.net'"
+                }
+                elseif (-not $ServicePrincipal.ServicePrincipalNames.Contains("api://${TenantId}/CIFS/${StorageAccountName}.file.core.windows.net")) 
 
                 {
-                    $checks["CheckADObject"].Result = "Partial"
+                    $checks["CheckEntraObject"].Result = "Partial"
                     Write-Warning "Service Principal is missing SPN 'api://${TenantId}/CIFS/${StorageAccountName}.file.core.windows.net'."
                     Write-Warning "It is okay to not have this value for now, but it is good to have this configured in future if you want to continue getting kerberos tickets."
 
-                    Write-Verbose "CheckADObject - SUCCESS"
+                    Write-Verbose "CheckEntraObject - SUCCESS"
                 }
                 else {
-                    $checks["CheckADObject"].Result = "Passed"
-                    Write-Verbose "CheckADObject - SUCCESS" 
+                    $checks["CheckEntraObject"].Result = "Passed"
+                    Write-Verbose "CheckEntraObject - SUCCESS" 
                 }
             } catch {
-                $checks["CheckADObject"].Result = "Failed"
-                $checks["CheckADObject"].Issue = $_
-                Write-Error "CheckADObject - FAILED"
+                $checks["CheckEntraObject"].Result = "Failed"
+                $checks["CheckEntraObject"].Issue = $_
+                Write-Error "CheckEntraObject - FAILED"
                 Write-Error $_
             }
         }
