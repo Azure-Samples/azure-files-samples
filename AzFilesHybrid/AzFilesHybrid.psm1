@@ -3849,11 +3849,10 @@ function Debug-AzStorageAccountEntraKerbAuth {
                     Write-Error "CheckEntraObject - FAILED"
                     Write-Error "SPN Value is not set correctly, It should be 'CIFS/Storageaccountname.file.core.windows.net'"
                 }
-                }
                 if(-not $ServicePrincipal.AccountEnabled)
                 {
                     $checks["CheckEntraObject"].Result = "Failed"
-                    $checks["CheckEntraObject"].Issue = "SPN Value is not Set correctly."
+                    $checks["CheckEntraObject"].Issue = "Expected AccountEnabled to be set to true"
                     Write-Error "CheckEntraObject - FAILED"
                     Write-Error "The service principal should have AccountEnabled set to true"
                 }
