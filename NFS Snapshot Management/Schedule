@@ -1,0 +1,29 @@
+Automate NFS snapshot creation using Cron 
+Cron is a flexible and powerful utility that can reduce the burden of many tasks associated with system administration. When combined with shell scripts, you can automate tasks that are normally tedious or complicated.
+
+Snapshots can be triggered on NFS file shares in hourly, daily, weekly and monthly schedules 
+
+crontab is a special file that holds the schedule of jobs cron will run. This allows you to edit your user profile’s crontab without changing your privileges with sudo.
+
+You can edit your crontab with the following command:
+crontab -e
+
+tasks scheduled in a crontab are structured like the following:
+Minute  hour  day_of_month  month  day_of_week  command_to_run
+
+For Example 
+#if you want to run Snapshots every 15 mins , here is the command 
+*/15 * * * * az storage share snapshot --name <File share name> --account-name <Storage account name>
+
+#if you want to run Snapshots hourly , here is the command 
+* */1 * * * az storage share snapshot --name <File share name> --account-name <Storage account name>
+
+#if you want to run Snapshots daily at 9PM, here is the command 
+0 21 * * * az storage share snapshot --name <File share name> --account-name <Storage account name>
+
+#if you want to run Snapshots Weekly at 9PM, here is the command 
+0 21 * * 5 az storage share snapshot --name <File share name> --account-name <Storage account name>
+
+#if you want to run Snapshots  Monthly , last day of the month at 9PM, here is the command 
+0 21 30 1-12 * az storage share snapshot --name <File share name> --account-name <Storage account name>
+
