@@ -3948,7 +3948,9 @@ function Debug-AzStorageAccountEntraKerbAuth {
                                 $checks["CheckKerbRealmMapping"].Result = "Warning"
                                 $checks["CheckKerbRealmMapping"].Issue = "The ${StorageAccountName} has been mapped to 'KERBEROS.MICROSOFTONLINE.COM'"
                                 Write-Warning "CheckKerbRealmMapping - Warning"
-                                Write-Warning "To retrieve Kerberos tickets run the ksetup Windows command on the client(s): 'ksetup /delhosttorealmmap <hostname> <realmname>'. "
+                                Write-Warning "The account has a realm mapping to the Microsoft Entra Kerberos realm."
+                                Write-Warning "Hard-coding the realm mapping in registry keys is not necessary."
+                                Write-Warning "To remove this unnecessary mapping, run: 'ksetup /delhosttorealmmap $url $domainName'. "
                              }
                             } else {
                                 $failure = $true
