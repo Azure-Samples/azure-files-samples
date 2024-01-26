@@ -3770,7 +3770,6 @@ function Debug-AzStorageAccountEntraKerbAuth {
             "CheckAADConnectivity" = [CheckResult]::new("CheckAADConnectivity");
             "CheckEntraObject" = [CheckResult]::new("CheckEntraObject");
             "CheckRegKey" = [CheckResult]::new("CheckRegKey");
-            "CheckAADObject" = [CheckResult]::new("CheckAADObject");
             "CheckKerbRealmMapping" = [CheckResult]::new("CheckKerbRealmMapping");
         }
         #
@@ -3916,6 +3915,76 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 Write-Error $_
             }
         }
+        #
+        # Check if Kerberos Realm Mapping is configured
+        #
+        if (!$filterIsPresent -or $Filter -match "CheckKerbRealmMapping")
+        {
+            try {
+                $hostToRealm = Get-ChildItem Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Lsa\Kerberos\HostToRealm
+                if($hostToRealm -eq $null)
+                {
+                    $checks["CheckKerbRealmMapping"].Result = "Passed"
+                    Write-Verbose "CheckKerbRealmMapping - SUCCESS"
+                }
+                $failure = $false
+                foreach ($domain in $hostToRealm) 
+                {
+                    $properties = $domain | Get-ItemProperty
+                    $realmName = $properties.PSChildName
+                    $spnMappings = $($domain | Get-ItemProperty).SpnMappings
+                    foreach ($hostName in $spnMappings) {
+                        if ($hostName -eq "${StorageAccountName}.file.core.windows.net" -or
+                            $hostName -eq ".file.core.windows.net" -or
+                            $hostName -eq ".core.windows.net" -or
+                            $hostName -eq ".windows.net" -or
+                            $hostName -eq ".net") 
+                        {
+                        if ($realmName -eq "KERBEROS.MICROSOFTONLINE.COM") 
+                        {
+                        if (!$failure) {
+                            $checks["CheckKerbRealmMapping"].Result = "Warning"
+                            $checks["CheckKerbRealmMapping"].Issue = "The ${StorageAccountName} has been mapped to 'KERBEROS.MICROSOFTONLINE.COM'"
+                            Write-Warning "CheckKerbRealmMapping - Warning"
+                            Write-Warning "To retrieve Kerberos tickets run the ksetup Windows command on the client(s): 'ksetup /delhosttorealmmap <hostname> <realmname>'. "
+                        }
+                        } else {
+                            $failure = $true
+                            $checks["CheckKerbRealmMapping"].Result = "Failed"
+                            $checks["CheckKerbRealmMapping"].Issue = "The ${StorageAccountName} is mapped to ${realmName}. "
+                            Write-Error "CheckKerbRealmMapping - FAILED" 
+                            Write-Error "To retrieve Kerberos tickets run the ksetup Windows command on the client(s) : 'ksetup /delhosttoreakmmap <hostname> <realmname>'"
+                            }
+                        }
+                    }
+                }
+            } catch {
+                $checks["CheckKerbRealmMapping"].Result = "Failed"
+                $checks["CheckKerbRealmMapping"].Issue = $_
+                Write-Error "CheckKerbRealmMapping - FAILED"
+                Write-Error $_
+            }
+        }
+
+        if ($filterIsPresent -and $checksExecuted -eq 0)
+        {
+            $message = "Filter '$Filter' provided does not match any options. No checks were executed." `
+                + " Available filters are {$($checks.Keys -join ', ')}"
+            Write-Error -Message $message -ErrorAction Stop
+        }
+        else
+        {
+            Write-Host "Summary of checks:"
+            $checks.Values | Format-Table -Property Name,Result
+            
+            $issues = $checks.Values | Where-Object { $_.Result -ieq "Failed" }
+
+            if ($issues.Length -gt 0) {
+                Write-Host "Issues found:"
+                $issues | ForEach-Object { Write-Host -ForegroundColor Red "---- $($_.Name) ----`n$($_.Issue)" }
+            }
+        }
+
         #
         # Check if Kerberos Realm Mapping is configured
         #
