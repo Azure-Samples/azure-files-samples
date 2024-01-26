@@ -3957,7 +3957,9 @@ function Debug-AzStorageAccountEntraKerbAuth {
                                 $checks["CheckKerbRealmMapping"].Result = "Failed"
                                 $checks["CheckKerbRealmMapping"].Issue = "The ${StorageAccountName} is mapped to ${domainName}. "
                                 Write-Error "CheckKerbRealmMapping - FAILED" 
-                                Write-Error "To retrieve Kerberos tickets run the ksetup Windows command on the client(s) : 'ksetup /delhosttoreakmmap <hostname> <realmname>'"
+                                Write-Error "The storage account is configured for Microsoft Entra Kerberos, but there is a realm mapping to another Kerberos realm."
+                                Write-Error "To retrieve Kerberos tickets, run: 'ksetup /delhosttorealmmap $url $domainName'"
+
                                 }
                             }
                         }
