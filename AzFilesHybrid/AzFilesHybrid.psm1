@@ -3942,12 +3942,12 @@ function Debug-AzStorageAccountEntraKerbAuth {
                         {
                         if ($realmName -eq "KERBEROS.MICROSOFTONLINE.COM") 
                         {
-                        if (!$failure) {
-                            $checks["CheckKerbRealmMapping"].Result = "Warning"
-                            $checks["CheckKerbRealmMapping"].Issue = "The ${StorageAccountName} has been mapped to 'KERBEROS.MICROSOFTONLINE.COM'"
-                            Write-Warning "CheckKerbRealmMapping - Warning"
-                            Write-Warning "To retrieve Kerberos tickets run the ksetup Windows command on the client(s): 'ksetup /delhosttorealmmap <hostname> <realmname>'. "
-                        }
+                            if (!$failure) {
+                                $checks["CheckKerbRealmMapping"].Result = "Warning"
+                                $checks["CheckKerbRealmMapping"].Issue = "The ${StorageAccountName} has been mapped to 'KERBEROS.MICROSOFTONLINE.COM'"
+                                Write-Warning "CheckKerbRealmMapping - Warning"
+                                Write-Warning "To retrieve Kerberos tickets run the ksetup Windows command on the client(s): 'ksetup /delhosttorealmmap <hostname> <realmname>'. "
+                            }
                         } else {
                             $failure = $true
                             $checks["CheckKerbRealmMapping"].Result = "Failed"
@@ -3984,82 +3984,6 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 $issues | ForEach-Object { Write-Host -ForegroundColor Red "---- $($_.Name) ----`n$($_.Issue)" }
             }
         }
-
-        #
-        # Check if Kerberos Realm Mapping is configured
-        #
-        if (!$filterIsPresent -or $Filter -match "CheckKerbRealmMapping")
-        {
-            try {
-                $hostToRealm = Get-ChildItem Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Lsa\Kerberos\HostToRealm
-                if($hostToRealm -eq $null)
-                {
-                    $checks["CheckKerbRealmMapping"].Result = "Passed"
-                    Write-Verbose "CheckKerbRealmMapping - SUCCESS"
-                }
-                $failure = $false
-                foreach ($domain in $hostToRealm) 
-                {
-                    $properties = $domain | Get-ItemProperty
-                    $domainName = $properties.PSChildName
-                    $spnMappings = $($domain | Get-ItemProperty).SpnMappings
-                        foreach ($url in $spnMappings) {
-                            if ($url -eq "${StorageAccountName}.file.core.windows.net" -or
-                                $url -eq ".file.core.windows.net" -or
-                                $url -eq ".core.windows.net" -or
-                                $url -eq ".windows.net" -or
-                                $url -eq ".net") 
-                            {
-                            if ($domainName -eq "KERBEROS.MICROSOFTONLINE.COM") 
-                            {
-                                Write-Warning "The ${StorageAccountName} has been mapped to 'KERBEROS.MICROSOFTONLINE.COM'. To retrieve Kerberos tickets, run the ksetup Windows command on the client(s): 'ksetup /delhosttorealmmap <hostname> <realmname>' ."
-                            if (!$failure) {
-                                $checks["CheckKerbRealmMapping"].Result = "Warning"
-                                $checks["CheckKerbRealmMapping"].Issue = "The ${StorageAccountName} has been mapped to 'KERBEROS.MICROSOFTONLINE.COM'"
-                                Write-Warning "CheckKerbRealmMapping - Warning"
-                                Write-Warning "The account has a realm mapping to the Microsoft Entra Kerberos realm."
-                                Write-Warning "Hard-coding the realm mapping in registry keys is not necessary."
-                                Write-Warning "To remove this unnecessary mapping, run: 'ksetup /delhosttorealmmap $url $domainName'. "
-                             }
-                            } else {
-                                $failure = $true
-                                $checks["CheckKerbRealmMapping"].Result = "Failed"
-                                $checks["CheckKerbRealmMapping"].Issue = "The ${StorageAccountName} is mapped to ${domainName}. "
-                                Write-Error "CheckKerbRealmMapping - FAILED" 
-                                Write-Error "The storage account is configured for Microsoft Entra Kerberos, but there is a realm mapping to another Kerberos realm."
-                                Write-Error "To retrieve Kerberos tickets, run: 'ksetup /delhosttorealmmap $url $domainName'"
-
-                                }
-                            }
-                        }
-                 }
-                } catch {
-                $checks["CheckKerbRealmMapping"].Result = "Failed"
-                $checks["CheckKerbRealmMapping"].Issue = $_
-                Write-Error "CheckKerbRealmMapping - FAILED"
-                Write-Error $_
-                }
-        }
-
-        if ($filterIsPresent -and $checksExecuted -eq 0)
-        {
-            $message = "Filter '$Filter' provided does not match any options. No checks were executed." `
-                + " Available filters are {$($checks.Keys -join ', ')}"
-            Write-Error -Message $message -ErrorAction Stop
-        }
-        else
-        {
-            Write-Host "Summary of checks:"
-            $checks.Values | Format-Table -Property Name,Result
-            
-            $issues = $checks.Values | Where-Object { $_.Result -ieq "Failed" }
-
-            if ($issues.Length -gt 0) {
-                Write-Host "Issues found:"
-                $issues | ForEach-Object { Write-Host -ForegroundColor Red "---- $($_.Name) ----`n$($_.Issue)" }
-            }
-        }
-
 
         Write-Host "This cmdlet does not support all the checks for Microsoft Entra Kerberos authentication yet, You can run Debug-AzStorageAccountAdDsAuth to run the AD DS authentication checks instead, but note that while some checks may provide useful information, not all AD DS checks are expected to pass for a storage account with Microsoft Entra Kerberos authentication."
     }
