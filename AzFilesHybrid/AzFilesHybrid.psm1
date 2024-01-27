@@ -3944,14 +3944,14 @@ function Debug-AzStorageAccountEntraKerbAuth {
                         {
                             if (!$failure) {
                                 $checks["CheckKerbRealmMapping"].Result = "Warning"
-                                $checks["CheckKerbRealmMapping"].Issue = "The ${StorageAccountName} has been mapped to 'KERBEROS.MICROSOFTONLINE.COM'"
+                                $checks["CheckKerbRealmMapping"].Issue = "The Storage account ${StorageAccountName} has been mapped to ${realmName}"
                                 Write-Warning "CheckKerbRealmMapping - Warning"
-                                Write-Warning "To retrieve Kerberos tickets run the ksetup Windows command on the client(s): 'ksetup /delhosttorealmmap <hostname> <realmname>'. "
+                                Write-Warning "To retrieve Kerberos tickets run the ksetup Windows command on the client(s): 'ksetup /delhosttorealmmap ${hostName} ${realmName}'. "
                             }
                         } else {
                             $failure = $true
                             $checks["CheckKerbRealmMapping"].Result = "Failed"
-                            $checks["CheckKerbRealmMapping"].Issue = "The ${StorageAccountName} is mapped to ${realmName}. "
+                            $checks["CheckKerbRealmMapping"].Issue = "The storage account '${StorageAccountName}' is mapped to '${realmName}'. "
                             Write-Error "CheckKerbRealmMapping - FAILED" 
                             Write-Error "To retrieve Kerberos tickets run the ksetup Windows command on the client(s) : 'ksetup /delhosttoreakmmap <hostname> <realmname>'"
                             }
