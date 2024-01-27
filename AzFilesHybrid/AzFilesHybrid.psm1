@@ -3953,7 +3953,8 @@ function Debug-AzStorageAccountEntraKerbAuth {
                             $checks["CheckKerbRealmMapping"].Result = "Failed"
                             $checks["CheckKerbRealmMapping"].Issue = "The ${StorageAccountName} is mapped to ${realmName}. "
                             Write-Error "CheckKerbRealmMapping - FAILED" 
-                            Write-Error "To retrieve Kerberos tickets run the ksetup Windows command on the client(s) : 'ksetup /delhosttoreakmmap <hostname> <realmname>'"
+                            Write-Error "To retrieve Kerberos tickets run the ksetup Windows command on the client(s) : 'ksetup /delhosttoreakmmap $hostName $realmName'"
+
                             }
                         }
                     }
