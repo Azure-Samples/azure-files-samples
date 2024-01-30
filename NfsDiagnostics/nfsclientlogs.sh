@@ -15,7 +15,7 @@ then
 fi
 
 # trace-nfsbpf
-NFSBPF_ABSOLUTE_PATH="$(cd "$(dirname "trace-nfsbpf")" && pwd)/$(basename "trace-nfsbpf")"
+NFSBPF_ABSOLUTE_PATH="$(realpath "trace-nfsbpf")"
 invoke_trace_nfsbpf="nohup $NFSBPF_ABSOLUTE_PATH"
 
 # Check if trace-cmd is installed.
