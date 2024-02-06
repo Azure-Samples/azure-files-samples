@@ -110,7 +110,8 @@ start_trace() {
     echo 7 > /proc/fs/cifs/cifsFYI
     CIFS_FYI_ENABLED=1
   fi
-  trace-cmd start -e cifs
+  echo 1023 > /sys/kernel/tracing/saved_cmdlines_size
+  trace-cmd start -e smb3_open_* -e smb3_close_* -e smb3_delete_* -e smb3_rename_*
 }
 
 dump_os_information() {
@@ -149,6 +150,8 @@ dump_debug_stats() {
   mount -t cifs >> cifs_diag.txt
   echo -e "\n======= CIFS TCP Connections =======" >> cifs_diag.txt
   ss -t | grep microsoft >> cifs_diag.txt
+  echo -e "\n======= Capture process information =======" >> cifs_diag.txt
+  ps -aux >> cifs_diag.txt
 }
 
 
