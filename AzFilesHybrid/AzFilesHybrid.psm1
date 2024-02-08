@@ -3938,22 +3938,24 @@ function Debug-AzStorageAccountEntraKerbAuth {
                             $hostName -eq ".file.core.windows.net" -or
                             $hostName -eq ".core.windows.net" -or
                             $hostName -eq ".windows.net" -or
-                            $hostName -eq ".net") 
+                            $hostName -eq ".net" -or
+                            $hostName -eq "${StorageAccountName}.privatelink.file.core.windows.net" -or
+                            $hostName -eq ".privatelink.file.core.windows.net")
                         {
-                        if ($realmName -eq "KERBEROS.MICROSOFTONLINE.COM") 
-                        {
-                            if (!$failure) {
-                                $checks["CheckKerbRealmMapping"].Result = "Warning"
-                                $checks["CheckKerbRealmMapping"].Issue = "The Storage account ${StorageAccountName} has been mapped to ${realmName}"
-                                Write-Warning "CheckKerbRealmMapping - Warning"
-                                Write-Warning "To retrieve Kerberos tickets run the ksetup Windows command on the client(s): 'ksetup /delhosttorealmmap ${hostName} ${realmName}'. "
-                            }
-                        } else {
-                            $failure = $true
-                            $checks["CheckKerbRealmMapping"].Result = "Failed"
-                            $checks["CheckKerbRealmMapping"].Issue = "The storage account '${StorageAccountName}' is mapped to '${realmName}'. "
-                            Write-Error "CheckKerbRealmMapping - FAILED" 
-                            Write-Error "To retrieve Kerberos tickets run the ksetup Windows command on the client(s) : 'ksetup /delhosttoreakmmap $hostName $realmName'"
+                            if ($realmName -eq "KERBEROS.MICROSOFTONLINE.COM") 
+                            {
+                                if (!$failure) {
+                                    $checks["CheckKerbRealmMapping"].Result = "Warning"
+                                    $checks["CheckKerbRealmMapping"].Issue = "The Storage account ${StorageAccountName} has been mapped to ${realmName}"
+                                    Write-Warning "CheckKerbRealmMapping - Warning"
+                                    Write-Warning "To retrieve Kerberos tickets run the ksetup Windows command on the client(s): 'ksetup /delhosttorealmmap ${hostName} ${realmName}'. "
+                                }
+                            } else {
+                                $failure = $true
+                                $checks["CheckKerbRealmMapping"].Result = "Failed"
+                                $checks["CheckKerbRealmMapping"].Issue = "The storage account '${StorageAccountName}' is mapped to '${realmName}'. "
+                                Write-Error "CheckKerbRealmMapping - FAILED" 
+                                Write-Error "To retrieve Kerberos tickets run the ksetup Windows command on the client(s) : 'ksetup /delhosttoreakmmap $hostName $realmName'"
 
                             }
                         }
@@ -3966,7 +3968,22 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 Write-Error $_
             }
         }
+        SummaryOfChecks -filterIsPresent $filterIsPresent -checksExecuted $checksExecuted
+        
+        }
+}
 
+function SummaryOfChecks {
+    param (
+        [Parameter(Mandatory=$True, Position=0, HelpMessage="Filter")]
+        [string]$filterIsPresent,
+
+        [Parameter(Mandatory=$True, Position=1, HelpMessage="CheckExecuted")]
+        [string]$checksExecuted
+    )
+
+    process
+    {
         if ($filterIsPresent -and $checksExecuted -eq 0)
         {
             $message = "Filter '$Filter' provided does not match any options. No checks were executed." `
@@ -3987,10 +4004,10 @@ function Debug-AzStorageAccountEntraKerbAuth {
         }
 
         Write-Host "This cmdlet does not support all the checks for Microsoft Entra Kerberos authentication yet, You can run Debug-AzStorageAccountAdDsAuth to run the AD DS authentication checks instead, but note that while some checks may provide useful information, not all AD DS checks are expected to pass for a storage account with Microsoft Entra Kerberos authentication."
+    
     }
+    
 }
-
-
 function Debug-AzStorageAccountADDSAuth {
     <#
     .SYNOPSIS
