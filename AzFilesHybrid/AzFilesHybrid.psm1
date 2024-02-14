@@ -3771,6 +3771,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
             "CheckEntraObject" = [CheckResult]::new("CheckEntraObject");
             "CheckRegKey" = [CheckResult]::new("CheckRegKey");
             "CheckKerbRealmMapping" = [CheckResult]::new("CheckKerbRealmMapping");
+            "CheckAdminConsent" = [CheckResult]::new("CheckAdminConsent")  
         }
         #
         # Port 445 check 
@@ -3968,8 +3969,86 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 Write-Error $_
             }
         }
+        #
+        # Check if admin consent has been granted onto the SP
+        #
+        if (!$filterIsPresent -or $Filter -match "CheckAdminConsent")
+        {
+            $checksExecuted += 1;
+            Debug-EntraKerbAdminConsent -StorageAccountName $StorageAccountName -checks $checks["CheckAdminConsent"]
+        }
+
         SummaryOfChecks -filterIsPresent $filterIsPresent -checksExecuted $checksExecuted
-        
+    }
+}
+
+function Debug-EntraKerbAdminConsent {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory=$True, Position=0, HelpMessage="Storage account name")]
+        [string]$StorageAccountName,
+        [Parameter(Mandatory=$True, Position=1, HelpMessage="Check result object")]
+        [CheckResult]$checkResult
+    )
+
+    process {
+        try {
+            Write-Verbose "CheckAdminConsent - START"
+            $Context = Get-AzContext
+            $TenantId = $Context.Tenant
+            
+            Import-Module Microsoft.Graph.Applications
+            Import-Module Microsoft.Graph.Identity.SignIns
+            Connect-MgGraph -Environment Global -Scopes "DelegatedPermissionGrant.Read.All" -TenantId $TenantId			
+            $MsGraphSp = Get-MgServicePrincipalByAppId -AppId 00000003-0000-0000-c000-000000000000 
+            
+            $spn = "api://$TenantId/CIFS/$StorageAccountName.file.core.windows.net')"
+            $ServicePrincipal = Get-MgServicePrincipal -Filter "servicePrincipalNames/any (name:name eq '$spn')" -ConsistencyLevel eventual
+            if($ServicePrincipal -eq $null -or $ServicePrincipal.Id -eq $null)
+            {
+                $checkResult.Result = "Failed"
+                $checkResult.Issue = "Could not find the application with SPN '$spn'. "
+
+                Write-Error "CheckAdminConsent - FAILED"
+                Write-Error "Could not find the application with SPN '$spn'"
+                return
+            }
+            
+            $Consent = Get-MgOauth2PermissionGrant -Filter "ClientId eq '$($ServicePrincipal.Id)' and ResourceId eq '$($MSGraphSp.Id)' and consentType eq 'AllPrincipals'" 
+            if($Consent -eq $null -or $Consent.Scope -eq $null)
+            {
+                $checkResult.Result = "Failed"
+                $checkResult.Issue = "Admin Consent is not granted"
+                Write-Error "CheckAdminConsent - FAILED"
+                Write-Error "Please grant admin consent using 'https://learn.microsoft.com/en-us/azure/storage/files/storage-files-identity-auth-hybrid-identities-enable?tabs=azure-portal#grant-admin-consent-to-the-new-service-principal'"
+                return
+            }
+
+            $permissions = New-Object System.Collections.Generic.HashSet[string] 
+            foreach ($permission in $Consent.Scope.Split(" ")) {
+                $permissions.Add($permission)
+            }
+
+            if ($permissions.Contains("openid") -and 
+                $permissions.Contains("profile") -and 
+                $permissions.Contains("User.Read")) 
+            {
+                $checkResult.Result = "Passed"
+                Write-Verbose " - SUCCESS"
+            } 
+            else 
+            {
+                $checkResult.Result = "Failed"
+                $checkResult.Issue = "Admin Consent is not granted"
+                Write-Error "CheckAdminConsent - FAILED"
+                Write-Error "Please grant admin consent using 'https://learn.microsoft.com/en-us/azure/storage/files/storage-files-identity-auth-hybrid-identities-enable?tabs=azure-portal#grant-admin-consent-to-the-new-service-principal'"
+            }                          
+        } catch {
+            $checkResult.Result = "Failed"
+            $checkResult.Issue = $_
+            Write-Error "CheckAdminConsent - FAILED"
+            Write-Error $_
+        }
     }
 }
 
