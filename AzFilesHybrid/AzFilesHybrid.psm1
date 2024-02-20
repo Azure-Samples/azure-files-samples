@@ -3705,6 +3705,7 @@ function Debug-AzStorageAccountAuth {
 
         if ($directoryServiceOptions -eq "ADDS")
         {
+            Write-Verbose "Running Debug cmdlet for AD DS joined account: "
             Debug-AzStorageAccountAdDsAuth `
                 -StorageAccountName $StorageAccountName `
                 -ResourceGroupName $ResourceGroupName `
@@ -3716,6 +3717,7 @@ function Debug-AzStorageAccountAuth {
         }
         elseif ($directoryServiceOptions -eq "AADKERB")
         {
+            Write-Verbose "Running Debug cmdlet for Microsoft Entra kerberos(AADKERB) joined account:"
             Debug-AzStorageAccountEntraKerbAuth`
                 -StorageAccountName $StorageAccountName `
                 -ResourceGroupName $ResourceGroupName `
@@ -3763,6 +3765,10 @@ function Debug-AzStorageAccountEntraKerbAuth {
 
     process
     {
+        if($UserName -ne $null -or $ObjectId -ne $null -or $FilePath -ne $null)
+        {
+            Write-Error "The debug cmdlet for Microsoft Entra Kerberos (AADKERB) accounts does not yet implement support for this parameter. It will be ignored."
+        }
         $checksExecuted = 0;
         $filterIsPresent = ![string]::IsNullOrEmpty($Filter);
         $checks = @{
