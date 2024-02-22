@@ -3770,6 +3770,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
             "CheckAADConnectivity" = [CheckResult]::new("CheckAADConnectivity");
             "CheckEntraObject" = [CheckResult]::new("CheckEntraObject");
             "CheckRegKey" = [CheckResult]::new("CheckRegKey");
+            "CheckKerbRealmMapping" = [CheckResult]::new("CheckKerbRealmMapping");
         }
         #
         # Port 445 check 
@@ -3914,12 +3915,99 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 Write-Error $_
             }
         }
+        #
+        # Check if Kerberos Realm Mapping is configured
+        #
+        if (!$filterIsPresent -or $Filter -match "CheckKerbRealmMapping")
+        {
+            try {
+                $hostToRealm = Get-ChildItem Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Lsa\Kerberos\HostToRealm
+                if($hostToRealm -eq $null)
+                {
+                    $checks["CheckKerbRealmMapping"].Result = "Passed"
+                    Write-Verbose "CheckKerbRealmMapping - SUCCESS"
+                }
+                $failure = $false
+                foreach ($domain in $hostToRealm) 
+                {
+                    $properties = $domain | Get-ItemProperty
+                    $realmName = $properties.PSChildName
+                    $spnMappings = $($domain | Get-ItemProperty).SpnMappings
+                    foreach ($hostName in $spnMappings) {
+                        if ($hostName -eq "${StorageAccountName}.file.core.windows.net" -or
+                            $hostName -eq ".file.core.windows.net" -or
+                            $hostName -eq ".core.windows.net" -or
+                            $hostName -eq ".windows.net" -or
+                            $hostName -eq ".net" -or
+                            $hostName -eq "${StorageAccountName}.privatelink.file.core.windows.net" -or
+                            $hostName -eq ".privatelink.file.core.windows.net")
+                        {
+                            if ($realmName -eq "KERBEROS.MICROSOFTONLINE.COM") 
+                            {
+                                if (!$failure) {
+                                    $checks["CheckKerbRealmMapping"].Result = "Warning"
+                                    $checks["CheckKerbRealmMapping"].Issue = "The Storage account ${StorageAccountName} has been mapped to ${realmName}"
+                                    Write-Warning "CheckKerbRealmMapping - Warning"
+                                    Write-Warning "To retrieve Kerberos tickets run the ksetup Windows command on the client(s): 'ksetup /delhosttorealmmap ${hostName} ${realmName}'. "
+                                }
+                            } else {
+                                $failure = $true
+                                $checks["CheckKerbRealmMapping"].Result = "Failed"
+                                $checks["CheckKerbRealmMapping"].Issue = "The storage account '${StorageAccountName}' is mapped to '${realmName}'. "
+                                Write-Error "CheckKerbRealmMapping - FAILED" 
+                                Write-Error "To retrieve Kerberos tickets run the ksetup Windows command on the client(s) : 'ksetup /delhosttoreakmmap $hostName $realmName'"
 
-        Write-Host "This cmdlet does not support all the checks for Microsoft Entra Kerberos authentication yet, You can run Debug-AzStorageAccountAdDsAuth to run the AD DS authentication checks instead, but note that while some checks may provide useful information, not all AD DS checks are expected to pass for a storage account with Microsoft Entra Kerberos authentication."
+                            }
+                        }
+                    }
+                }
+            } catch {
+                $checks["CheckKerbRealmMapping"].Result = "Failed"
+                $checks["CheckKerbRealmMapping"].Issue = $_
+                Write-Error "CheckKerbRealmMapping - FAILED"
+                Write-Error $_
+            }
+        }
+        SummaryOfChecks -filterIsPresent $filterIsPresent -checksExecuted $checksExecuted
+        
     }
 }
 
+function SummaryOfChecks {
+    param (
+        [Parameter(Mandatory=$True, Position=0, HelpMessage="Filter")]
+        [string]$filterIsPresent,
 
+        [Parameter(Mandatory=$True, Position=1, HelpMessage="CheckExecuted")]
+        [string]$checksExecuted
+    )
+
+    process
+    {
+        if ($filterIsPresent -and $checksExecuted -eq 0)
+        {
+            $message = "Filter '$Filter' provided does not match any options. No checks were executed." `
+                + " Available filters are {$($checks.Keys -join ', ')}"
+            Write-Error -Message $message -ErrorAction Stop
+        }
+        else
+        {
+            Write-Host "Summary of checks:"
+            $checks.Values | Format-Table -Property Name,Result
+            
+            $issues = $checks.Values | Where-Object { $_.Result -ieq "Failed" }
+
+            if ($issues.Length -gt 0) {
+                Write-Host "Issues found:"
+                $issues | ForEach-Object { Write-Host -ForegroundColor Red "---- $($_.Name) ----`n$($_.Issue)" }
+            }
+        }
+
+        Write-Host "This cmdlet does not support all the checks for Microsoft Entra Kerberos authentication yet, You can run Debug-AzStorageAccountAdDsAuth to run the AD DS authentication checks instead, but note that while some checks may provide useful information, not all AD DS checks are expected to pass for a storage account with Microsoft Entra Kerberos authentication."
+    
+    }
+    
+}
 function Debug-AzStorageAccountADDSAuth {
     <#
     .SYNOPSIS
