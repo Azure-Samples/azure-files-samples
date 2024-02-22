@@ -3970,7 +3970,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
         }
         SummaryOfChecks -filterIsPresent $filterIsPresent -checksExecuted $checksExecuted
         
-        }
+    }
 }
 
 function SummaryOfChecks {
