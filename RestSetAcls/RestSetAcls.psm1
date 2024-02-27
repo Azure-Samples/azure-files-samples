@@ -1,14 +1,14 @@
 function Ask([Parameter(Mandatory=$true)][string] $question)
 {
     while ($true) {
-        $yn = Read-Host "${indent}${question} [Y/n]"
+        $yn = Read-Host "${question} [Y/n]"
         $yn = $yn.Trim().ToLower()
         if ($yn -eq 'n') {
             return $false
         } elseif ($yn -eq '' -or $yn -eq 'y') {
             return $true
         }
-        Write-Host "${indent}Invalid answer '$yn'. Answer with either 'y' or 'n'" -ForegroundColor Red
+        Write-Host "Invalid answer '$yn'. Answer with either 'y' or 'n'" -ForegroundColor Red
     }
 }
 
