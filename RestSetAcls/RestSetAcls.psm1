@@ -1,3 +1,18 @@
+function Get-SpecialCharactersPrintable {
+    # Windows Terminal supports it
+    if ($env:WT_SESSION) {
+        return $true
+    }
+
+    # PowerShell 6+ supports it
+    if ($PSVersionTable.PSVersion.Major -ge 6) {
+        return $true
+    }
+
+    # Older versions don't
+    return $false
+}
+
 function Get-AzureFilesRecursive {
     param (
         [Parameter(Mandatory=$true, ValueFromPipeline=$true, ValueFromPipelineByPropertyName=$true)]
@@ -70,11 +85,16 @@ function Set-AzureFilesAclRecursive {
         [string]$FilePath,
 
         [Parameter(Mandatory=$true)]
-        [string]$SddlPermission,
-
-        [Parameter(Mandatory=$false)]
-        [switch]$Recursive
+        [string]$SddlPermission
     )
+
+    # Backwards compat with older PowerShell versions
+    $specialChars = Get-SpecialCharactersPrintable
+    $checkmark = [System.Char]::ConvertFromUtf32([System.Convert]::ToInt32("2713", 16))
+    $cross = [System.Char]::ConvertFromUtf32([System.Convert]::ToInt32("2717", 16))
+    $doneStatus = if ($specialChars) { "($checkmark) Done: " } else { "Done: " }
+    $partialStatus = if ($specialChars) { "($cross) Partial: " } else { "Partial: " }
+    $failedStatus = if ($specialChars) { "($cross) Failed: " } else { "Failed: " }
 
     Write-Host "Step 1: Finding all files" -ForegroundColor White
     $startTime = Get-Date
@@ -83,7 +103,7 @@ function Set-AzureFilesAclRecursive {
     try {
         $directory = Get-AzStorageFile -Context $Context -ShareName $FileShareName -Path $FilePath -ErrorAction Stop
     } catch {
-        Write-Host "(✗) Failed: " -ForegroundColor Red -NoNewline
+        Write-Host $failedStatus -ForegroundColor Red -NoNewline
         Write-Host "Failed to read root directory"
         Write-Host
         Write-Host $_.Exception.Message -ForegroundColor Red
@@ -104,14 +124,13 @@ function Set-AzureFilesAclRecursive {
 
     # Print success
     $totalTime = [math]::Round(((Get-Date) - $startTime).TotalSeconds, 2)
-    Write-Host "`r(✓) Done: " -ForegroundColor Green -NoNewline
+    Write-Host "`r$doneStatus" -ForegroundColor Green -NoNewline
     Write-Host "Found " -NoNewline
     Write-Host $allFiles.Count -ForegroundColor Blue -NoNewline
     Write-Host " files and folders in " -NoNewline
     Write-Host $totalTime -ForegroundColor Blue -NoNewline
     Write-Host " seconds"
     $ProgressPreference = "Continue"
-    
     Write-Host
 
     Write-Host "Step 2: Setting ACLs" -ForegroundColor White
@@ -150,7 +169,7 @@ function Set-AzureFilesAclRecursive {
     $totalTime = [math]::Round(((Get-Date) - $startTime).TotalSeconds, 2)
     if ($errors.Count -eq $allFiles.Count) {
         # Setting ACLs failed for all files; report it.
-        Write-Host "(✗) Failed: " -ForegroundColor Red -NoNewline
+        Write-Host $failedStatus -ForegroundColor Red -NoNewline
         Write-Host "Failed to set " -NoNewline
         Write-Host $errors.Count -ForegroundColor Red -NoNewline
         Write-Host " ACLs. Total time " -NoNewline
@@ -162,7 +181,7 @@ function Set-AzureFilesAclRecursive {
         # to know which files failed. We print the first 10, and put the rest in a JSON file.
         $maxErrorsToShow = 10
         
-        Write-Host "(✗) Partial: " -ForegroundColor Yellow -NoNewline
+        Write-Host $partialStatus -ForegroundColor Yellow -NoNewline
         Write-Host "Set " -NoNewline
         Write-Host $($allFiles.Count - $errors.Count) -ForegroundColor Blue -NoNewline
         Write-Host " ACLs successfully, failed to set " -NoNewline
@@ -193,7 +212,7 @@ function Set-AzureFilesAclRecursive {
         
         Write-Host
     } else {
-        Write-Host "(✓) Done: " -ForegroundColor Green -NoNewline
+        Write-Host $doneStatus -ForegroundColor Green -NoNewline
         Write-Host "Set " -NoNewline
         Write-Host $allFiles.Count -ForegroundColor Blue -NoNewline
         Write-Host " ACLs in " -NoNewline

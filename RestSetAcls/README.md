@@ -6,7 +6,7 @@ RestSetAcls.psm1 is a PowerShell module that provides functions to set Access Co
 
 ## Prerequisites
 
-- PowerShell 7 or later
+- PowerShell 5.1 or later
 - `Az.Storage` module v4.1.1 or later
 - Azure Storage account
 - Azure Storage account key
