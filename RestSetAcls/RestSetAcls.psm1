@@ -12,12 +12,10 @@ function Get-AzureFilesRecursive {
 
     foreach ($file in $directory) {
         $fullPath = "${path}$($file.Name)"
-        $isDirectory = $false
 
         $file.Context = $context
 
         if ($file.GetType().Name -eq "AzureStorageFileDirectory") {
-            $isDirectory = $true
             $fullPath += "/"
 
             # Recurse on subdirectory
@@ -28,7 +26,6 @@ function Get-AzureFilesRecursive {
         }
 
         Write-Output @{
-            IsDirectory = $isDirectory
             FullPath = $fullPath
             File = $file   
         }
