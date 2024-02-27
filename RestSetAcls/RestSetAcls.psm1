@@ -75,7 +75,7 @@ function Set-AzureFilesAcl {
         $directory.ShareDirectoryClient.SetHttpHeaders(
             $null, # SmbProperties
             $SddlPermission # filePermission
-        )
+        ) | Out-Null
     } else {
         $file = [Microsoft.WindowsAzure.Commands.Common.Storage.ResourceModel.AzureStorageFile]$File
         $file.ShareFileClient.SetHttpHeaders(
@@ -83,7 +83,7 @@ function Set-AzureFilesAcl {
             $null, # httpHeaders
             $null, # smbProperties
             $SddlPermission # filePermission
-        )
+        )  | Out-Null
     }
 }
 
