@@ -19,7 +19,13 @@ RestSetAcls.psm1 is a PowerShell module that provides functions to set Access Co
 ## Usage
 
 1. Open a PowerShell session.
-2. Call `Set-AzureFilesAclRecursive` as follows:
+1. Determine the SDDL string for the desired permissions. If you have a file or folder that already has the desired permissions, you can use the following PowerShell command to get its SDDL string:
+
+   ```powershell
+   $sddl = (Get-Acl -Path "<path-to-file-or-folder>").Sddl
+   ```
+
+1. Call `Set-AzureFilesAclRecursive` as follows:
 
    ```powershell  
    $AccountName = "<storage-account-name>"
