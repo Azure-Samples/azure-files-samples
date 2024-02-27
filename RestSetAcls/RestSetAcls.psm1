@@ -79,24 +79,47 @@ function Set-AzureFilesAclRecursive {
         [switch]$Recursive
     )
 
-    $directory = Get-AzStorageFile -Context $Context -ShareName $FileShareName -Path $FilePath
+    Write-Host "Step 1: Finding all files" -ForegroundColor White
+    $startTime = Get-Date
+
+    # Get root directory
+    try {
+        $directory = Get-AzStorageFile -Context $Context -ShareName $FileShareName -Path $FilePath -ErrorAction Stop
+    } catch {
+        Write-Host "(✗) Failed: " -ForegroundColor Red -NoNewline
+        Write-Host "Failed to read root directory"
+        Write-Host
+        Write-Host $_.Exception.Message -ForegroundColor Red
+        return
+    }
     
-    Write-Host "Step 1: Finding all files" -ForegroundColor Blue
+    # Recursively find all files under the root directory
     $ProgressPreference = "SilentlyContinue"
     $i = 0
     $allFiles = Get-AzureFilesRecursive -Context $context -Directory $directory | ForEach-Object {
         $i++
         Write-Debug $_
         Write-Host "`rFound " -ForegroundColor DarkGray -NoNewline
-        Write-Host $i -ForegroundColor Yellow -NoNewline
+        Write-Host $i -ForegroundColor Blue -NoNewline
         Write-Host " files and folders" -ForegroundColor DarkGray -NoNewline
         $_
     }
-    Write-Host "`n"
-    $ProgressPreference = "Continue"
 
-    Write-Host "Step 2: Setting ACLs" -ForegroundColor Blue
+    # Print success
+    $totalTime = [math]::Round(((Get-Date) - $startTime).TotalSeconds, 2)
+    Write-Host "`r(✓) Done: " -ForegroundColor Green -NoNewline
+    Write-Host "Found " -NoNewline
+    Write-Host $allFiles.Count -ForegroundColor Blue -NoNewline
+    Write-Host " files and folders in " -NoNewline
+    Write-Host $totalTime -ForegroundColor Blue -NoNewline
+    Write-Host " seconds"
+    $ProgressPreference = "Continue"
+    
+    Write-Host
+
+    Write-Host "Step 2: Setting ACLs" -ForegroundColor White
     $startTime = Get-Date
+    $errors = @{}
     for ($i = 0; $i -lt $allFiles.Count; $i++) {
         $file = $allFiles[$i]
         $fileFullPath = $file.FullPath
@@ -114,15 +137,70 @@ function Set-AzureFilesAclRecursive {
         # Print progress bar
         Write-Progress -Activity "Setting ACLs" -Status "${roundedPercentComplete}% - setting ACL for $fileFullPath" `
             -PercentComplete $percentComplete `
-            -SecondsRemaining $secondsRemaining
+            -SecondsRemaining $secondsRemaining            
 
         # Set the ACL
-        # Write-Host "Setting ACL for $fileFullPath" -ForegroundColor DarkGray
-        Set-AzureFilesAcl -File $file.File -SddlPermission $SddlPermission
-        # Start-Sleep -Milliseconds 500
+        try {
+            Set-AzureFilesAcl -File $file.File -SddlPermission $SddlPermission
+        } catch {
+            $errors[$fileFullPath] = $_.Exception.Message
+        }
     }
+    
+    # Close the progress bar
     Write-Progress -Activity "Setting ACLs" -Status "Done" -Completed
 
-    Write-Host "Done" -ForegroundColor Green
-    Write-Host "Total time: $([math]::Round(((Get-Date) - $startTime).TotalSeconds, 2)) seconds" -ForegroundColor DarkGray
+    $totalTime = [math]::Round(((Get-Date) - $startTime).TotalSeconds, 2)
+    if ($errors.Count -eq $allFiles.Count) {
+        # Setting ACLs failed for all files; report it.
+        Write-Host "(✗) Failed: " -ForegroundColor Red -NoNewline
+        Write-Host "Failed to set " -NoNewline
+        Write-Host $errors.Count -ForegroundColor Red -NoNewline
+        Write-Host " ACLs. Total time " -NoNewline
+        Write-Host $totalTime -ForegroundColor Blue -NoNewline
+        Write-Host " seconds"
+    }
+    elseif ($errors.Count -gt 0) {
+        # Setting ACLs failed for some, but not all files. In such cases, it may be important
+        # to know which files failed. We print the first 10, and put the rest in a JSON file.
+        $maxErrorsToShow = 10
+        
+        Write-Host "(✗) Partial: " -ForegroundColor Yellow -NoNewline
+        Write-Host "Set " -NoNewline
+        Write-Host $($allFiles.Count - $errors.Count) -ForegroundColor Blue -NoNewline
+        Write-Host " ACLs successfully, failed to set " -NoNewline
+        Write-Host $errors.Count -ForegroundColor Blue -NoNewline
+        Write-Host " ACLs. Total time " -NoNewline
+        Write-Host $totalTime -ForegroundColor Blue -NoNewline
+        Write-Host " seconds. Errors:"
+        Write-Host
+        
+        # Print first $maxErrorsToShow errors
+        $errors.GetEnumerator() | Select-Object -First $maxErrorsToShow | ForEach-Object {
+            Write-Host "  $($_.Key): " -NoNewline
+            Write-Host $_.Value -ForegroundColor Red
+        }
+
+        # Add a note if there are more errors
+        if ($errors.Count -gt $maxErrorsToShow) {
+            Write-Host "  ... and " -NoNewline
+            Write-Host ($errors.Count - $maxErrorsToShow) -ForegroundColor Red -NoNewline
+            Write-Host " more errors"
+            Write-Host
+        }
+        
+        # Save all errors to a JSON file
+        ConvertTo-Json $errors | Out-File "errors.json"
+        Write-Host "  Full list of errors has been saved in " -NoNewline
+        Write-Host "errors.json" -ForegroundColor Blue
+        
+        Write-Host
+    } else {
+        Write-Host "(✓) Done: " -ForegroundColor Green -NoNewline
+        Write-Host "Set " -NoNewline
+        Write-Host $allFiles.Count -ForegroundColor Blue -NoNewline
+        Write-Host " ACLs in " -NoNewline
+        Write-Host $totalTime -ForegroundColor Blue -NoNewline
+        Write-Host " seconds"
+    }
 }
