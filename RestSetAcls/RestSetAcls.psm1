@@ -1,3 +1,17 @@
+function Ask([Parameter(Mandatory=$true)][string] $question)
+{
+    while ($true) {
+        $yn = Read-Host "${indent}${question} [Y/n]"
+        $yn = $yn.Trim().ToLower()
+        if ($yn -eq 'n') {
+            return $false
+        } elseif ($yn -eq '' -or $yn -eq 'y') {
+            return $true
+        }
+        Write-Host "${indent}Invalid answer '$yn'. Answer with either 'y' or 'n'" -ForegroundColor Red
+    }
+}
+
 function Get-SpecialCharactersPrintable {
     # Windows Terminal supports it
     if ($env:WT_SESSION) {
@@ -85,7 +99,10 @@ function Set-AzureFilesAclRecursive {
         [string]$FilePath,
 
         [Parameter(Mandatory=$true)]
-        [string]$SddlPermission
+        [string]$SddlPermission,
+
+        [Parameter(Mandatory=$false)]
+        [switch]$Confirm = $true
     )
 
     # Backwards compat with older PowerShell versions
@@ -131,6 +148,15 @@ function Set-AzureFilesAclRecursive {
     Write-Host $totalTime -ForegroundColor Blue -NoNewline
     Write-Host " seconds"
     $ProgressPreference = "Continue"
+    
+    if ($Confirm) {
+        Write-Host
+        $continue = Ask "Do you want update $($allFiles.Count) file permissions?"
+        if (-not $continue) {
+            return
+        }
+    }
+    
     Write-Host
 
     Write-Host "Step 2: Setting ACLs" -ForegroundColor White
