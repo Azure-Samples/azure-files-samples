@@ -199,28 +199,30 @@ function Set-AzureFilesAclRecursive {
     Write-Progress -Activity "Setting ACLs" -Status "Done" -Completed
 
     $totalTime = [math]::Round(((Get-Date) - $startTime).TotalSeconds, 2)
-    if ($errors.Count -eq $allFiles.Count) {
-        # Setting ACLs failed for all files; report it.
-        Write-Host $failedStatus -ForegroundColor Red -NoNewline
-        Write-Host "Failed to set " -NoNewline
-        Write-Host $errors.Count -ForegroundColor Red -NoNewline
-        Write-Host " ACLs. Total time " -NoNewline
-        Write-Host $totalTime -ForegroundColor Blue -NoNewline
-        Write-Host " seconds"
-    }
-    elseif ($errors.Count -gt 0) {
+    if ($errors.Count -gt 0) {
         # Setting ACLs failed for some, but not all files. In such cases, it may be important
         # to know which files failed. We print the first 10, and put the rest in a JSON file.
         $maxErrorsToShow = 10
         
-        Write-Host $partialStatus -ForegroundColor Yellow -NoNewline
-        Write-Host "Set " -NoNewline
-        Write-Host $($allFiles.Count - $errors.Count) -ForegroundColor Blue -NoNewline
-        Write-Host " ACLs successfully, failed to set " -NoNewline
-        Write-Host $errors.Count -ForegroundColor Blue -NoNewline
-        Write-Host " ACLs. Total time " -NoNewline
-        Write-Host $totalTime -ForegroundColor Blue -NoNewline
-        Write-Host " seconds. Errors:"
+        if ($errors.Count -eq $allFiles.Count) {
+            # Setting ACLs failed for all files; report it.
+            Write-Host $failedStatus -ForegroundColor Red -NoNewline
+            Write-Host "Failed to set " -NoNewline
+            Write-Host $errors.Count -ForegroundColor Red -NoNewline
+            Write-Host " ACLs. Total time " -NoNewline
+            Write-Host $totalTime -ForegroundColor Blue -NoNewline
+            Write-Host " seconds. Errors:"
+        }
+        else {
+            Write-Host $partialStatus -ForegroundColor Yellow -NoNewline
+            Write-Host "Set " -NoNewline
+            Write-Host $($allFiles.Count - $errors.Count) -ForegroundColor Blue -NoNewline
+            Write-Host " ACLs successfully, failed to set " -NoNewline
+            Write-Host $errors.Count -ForegroundColor Blue -NoNewline
+            Write-Host " ACLs. Total time " -NoNewline
+            Write-Host $totalTime -ForegroundColor Blue -NoNewline
+            Write-Host " seconds. Errors:"
+        }
         Write-Host
         
         # Print first $maxErrorsToShow errors
