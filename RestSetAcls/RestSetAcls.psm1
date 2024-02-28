@@ -30,27 +30,30 @@ function Get-SpecialCharactersPrintable {
 function Get-AzureFilesRecursive {
     param (
         [Parameter(Mandatory=$true, ValueFromPipeline=$true, ValueFromPipelineByPropertyName=$true)]
-        [Object[]]$Directory,
+        [Microsoft.WindowsAzure.Commands.Common.Storage.ResourceModel.AzureStorageBase[]]$DirectoryContents,
 
         [Parameter(Mandatory=$true)]
         [Microsoft.WindowsAzure.Commands.Storage.AzureStorageContext]$Context,
 
         [Parameter(Mandatory=$false)]
-        [string]$Path = ""
+        [string]$DirectoryPath = ""
     )
 
-    foreach ($file in $directory) {
-        $fullPath = "${path}$($file.Name)"
+    foreach ($file in $DirectoryContents) {
+        $fullPath = "${DirectoryPath}$($file.Name)"
 
-        $file.Context = $context
+        $file.Context = $Context
 
         if ($file.GetType().Name -eq "AzureStorageFileDirectory") {
             $fullPath += "/"
 
-            # Recurse on subdirectory
-            $subdirectory = Get-AzStorageFile -Directory $file.CloudFileDirectory
-            if ($null -ne $subdirectory) {
-                Get-AzureFilesRecursive -Context $context -Directory $subdirectory -Path $fullPath
+            # Get the contents of the directory.
+            # Calling Get-AzStorageFile with this parameter set returns an Object[],
+            # where items are either AzureStorageFile or AzureStorageFileDirectory.
+            # Therefore, when recursing, we can cast Object[] to AzureStorageBase[].
+            $subdirectoryContents = Get-AzStorageFile -Directory $file.CloudFileDirectory
+            if ($null -ne $subdirectoryContents) {
+                Get-AzureFilesRecursive -Context $Context -DirectoryContents $subdirectoryContents -DirectoryPath $fullPath
             }
         }
 
@@ -117,6 +120,9 @@ function Set-AzureFilesAclRecursive {
     $startTime = Get-Date
 
     # Get root directory
+    # Calling Get-AzStorageFile with this parameter set returns a AzureStorageFileDirectory
+    # (if the path is a directory) or AzureStorageFile (if the path is a file).
+    # If it's a directory, Get-AzureFilesRecursive will get its contents. 
     try {
         $directory = Get-AzStorageFile -Context $Context -ShareName $FileShareName -Path $FilePath -ErrorAction Stop
     } catch {
@@ -130,7 +136,7 @@ function Set-AzureFilesAclRecursive {
     # Recursively find all files under the root directory
     $ProgressPreference = "SilentlyContinue"
     $i = 0
-    $allFiles = Get-AzureFilesRecursive -Context $context -Directory $directory | ForEach-Object {
+    $allFiles = Get-AzureFilesRecursive -Context $context -DirectoryContents @($directory) | ForEach-Object {
         $i++
         Write-Debug $_
         Write-Host "`rFound " -ForegroundColor DarkGray -NoNewline
