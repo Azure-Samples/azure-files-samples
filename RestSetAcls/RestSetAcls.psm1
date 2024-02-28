@@ -136,7 +136,7 @@ function Set-AzureFilesAclRecursive {
     # Recursively find all files under the root directory
     $ProgressPreference = "SilentlyContinue"
     $i = 0
-    $allFiles = Get-AzureFilesRecursive -Context $context -DirectoryContents @($directory) | ForEach-Object {
+    $allFiles = Get-AzureFilesRecursive -Context $Context -DirectoryContents @($directory) | ForEach-Object {
         $i++
         Write-Debug $_
         Write-Host "`rFound " -ForegroundColor DarkGray -NoNewline
