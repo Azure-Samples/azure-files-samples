@@ -3703,10 +3703,10 @@ function Debug-AzStorageAccountAuth {
         $VerifyAD = get-AzStorageAccount -ResourceGroupName $ResourceGroupName -StorageAccountName $StorageAccountName  
         $directoryServiceOptions = $VerifyAD.AzureFilesIdentityBasedAuth.DirectoryServiceOptions
 
-        if ($directoryServiceOptions -eq "ADDS")
+        if ($directoryServiceOptions -eq "AD")
         {
             Write-Verbose "Running Debug cmdlet for AD DS joined account: "
-            Debug-AzStorageAccountAdDsAuth `
+            Debug-AzStorageAccountADDSAuth `
                 -StorageAccountName $StorageAccountName `
                 -ResourceGroupName $ResourceGroupName `
                 -Filter $Filter `
@@ -3718,7 +3718,7 @@ function Debug-AzStorageAccountAuth {
         elseif ($directoryServiceOptions -eq "AADKERB")
         {
             Write-Verbose "Running Debug cmdlet for Microsoft Entra kerberos(AADKERB) joined account:"
-            Debug-AzStorageAccountEntraKerbAuth`
+            Debug-AzStorageAccountEntraKerbAuth `
                 -StorageAccountName $StorageAccountName `
                 -ResourceGroupName $ResourceGroupName `
                 -Filter $Filter `
@@ -3729,7 +3729,7 @@ function Debug-AzStorageAccountAuth {
         }
         elseif ($directoryServiceOptions -eq "AADDS")
         {
-            Write-Host "This cmdlet does not support Microsoft Entra Domain Services authentication yet, You can run Debug-AzStorageAccountAdDsAuth to run the AD DS authentication checks instead, but note that while some checks may provide useful information, not all AD DS checks are expected to pass for a storage account with Microsoft Entra Domain Services authentication."
+            Write-Host "This cmdlet does not support Microsoft Entra Domain Services authentication yet, You can run Debug-AzStorageAccountADDSAuth to run the AD DS authentication checks instead, but note that while some checks may provide useful information, not all AD DS checks are expected to pass for a storage account with Microsoft Entra Domain Services authentication."
         }
         else
         {
@@ -3765,15 +3765,15 @@ function Debug-AzStorageAccountEntraKerbAuth {
 
     process
     {
-        if($UserName -ne $null )
+        if(![string]::IsNullOrEmpty($UserName))
         {
             Write-Error "The debug cmdlet for Microsoft Entra Kerberos (AADKERB) accounts does not yet implement support for -UserName parameter. It will be ignored."
         }
-        if($ObjectId -ne $null )
+        if(![string]::IsNullOrEmpty($Domain) )
         {
             Write-Error "The debug cmdlet for Microsoft Entra Kerberos (AADKERB) accounts does not yet implement support for -ObjectId parameter. It will be ignored."
         }
-        if($FilePath -ne $null )
+        if(![string]::IsNullOrEmpty($FilePath))
         {
             Write-Error "The debug cmdlet for Microsoft Entra Kerberos (AADKERB) accounts does not yet implement support for -FilePath parameter. It will be ignored."
         }
@@ -3820,7 +3820,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 $Context = Get-AzContext
                 $TenantId = $Context.Tenant
                 $Response = Invoke-WebRequest -Method POST https://login.microsoftonline.com/$TenantId/kerberos
-                if ($Response.StatusCode == 200)
+                if ($Response.StatusCode -eq 200)
                 {
                     $checks["CheckAADConnectivity"].Result = "Passed"
                     Write-Verbose "CheckAADConnectivity - SUCCESS"
@@ -3848,6 +3848,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 Write-Verbose "CheckEntraObject - START"
                 $Context = Get-AzContext
                 $TenantId = $Context.Tenant
+                Import-Module Microsoft.Graph.Applications
                 Connect-MgGraph -Environment Global -Scopes "Application.Read.All" -TenantId $TenantId
                 $Application = Get-MgApplication -Filter "identifierUris/any (uri:uri eq 'api://${TenantId}/CIFS/${StorageAccountName}.file.core.windows.net')" -ConsistencyLevel eventual
                 if($null -eq $Application)
@@ -3908,7 +3909,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 $checksExecuted += 1;
                 Write-Verbose "CheckRegKey - START"
                 $RegKey = Get-ItemProperty -Path Registry::HKLM\SYSTEM\CurrentControlSet\Control\Lsa\Kerberos\Parameters
-                if($RegKey -ne $null -and $RegKey.CloudKerberosTicketRetrievalEnabled -eq "1")
+                if($null -ne $RegKey -and $RegKey.CloudKerberosTicketRetrievalEnabled -eq "1")
                 {
                     $checks["CheckRegKey"].Result = "Passed"
                     Write-Verbose "CheckRegKey - SUCCESS"
@@ -3937,7 +3938,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
         {
             try {
                 $hostToRealm = Get-ChildItem Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Lsa\Kerberos\HostToRealm
-                if($hostToRealm -eq $null)
+                if($null -eq $hostToRealm)
                 {
                     $checks["CheckKerbRealmMapping"].Result = "Passed"
                     Write-Verbose "CheckKerbRealmMapping - SUCCESS"
@@ -4018,7 +4019,7 @@ function Debug-EntraKerbAdminConsent {
             
             $spn = "api://$TenantId/CIFS/$StorageAccountName.file.core.windows.net')"
             $ServicePrincipal = Get-MgServicePrincipal -Filter "servicePrincipalNames/any (name:name eq '$spn')" -ConsistencyLevel eventual
-            if($ServicePrincipal -eq $null -or $ServicePrincipal.Id -eq $null)
+            if($null -eq $ServicePrincipal -or $null -eq $ServicePrincipal.Id)
             {
                 $checkResult.Result = "Failed"
                 $checkResult.Issue = "Could not find the application with SPN '$spn'. "
@@ -4029,7 +4030,7 @@ function Debug-EntraKerbAdminConsent {
             }
             
             $Consent = Get-MgOauth2PermissionGrant -Filter "ClientId eq '$($ServicePrincipal.Id)' and ResourceId eq '$($MSGraphSp.Id)' and consentType eq 'AllPrincipals'" 
-            if($Consent -eq $null -or $Consent.Scope -eq $null)
+            if($null -eq $Consent -or $null -eq $Consent.Scope)
             {
                 $checkResult.Result = "Failed"
                 $checkResult.Issue = "Admin Consent is not granted"
@@ -4096,7 +4097,7 @@ function SummaryOfChecks {
             }
         }
 
-        Write-Host "This cmdlet does not support all the checks for Microsoft Entra Kerberos authentication yet, You can run Debug-AzStorageAccountAdDsAuth to run the AD DS authentication checks instead, but note that while some checks may provide useful information, not all AD DS checks are expected to pass for a storage account with Microsoft Entra Kerberos authentication."
+        Write-Host "This cmdlet does not support all the checks for Microsoft Entra Kerberos authentication yet, You can run Debug-AzStorageAccountADDSAuth to run the AD DS authentication checks instead, but note that while some checks may provide useful information, not all AD DS checks are expected to pass for a storage account with Microsoft Entra Kerberos authentication."
     
     }
     
