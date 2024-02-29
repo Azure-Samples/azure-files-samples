@@ -24,16 +24,22 @@ RestSetAcls.psm1 is a PowerShell module that provides functions to set Access Co
    ```powershell
    $sddl = (Get-Acl -Path "<path-to-file-or-folder>").Sddl
    ```
+1. Define how to connect your storage account with storage account key:
 
+   ```powershell
+   $AccountName = "<storage-account-name>"
+   $AccountKey = "<storage-account-key>"
+
+   $context = New-AzStorageContext -StorageAccountName $AccountName -StorageAccountKey $AccountKey
+   ```
+
+   If your storage account is on another Azure environment than the public Azure cloud, you can use the `-Environment` or `-FileEndpoint` flags of `New-AzStorageContext` to configure the address at which the storage account is reachable. See the documentation of [New-AzStorageContext](https://learn.microsoft.com/en-us/powershell/module/az.storage/new-azstoragecontext).
+   
 1. Call `Set-AzureFilesAclRecursive` as follows:
 
-   ```powershell  
-   $AccountName = "<storage-account-name>"
+   ```powershell
    $FileShareName = "<file-share-name>"
-   $AccountKey = "<storage-account-key>"
    $sddl = "<sddl-string>"
-    
-   $context = New-AzStorageContext -StorageAccountName $AccountName -StorageAccountKey $AccountKey
    
    Import-Module -Name "Path\To\RestSetAcls.psm1"
    Set-AzureFilesAclRecursive -Context $context -FileShareName $FileShareName -FilePath "/" -SddlPermission $sddl
