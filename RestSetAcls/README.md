@@ -4,6 +4,13 @@
 
 RestSetAcls.psm1 is a PowerShell module that provides functions to set Access Control Lists (ACLs) for Azure file shares, using the Azure Files REST API.
 
+> [!NOTE]  
+> RestSetAcls.psm1 currently only supports setting the same owner, group and permissions on all files within a share or subdirectory.
+> It does not yet support:
+>
+> - Updates to one field without updating others (e.g., updating the owner without updating the group and permissions)
+> - Adding or removing a permission, without otherwise changing the permissions
+
 ## Prerequisites
 
 - PowerShell 5.1 or later
