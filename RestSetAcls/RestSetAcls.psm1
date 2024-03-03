@@ -105,7 +105,13 @@ function Set-AzureFilesAclRecursive {
         [string]$SddlPermission,
 
         [Parameter(Mandatory=$false)]
-        [switch]$Confirm = $true
+        [switch]$SkipConfirm = $false,
+
+        [Parameter(Mandatory=$false)]
+        [switch]$Parallel = $false,
+
+        [Parameter(Mandatory=$false)]
+        [int]$ThrottleLimit = 10
     )
 
     # Backwards compat with older PowerShell versions
@@ -155,7 +161,7 @@ function Set-AzureFilesAclRecursive {
     Write-Host " seconds"
     $ProgressPreference = "Continue"
     
-    if ($Confirm) {
+    if (-not $SkipConfirm) {
         Write-Host
         $continue = Ask "Do you want update $($allFiles.Count) file permissions?"
         if (-not $continue) {
@@ -168,30 +174,80 @@ function Set-AzureFilesAclRecursive {
     Write-Host "Step 2: Setting ACLs" -ForegroundColor White
     $startTime = Get-Date
     $errors = @{}
-    for ($i = 0; $i -lt $allFiles.Count; $i++) {
-        $file = $allFiles[$i]
-        $fileFullPath = $file.FullPath
 
-        # Calculate completion percentage
-        $percentComplete = ($i / $allFiles.Count) * 100
-        $roundedPercentComplete = [math]::Round($percentComplete, 2)
+    if ($Parallel -and $PSVersionTable.PSVersion.Major -ge 7) {
+        Write-Host "Using parallel mode" -ForegroundColor Yellow
 
-        # Calculate time remaining
-        $elapsedSeconds = ((Get-Date) - $startTime).TotalSeconds
-        $averageSecondsPerFile = $elapsedSeconds / ($i + 1)
-        $remainingItems = $allFiles.Count - $i - 1
-        $secondsRemaining = $remainingItems * $averageSecondsPerFile
+        $funcDef = ${function:Set-AzureFilesAcl}.ToString()
+        $allFiles | ForEach-Object -ThrottleLimit $ThrottleLimit -Parallel {
+            # Set the ACL
+            ${function:Set-AzureFilesAcl} = $using:funcDef
+            $errorMessage = $null            
+            try {
+                Set-AzureFilesAcl -File $_.File -SddlPermission $using:SddlPermission
+            } catch {
+                $errorMessage = $_.Exception.Message
+            }
+            return @{
+                FullPath = $_.FullPath
+                ErrorMessage = $errorMessage
+            }
+        } | ForEach-Object -Begin { $received = 0 } -Process {
+            $received++
+            
+            $fileFullPath = $_.FullPath
+            if ($null -ne $_.ErrorMessage) {
+                $errors[$fileFullPath] = $_.ErrorMessage
+            }
 
-        # Print progress bar
-        Write-Progress -Activity "Setting ACLs" -Status "${roundedPercentComplete}% - setting ACL for $fileFullPath" `
-            -PercentComplete $percentComplete `
-            -SecondsRemaining $secondsRemaining            
+            # Calculate completion percentage
+            $percentComplete = ($received / $allFiles.Count) * 100
+            $roundedPercentComplete = [math]::Round($percentComplete, 2)
+    
+            # Calculate time remaining
+            $elapsedSeconds = ((Get-Date) - $startTime).TotalSeconds
+            $averageSecondsPerFile = $elapsedSeconds / $received
+            $remainingItems = $allFiles.Count - $received
+            $secondsRemaining = $remainingItems * $averageSecondsPerFile
+    
+            # Print progress bar
+            Write-Progress -Activity "Setting ACLs" -Status "${roundedPercentComplete}% - set ACL for $fileFullPath" `
+                -PercentComplete $percentComplete `
+                -SecondsRemaining $secondsRemaining
+        }
+    } else {
+        if ($Parallel) {
+            Write-Warning "-Parallel is only supported on PowerShell 7+. Falling back to single-threaded mode."
+        } else {
+            Write-Host "Using single-threaded mode" -ForegroundColor Yellow
+        }
 
-        # Set the ACL
-        try {
-            Set-AzureFilesAcl -File $file.File -SddlPermission $SddlPermission
-        } catch {
-            $errors[$fileFullPath] = $_.Exception.Message
+        # Single-threaded
+        for ($i = 0; $i -lt $allFiles.Count; $i++) {
+            $file = $allFiles[$i]
+            $fileFullPath = $file.FullPath
+    
+            # Calculate completion percentage
+            $percentComplete = ($i / $allFiles.Count) * 100
+            $roundedPercentComplete = [math]::Round($percentComplete, 2)
+    
+            # Calculate time remaining
+            $elapsedSeconds = ((Get-Date) - $startTime).TotalSeconds
+            $averageSecondsPerFile = $elapsedSeconds / ($i + 1)
+            $remainingItems = $allFiles.Count - $i - 1
+            $secondsRemaining = $remainingItems * $averageSecondsPerFile
+    
+            # Print progress bar
+            Write-Progress -Activity "Setting ACLs" -Status "${roundedPercentComplete}% - setting ACL for $fileFullPath" `
+                -PercentComplete $percentComplete `
+                -SecondsRemaining $secondsRemaining
+    
+            # Set the ACL
+            try {
+                Set-AzureFilesAcl -File $file.File -SddlPermission $SddlPermission
+            } catch {
+                $errors[$fileFullPath] = $_.Exception.Message
+            }
         }
     }
     
