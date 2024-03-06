@@ -26,7 +26,7 @@ RestSetAcls.psm1 is a PowerShell module that provides functions to set Access Co
 ## Usage
 
 1. Make sure you meet the prerequisites above.
-1. Open a PowerShell session.
+1. Open a PowerShell session. PowerShell 7 is preferred, but PowerShell 5 (aka Windows PowerShell) is also acceptable.
 1. Define how to connect your storage account with storage account key:
 
    ```powershell
