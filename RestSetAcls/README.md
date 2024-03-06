@@ -37,20 +37,22 @@ RestSetAcls.psm1 is a PowerShell module that provides functions to set Access Co
 
    If your storage account is on another Azure environment than the public Azure cloud, you can use the `-Environment` or `-FileEndpoint` flags of `New-AzStorageContext` to configure the address at which the storage account is reachable. See the documentation of [New-AzStorageContext](https://learn.microsoft.com/en-us/powershell/module/az.storage/new-azstoragecontext).
    
-1. Determine the SDDL string for the desired permissions. If you have a file or folder that already has the desired permissions, you can use the following PowerShell command to get its SDDL string (replace `<path-to-file-or-folder>` with the path to the file or the folder):
+1. Determine the SDDL string for the desired permissions.
+
+   If you already know what SDDL string you want, you can define it directly:
+
+   ```powershell
+   $sddl = "<sddl-string>" # replace with the SDDL string
+   ```
+
+   If you do not know the SDDL string for the permission you want to set, the easiest approach is to get it from another file. In other words, the idea is to use the permissions of another file as a template of what permissions should be set recursively on your file share. To do so, we either need a file that has the right permissions already, or we need to create it. To create it, you can create a file (anywhere you want, for instance on your Desktop), right click on it, click on Properties, go to the Security tab, click Edit, and then add, remove or edit permissions until you get the permissions you want. Press OK to save and OK to close the Properties window. You can then get the SDDL of your sample file as follows:
 
    ```powershell
    $filepath = "<path-to-file-or-folder>" # replace with the path to your file or folder
    $sddl = (Get-Acl -Path $filepath).Sddl
    ```
-
-   Alternatively, if you know what SDDL string you want, you can define it directly:
-
-   ```powershell
-   $sddl = "<sddl-string>" # replace with the SDDL string
-   ```
    
-1. Call `Set-AzureFilesAclRecursive` as follows:
+1. Call `Set-AzureFilesAclRecursive` as follows. This will recursively find all files and folders on your file share, and set the SDDL permission on each one of them.
 
    ```powershell
    $FileShareName = "<file-share-name>" # replace with the name of your file share
