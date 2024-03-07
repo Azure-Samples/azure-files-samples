@@ -3938,6 +3938,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
         if (!$filterIsPresent -or $Filter -match "CheckKerbRealmMapping")
         {
             try {
+                $checksExecuted += 1;
                 $hostToRealm = Get-ChildItem Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Lsa\Kerberos\HostToRealm
                 if($null -eq $hostToRealm)
                 {
