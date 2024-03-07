@@ -3848,6 +3848,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 Write-Verbose "CheckEntraObject - START"
                 $Context = Get-AzContext
                 $TenantId = $Context.Tenant
+                
                 Import-Module Microsoft.Graph.Applications
                 Connect-MgGraph -Environment Global -Scopes "Application.Read.All" -TenantId $TenantId
                 $Application = Get-MgApplication -Filter "identifierUris/any (uri:uri eq 'api://${TenantId}/CIFS/${StorageAccountName}.file.core.windows.net')" -ConsistencyLevel eventual
@@ -3990,7 +3991,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
         if (!$filterIsPresent -or $Filter -match "CheckAdminConsent")
         {
             $checksExecuted += 1;
-            Debug-EntraKerbAdminConsent -StorageAccountName $StorageAccountName -checks $checks["CheckAdminConsent"]
+            Debug-EntraKerbAdminConsent -StorageAccountName $StorageAccountName -checkResult $checks["CheckAdminConsent"]
         }
 
         SummaryOfChecks -filterIsPresent $filterIsPresent -checksExecuted $checksExecuted
