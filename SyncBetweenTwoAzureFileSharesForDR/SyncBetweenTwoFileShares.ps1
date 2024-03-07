@@ -106,30 +106,34 @@ $targetShareSASURI = New-AzStorageShareSASToken -Context $destinationContext `
     -ExpiryTime(get-date).AddDays(1) -FullUri -ShareName $targetStorageFileShareName -Permission rwl
 
 # Create AzCopy syntax command
-$sourceSnapshotSASURI = "'" + $sourceSnapSASURI + "'"
-$targetFileShareSASURI = "'" + $targetShareSASURI + "'"
-
 # Check if target file share contains data
 $targetFileShare = Get-AzStorageFile -Sharename $targetStorageFileShareName -Context $destinationContext.Context
 
 # If target share already contains data, use AzCopy sync to sync data from source to target
 # Else if target share is empty, use AzCopy copy as it will be more efficient
+$azcopy = "azcopy"
 if ($targetFileShare) {
-     $command = "azcopy " + "sync " + $sourceSnapshotSASURI + " " + $targetFileShareSASURI + " --preserve-smb-info" + " --preserve-smb-permissions" + " --recursive"
+         $azcopySubCommand = "sync"
 }
 Else {
-     $command = "azcopy " + "copy " + $sourceSnapshotSASURI + " " + $targetFileShareSASURI + " --preserve-smb-info" + " --preserve-smb-permissions" + " --recursive"
+     $azcopySubCommand = "copy"
 }
+# Note: the $command is used to create container instance object. the parmater is string array, not a single string. 
+$command = @($azcopy, $azcopySubCommand, $sourceSnapSASURI, $targetShareSASURI, "--preserve-smb-info", "--preserve-smb-permissions","--recursive")
+
 # Create Azure Container Instance and run the AzCopy job
 # The container image (peterdavehello) is publicly available on Docker Hub and has the latest AzCopy version installed
 # You could also create your own container image and use it instead
 # When you create a new container instance, the default compute resources are set to 1vCPU and 1.5GB RAM
 # We recommend starting with 2vCPU and 4GB memory for larger file shares (E.g. 3TB)
 # You may need to adjust the CPU and memory based on the size and churn of your file share
-New-AzContainerGroup -ResourceGroupName $sourceStorageAccountRG `
-         -Name azcopyjob -image peterdavehello/azcopy:latest -OsType Linux `
-         -Cpu 2 -MemoryInGB 4 -Command $command `
-         -RestartPolicy never
+$containerAzCopy = New-AzContainerInstanceObject -Name azcopy-container `
+                                                 -Image peterdavehello/azcopy:latest  `
+                                                 -RequestCpu 2 -RequestMemoryInGB 4 -Command $command 
+
+New-AzContainerGroup -ResourceGroupName $SourceResourceGroupName -Name azcopyjob`
+                     -Container $containerAzCopy -OsType Linux `
+                     -RestartPolicy never
 
 # List the current snapshots on the target share
 $snapshots = Get-AzStorageShare `
