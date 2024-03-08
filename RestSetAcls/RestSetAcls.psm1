@@ -34,21 +34,25 @@ function Write-LiveFilesAndFoldersProcessingStatus {
         [Object[]]$FileOrFolder,
 
         [Parameter(Mandatory=$true)]
-        [datetime]$StartTime
+        [datetime]$StartTime,
+
+        [Parameter(Mandatory=$false)]
+        [int]$RefreshRateHertz = 10
     )
 
     begin {
         $i = 0
-        $lastPrint = $StartTime
+        $msBetweenPrints = 1000 / $RefreshRateHertz
+        $lastPrint = (Get-Date).AddMilliseconds(-$msBetweenPrints)
     }
 
     process {
         $i++
         $timeSinceLastPrint = (Get-Date) - $lastPrint
         
-        # Only print at ~10fps to avoid overloading gui
-        # On a test with 6K files this saved ~20% perf.
-        if ($timeSinceLastPrint.TotalMilliseconds -gt 100) {
+        # To avoid overloading gui, only print at most every $msBetweenPrints
+        # On a test with 6K files, printing at 60Hz saved ~20% perf compared to printing every update
+        if ($timeSinceLastPrint.TotalMilliseconds -gt $msBetweenPrints) {
             $now = Get-Date
             $timeSinceStart = $now - $StartTime
             $itemsPerSec = [math]::Round($i / $timeSinceStart.TotalSeconds, 1)
@@ -59,7 +63,8 @@ function Write-LiveFilesAndFoldersProcessingStatus {
             Write-Host "(" -ForegroundColor DarkGray -NoNewline
             Write-Host $itemsPerSec -ForegroundColor Blue -NoNewline
             Write-Host " items/s)" -ForegroundColor DarkGray -NoNewline
-            $lastPrint = $now
+            
+            $lastPrint = Get-Date
         }
     }
 
@@ -140,14 +145,17 @@ function Write-FinalFilesAndFoldersProcessed {
         
         Write-Host
     } else {
+        $itemsPerSec = [math]::Round($successCount / $TotalTime.TotalSeconds, 1)
+
         Write-Host "`r$doneStatus" -ForegroundColor Green -NoNewline
         Write-Host "Set permissions on " -NoNewline
         Write-Host $successCount -ForegroundColor Blue -NoNewline
         Write-Host " files in folders in " -NoNewline
         Write-Host $seconds -ForegroundColor Blue -NoNewline
         Write-Host " seconds" -NoNewline
-        $itemsPerSec = [math]::Round($successCount / $TotalTime.TotalSeconds, 1)
-        Write-Host " ($itemsPerSec items/s)"
+        Write-Host " (" -NoNewline
+        Write-Host $itemsPerSec -ForegroundColor Blue -NoNewline
+        Write-Host " items/s)"
     }
 }
 
@@ -278,24 +286,26 @@ function Set-AzureFilesAclRecursive {
                 }
             } `
             | ForEach-Object {
+                # Can't write in the parallel block, so we write here
                 if ($null -ne $_.ErrorMessage) {
-                    $errors[$fileFullPath] = $_.ErrorMessage
+                    $errors[$_.FullPath] = $_.ErrorMessage
                 }
                 Write-Output $_.FullPath
             } `
-            | Write-LiveFilesAndFoldersProcessingStatus -StartTime $startTime
+            | Write-LiveFilesAndFoldersProcessingStatus -RefreshRateHertz 10 -StartTime $startTime
     } else {
         $processedCount = Get-AzureFilesRecursive -Context $Context -DirectoryContents @($directory) `
             | ForEach-Object {
                 # Set the ACL
+                $fullPath = $_.FullPath
                 try {
                     Set-AzureFilesAcl -File $_.File -SddlPermission $SddlPermission
                 } catch {
-                    $errors[$_.FullPath] = $_.Exception.Message
+                    $errors[$fullPath] = $_.Exception.Message
                 }
                 Write-Output $_.FullPath
             } `
-            | Write-LiveFilesAndFoldersProcessingStatus -StartTime $startTime
+            | Write-LiveFilesAndFoldersProcessingStatus -RefreshRateHertz 10 -StartTime $startTime
     }
 
     $ProgressPreference = "Continue"
