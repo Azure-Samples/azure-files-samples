@@ -27,6 +27,35 @@ function Get-SpecialCharactersPrintable {
     return $false
 }
 
+function Write-LiveFilesAndFoldersFound {
+    [OutputType([System.Array])]
+    param (
+        [Parameter(Mandatory=$true, ValueFromPipeline=$true, ValueFromPipelineByPropertyName=$true)]
+        [Object[]]$FileOrFolder
+    )
+
+    begin {
+        $i = 0
+        $lastPrint = (Get-Date).AddSeconds(-1)
+    }
+
+    process {
+        $i++
+        $timeSinceLastPrint = (Get-Date) - $lastPrint
+        
+        # Only print at ~10fps to avoid overloading gui
+        # On a test with 6K files this saved ~20% perf.
+        if ($timeSinceLastPrint.TotalMilliseconds -gt 100) {
+            Write-Host "`rFound " -ForegroundColor DarkGray -NoNewline
+            Write-Host $i -ForegroundColor Blue -NoNewline
+            Write-Host " files and folders" -ForegroundColor DarkGray -NoNewline
+            $lastPrint = Get-Date
+        }
+
+        Write-Output $_
+    }
+}
+
 function Get-AzureFilesRecursive {
     param (
         [Parameter(Mandatory=$true, ValueFromPipeline=$true, ValueFromPipelineByPropertyName=$true)]
@@ -138,25 +167,14 @@ function Set-AzureFilesAclRecursive {
         Write-Host $_.Exception.Message -ForegroundColor Red
         return
     }
+
+    $startTime = Get-Date
     
     # Recursively find all files under the root directory
     $ProgressPreference = "SilentlyContinue"
-    $i = 0
-    $lastPrint = Get-Date
-    $allFiles = Get-AzureFilesRecursive -Context $Context -DirectoryContents @($directory) | ForEach-Object {
-        $i++
-        $timeSinceLastPrint = (Get-Date) - $lastPrint
-        
-        # Only print at ~10fps to avoid overloading gui
-        # On a test with 6K files this saved ~20% perf.
-        if ($timeSinceLastPrint.TotalMilliseconds -gt 100) {
-            Write-Host "`rFound " -ForegroundColor DarkGray -NoNewline
-            Write-Host $i -ForegroundColor Blue -NoNewline
-            Write-Host " files and folders" -ForegroundColor DarkGray -NoNewline
-            $lastPrint = Get-Date
-        }
-        $_
-    }
+    $allFiles = Get-AzureFilesRecursive -Context $Context -DirectoryContents @($directory) `
+        | Write-LiveFilesAndFoldersFound
+    $ProgressPreference = "Continue"
 
     # Print success
     $totalTime = [math]::Round(((Get-Date) - $startTime).TotalSeconds, 2)
@@ -166,7 +184,6 @@ function Set-AzureFilesAclRecursive {
     Write-Host " files and folders in " -NoNewline
     Write-Host $totalTime -ForegroundColor Blue -NoNewline
     Write-Host " seconds"
-    $ProgressPreference = "Continue"
     
     if (-not $SkipConfirm) {
         Write-Host
