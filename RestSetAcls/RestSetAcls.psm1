@@ -12,6 +12,10 @@ function Ask([Parameter(Mandatory=$true)][string] $question)
     }
 }
 
+function Get-IsPowerShellIse {
+    return $host.Name -eq "Windows PowerShell ISE Host"
+}
+
 function Get-SpecialCharactersPrintable {
     # Windows Terminal supports it
     if ($env:WT_SESSION) {
@@ -45,6 +49,7 @@ function Write-LiveFilesAndFoldersProcessingStatus {
         $failures = 0
         $msBetweenPrints = 1000 / $RefreshRateHertz
         $lastPrint = (Get-Date).AddMilliseconds(-$msBetweenPrints)
+        $overwriteLine = -not (Get-IsPowerShellIse)
     }
 
     process {
@@ -62,7 +67,10 @@ function Write-LiveFilesAndFoldersProcessingStatus {
             $timeSinceStart = $now - $StartTime
             $itemsPerSec = [math]::Round($i / $timeSinceStart.TotalSeconds, 1)
 
-            Write-Host "`rSet " -ForegroundColor DarkGray -NoNewline
+            if ($overwriteLine) {
+                Write-Host "`r" -NoNewline
+            }
+            Write-Host "Set " -ForegroundColor DarkGray -NoNewline
             Write-Host ($i - $failures) -ForegroundColor Blue -NoNewline
             Write-Host " permissions" -ForegroundColor DarkGray -NoNewline
             if ($failures -gt 0) {
@@ -73,6 +81,9 @@ function Write-LiveFilesAndFoldersProcessingStatus {
             Write-Host " (" -ForegroundColor DarkGray -NoNewline
             Write-Host $itemsPerSec -ForegroundColor Blue -NoNewline
             Write-Host " items/s)" -ForegroundColor DarkGray -NoNewline
+            if (-not $overwriteLine) {
+                Write-Host
+            }
             
             $lastPrint = Get-Date
         }
