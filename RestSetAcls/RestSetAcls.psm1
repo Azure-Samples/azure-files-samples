@@ -142,12 +142,19 @@ function Set-AzureFilesAclRecursive {
     # Recursively find all files under the root directory
     $ProgressPreference = "SilentlyContinue"
     $i = 0
+    $lastPrint = Get-Date
     $allFiles = Get-AzureFilesRecursive -Context $Context -DirectoryContents @($directory) | ForEach-Object {
         $i++
-        Write-Debug $_
-        Write-Host "`rFound " -ForegroundColor DarkGray -NoNewline
-        Write-Host $i -ForegroundColor Blue -NoNewline
-        Write-Host " files and folders" -ForegroundColor DarkGray -NoNewline
+        $timeSinceLastPrint = (Get-Date) - $lastPrint
+        
+        # Only print at ~10fps to avoid overloading gui
+        # On a test with 6K files this saved ~20% perf.
+        if ($timeSinceLastPrint.TotalMilliseconds -gt 100) {
+            Write-Host "`rFound " -ForegroundColor DarkGray -NoNewline
+            Write-Host $i -ForegroundColor Blue -NoNewline
+            Write-Host " files and folders" -ForegroundColor DarkGray -NoNewline
+            $lastPrint = Get-Date
+        }
         $_
     }
 
