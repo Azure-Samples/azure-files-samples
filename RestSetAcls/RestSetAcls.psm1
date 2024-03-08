@@ -258,7 +258,7 @@ function Set-AzureFilesAclRecursive {
         [string]$SddlPermission,
 
         [Parameter(Mandatory=$false)]
-        [switch]$Parallel = $false,
+        [bool]$Parallel = $true,
 
         [Parameter(Mandatory=$false)]
         [int]$ThrottleLimit = 10
