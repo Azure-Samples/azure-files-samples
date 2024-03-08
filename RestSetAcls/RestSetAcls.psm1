@@ -42,6 +42,7 @@ function Write-LiveFilesAndFoldersProcessingStatus {
 
     begin {
         $i = 0
+        $failures = 0
         $msBetweenPrints = 1000 / $RefreshRateHertz
         $lastPrint = (Get-Date).AddMilliseconds(-$msBetweenPrints)
     }
@@ -49,6 +50,10 @@ function Write-LiveFilesAndFoldersProcessingStatus {
     process {
         $i++
         $timeSinceLastPrint = (Get-Date) - $lastPrint
+
+        if (-not $_.Success) {
+            $failures++
+        }
         
         # To avoid overloading gui, only print at most every $msBetweenPrints
         # On a test with 6K files, printing at 60Hz saved ~20% perf compared to printing every update
@@ -57,10 +62,15 @@ function Write-LiveFilesAndFoldersProcessingStatus {
             $timeSinceStart = $now - $StartTime
             $itemsPerSec = [math]::Round($i / $timeSinceStart.TotalSeconds, 1)
 
-            Write-Host "`rSet permissions on " -ForegroundColor DarkGray -NoNewline
-            Write-Host $i -ForegroundColor Blue -NoNewline
-            Write-Host " files and folders " -ForegroundColor DarkGray -NoNewline
-            Write-Host "(" -ForegroundColor DarkGray -NoNewline
+            Write-Host "`rSet " -ForegroundColor DarkGray -NoNewline
+            Write-Host ($i - $failures) -ForegroundColor Blue -NoNewline
+            Write-Host " permissions" -ForegroundColor DarkGray -NoNewline
+            if ($failures -gt 0) {
+                Write-Host ", " -ForegroundColor DarkGray -NoNewline
+                Write-Host $failures -ForegroundColor Red -NoNewline
+                Write-Host " failures" -ForegroundColor DarkGray -NoNewline
+            }
+            Write-Host " (" -ForegroundColor DarkGray -NoNewline
             Write-Host $itemsPerSec -ForegroundColor Blue -NoNewline
             Write-Host " items/s)" -ForegroundColor DarkGray -NoNewline
             
@@ -106,19 +116,19 @@ function Write-FinalFilesAndFoldersProcessed {
         if ($errorCount -eq $processedCount) {
             # Setting ACLs failed for all files; report it.
             Write-Host $failedStatus -ForegroundColor Red -NoNewline
-            Write-Host "`rFailed to set " -NoNewline
+            Write-Host "Failed to set " -NoNewline
             Write-Host $errorCount -ForegroundColor Red -NoNewline
-            Write-Host " ACLs. Total time " -NoNewline
+            Write-Host " permissions. Total time " -NoNewline
             Write-Host $seconds -ForegroundColor Blue -NoNewline
             Write-Host " seconds. Errors:"
         }
         else {
             Write-Host $partialStatus -ForegroundColor Yellow -NoNewline
-            Write-Host "`rSet " -NoNewline
+            Write-Host "Set " -NoNewline
             Write-Host $successCount -ForegroundColor Blue -NoNewline
-            Write-Host " ACLs successfully, failed to set " -NoNewline
-            Write-Host $errorCount -ForegroundColor Blue -NoNewline
-            Write-Host " ACLs. Total time " -NoNewline
+            Write-Host " permissions, " -NoNewline
+            Write-Host $errorCount -ForegroundColor Red -NoNewline
+            Write-Host " failures. Total time " -NoNewline
             Write-Host $seconds -ForegroundColor Blue -NoNewline
             Write-Host " seconds. Errors:"
         }
@@ -147,10 +157,10 @@ function Write-FinalFilesAndFoldersProcessed {
     } else {
         $itemsPerSec = [math]::Round($successCount / $TotalTime.TotalSeconds, 1)
 
-        Write-Host "`r$doneStatus" -ForegroundColor Green -NoNewline
-        Write-Host "Set permissions on " -NoNewline
+        Write-Host $doneStatus -ForegroundColor Green -NoNewline
+        Write-Host "Set " -NoNewline
         Write-Host $successCount -ForegroundColor Blue -NoNewline
-        Write-Host " files in folders in " -NoNewline
+        Write-Host " permissions in " -NoNewline
         Write-Host $seconds -ForegroundColor Blue -NoNewline
         Write-Host " seconds" -NoNewline
         Write-Host " (" -NoNewline
@@ -240,7 +250,7 @@ function Set-AzureFilesAclRecursive {
         [switch]$Parallel = $false,
 
         [Parameter(Mandatory=$false)]
-        [int]$ThrottleLimit = 1000
+        [int]$ThrottleLimit = 10
     )
 
     # Check if parallel mode is supported
@@ -286,11 +296,18 @@ function Set-AzureFilesAclRecursive {
                 }
             } `
             | ForEach-Object {
+                $success = $true
+                
                 # Can't write in the parallel block, so we write here
                 if ($null -ne $_.ErrorMessage) {
                     $errors[$_.FullPath] = $_.ErrorMessage
+                    $success = $false
                 }
-                Write-Output $_.FullPath
+
+                Write-Output @{
+                    FullPath = $_.FullPath
+                    Success = $success
+                }
             } `
             | Write-LiveFilesAndFoldersProcessingStatus -RefreshRateHertz 10 -StartTime $startTime
     } else {
@@ -298,12 +315,17 @@ function Set-AzureFilesAclRecursive {
             | ForEach-Object {
                 # Set the ACL
                 $fullPath = $_.FullPath
+                $success = $true
                 try {
                     Set-AzureFilesAcl -File $_.File -SddlPermission $SddlPermission
                 } catch {
                     $errors[$fullPath] = $_.Exception.Message
+                    $success = $false
                 }
-                Write-Output $_.FullPath
+                Write-Output @{
+                    FullPath = $_.FullPath
+                    Success = $success
+                }
             } `
             | Write-LiveFilesAndFoldersProcessingStatus -RefreshRateHertz 10 -StartTime $startTime
     }
@@ -311,5 +333,6 @@ function Set-AzureFilesAclRecursive {
     $ProgressPreference = "Continue"
     
     $totalTime = (Get-Date) - $startTime
+    Write-Host "`r" -NoNewline # Clear the line from the live progress reporting
     Write-FinalFilesAndFoldersProcessed -ProcessedCount $processedCount -Errors $errors -TotalTime $totalTime
 }
