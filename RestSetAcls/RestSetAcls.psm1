@@ -12,6 +12,10 @@ function Ask([Parameter(Mandatory=$true)][string] $question)
     }
 }
 
+function Get-IsPowerShellIse {
+    return $host.Name -eq "Windows PowerShell ISE Host"
+}
+
 function Get-SpecialCharactersPrintable {
     # Windows Terminal supports it
     if ($env:WT_SESSION) {
@@ -25,6 +29,155 @@ function Get-SpecialCharactersPrintable {
 
     # Older versions don't
     return $false
+}
+
+function Write-LiveFilesAndFoldersProcessingStatus {
+    [OutputType([int])]
+    param (
+        [Parameter(Mandatory=$true, ValueFromPipeline=$true, ValueFromPipelineByPropertyName=$true)]
+        [Object[]]$FileOrFolder,
+
+        [Parameter(Mandatory=$true)]
+        [datetime]$StartTime,
+
+        [Parameter(Mandatory=$false)]
+        [int]$RefreshRateHertz = 10
+    )
+
+    begin {
+        $i = 0
+        $failures = 0
+        $msBetweenPrints = 1000 / $RefreshRateHertz
+        $lastPrint = (Get-Date).AddMilliseconds(-$msBetweenPrints)
+        $overwriteLine = -not (Get-IsPowerShellIse)
+    }
+
+    process {
+        $i++
+        $timeSinceLastPrint = (Get-Date) - $lastPrint
+
+        if (-not $_.Success) {
+            $failures++
+        }
+        
+        # To avoid overloading gui, only print at most every $msBetweenPrints
+        # On a test with 6K files, printing at 60Hz saved ~20% perf compared to printing every update
+        if ($timeSinceLastPrint.TotalMilliseconds -gt $msBetweenPrints) {
+            $now = Get-Date
+            $timeSinceStart = $now - $StartTime
+            $itemsPerSec = [math]::Round($i / $timeSinceStart.TotalSeconds, 1)
+
+            if ($overwriteLine) {
+                Write-Host "`r" -NoNewline
+            }
+            Write-Host "Set " -ForegroundColor DarkGray -NoNewline
+            Write-Host ($i - $failures) -ForegroundColor Blue -NoNewline
+            Write-Host " permissions" -ForegroundColor DarkGray -NoNewline
+            if ($failures -gt 0) {
+                Write-Host ", " -ForegroundColor DarkGray -NoNewline
+                Write-Host $failures -ForegroundColor Red -NoNewline
+                Write-Host " failures" -ForegroundColor DarkGray -NoNewline
+            }
+            Write-Host " (" -ForegroundColor DarkGray -NoNewline
+            Write-Host $itemsPerSec -ForegroundColor Blue -NoNewline
+            Write-Host " items/s)" -ForegroundColor DarkGray -NoNewline
+            if (-not $overwriteLine) {
+                Write-Host
+            }
+            
+            $lastPrint = Get-Date
+        }
+    }
+
+    end {
+        return $i
+    }
+}
+
+function Write-FinalFilesAndFoldersProcessed {
+    [OutputType([System.Void])]
+    param (
+        [Parameter(Mandatory=$true)]
+        [int]$ProcessedCount,
+
+        [Parameter(Mandatory=$true)]
+        [hashtable]$Errors,
+
+        [Parameter(Mandatory=$true)]
+        [timespan]$TotalTime,
+
+        [Parameter(Mandatory=$false)]
+        [int]$MaxErrorsToShow = 10
+    )
+
+     # Backwards compat with older PowerShell versions
+    $specialChars = Get-SpecialCharactersPrintable
+    $checkmark = [System.Char]::ConvertFromUtf32([System.Convert]::ToInt32("2713", 16))
+    $cross = [System.Char]::ConvertFromUtf32([System.Convert]::ToInt32("2717", 16))
+    $doneStatus = if ($specialChars) { "($checkmark) Done: " } else { "Done: " }
+    $partialStatus = if ($specialChars) { "($cross) Partial: " } else { "Partial: " }
+    $failedStatus = if ($specialChars) { "($cross) Failed: " } else { "Failed: " }
+
+    $successCount = $ProcessedCount - $Errors.Count
+    $errorCount = $Errors.Count
+
+    $seconds = [math]::Round($TotalTime.TotalSeconds, 2)
+
+    if ($errorCount -gt 0) {        
+        if ($errorCount -eq $processedCount) {
+            # Setting ACLs failed for all files; report it.
+            Write-Host $failedStatus -ForegroundColor Red -NoNewline
+            Write-Host "Failed to set " -NoNewline
+            Write-Host $errorCount -ForegroundColor Red -NoNewline
+            Write-Host " permissions. Total time " -NoNewline
+            Write-Host $seconds -ForegroundColor Blue -NoNewline
+            Write-Host " seconds. Errors:"
+        }
+        else {
+            Write-Host $partialStatus -ForegroundColor Yellow -NoNewline
+            Write-Host "Set " -NoNewline
+            Write-Host $successCount -ForegroundColor Blue -NoNewline
+            Write-Host " permissions, " -NoNewline
+            Write-Host $errorCount -ForegroundColor Red -NoNewline
+            Write-Host " failures. Total time " -NoNewline
+            Write-Host $seconds -ForegroundColor Blue -NoNewline
+            Write-Host " seconds. Errors:"
+        }
+        Write-Host
+        
+        # Print first $maxErrorsToShow errors
+        $Errors.GetEnumerator() | Select-Object -First $MaxErrorsToShow | ForEach-Object {
+            Write-Host "  $($_.Key): " -NoNewline
+            Write-Host $_.Value -ForegroundColor Red
+        }
+
+        # Add a note if there are more errors
+        if ($errorCount -gt $MaxErrorsToShow) {
+            Write-Host "  ... and " -NoNewline
+            Write-Host ($errorCount - $MaxErrorsToShow) -ForegroundColor Red -NoNewline
+            Write-Host " more errors"
+            Write-Host
+        }
+        
+        # Save all errors to a JSON file
+        ConvertTo-Json $Errors | Out-File "errors.json"
+        Write-Host "  Full list of errors has been saved in " -NoNewline
+        Write-Host "errors.json" -ForegroundColor Blue
+        
+        Write-Host
+    } else {
+        $itemsPerSec = [math]::Round($successCount / $TotalTime.TotalSeconds, 1)
+
+        Write-Host $doneStatus -ForegroundColor Green -NoNewline
+        Write-Host "Set " -NoNewline
+        Write-Host $successCount -ForegroundColor Blue -NoNewline
+        Write-Host " permissions in " -NoNewline
+        Write-Host $seconds -ForegroundColor Blue -NoNewline
+        Write-Host " seconds" -NoNewline
+        Write-Host " (" -NoNewline
+        Write-Host $itemsPerSec -ForegroundColor Blue -NoNewline
+        Write-Host " items/s)"
+    }
 }
 
 function Get-AzureFilesRecursive {
@@ -105,19 +258,17 @@ function Set-AzureFilesAclRecursive {
         [string]$SddlPermission,
 
         [Parameter(Mandatory=$false)]
-        [switch]$Confirm = $true
+        [bool]$Parallel = $true,
+
+        [Parameter(Mandatory=$false)]
+        [int]$ThrottleLimit = 10
     )
 
-    # Backwards compat with older PowerShell versions
-    $specialChars = Get-SpecialCharactersPrintable
-    $checkmark = [System.Char]::ConvertFromUtf32([System.Convert]::ToInt32("2713", 16))
-    $cross = [System.Char]::ConvertFromUtf32([System.Convert]::ToInt32("2717", 16))
-    $doneStatus = if ($specialChars) { "($checkmark) Done: " } else { "Done: " }
-    $partialStatus = if ($specialChars) { "($cross) Partial: " } else { "Partial: " }
-    $failedStatus = if ($specialChars) { "($cross) Failed: " } else { "Failed: " }
-
-    Write-Host "Step 1: Finding all files" -ForegroundColor White
-    $startTime = Get-Date
+    # Check if parallel mode is supported
+    if ($Parallel -and $PSVersionTable.PSVersion.Major -lt 7) {
+        Write-Warning "-Parallel is only supported on PowerShell 7+. Falling back to single-threaded mode."
+        $Parallel = $false
+    }
 
     # Get root directory
     # Calling Get-AzStorageFile with this parameter set returns a AzureStorageFileDirectory
@@ -132,125 +283,67 @@ function Set-AzureFilesAclRecursive {
         Write-Host $_.Exception.Message -ForegroundColor Red
         return
     }
-    
-    # Recursively find all files under the root directory
+
+    $startTime = Get-Date
+    $processedCount = 0
+    $errors = @{}
     $ProgressPreference = "SilentlyContinue"
-    $i = 0
-    $allFiles = Get-AzureFilesRecursive -Context $Context -DirectoryContents @($directory) | ForEach-Object {
-        $i++
-        Write-Debug $_
-        Write-Host "`rFound " -ForegroundColor DarkGray -NoNewline
-        Write-Host $i -ForegroundColor Blue -NoNewline
-        Write-Host " files and folders" -ForegroundColor DarkGray -NoNewline
-        $_
+
+    if ($Parallel) {
+        $funcDef = ${function:Set-AzureFilesAcl}.ToString()
+        $processedCount = Get-AzureFilesRecursive -Context $Context -DirectoryContents @($directory) `
+            | ForEach-Object -ThrottleLimit $ThrottleLimit -Parallel {
+                # Set the ACL
+                ${function:Set-AzureFilesAcl} = $using:funcDef
+                $errorMessage = $null            
+                try {
+                    Set-AzureFilesAcl -File $_.File -SddlPermission $using:SddlPermission
+                } catch {
+                    $errorMessage = $_.Exception.Message
+                }
+                Write-Output @{
+                    FullPath = $_.FullPath
+                    ErrorMessage = $errorMessage
+                }
+            } `
+            | ForEach-Object {
+                $success = $true
+                
+                # Can't write in the parallel block, so we write here
+                if ($null -ne $_.ErrorMessage) {
+                    $errors[$_.FullPath] = $_.ErrorMessage
+                    $success = $false
+                }
+
+                Write-Output @{
+                    FullPath = $_.FullPath
+                    Success = $success
+                }
+            } `
+            | Write-LiveFilesAndFoldersProcessingStatus -RefreshRateHertz 10 -StartTime $startTime
+    } else {
+        $processedCount = Get-AzureFilesRecursive -Context $Context -DirectoryContents @($directory) `
+            | ForEach-Object {
+                # Set the ACL
+                $fullPath = $_.FullPath
+                $success = $true
+                try {
+                    Set-AzureFilesAcl -File $_.File -SddlPermission $SddlPermission
+                } catch {
+                    $errors[$fullPath] = $_.Exception.Message
+                    $success = $false
+                }
+                Write-Output @{
+                    FullPath = $_.FullPath
+                    Success = $success
+                }
+            } `
+            | Write-LiveFilesAndFoldersProcessingStatus -RefreshRateHertz 10 -StartTime $startTime
     }
 
-    # Print success
-    $totalTime = [math]::Round(((Get-Date) - $startTime).TotalSeconds, 2)
-    Write-Host "`r$doneStatus" -ForegroundColor Green -NoNewline
-    Write-Host "Found " -NoNewline
-    Write-Host $allFiles.Count -ForegroundColor Blue -NoNewline
-    Write-Host " files and folders in " -NoNewline
-    Write-Host $totalTime -ForegroundColor Blue -NoNewline
-    Write-Host " seconds"
     $ProgressPreference = "Continue"
     
-    if ($Confirm) {
-        Write-Host
-        $continue = Ask "Do you want update $($allFiles.Count) file permissions?"
-        if (-not $continue) {
-            return
-        }
-    }
-    
-    Write-Host
-
-    Write-Host "Step 2: Setting ACLs" -ForegroundColor White
-    $startTime = Get-Date
-    $errors = @{}
-    for ($i = 0; $i -lt $allFiles.Count; $i++) {
-        $file = $allFiles[$i]
-        $fileFullPath = $file.FullPath
-
-        # Calculate completion percentage
-        $percentComplete = ($i / $allFiles.Count) * 100
-        $roundedPercentComplete = [math]::Round($percentComplete, 2)
-
-        # Calculate time remaining
-        $elapsedSeconds = ((Get-Date) - $startTime).TotalSeconds
-        $averageSecondsPerFile = $elapsedSeconds / ($i + 1)
-        $remainingItems = $allFiles.Count - $i - 1
-        $secondsRemaining = $remainingItems * $averageSecondsPerFile
-
-        # Print progress bar
-        Write-Progress -Activity "Setting ACLs" -Status "${roundedPercentComplete}% - setting ACL for $fileFullPath" `
-            -PercentComplete $percentComplete `
-            -SecondsRemaining $secondsRemaining            
-
-        # Set the ACL
-        try {
-            Set-AzureFilesAcl -File $file.File -SddlPermission $SddlPermission
-        } catch {
-            $errors[$fileFullPath] = $_.Exception.Message
-        }
-    }
-    
-    # Close the progress bar
-    Write-Progress -Activity "Setting ACLs" -Status "Done" -Completed
-
-    $totalTime = [math]::Round(((Get-Date) - $startTime).TotalSeconds, 2)
-    if ($errors.Count -gt 0) {
-        # Setting ACLs failed for some, but not all files. In such cases, it may be important
-        # to know which files failed. We print the first 10, and put the rest in a JSON file.
-        $maxErrorsToShow = 10
-        
-        if ($errors.Count -eq $allFiles.Count) {
-            # Setting ACLs failed for all files; report it.
-            Write-Host $failedStatus -ForegroundColor Red -NoNewline
-            Write-Host "Failed to set " -NoNewline
-            Write-Host $errors.Count -ForegroundColor Red -NoNewline
-            Write-Host " ACLs. Total time " -NoNewline
-            Write-Host $totalTime -ForegroundColor Blue -NoNewline
-            Write-Host " seconds. Errors:"
-        }
-        else {
-            Write-Host $partialStatus -ForegroundColor Yellow -NoNewline
-            Write-Host "Set " -NoNewline
-            Write-Host $($allFiles.Count - $errors.Count) -ForegroundColor Blue -NoNewline
-            Write-Host " ACLs successfully, failed to set " -NoNewline
-            Write-Host $errors.Count -ForegroundColor Blue -NoNewline
-            Write-Host " ACLs. Total time " -NoNewline
-            Write-Host $totalTime -ForegroundColor Blue -NoNewline
-            Write-Host " seconds. Errors:"
-        }
-        Write-Host
-        
-        # Print first $maxErrorsToShow errors
-        $errors.GetEnumerator() | Select-Object -First $maxErrorsToShow | ForEach-Object {
-            Write-Host "  $($_.Key): " -NoNewline
-            Write-Host $_.Value -ForegroundColor Red
-        }
-
-        # Add a note if there are more errors
-        if ($errors.Count -gt $maxErrorsToShow) {
-            Write-Host "  ... and " -NoNewline
-            Write-Host ($errors.Count - $maxErrorsToShow) -ForegroundColor Red -NoNewline
-            Write-Host " more errors"
-            Write-Host
-        }
-        
-        # Save all errors to a JSON file
-        ConvertTo-Json $errors | Out-File "errors.json"
-        Write-Host "  Full list of errors has been saved in " -NoNewline
-        Write-Host "errors.json" -ForegroundColor Blue
-        
-        Write-Host
-    } else {
-        Write-Host $doneStatus -ForegroundColor Green -NoNewline
-        Write-Host "Set " -NoNewline
-        Write-Host $allFiles.Count -ForegroundColor Blue -NoNewline
-        Write-Host " ACLs in " -NoNewline
-        Write-Host $totalTime -ForegroundColor Blue -NoNewline
-        Write-Host " seconds"
-    }
+    $totalTime = (Get-Date) - $startTime
+    Write-Host "`r" -NoNewline # Clear the line from the live progress reporting
+    Write-FinalFilesAndFoldersProcessed -ProcessedCount $processedCount -Errors $errors -TotalTime $totalTime
 }
