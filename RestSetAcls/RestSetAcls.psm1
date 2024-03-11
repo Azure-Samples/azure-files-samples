@@ -217,6 +217,54 @@ function Get-AzureFilesRecursive {
     }
 }
 
+function New-AzFilePermission {
+    [OutputType([string])]
+    param (
+        [Parameter(Mandatory=$true, HelpMessage="Azure storage context")]
+        [Microsoft.WindowsAzure.Commands.Storage.AzureStorageContext]$Context,
+
+        [Parameter(Mandatory=$true, HelpMessage="Name of the file share")]
+        [string]$FileShareName,
+        
+        [Parameter(
+            Mandatory=$true,
+            HelpMessage="File permission in the Security Descriptor Definition Language (SDDL). " +
+                        "SDDL must have an owner, group, and discretionary access control list (DACL). " +
+                        "The provided SDDL string format of the security descriptor should not have " +
+                        "domain relative identifier (like 'DU', 'DA', 'DD' etc) in it.")]
+        [string]$Sddl
+    )
+
+    $share = Get-AzStorageShare -Name $FileShareName -Context $Context
+    $permissionInfo = $share.ShareClient.CreatePermission($Sddl)
+    return $permissionInfo.Value.FilePermissionKey
+}
+
+function Set-AzureFilesPermissionKey {
+    param (
+        [Parameter(Mandatory=$true, ValueFromPipeline=$true, ValueFromPipelineByPropertyName=$true)]
+        [Microsoft.WindowsAzure.Commands.Common.Storage.ResourceModel.AzureStorageBase]$File,
+
+        [Parameter(Mandatory=$true)]
+        [string]$FilePermissionKey
+    )
+
+    $smbProperties = New-Object Azure.Storage.Files.Shares.Models.FileSmbProperties
+    $smbProperties.FilePermissionKey = $FilePermissionKey
+
+    if ($File.GetType().Name -eq "AzureStorageFileDirectory") {
+        $directory = [Microsoft.WindowsAzure.Commands.Common.Storage.ResourceModel.AzureStorageFileDirectory]$File
+        $directory.ShareDirectoryClient.SetHttpHeaders($smbProperties) | Out-Null
+    } else {
+        $file = [Microsoft.WindowsAzure.Commands.Common.Storage.ResourceModel.AzureStorageFile]$File
+        $file.ShareFileClient.SetHttpHeaders(
+            $null, # newSize
+            $null, # httpHeaders
+            $smbProperties
+        ) | Out-Null
+    }
+}
+
 function Set-AzureFilesAcl {
     param (
         [Parameter(Mandatory=$true, ValueFromPipeline=$true, ValueFromPipelineByPropertyName=$true)]
@@ -270,6 +318,19 @@ function Set-AzureFilesAclRecursive {
         $Parallel = $false
     }
 
+    # Try to create permission
+    # The idea is to create the permission early. If this fails (e.g. due to invalid SDDL), we can fail early.
+    # Setting permission key should in theory also be slightly faster than setting SDDL directly (though this may not be noticeable in practice).
+    try {
+        $filePermissionKey = New-AzFilePermission -Context $Context -FileShareName $FileShareName -Sddl $SddlPermission
+    } catch {
+        Write-Host $failedStatus -ForegroundColor Red -NoNewline
+        Write-Host "Failed to create file permission" -ForegroundColor Red
+        Write-Host 
+        Write-Host $_.Exception.Message -ForegroundColor Red
+        return
+    }
+
     # Get root directory
     # Calling Get-AzStorageFile with this parameter set returns a AzureStorageFileDirectory
     # (if the path is a directory) or AzureStorageFile (if the path is a file).
@@ -290,14 +351,14 @@ function Set-AzureFilesAclRecursive {
     $ProgressPreference = "SilentlyContinue"
 
     if ($Parallel) {
-        $funcDef = ${function:Set-AzureFilesAcl}.ToString()
+        $funcDef = ${function:Set-AzureFilesPermissionKey}.ToString()
         $processedCount = Get-AzureFilesRecursive -Context $Context -DirectoryContents @($directory) `
             | ForEach-Object -ThrottleLimit $ThrottleLimit -Parallel {
                 # Set the ACL
-                ${function:Set-AzureFilesAcl} = $using:funcDef
+                ${function:Set-AzureFilesPermissionKey} = $using:funcDef
                 $errorMessage = $null            
                 try {
-                    Set-AzureFilesAcl -File $_.File -SddlPermission $using:SddlPermission
+                    Set-AzureFilesPermissionKey -File $_.File -FilePermissionKey $using:filePermissionKey
                 } catch {
                     $errorMessage = $_.Exception.Message
                 }
@@ -328,7 +389,7 @@ function Set-AzureFilesAclRecursive {
                 $fullPath = $_.FullPath
                 $success = $true
                 try {
-                    Set-AzureFilesAcl -File $_.File -SddlPermission $SddlPermission
+                    Set-AzureFilesPermissionKey -File $_.File -FilePermissionKey $filePermissionKey
                 } catch {
                     $errors[$fullPath] = $_.Exception.Message
                     $success = $false
