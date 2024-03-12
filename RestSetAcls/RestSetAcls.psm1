@@ -189,15 +189,22 @@ function Get-AzureFilesRecursive {
         [Microsoft.WindowsAzure.Commands.Storage.AzureStorageContext]$Context,
 
         [Parameter(Mandatory=$false)]
-        [string]$DirectoryPath = ""
+        [string]$DirectoryPath = "",
+
+        [Parameter(Mandatory=$false)]
+        [switch]$SkipFiles = $false,
+
+        [Parameter(Mandatory=$false)]
+        [switch]$SkipDirectories = $false
     )
 
     foreach ($file in $DirectoryContents) {
         $fullPath = "${DirectoryPath}$($file.Name)"
+        $isDirectory = $file.GetType().Name -eq "AzureStorageFileDirectory"
 
         $file.Context = $Context
 
-        if ($file.GetType().Name -eq "AzureStorageFileDirectory") {
+        if ($isDirectory) {
             $fullPath += "/"
 
             # Get the contents of the directory.
@@ -205,14 +212,22 @@ function Get-AzureFilesRecursive {
             # where items are either AzureStorageFile or AzureStorageFileDirectory.
             # Therefore, when recursing, we can cast Object[] to AzureStorageBase[].
             $subdirectoryContents = Get-AzStorageFile -Directory $file.CloudFileDirectory
+
             if ($null -ne $subdirectoryContents) {
-                Get-AzureFilesRecursive -Context $Context -DirectoryContents $subdirectoryContents -DirectoryPath $fullPath
+                Get-AzureFilesRecursive `
+                    -Context $Context `
+                    -DirectoryContents $subdirectoryContents `
+                    -DirectoryPath $fullPath `
+                    -SkipFiles:$SkipFiles `
+                    -SkipDirectories:$SkipDirectories
             }
         }
 
-        Write-Output @{
-            FullPath = $fullPath
-            File = $file   
+        if (($isDirectory -and !$SkipDirectories) -or (!$isDirectory -and !$SkipFiles)) {
+            Write-Output @{
+                FullPath = $fullPath
+                File = $file   
+            }
         }
     }
 }
@@ -309,8 +324,19 @@ function Set-AzureFilesAclRecursive {
         [bool]$Parallel = $true,
 
         [Parameter(Mandatory=$false)]
-        [int]$ThrottleLimit = 10
+        [int]$ThrottleLimit = 10,
+
+        [Parameter(Mandatory=$false)]
+        [switch]$SkipFiles = $false,
+
+        [Parameter(Mandatory=$false)]
+        [switch]$SkipDirectories = $false
     )
+
+    if ($SkipFiles -and $SkipDirectories) {
+        Write-Warning "Both -SkipFiles and -SkipDirectories are set. Nothing to do."
+        return
+    }
 
     # Check if parallel mode is supported
     if ($Parallel -and $PSVersionTable.PSVersion.Major -lt 7) {
@@ -352,54 +378,62 @@ function Set-AzureFilesAclRecursive {
 
     if ($Parallel) {
         $funcDef = ${function:Set-AzureFilesPermissionKey}.ToString()
-        $processedCount = Get-AzureFilesRecursive -Context $Context -DirectoryContents @($directory) `
-            | ForEach-Object -ThrottleLimit $ThrottleLimit -Parallel {
-                # Set the ACL
-                ${function:Set-AzureFilesPermissionKey} = $using:funcDef
-                $errorMessage = $null            
-                try {
-                    Set-AzureFilesPermissionKey -File $_.File -FilePermissionKey $using:filePermissionKey
-                } catch {
-                    $errorMessage = $_.Exception.Message
-                }
-                Write-Output @{
-                    FullPath = $_.FullPath
-                    ErrorMessage = $errorMessage
-                }
-            } `
-            | ForEach-Object {
-                $success = $true
-                
-                # Can't write in the parallel block, so we write here
-                if ($null -ne $_.ErrorMessage) {
-                    $errors[$_.FullPath] = $_.ErrorMessage
-                    $success = $false
-                }
+        $processedCount = Get-AzureFilesRecursive `
+            -Context $Context `
+            -DirectoryContents @($directory) `
+            -SkipFiles:$SkipFiles `
+            -SkipDirectories:$SkipDirectories `
+        | ForEach-Object -ThrottleLimit $ThrottleLimit -Parallel {
+            # Set the ACL
+            ${function:Set-AzureFilesPermissionKey} = $using:funcDef
+            $errorMessage = $null            
+            try {
+                Set-AzureFilesPermissionKey -File $_.File -FilePermissionKey $using:filePermissionKey
+            } catch {
+                $errorMessage = $_.Exception.Message
+            }
+            Write-Output @{
+                FullPath = $_.FullPath
+                ErrorMessage = $errorMessage
+            }
+        } `
+        | ForEach-Object {
+            $success = $true
+            
+            # Can't write in the parallel block, so we write here
+            if ($null -ne $_.ErrorMessage) {
+                $errors[$_.FullPath] = $_.ErrorMessage
+                $success = $false
+            }
 
-                Write-Output @{
-                    FullPath = $_.FullPath
-                    Success = $success
-                }
-            } `
-            | Write-LiveFilesAndFoldersProcessingStatus -RefreshRateHertz 10 -StartTime $startTime
+            Write-Output @{
+                FullPath = $_.FullPath
+                Success = $success
+            }
+        } `
+        | Write-LiveFilesAndFoldersProcessingStatus -RefreshRateHertz 10 -StartTime $startTime
     } else {
-        $processedCount = Get-AzureFilesRecursive -Context $Context -DirectoryContents @($directory) `
-            | ForEach-Object {
-                # Set the ACL
-                $fullPath = $_.FullPath
-                $success = $true
-                try {
-                    Set-AzureFilesPermissionKey -File $_.File -FilePermissionKey $filePermissionKey
-                } catch {
-                    $errors[$fullPath] = $_.Exception.Message
-                    $success = $false
-                }
-                Write-Output @{
-                    FullPath = $_.FullPath
-                    Success = $success
-                }
-            } `
-            | Write-LiveFilesAndFoldersProcessingStatus -RefreshRateHertz 10 -StartTime $startTime
+        $processedCount = Get-AzureFilesRecursive `
+            -Context $Context `
+            -DirectoryContents @($directory) `
+            -SkipFiles:$SkipFiles `
+            -SkipDirectories:$SkipDirectories `
+        | ForEach-Object {
+            # Set the ACL
+            $fullPath = $_.FullPath
+            $success = $true
+            try {
+                Set-AzureFilesPermissionKey -File $_.File -FilePermissionKey $filePermissionKey
+            } catch {
+                $errors[$fullPath] = $_.Exception.Message
+                $success = $false
+            }
+            Write-Output @{
+                FullPath = $_.FullPath
+                Success = $success
+            }
+        } `
+        | Write-LiveFilesAndFoldersProcessingStatus -RefreshRateHertz 10 -StartTime $startTime
     }
 
     $ProgressPreference = "Continue"
