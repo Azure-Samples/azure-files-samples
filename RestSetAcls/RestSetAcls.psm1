@@ -31,6 +31,43 @@ function Get-SpecialCharactersPrintable {
     return $false
 }
 
+function Write-DoneHeader {
+    if (Get-SpecialCharactersPrintable) { 
+        $checkmark = [System.Char]::ConvertFromUtf32([System.Convert]::ToInt32("2713", 16))
+        Write-Host "($checkmark) Done: " -ForegroundColor Green -NoNewline
+    } else {
+        Write-Host "Done: " -ForegroundColor Green -NoNewline
+    }
+}
+
+function Write-PartialHeader {
+    if (Get-SpecialCharactersPrintable) { 
+        $cross = [System.Char]::ConvertFromUtf32([System.Convert]::ToInt32("2717", 16))
+        Write-Host "($cross) Partial: " -ForegroundColor Yellow -NoNewline
+    } else {
+        Write-Host "Partial: " -ForegroundColor Yellow -NoNewline
+    }
+}
+
+function Write-FailedHeader {
+    if (Get-SpecialCharactersPrintable) { 
+        $cross = [System.Char]::ConvertFromUtf32([System.Convert]::ToInt32("2717", 16))
+        Write-Host "($cross) Failed: " -ForegroundColor Red -NoNewline
+    } else {
+        Write-Host "Failed: " -ForegroundColor Red -NoNewline
+    }
+}
+
+function Write-WarningHeader {
+    if (Get-SpecialCharactersPrintable) { 
+        $warning = [System.Char]::ConvertFromUtf32([System.Convert]::ToInt32("26A0", 16))
+        Write-Host "($warning) Warning: " -ForegroundColor Yellow -NoNewline
+    } else {
+        Write-Host "Warning: " -ForegroundColor Yellow -NoNewline
+    }
+
+}
+
 function Write-LiveFilesAndFoldersProcessingStatus {
     [OutputType([int])]
     param (
@@ -110,14 +147,6 @@ function Write-FinalFilesAndFoldersProcessed {
         [int]$MaxErrorsToShow = 10
     )
 
-     # Backwards compat with older PowerShell versions
-    $specialChars = Get-SpecialCharactersPrintable
-    $checkmark = [System.Char]::ConvertFromUtf32([System.Convert]::ToInt32("2713", 16))
-    $cross = [System.Char]::ConvertFromUtf32([System.Convert]::ToInt32("2717", 16))
-    $doneStatus = if ($specialChars) { "($checkmark) Done: " } else { "Done: " }
-    $partialStatus = if ($specialChars) { "($cross) Partial: " } else { "Partial: " }
-    $failedStatus = if ($specialChars) { "($cross) Failed: " } else { "Failed: " }
-
     $successCount = $ProcessedCount - $Errors.Count
     $errorCount = $Errors.Count
 
@@ -126,7 +155,7 @@ function Write-FinalFilesAndFoldersProcessed {
     if ($errorCount -gt 0) {        
         if ($errorCount -eq $processedCount) {
             # Setting ACLs failed for all files; report it.
-            Write-Host $failedStatus -ForegroundColor Red -NoNewline
+            Write-FailedHeader
             Write-Host "Failed to set " -NoNewline
             Write-Host $errorCount -ForegroundColor Red -NoNewline
             Write-Host " permissions. Total time " -NoNewline
@@ -134,7 +163,7 @@ function Write-FinalFilesAndFoldersProcessed {
             Write-Host " seconds. Errors:"
         }
         else {
-            Write-Host $partialStatus -ForegroundColor Yellow -NoNewline
+            Write-PartialHeader
             Write-Host "Set " -NoNewline
             Write-Host $successCount -ForegroundColor Blue -NoNewline
             Write-Host " permissions, " -NoNewline
@@ -168,7 +197,7 @@ function Write-FinalFilesAndFoldersProcessed {
     } else {
         $itemsPerSec = [math]::Round($successCount / $TotalTime.TotalSeconds, 1)
 
-        Write-Host $doneStatus -ForegroundColor Green -NoNewline
+        Write-DoneHeader
         Write-Host "Set " -NoNewline
         Write-Host $successCount -ForegroundColor Blue -NoNewline
         Write-Host " permissions in " -NoNewline
@@ -350,7 +379,7 @@ function Set-AzureFilesAclRecursive {
     try {
         $filePermissionKey = New-AzFilePermission -Context $Context -FileShareName $FileShareName -Sddl $SddlPermission
     } catch {
-        Write-Host $failedStatus -ForegroundColor Red -NoNewline
+        Write-FailedHeader
         Write-Host "Failed to create file permission" -ForegroundColor Red
         Write-Host 
         Write-Host $_.Exception.Message -ForegroundColor Red
@@ -364,7 +393,7 @@ function Set-AzureFilesAclRecursive {
     try {
         $directory = Get-AzStorageFile -Context $Context -ShareName $FileShareName -Path $FilePath -ErrorAction Stop
     } catch {
-        Write-Host $failedStatus -ForegroundColor Red -NoNewline
+        Write-FailedHeader
         Write-Host "Failed to read root directory"
         Write-Host
         Write-Host $_.Exception.Message -ForegroundColor Red
