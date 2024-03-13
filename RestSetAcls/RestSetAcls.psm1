@@ -1,4 +1,4 @@
-function Ask([Parameter(Mandatory=$true)][string] $question)
+function Ask([Parameter(Mandatory=$false)][string] $question)
 {
     while ($true) {
         $yn = Read-Host "${question} [Y/n]"
@@ -66,6 +66,71 @@ function Write-WarningHeader {
         Write-Host "Warning: " -ForegroundColor Yellow -NoNewline
     }
 
+}
+
+function Get-AreAceFlagsInSddlAllEqualToTarget {
+    param (
+        [Parameter(Mandatory=$true)]
+        [string] $Sddl,
+        
+        [Parameter(Mandatory=$true)]
+        [System.Security.AccessControl.InheritanceFlags]$TargetInheritanceFlags,
+
+        [Parameter(Mandatory=$true)]
+        [System.Security.AccessControl.PropagationFlags]$TargetPropagationFlags
+    )
+    # Load the SDDL into a DirectorySecurity object
+    # DirectorySecurity is used over FileSecurity because it keeps the inheritance flags of the SDDL
+    $securityDescriptor = New-Object System.Security.AccessControl.DirectorySecurity
+    $securityDescriptor.SetSecurityDescriptorSddlForm($Sddl)
+
+    foreach ($ace in $securityDescriptor.Access) {
+        if ($ace.InheritanceFlags -ne $TargetInheritanceFlags -or
+            $ace.PropagationFlags -ne $TargetPropagationFlags) {
+                return $false
+        }
+    }
+
+    return $true
+}
+
+function Get-SddlWithUpdatedAceFlags {
+    param (
+        [Parameter(Mandatory=$true)]
+        [string] $Sddl,
+        
+        [Parameter(Mandatory=$true)]
+        [System.Security.AccessControl.InheritanceFlags]$InheritanceFlags,
+
+        [Parameter(Mandatory=$true)]
+        [System.Security.AccessControl.PropagationFlags]$PropagationFlags
+    )
+    # Load the SDDL into a DirectorySecurity object
+    # DirectorySecurity is used over FileSecurity because it keeps the inheritance flags of the SDDL
+    $securityDescriptor = New-Object System.Security.AccessControl.DirectorySecurity
+    $securityDescriptor.SetSecurityDescriptorSddlForm($SddlPermission)
+
+    # Create new ACEs with updated flags
+    $newAces = $securityDescriptor.Access | ForEach-Object {
+        [System.Security.AccessControl.FileSystemAccessRule]::new(
+            $_.IdentityReference,
+            $_.FileSystemRights,
+            $InheritanceFlags,
+            $PropagationFlags,
+            $_.AccessControlType)            
+    }
+    
+    # Remove all old ACEs
+    foreach ($ace in $securityDescriptor.Access) {
+        $securityDescriptor.RemoveAccessRule($ace) | Out-Null
+    }
+
+    # Add all new ACEs
+    foreach ($ace in $newAces) {
+        $securityDescriptor.AddAccessRule($ace)
+    }
+
+    return $securityDescriptor.GetSecurityDescriptorSddlForm([System.Security.AccessControl.AccessControlSections]::All)
 }
 
 function Write-LiveFilesAndFoldersProcessingStatus {
@@ -373,7 +438,50 @@ function Set-AzureFilesAclRecursive {
         $Parallel = $false
     }
 
-    # Try to create permission
+    # Try to parse SDDL permission, check for common issues
+    try {
+        $securityDescriptor = New-Object System.Security.AccessControl.DirectorySecurity
+        $securityDescriptor.SetSecurityDescriptorSddlForm($SddlPermission)
+    } catch {
+        Write-FailedHeader
+        Write-Host "SDDL permission is invalid" -ForegroundColor Red
+        return
+    }
+
+    # Check if inheritance flags are okay
+    $targetInheritanceFlags = [System.Security.AccessControl.InheritanceFlags]::ContainerInherit -bor [System.Security.AccessControl.InheritanceFlags]::ObjectInherit
+    $targetPropagationFlags = [System.Security.AccessControl.PropagationFlags]::None
+
+    $matchesTarget = Get-AreAceFlagsInSddlAllEqualToTarget `
+        -Sddl $SddlPermission `
+        -TargetInheritanceFlags $targetInheritanceFlags `
+        -TargetPropagationFlags $targetPropagationFlags
+
+    if (-not ($matchesTarget)) {
+        $newSddl = Get-SddlWithUpdatedAceFlags `
+            -Sddl $SddlPermission `
+            -InheritanceFlags $targetInheritanceFlags `
+            -PropagationFlags $targetPropagationFlags
+        
+        Write-Host "The SDDL string has non-standard inheritance rules." -ForegroundColor Yellow
+        Write-Host "It is recommended to set OI (Object Inherit) and CI (Container Inherit) on every permission. " -ForegroundColor DarkGray
+        Write-Host "This ensures that the permissions are inherited by files and folders created in the future." -ForegroundColor DarkGray
+        Write-Host
+        Write-Host "   Given:       "  -NoNewline -ForegroundColor Yellow
+        Write-Host $SddlPermission
+        Write-Host "   Recommended: " -NoNewline -ForegroundColor Green
+        Write-Host $newSddl
+        Write-Host
+
+        Write-Host "Do you want to continue with the " -NoNewline
+        Write-Host "given" -ForegroundColor Yellow -NoNewline
+        Write-Host " SDDL?" -NoNewline
+        if (-not (Ask "")) {
+            return
+        }
+    }    
+
+    # Try to create permission on Azure Files
     # The idea is to create the permission early. If this fails (e.g. due to invalid SDDL), we can fail early.
     # Setting permission key should in theory also be slightly faster than setting SDDL directly (though this may not be noticeable in practice).
     try {
