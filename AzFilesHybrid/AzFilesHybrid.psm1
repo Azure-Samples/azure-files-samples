@@ -3946,11 +3946,11 @@ function Debug-AzStorageAccountEntraKerbAuth {
                     Write-Verbose "CheckKerbRealmMapping - SUCCESS"
                 }
                 $failure = $false
-                foreach ($domain in $hostToRealm) 
+                foreach ($domainKey in $hostToRealm) 
                 {
-                    $properties = $domain | Get-ItemProperty
+                    $properties = $domainKey | Get-ItemProperty
                     $realmName = $properties.PSChildName
-                    $spnMappings = $($domain | Get-ItemProperty).SpnMappings
+                    $spnMappings = $($domainKey | Get-ItemProperty).SpnMappings
                     foreach ($hostName in $spnMappings) {
                         if ($hostName -eq "${StorageAccountName}.file.core.windows.net" -or
                             $hostName -eq ".file.core.windows.net" -or
