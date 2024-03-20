@@ -936,12 +936,14 @@ function Request-PowerShellGetModule {
 
 function Request-MSGraphModule {
     [CmdletBinding(SupportsShouldProcess, ConfirmImpact="High")]
-    param()
+    param(
+        [Parameter(Mandatory=$true)]
+        [string[]]$RequiredModules
+    )
 
-    $requiredModules = @("Microsoft.Graph.Users", "Microsoft.Graph.Groups", "Microsoft.Graph.Identity.DirectoryManagement")
     $missingModules = @()
 
-    foreach ($module in $requiredModules) {
+    foreach ($module in $RequiredModules) {
         $installedModule = Get-Module -Name $module -ListAvailable
         if ($null -eq $installedModule) {
             Write-Host "Missing module: $module"
@@ -3286,7 +3288,9 @@ function Get-AadUserForSid {
         [string]$sid
     )
 
-    Request-ConnectMsGraph -Scopes "User.Read.All"
+    Request-ConnectMsGraph `
+        -Scopes "User.Read.All" `
+        -RequiredModules @("Microsoft.Graph.Users", "Microsoft.Graph.Groups", "Microsoft.Graph.Identity.DirectoryManagement")
 
     $aadUser = Get-MgUser -Filter "OnPremisesSecurityIdentifier eq '$sid'"
 
@@ -3848,10 +3852,18 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 Write-Verbose "CheckEntraObject - START"
                 $Context = Get-AzContext
                 $TenantId = $Context.Tenant
+
+                Request-ConnectMsGraph `
+                    -Scopes "Application.Read.All" `
+                    -RequiredModules @("Microsoft.Graph.Applications") `
+                    -TenantId $TenantId
                 
                 Import-Module Microsoft.Graph.Applications
-                Connect-MgGraph -Environment Global -Scopes "Application.Read.All" -TenantId $TenantId
-                $Application = Get-MgApplication -Filter "identifierUris/any (uri:uri eq 'api://${TenantId}/CIFS/${StorageAccountName}.file.core.windows.net')" -ConsistencyLevel eventual
+
+                $Application = Get-MgApplication `
+                    -Filter "identifierUris/any (uri:uri eq 'api://${TenantId}/CIFS/${StorageAccountName}.file.core.windows.net')" `
+                    -ConsistencyLevel eventual
+                
                 if($null -eq $Application)
                 {
                     $checks["CheckEntraObject"].Result = "Failed"
@@ -4014,9 +4026,14 @@ function Debug-EntraKerbAdminConsent {
             $Context = Get-AzContext
             $TenantId = $Context.Tenant
             
+            Request-ConnectMsGraph `
+                -Scopes "DelegatedPermissionGrant.Read.All" ` #TODO(maybe update scopes)
+                -RequiredModules @("Microsoft.Graph.Applications", "Microsoft.Graph.Identity.SignIns") `
+                -TenantId $TenantId
+
             Import-Module Microsoft.Graph.Applications
             Import-Module Microsoft.Graph.Identity.SignIns
-            Connect-MgGraph -Environment Global -Scopes "DelegatedPermissionGrant.Read.All" -TenantId $TenantId			
+
             $MsGraphSp = Get-MgServicePrincipalByAppId -AppId 00000003-0000-0000-c000-000000000000 
             
             $spn = "api://$TenantId/CIFS/$StorageAccountName.file.core.windows.net')"
@@ -4463,7 +4480,9 @@ function Debug-AzStorageAccountADDSAuth {
                 $checksExecuted += 1
                 Write-Verbose "CheckUserRbacAssignment - START"
 
-                Request-ConnectMsGraph -Scopes "User.Read.All", "GroupMember.Read.All"
+                Request-ConnectMsGraph `
+                    -Scopes "User.Read.All", "GroupMember.Read.All" `
+                    -RequiredModules @("Microsoft.Graph.Users", "Microsoft.Graph.Groups", "Microsoft.Graph.Identity.DirectoryManagement")
 
                 $sidNames = @{}
                 $user = Get-OnPremAdUser -Identity $UserName -Domain $Domain -ErrorAction Stop
@@ -5703,20 +5722,32 @@ function Request-ConnectMsGraph {
     .DESCRIPTION
     Correctly import the MsGraph module for your PowerShell version and then sign in using the same tenant is the currently signed in Az user.
     .EXAMPLE
-    Request-ConnectMsGraph
+    Request-ConnectMsGraph `
+        -Scopes "Domain.Read.All" `
+        -RequiredModules @("Microsoft.Graph.Users", "Microsoft.Graph.Groups", "Microsoft.Graph.Identity.DirectoryManagement")
     #>
 
     [CmdletBinding()]
     param(
         [Parameter(Mandatory=$true)]
-        [string[]]$Scopes
+        [string[]]$Scopes,
+
+        [Parameter(Mandatory=$true)]
+        [string[]]$RequiredModules,
+
+        [Parameter(Mandatory=$false)]
+        [string]$TenantId
     )
 
     Assert-IsWindows
-    Request-MSGraphModule
+    Request-MSGraphModule -RequiredModules $RequiredModules
 
-    $context = Get-AzContext
-    Connect-MgGraph -Scopes $Scopes -TenantId $context.Tenant.Id | Out-Null
+    if ([string]::IsNullOrEmpty($TenantId)) {
+        $context = Get-AzContext
+        $TenantId = $context.Tenant.Id
+    }
+
+    Connect-MgGraph -Scopes $Scopes -TenantId $TenantId | Out-Null
 }
 
 function Get-AzCurrentAzureADUser {
@@ -5738,7 +5769,9 @@ function Get-AzCurrentAzureADUser {
     $friendlyLogin = $context.Account.Id
     $friendlyLoginSplit = $friendlyLogin.Split("@")
 
-    Request-ConnectMsGraph -Scopes "Domain.Read.All"
+    Request-ConnectMsGraph `
+        -Scopes "Domain.Read.All" `
+        -RequiredModules @("Microsoft.Graph.Users", "Microsoft.Graph.Groups", "Microsoft.Graph.Identity.DirectoryManagement")
 
     $domains = Get-MgDomain
     $domainNames = $domains | Select-Object -ExpandProperty Id
@@ -7233,7 +7266,10 @@ function Move-OnPremSharePermissionsToAzureFileShare
         #Geting the OID of domain user/group using its SID
         try
         {
-            Request-ConnectMsGraph -Scopes "User.Read.All"
+            Request-ConnectMsGraph `
+                -Scopes "User.Read.All" `
+                -RequiredModules @("Microsoft.Graph.Users", "Microsoft.Graph.Groups", "Microsoft.Graph.Identity.DirectoryManagement")
+            
             $aadUser = Get-MgUser -Filter "OnPremisesSecurityIdentifier eq '$strSID'"
         }
         catch
