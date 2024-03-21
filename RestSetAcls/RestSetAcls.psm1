@@ -142,6 +142,32 @@ function Write-FinalFilesAndFoldersProcessed {
     }
 }
 
+function Write-SddlWarning {
+    param (
+        [Parameter(Mandatory=$true)]
+        [string]$Sddl,
+
+        [Parameter(Mandatory=$true)]
+        [string]$NewSddl
+    )
+    Write-WarningHeader
+    Write-Host "The SDDL string has non-standard inheritance rules."
+    Write-Host "It is recommended to set OI (Object Inherit) and CI (Container Inherit) on every permission. " -ForegroundColor DarkGray
+    Write-Host "This ensures that the permissions are inherited by files and folders created in the future." -ForegroundColor DarkGray
+    Write-Host
+    Write-Host "   Current:     "  -NoNewline -ForegroundColor Yellow
+    Write-Host $Sddl
+    Write-Host "   Recommended: " -NoNewline -ForegroundColor Green
+    Write-Host $NewSddl
+    Write-Host
+
+    Write-Host "Do you want to continue with the " -NoNewline
+    Write-Host "current" -ForegroundColor Yellow -NoNewline
+    Write-Host " SDDL?" -NoNewline
+
+    return Ask ""
+}
+
 function Get-AzureFilesRecursive {
     param (
         [Parameter(Mandatory=$true, ValueFromPipeline=$true, ValueFromPipelineByPropertyName=$true)]
@@ -360,25 +386,12 @@ function Set-AzureFilesAclRecursive {
             -DisableFlags $shouldBeDisabled
 
         $newSddl = ConvertFrom-RawSecurityDescriptor $securityDescriptor
-        
-        Write-WarningHeader
-        Write-Host "The SDDL string has non-standard inheritance rules."
-        Write-Host "It is recommended to set OI (Object Inherit) and CI (Container Inherit) on every permission. " -ForegroundColor DarkGray
-        Write-Host "This ensures that the permissions are inherited by files and folders created in the future." -ForegroundColor DarkGray
-        Write-Host
-        Write-Host "   Given:       "  -NoNewline -ForegroundColor Yellow
-        Write-Host $SddlPermission
-        Write-Host "   Recommended: " -NoNewline -ForegroundColor Green
-        Write-Host $newSddl
-        Write-Host
 
-        Write-Host "Do you want to continue with the " -NoNewline
-        Write-Host "given" -ForegroundColor Yellow -NoNewline
-        Write-Host " SDDL?" -NoNewline
-        if (-not (Ask "")) {
+        $continue = Write-SddlWarning -Sddl $SddlPermission -NewSddl $newSddl
+        if (-not $continue) {
             return
         }
-    }    
+    }
 
     # Try to create permission on Azure Files
     # The idea is to create the permission early. If this fails (e.g. due to invalid SDDL), we can fail early.
