@@ -4,7 +4,21 @@
 > These instructions are only meant for contributors to this project.
 > If you want to use the script, refer to the README.
 
-## Setting up a test
+## Running unit tests
+
+1. Install Pester. You should use Pester 5.x or later.
+
+    ```powershell
+    Install-Module -Name Pester -Force
+    ```
+
+2. Run the tests
+
+    ```powershell
+    Invoke-Pester -Output Detailed
+    ```
+
+## Setting up a test run
 
 1. Create a new Azure Storage account with a file share. Take note of the storage account key.
 1. Define the following in your PowerShell session:

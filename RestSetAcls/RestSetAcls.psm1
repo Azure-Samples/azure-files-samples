@@ -1,69 +1,5 @@
-Import-Module $PSScriptRoot/PrintUtils.psm1
-
-function Get-AreAceFlagsInSddlAllEqualToTarget {
-    param (
-        [Parameter(Mandatory=$true)]
-        [string] $Sddl,
-        
-        [Parameter(Mandatory=$true)]
-        [System.Security.AccessControl.InheritanceFlags]$TargetInheritanceFlags,
-
-        [Parameter(Mandatory=$true)]
-        [System.Security.AccessControl.PropagationFlags]$TargetPropagationFlags
-    )
-    # Load the SDDL into a DirectorySecurity object
-    # DirectorySecurity is used over FileSecurity because it keeps the inheritance flags of the SDDL
-    $securityDescriptor = New-Object System.Security.AccessControl.DirectorySecurity
-    $securityDescriptor.SetSecurityDescriptorSddlForm($Sddl)
-
-    foreach ($ace in $securityDescriptor.Access) {
-        if ($ace.InheritanceFlags -ne $TargetInheritanceFlags -or
-            $ace.PropagationFlags -ne $TargetPropagationFlags) {
-                return $false
-        }
-    }
-
-    return $true
-}
-
-function Get-SddlWithUpdatedAceFlags {
-    param (
-        [Parameter(Mandatory=$true)]
-        [string] $Sddl,
-        
-        [Parameter(Mandatory=$true)]
-        [System.Security.AccessControl.InheritanceFlags]$InheritanceFlags,
-
-        [Parameter(Mandatory=$true)]
-        [System.Security.AccessControl.PropagationFlags]$PropagationFlags
-    )
-    # Load the SDDL into a DirectorySecurity object
-    # DirectorySecurity is used over FileSecurity because it keeps the inheritance flags of the SDDL
-    $securityDescriptor = New-Object System.Security.AccessControl.DirectorySecurity
-    $securityDescriptor.SetSecurityDescriptorSddlForm($SddlPermission)
-
-    # Create new ACEs with updated flags
-    $newAces = $securityDescriptor.Access | ForEach-Object {
-        [System.Security.AccessControl.FileSystemAccessRule]::new(
-            $_.IdentityReference,
-            $_.FileSystemRights,
-            $InheritanceFlags,
-            $PropagationFlags,
-            $_.AccessControlType)            
-    }
-    
-    # Remove all old ACEs
-    foreach ($ace in $securityDescriptor.Access) {
-        $securityDescriptor.RemoveAccessRule($ace) | Out-Null
-    }
-
-    # Add all new ACEs
-    foreach ($ace in $newAces) {
-        $securityDescriptor.AddAccessRule($ace)
-    }
-
-    return $securityDescriptor.GetSecurityDescriptorSddlForm([System.Security.AccessControl.AccessControlSections]::All)
-}
+. $PSScriptRoot/SddlUtils.ps1
+. $PSScriptRoot/PrintUtils.ps1
 
 function Write-LiveFilesAndFoldersProcessingStatus {
     [OutputType([int])]
@@ -372,8 +308,7 @@ function Set-AzureFilesAclRecursive {
 
     # Try to parse SDDL permission, check for common issues
     try {
-        $securityDescriptor = New-Object System.Security.AccessControl.DirectorySecurity
-        $securityDescriptor.SetSecurityDescriptorSddlForm($SddlPermission)
+        $securityDescriptor = ConvertTo-RawSecurityDescriptor -Sddl $SddlPermission
     } catch {
         Write-FailedHeader
         Write-Host "SDDL permission is invalid" -ForegroundColor Red
@@ -381,19 +316,21 @@ function Set-AzureFilesAclRecursive {
     }
 
     # Check if inheritance flags are okay
-    $targetInheritanceFlags = [System.Security.AccessControl.InheritanceFlags]::ContainerInherit -bor [System.Security.AccessControl.InheritanceFlags]::ObjectInherit
-    $targetPropagationFlags = [System.Security.AccessControl.PropagationFlags]::None
+    $shouldBeEnabled = "ContainerInherit, ObjectInherit"
+    $shouldBeDisabled = "NoPropagateInherit, InheritOnly"
 
-    $matchesTarget = Get-AreAceFlagsInSddlAllEqualToTarget `
-        -Sddl $SddlPermission `
-        -TargetInheritanceFlags $targetInheritanceFlags `
-        -TargetPropagationFlags $targetPropagationFlags
+    $matchesTarget = Get-AllAceFlagsMatch `
+        -SecurityDescriptor $securityDescriptor `
+        -EnabledFlags $shouldBeEnabled `
+        -DisabledFlags $shouldBeDisabled
 
     if (-not ($matchesTarget)) {
-        $newSddl = Get-SddlWithUpdatedAceFlags `
-            -Sddl $SddlPermission `
-            -InheritanceFlags $targetInheritanceFlags `
-            -PropagationFlags $targetPropagationFlags
+        Set-AceFlags `
+            -SecurityDescriptor $securityDescriptor `
+            -EnableFlags $shouldBeEnabled `
+            -DisableFlags $shouldBeDisabled
+
+        $newSddl = ConvertFrom-RawSecurityDescriptor $securityDescriptor
         
         Write-WarningHeader
         Write-Host "The SDDL string has non-standard inheritance rules."
