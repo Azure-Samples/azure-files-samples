@@ -217,6 +217,19 @@ function New-AzFilePermission {
     return $permissionInfo.Value.FilePermissionKey
 }
 
+function Get-AzureFilesPermission {
+    [OutputType([string])]
+    param (
+        [Parameter(Mandatory=$true)]
+        [string]$PermissionKey,
+
+        [Parameter(Mandatory=$true)]
+        [Microsoft.WindowsAzure.Commands.Common.Storage.ResourceModel.AzureStorageFileShare]$Share
+    )
+
+    $Share.ShareClient.GetPermission($PermissionKey).Value
+}
+
 function Set-AzureFilesPermissionKey {
     param (
         [Parameter(Mandatory=$true, ValueFromPipeline=$true, ValueFromPipelineByPropertyName=$true)]
@@ -239,6 +252,22 @@ function Set-AzureFilesPermissionKey {
             $null, # httpHeaders
             $smbProperties
         ) | Out-Null
+    }
+}
+
+function Get-AzureFilesPermissionKey {
+    [OutputType([string])]
+    param (
+        [Parameter(Mandatory=$true)]
+        [Microsoft.WindowsAzure.Commands.Common.Storage.ResourceModel.AzureStorageBase]$FileOrDirectory
+    )
+
+    if ($FileOrDirectory.GetType().Name -eq "AzureStorageFileDirectory") {
+        $directory = [Microsoft.WindowsAzure.Commands.Common.Storage.ResourceModel.AzureStorageFileDirectory]$FileOrDirectory
+        return $directory.ShareDirectoryProperties.SmbProperties.FilePermissionKey
+    } else {
+        $file = [Microsoft.WindowsAzure.Commands.Common.Storage.ResourceModel.AzureStorageFile]$FileOrDirectory
+        return $file.FileProperties.SmbProperties.FilePermissionKey
     }
 }
 
