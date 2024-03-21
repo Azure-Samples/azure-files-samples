@@ -57,10 +57,8 @@ function Write-LiveFilesAndFoldersProcessingStatus {
             
             $lastPrint = Get-Date
         }
-    }
 
-    end {
-        return $i
+        Write-Output $_
     }
 }
 
@@ -347,7 +345,10 @@ function Set-AzureFilesAclRecursive {
         [switch]$SkipFiles = $false,
 
         [Parameter(Mandatory=$false)]
-        [switch]$SkipDirectories = $false
+        [switch]$SkipDirectories = $false,
+
+        [Parameter(Mandatory=$false)]
+        [switch]$WriteToPipeline = $false
     )
 
     if ($SkipFiles -and $SkipDirectories) {
@@ -427,7 +428,7 @@ function Set-AzureFilesAclRecursive {
 
     if ($Parallel) {
         $funcDef = ${function:Set-AzureFilePermissionKey}.ToString()
-        $processedCount = Get-AzureFilesRecursive `
+        Get-AzureFilesRecursive `
             -Context $Context `
             -DirectoryContents @($directory) `
             -SkipFiles:$SkipFiles `
@@ -435,54 +436,83 @@ function Set-AzureFilesAclRecursive {
         | ForEach-Object -ThrottleLimit $ThrottleLimit -Parallel {
             # Set the ACL
             ${function:Set-AzureFilePermissionKey} = $using:funcDef
-            $errorMessage = $null            
+            $success = $true
+            $errorMessage = ""            
             try {
                 Set-AzureFilePermissionKey -File $_.File -FilePermissionKey $using:filePermissionKey
             } catch {
+                $success = $false
                 $errorMessage = $_.Exception.Message
             }
-            Write-Output @{
-                FullPath = $_.FullPath
-                ErrorMessage = $errorMessage
+            
+            # Write full output if requested, otherwise write minimal output
+            if ($using:WriteToPipeline) {
+                Write-Output @{
+                    Time = (Get-Date).ToString("o")
+                    FullPath = $_.FullPath
+                    Permission = $using:SddlPermission
+                    Success = $success
+                    ErrorMessage = $errorMessage
+                }
+            } else {
+                Write-Output @{
+                    FullPath = $_.FullPath
+                    Success = $success
+                    ErrorMessage = $errorMessage
+                }
             }
         } `
         | ForEach-Object {
-            $success = $true
-            
             # Can't write in the parallel block, so we write here
-            if ($null -ne $_.ErrorMessage) {
+            if (-not $_.Success) {
                 $errors[$_.FullPath] = $_.ErrorMessage
-                $success = $false
             }
-
-            Write-Output @{
-                FullPath = $_.FullPath
-                Success = $success
-            }
+            $processedCount++
+            Write-Output $_
         } `
-        | Write-LiveFilesAndFoldersProcessingStatus -RefreshRateHertz 10 -StartTime $startTime
-    } else {
-        $processedCount = Get-AzureFilesRecursive `
+        | Write-LiveFilesAndFoldersProcessingStatus -RefreshRateHertz 10 -StartTime $startTime `
+        | ForEach-Object { if ($WriteToPipeline) { Write-Output $_ } }
+    } else {       
+        Get-AzureFilesRecursive `
             -Context $Context `
             -DirectoryContents @($directory) `
             -SkipFiles:$SkipFiles `
             -SkipDirectories:$SkipDirectories `
         | ForEach-Object {
-            # Set the ACL
             $fullPath = $_.FullPath
             $success = $true
+            $errorMessage = ""
+            
+            # Set the ACL
             try {
                 Set-AzureFilePermissionKey -File $_.File -FilePermissionKey $filePermissionKey
             } catch {
-                $errors[$fullPath] = $_.Exception.Message
                 $success = $false
+                $errorMessage = $_.Exception.Message
+                $errors[$fullPath] = $errorMessage
             }
-            Write-Output @{
-                FullPath = $_.FullPath
-                Success = $success
-            }
+
+            $processedCount++
+            
+            # Write full output if requested, otherwise write minimal output
+            if ($WriteToPipeline) {
+                Write-Output @{
+                    Time = (Get-Date).ToString("o")
+                    FullPath = $fullPath
+                    Permission = $SddlPermission
+                    Success =  $success
+                    ErrorMessage = $errorMessage
+                }
+            } else {
+                Write-Output @{
+                    FullPath = $fullPath
+                    Success = $success
+                    ErrorMessage = $errorMessage
+                }
+            }            
         } `
-        | Write-LiveFilesAndFoldersProcessingStatus -RefreshRateHertz 10 -StartTime $startTime
+        | Write-LiveFilesAndFoldersProcessingStatus -RefreshRateHertz 10 -StartTime $startTime `
+        | ForEach-Object { if ($WriteToPipeline) { Write-Output $_ } }
     }
 
     $ProgressPreference = "Continue"
