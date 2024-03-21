@@ -4036,7 +4036,7 @@ function Debug-EntraKerbAdminConsent {
 
             $MsGraphSp = Get-MgServicePrincipalByAppId -AppId 00000003-0000-0000-c000-000000000000 
             
-            $spn = "api://$TenantId/CIFS/$StorageAccountName.file.core.windows.net')"
+            $spn = "api://$TenantId/CIFS/$StorageAccountName.file.core.windows.net"
             $ServicePrincipal = Get-MgServicePrincipal -Filter "servicePrincipalNames/any (name:name eq '$spn')" -ConsistencyLevel eventual
             if($null -eq $ServicePrincipal -or $null -eq $ServicePrincipal.Id)
             {
