@@ -366,8 +366,7 @@ function Set-AzureFilesAclRecursive {
     try {
         $securityDescriptor = ConvertTo-RawSecurityDescriptor -Sddl $SddlPermission
     } catch {
-        Write-FailedHeader
-        Write-Host "SDDL permission is invalid" -ForegroundColor Red
+        Write-Failure "SDDL permission is invalid"
         return
     }
 
@@ -400,10 +399,7 @@ function Set-AzureFilesAclRecursive {
     try {
         $filePermissionKey = New-AzureFilePermission -Context $Context -FileShareName $FileShareName -Sddl $SddlPermission
     } catch {
-        Write-FailedHeader
-        Write-Host "Failed to create file permission" -ForegroundColor Red
-        Write-Host 
-        Write-Host $_.Exception.Message -ForegroundColor Red
+        Write-Failure "Failed to create file permission" -Details $_.Exception.Message
         return
     }
 
@@ -414,10 +410,7 @@ function Set-AzureFilesAclRecursive {
     try {
         $directory = Get-AzStorageFile -Context $Context -ShareName $FileShareName -Path $FilePath -ErrorAction Stop
     } catch {
-        Write-FailedHeader
-        Write-Host "Failed to read root directory"
-        Write-Host
-        Write-Host $_.Exception.Message -ForegroundColor Red
+        Write-Failure "Failed to read root directory" -Details $_.Exception.Message
         return
     }
 

@@ -65,5 +65,21 @@ function Write-WarningHeader {
     } else {
         Write-Host "Warning: " -ForegroundColor Yellow -NoNewline
     }
+}
 
+function Write-Failure {
+    param (
+        [Parameter(Mandatory=$true, Position=0)]
+        [string]$Overview,
+        
+        [Parameter(Mandatory=$false)]
+        [string]$Details = $null
+    )
+
+    Write-FailedHeader
+    Write-Host $Overview -ForegroundColor Red
+    if (-not [string]::IsNullOrWhiteSpace($Details)) {
+        Write-Host
+        Write-Host $Details -ForegroundColor Red
+    }
 }
