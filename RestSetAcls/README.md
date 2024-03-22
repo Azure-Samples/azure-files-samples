@@ -71,7 +71,13 @@ You can export a CSV file that logs the changes made by `Set-AzureFilesAclRecurs
 To do this, use the `-WriteToPipeline` flag, and pass the output to `Export-Csv`:
 
 ```powershell
-Set-AzureFilesAclRecursive -Context $context -FileShareName $FileShareName -FilePath "/" -SddlPermission $sddl -WriteToPipeline | Export-Csv -Path "C:\path\to\log.csv"
+Set-AzureFilesAclRecursive `
+   -Context $context `
+   -FileShareName $FileShareName `
+   -FilePath "/" `
+   -SddlPermission $sddl `
+   -WriteToPipeline `
+   | Export-Csv -Path "C:\path\to\log.csv"
 ```
 
 To customize the CSV output, see the documentation of [Export-Csv](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.utility/export-csv).
