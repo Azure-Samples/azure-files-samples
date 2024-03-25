@@ -19,7 +19,7 @@ If issue can be easily reproduced:
    (or)
    In case the service is Azure NFSv3 blob service, replace v4 above with v3b.
 5) Repro the issue.
-6) Run "./smbclientlogs.sh stop"
+6) Run "./nfsclientlogs.sh stop"
 7) Above command generates output.zip
 8) Send the output.zip file to Microsoft support against your support case.
 

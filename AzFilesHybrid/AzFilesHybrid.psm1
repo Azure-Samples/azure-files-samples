@@ -936,12 +936,14 @@ function Request-PowerShellGetModule {
 
 function Request-MSGraphModule {
     [CmdletBinding(SupportsShouldProcess, ConfirmImpact="High")]
-    param()
+    param(
+        [Parameter(Mandatory=$true)]
+        [string[]]$RequiredModules
+    )
 
-    $requiredModules = @("Microsoft.Graph.Users", "Microsoft.Graph.Groups", "Microsoft.Graph.Identity.DirectoryManagement")
     $missingModules = @()
 
-    foreach ($module in $requiredModules) {
+    foreach ($module in $RequiredModules) {
         $installedModule = Get-Module -Name $module -ListAvailable
         if ($null -eq $installedModule) {
             Write-Host "Missing module: $module"
@@ -3134,7 +3136,7 @@ function Get-AzStorageKerberosTicketStatus {
             elseif ($line -match "0x80090342")
             {
                 #
-                # SEC_E_KDC_UNKNOWN_ETYPE
+                # SEC_E_KDC_UNKNOWN_ETYPE  
                 # The encryption type requested is not supported by the KDC.
                 #
 
@@ -3286,7 +3288,9 @@ function Get-AadUserForSid {
         [string]$sid
     )
 
-    Request-ConnectMsGraph -Scopes "User.Read.All"
+    Request-ConnectMsGraph `
+        -Scopes "User.Read.All" `
+        -RequiredModules @("Microsoft.Graph.Users", "Microsoft.Graph.Groups", "Microsoft.Graph.Identity.DirectoryManagement")
 
     $aadUser = Get-MgUser -Filter "OnPremisesSecurityIdentifier eq '$sid'"
 
@@ -3703,9 +3707,10 @@ function Debug-AzStorageAccountAuth {
         $VerifyAD = get-AzStorageAccount -ResourceGroupName $ResourceGroupName -StorageAccountName $StorageAccountName  
         $directoryServiceOptions = $VerifyAD.AzureFilesIdentityBasedAuth.DirectoryServiceOptions
 
-        if ($directoryServiceOptions -eq "ADDS")
+        if ($directoryServiceOptions -eq "AD")
         {
-            Debug-AzStorageAccountAdDsAuth `
+            Write-Verbose "Running Debug cmdlet for AD DS joined account: "
+            Debug-AzStorageAccountADDSAuth `
                 -StorageAccountName $StorageAccountName `
                 -ResourceGroupName $ResourceGroupName `
                 -Filter $Filter `
@@ -3716,7 +3721,8 @@ function Debug-AzStorageAccountAuth {
         }
         elseif ($directoryServiceOptions -eq "AADKERB")
         {
-            Debug-AzStorageAccountEntraKerbAuth`
+            Write-Verbose "Running Debug cmdlet for Microsoft Entra kerberos(AADKERB) joined account:"
+            Debug-AzStorageAccountEntraKerbAuth `
                 -StorageAccountName $StorageAccountName `
                 -ResourceGroupName $ResourceGroupName `
                 -Filter $Filter `
@@ -3727,7 +3733,7 @@ function Debug-AzStorageAccountAuth {
         }
         elseif ($directoryServiceOptions -eq "AADDS")
         {
-            Write-Host "This cmdlet does not support Microsoft Entra Domain Services authentication yet, You can run Debug-AzStorageAccountAdDsAuth to run the AD DS authentication checks instead, but note that while some checks may provide useful information, not all AD DS checks are expected to pass for a storage account with Microsoft Entra Domain Services authentication."
+            Write-Host "This cmdlet does not support Microsoft Entra Domain Services authentication yet, You can run Debug-AzStorageAccountADDSAuth to run the AD DS authentication checks instead, but note that while some checks may provide useful information, not all AD DS checks are expected to pass for a storage account with Microsoft Entra Domain Services authentication."
         }
         else
         {
@@ -3763,12 +3769,27 @@ function Debug-AzStorageAccountEntraKerbAuth {
 
     process
     {
+        if(![string]::IsNullOrEmpty($UserName))
+        {
+            Write-Error "The debug cmdlet for Microsoft Entra Kerberos (AADKERB) accounts does not yet implement support for -UserName parameter. It will be ignored."
+        }
+        if(![string]::IsNullOrEmpty($Domain) )
+        {
+            Write-Error "The debug cmdlet for Microsoft Entra Kerberos (AADKERB) accounts does not yet implement support for -ObjectId parameter. It will be ignored."
+        }
+        if(![string]::IsNullOrEmpty($FilePath))
+        {
+            Write-Error "The debug cmdlet for Microsoft Entra Kerberos (AADKERB) accounts does not yet implement support for -FilePath parameter. It will be ignored."
+        }
         $checksExecuted = 0;
         $filterIsPresent = ![string]::IsNullOrEmpty($Filter);
         $checks = @{
             "CheckPort445Connectivity" = [CheckResult]::new("CheckPort445Connectivity");
             "CheckAADConnectivity" = [CheckResult]::new("CheckAADConnectivity");
-            "CheckAADObject" = [CheckResult]::new("CheckAADObject");
+            "CheckEntraObject" = [CheckResult]::new("CheckEntraObject");
+            "CheckRegKey" = [CheckResult]::new("CheckRegKey");
+            "CheckKerbRealmMapping" = [CheckResult]::new("CheckKerbRealmMapping");
+            "CheckAdminConsent" = [CheckResult]::new("CheckAdminConsent")  
         }
         #
         # Port 445 check 
@@ -3792,6 +3813,9 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 Write-Error $_
             }
         }
+        #
+        # AAD Connectivity check 
+        #
         if (!$filterIsPresent -or $Filter -match "CheckAADConnectivity")
         {
             try {
@@ -3800,7 +3824,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 $Context = Get-AzContext
                 $TenantId = $Context.Tenant
                 $Response = Invoke-WebRequest -Method POST https://login.microsoftonline.com/$TenantId/kerberos
-                if ($Response.StatusCode == 200)
+                if ($Response.StatusCode -eq 200)
                 {
                     $checks["CheckAADConnectivity"].Result = "Passed"
                     Write-Verbose "CheckAADConnectivity - SUCCESS"
@@ -3808,8 +3832,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 else{
                     $checks["CheckAADConnectivity"].Result = "Failed"
                     $checks["CheckAADConnectivity"].Issue = "Expected response is 200, but we got $($Response.StatusCode)"
-                    Write-Error "CheckAADConnectivity - FAILED"
-
+                    Write-Error "Unexpected failure"
                 }
                 
             } catch {
@@ -3819,13 +3842,285 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 Write-Error $_
             }
         }
+        #
+        # AAD Object check 
+        #
+        if (!$filterIsPresent -or $Filter -match "CheckEntraObject")
+        {
+            try {
+                $checksExecuted += 1;
+                Write-Verbose "CheckEntraObject - START"
+                $Context = Get-AzContext
+                $TenantId = $Context.Tenant
 
+                Request-ConnectMsGraph `
+                    -Scopes "Application.Read.All" `
+                    -RequiredModules @("Microsoft.Graph.Applications") `
+                    -TenantId $TenantId
+                
+                Import-Module Microsoft.Graph.Applications
 
-        Write-Host "This cmdlet does not support all the checks for Microsoft Entra Kerberos authentication yet, You can run Debug-AzStorageAccountAdDsAuth to run the AD DS authentication checks instead, but note that while some checks may provide useful information, not all AD DS checks are expected to pass for a storage account with Microsoft Entra Kerberos authentication."
+                $Application = Get-MgApplication `
+                    -Filter "identifierUris/any (uri:uri eq 'api://${TenantId}/CIFS/${StorageAccountName}.file.core.windows.net')" `
+                    -ConsistencyLevel eventual
+                
+                if($null -eq $Application)
+                {
+                    $checks["CheckEntraObject"].Result = "Failed"
+                    $checks["CheckEntraObject"].Issue = "Could not find the application with SPN ' api://${TenantId}/CIFS/${StorageAccountName}.file.core.windows.net'."
+                    Write-Error "CheckEntraObject - FAILED"
+                    Write-Error "Could not find the application with SPN 'api://${TenantId}/CIFS/${StorageAccountName}.file.core.windows.net' "
+                }
+                $ServicePrincipal = Get-MgServicePrincipal -Filter "servicePrincipalNames/any (name:name eq 'api://$TenantId/CIFS/$StorageAccountName.file.core.windows.net')" -ConsistencyLevel eventual
+                if($null -eq $ServicePrincipal)
+                {
+                    $checks["CheckEntraObject"].Result = "Failed"
+                    $checks["CheckEntraObject"].Issue = "Service Principal is missing SPN ' CIFS/${StorageAccountName}.file.core.windows.net'."
+                    Write-Error "CheckEntraObject - FAILED"
+                    Write-Error "SPN Value is not set correctly, It should be 'CIFS/Storageaccountname.file.core.windows.net'"
+                }
+                if(-not $ServicePrincipal.AccountEnabled)
+                {
+                    $checks["CheckEntraObject"].Result = "Failed"
+                    $checks["CheckEntraObject"].Issue = "Expected AccountEnabled to be set to true"
+                    Write-Error "CheckEntraObject - FAILED"
+                    Write-Error "The service principal should have AccountEnabled set to true"
+                }
+                elseif(-not $ServicePrincipal.ServicePrincipalNames.Contains("CIFS/${StorageAccountName}.file.core.windows.net")  )
+                {
+                    $checks["CheckEntraObject"].Result = "Failed"
+                    $checks["CheckEntraObject"].Issue = "Service Principal is missing SPN ' CIFS/${StorageAccountName}.file.core.windows.net'."
+                    Write-Error "CheckEntraObject - FAILED"
+                    Write-Error "SPN Value is not set correctly, It should be 'CIFS/Storageaccountname.file.core.windows.net'"
+                }
+                elseif (-not $ServicePrincipal.ServicePrincipalNames.Contains("api://${TenantId}/CIFS/${StorageAccountName}.file.core.windows.net")) 
+
+                {
+                    $checks["CheckEntraObject"].Result = "Partial"
+                    Write-Warning "Service Principal is missing SPN 'api://${TenantId}/CIFS/${StorageAccountName}.file.core.windows.net'."
+                    Write-Warning "It is okay to not have this value for now, but it is good to have this configured in future if you want to continue getting kerberos tickets."
+
+                    Write-Verbose "CheckEntraObject - SUCCESS"
+                }
+                else {
+                    $checks["CheckEntraObject"].Result = "Passed"
+                    Write-Verbose "CheckEntraObject - SUCCESS" 
+                }
+            } catch {
+                $checks["CheckEntraObject"].Result = "Failed"
+                $checks["CheckEntraObject"].Issue = $_
+                Write-Error "CheckEntraObject - FAILED"
+                Write-Error $_
+            }
+        }
+        #
+        #Check if Reg key is enabled
+        #
+        if (!$filterIsPresent -or $Filter -match "CheckRegKey")
+        {
+            try {
+                $checksExecuted += 1;
+                Write-Verbose "CheckRegKey - START"
+                $RegKey = Get-ItemProperty -Path Registry::HKLM\SYSTEM\CurrentControlSet\Control\Lsa\Kerberos\Parameters
+                if($null -ne $RegKey -and $RegKey.CloudKerberosTicketRetrievalEnabled -eq "1")
+                {
+                    $checks["CheckRegKey"].Result = "Passed"
+                    Write-Verbose "CheckRegKey - SUCCESS"
+                }
+                else {
+                    $checks["CheckRegKey"].Result = "Failed"
+                    $checks["CheckRegKey"].Issue = "The CloudKerberosTicketRetrievalEnabled need to be enabled to get kerberos ticket"
+                    Write-Error "CheckRegKey - FAILED"
+                    Write-Error "The registry key HKLM\SYSTEM\CurrentControlSet\Control\Lsa\Kerberos\Parameters\CloudKerberosTicketRetrievalEnabled was non-existent or 0."
+                    Write-Error "For AAD Kerberos authentication, it should be set to 1."
+                    Write-Error "To fix this error, enable the registry key and reboot the machine."
+                    Write-Error "See https://learn.microsoft.com/en-us/azure/storage/files/storage-files-identity-auth-hybrid-identities-enable?tabs=azure-portal#configure-the-clients-to-retrieve-kerberos-tickets"
+                }
+                
+            } catch {
+                $checks["CheckRegKey"].Result = "Failed"
+                $checks["CheckRegKey"].Issue = $_
+                Write-Error "CheckRegKey - FAILED"
+                Write-Error $_
+            }
+        }
+        #
+        # Check if Kerberos Realm Mapping is configured
+        #
+        if (!$filterIsPresent -or $Filter -match "CheckKerbRealmMapping")
+        {
+            try {
+                $checksExecuted += 1;
+                $hostToRealm = Get-ChildItem Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Lsa\Kerberos\HostToRealm
+                if($null -eq $hostToRealm)
+                {
+                    $checks["CheckKerbRealmMapping"].Result = "Passed"
+                    Write-Verbose "CheckKerbRealmMapping - SUCCESS"
+                }
+                $failure = $false
+                foreach ($domainKey in $hostToRealm) 
+                {
+                    $properties = $domainKey | Get-ItemProperty
+                    $realmName = $properties.PSChildName
+                    $spnMappings = $($domainKey | Get-ItemProperty).SpnMappings
+                    foreach ($hostName in $spnMappings) {
+                        if ($hostName -eq "${StorageAccountName}.file.core.windows.net" -or
+                            $hostName -eq ".file.core.windows.net" -or
+                            $hostName -eq ".core.windows.net" -or
+                            $hostName -eq ".windows.net" -or
+                            $hostName -eq ".net" -or
+                            $hostName -eq "${StorageAccountName}.privatelink.file.core.windows.net" -or
+                            $hostName -eq ".privatelink.file.core.windows.net")
+                        {
+                            if ($realmName -eq "KERBEROS.MICROSOFTONLINE.COM") 
+                            {
+                                if (!$failure) {
+                                    $checks["CheckKerbRealmMapping"].Result = "Warning"
+                                    $checks["CheckKerbRealmMapping"].Issue = "The Storage account ${StorageAccountName} has been mapped to ${realmName}"
+                                    Write-Warning "CheckKerbRealmMapping - Warning"
+                                    Write-Warning "To retrieve Kerberos tickets run the ksetup Windows command on the client(s): 'ksetup /delhosttorealmmap ${hostName} ${realmName}'. "
+                                }
+                            } else {
+                                $failure = $true
+                                $checks["CheckKerbRealmMapping"].Result = "Failed"
+                                $checks["CheckKerbRealmMapping"].Issue = "The storage account '${StorageAccountName}' is mapped to '${realmName}'. "
+                                Write-Error "CheckKerbRealmMapping - FAILED" 
+                                Write-Error "To retrieve Kerberos tickets run the ksetup Windows command on the client(s) : 'ksetup /delhosttoreakmmap $hostName $realmName'"
+
+                            }
+                        }
+                    }
+                }
+            } catch {
+                $checks["CheckKerbRealmMapping"].Result = "Failed"
+                $checks["CheckKerbRealmMapping"].Issue = $_
+                Write-Error "CheckKerbRealmMapping - FAILED"
+                Write-Error $_
+            }
+        }
+        #
+        # Check if admin consent has been granted onto the SP
+        #
+        if (!$filterIsPresent -or $Filter -match "CheckAdminConsent")
+        {
+            $checksExecuted += 1;
+            Debug-EntraKerbAdminConsent -StorageAccountName $StorageAccountName -checkResult $checks["CheckAdminConsent"]
+        }
+
+        SummaryOfChecks -filterIsPresent $filterIsPresent -checksExecuted $checksExecuted
     }
 }
 
+function Debug-EntraKerbAdminConsent {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory=$True, Position=0, HelpMessage="Storage account name")]
+        [string]$StorageAccountName,
+        [Parameter(Mandatory=$True, Position=1, HelpMessage="Check result object")]
+        [CheckResult]$checkResult
+    )
 
+    process {
+        try {
+            Write-Verbose "CheckAdminConsent - START"
+            $Context = Get-AzContext
+            $TenantId = $Context.Tenant
+            
+            Request-ConnectMsGraph `
+                -Scopes "DelegatedPermissionGrant.Read.All" ` #TODO(maybe update scopes)
+                -RequiredModules @("Microsoft.Graph.Applications", "Microsoft.Graph.Identity.SignIns") `
+                -TenantId $TenantId
+
+            Import-Module Microsoft.Graph.Applications
+            Import-Module Microsoft.Graph.Identity.SignIns
+
+            $MsGraphSp = Get-MgServicePrincipalByAppId -AppId 00000003-0000-0000-c000-000000000000 
+            
+            $spn = "api://$TenantId/CIFS/$StorageAccountName.file.core.windows.net"
+            $ServicePrincipal = Get-MgServicePrincipal -Filter "servicePrincipalNames/any (name:name eq '$spn')" -ConsistencyLevel eventual
+            if($null -eq $ServicePrincipal -or $null -eq $ServicePrincipal.Id)
+            {
+                $checkResult.Result = "Failed"
+                $checkResult.Issue = "Could not find the application with SPN '$spn'. "
+
+                Write-Error "CheckAdminConsent - FAILED"
+                Write-Error "Could not find the application with SPN '$spn'"
+                return
+            }
+            
+            $Consent = Get-MgOauth2PermissionGrant -Filter "ClientId eq '$($ServicePrincipal.Id)' and ResourceId eq '$($MSGraphSp.Id)' and consentType eq 'AllPrincipals'" 
+            if($null -eq $Consent -or $null -eq $Consent.Scope)
+            {
+                $checkResult.Result = "Failed"
+                $checkResult.Issue = "Admin Consent is not granted"
+                Write-Error "CheckAdminConsent - FAILED"
+                Write-Error "Please grant admin consent using 'https://learn.microsoft.com/en-us/azure/storage/files/storage-files-identity-auth-hybrid-identities-enable?tabs=azure-portal#grant-admin-consent-to-the-new-service-principal'"
+                return
+            }
+
+            $permissions = New-Object System.Collections.Generic.HashSet[string] 
+            foreach ($permission in $Consent.Scope.Split(" ")) {
+                $permissions.Add($permission)
+            }
+
+            if ($permissions.Contains("openid") -and 
+                $permissions.Contains("profile") -and 
+                $permissions.Contains("User.Read")) 
+            {
+                $checkResult.Result = "Passed"
+                Write-Verbose " - SUCCESS"
+            } 
+            else 
+            {
+                $checkResult.Result = "Failed"
+                $checkResult.Issue = "Admin Consent is not granted"
+                Write-Error "CheckAdminConsent - FAILED"
+                Write-Error "Please grant admin consent using 'https://learn.microsoft.com/en-us/azure/storage/files/storage-files-identity-auth-hybrid-identities-enable?tabs=azure-portal#grant-admin-consent-to-the-new-service-principal'"
+            }                          
+        } catch {
+            $checkResult.Result = "Failed"
+            $checkResult.Issue = $_
+            Write-Error "CheckAdminConsent - FAILED"
+            Write-Error $_
+        }
+    }
+}
+
+function SummaryOfChecks {
+    param (
+        [Parameter(Mandatory=$True, Position=0, HelpMessage="Filter")]
+        [string]$filterIsPresent,
+
+        [Parameter(Mandatory=$True, Position=1, HelpMessage="CheckExecuted")]
+        [string]$checksExecuted
+    )
+
+    process
+    {
+        if ($filterIsPresent -and $checksExecuted -eq 0)
+        {
+            $message = "Filter '$Filter' provided does not match any options. No checks were executed." `
+                + " Available filters are {$($checks.Keys -join ', ')}"
+            Write-Error -Message $message -ErrorAction Stop
+        }
+        else
+        {
+            Write-Host "Summary of checks:"
+            $checks.Values | Format-Table -Property Name,Result
+            
+            $issues = $checks.Values | Where-Object { $_.Result -ieq "Failed" }
+
+            if ($issues.Length -gt 0) {
+                Write-Host "Issues found:"
+                $issues | ForEach-Object { Write-Host -ForegroundColor Red "---- $($_.Name) ----`n$($_.Issue)" }
+            }
+        }
+
+        Write-Host "This cmdlet does not support all the checks for Microsoft Entra Kerberos authentication yet, You can run Debug-AzStorageAccountADDSAuth to run the AD DS authentication checks instead, but note that while some checks may provide useful information, not all AD DS checks are expected to pass for a storage account with Microsoft Entra Kerberos authentication."
+    
+    }
+    
+}
 function Debug-AzStorageAccountADDSAuth {
     <#
     .SYNOPSIS
@@ -3926,10 +4221,11 @@ function Debug-AzStorageAccountADDSAuth {
         
                 if (!(Get-IsDomainJoined))
                 {
-                    $message = "Machine is not domain-joined. Mounting to Azure Files through" `
-                        + " Active Directory Authentication is only supported when the computer is joined to" `
-                        + " an Active Directory domain, which is synced to Azure AD with Azure AD Connect" `
-                        + " (https://docs.microsoft.com/en-us/azure/storage/files/storage-files-identity-auth-active-directory-enable#prerequisites)"
+                    $message = "Machine is not domain-joined." `
+                        + " Being domain-joined to an AD DS domain is a prerequisite for mounting" `
+                        + " Azure file shares without having to explicitly provide user credentials at every mount.See[https://docs.microsoft.com/en-us/azure/storage/files/storage-files-identity-auth-active-directory-enable#prerequisites].\n\n" `
+                        + " Mounting through a machine that isn't domain-joined is also supported," `
+                        + " but you must (1) have line of sight to the domain controller, and (2) explicitly provide AD DS user credentials when mounting. See[https://learn.microsoft.com/en-us/azure/storage/files/storage-files-identity-ad-ds-mount-file-share#mount-the-file-share-from-a-non-domain-joined-vm-or-a-vm-joined-to-a-different-ad-domain]"
                     Write-Error -Message $message -ErrorAction Stop
                 }
 
@@ -4187,7 +4483,9 @@ function Debug-AzStorageAccountADDSAuth {
                 $checksExecuted += 1
                 Write-Verbose "CheckUserRbacAssignment - START"
 
-                Request-ConnectMsGraph -Scopes "User.Read.All", "GroupMember.Read.All"
+                Request-ConnectMsGraph `
+                    -Scopes "User.Read.All", "GroupMember.Read.All" `
+                    -RequiredModules @("Microsoft.Graph.Users", "Microsoft.Graph.Groups", "Microsoft.Graph.Identity.DirectoryManagement")
 
                 $sidNames = @{}
                 $user = Get-OnPremAdUser -Identity $UserName -Domain $Domain -ErrorAction Stop
@@ -5457,20 +5755,32 @@ function Request-ConnectMsGraph {
     .DESCRIPTION
     Correctly import the MsGraph module for your PowerShell version and then sign in using the same tenant is the currently signed in Az user.
     .EXAMPLE
-    Request-ConnectMsGraph
+    Request-ConnectMsGraph `
+        -Scopes "Domain.Read.All" `
+        -RequiredModules @("Microsoft.Graph.Users", "Microsoft.Graph.Groups", "Microsoft.Graph.Identity.DirectoryManagement")
     #>
 
     [CmdletBinding()]
     param(
         [Parameter(Mandatory=$true)]
-        [string[]]$Scopes
+        [string[]]$Scopes,
+
+        [Parameter(Mandatory=$true)]
+        [string[]]$RequiredModules,
+
+        [Parameter(Mandatory=$false)]
+        [string]$TenantId
     )
 
     Assert-IsWindows
-    Request-MSGraphModule
+    Request-MSGraphModule -RequiredModules $RequiredModules
 
-    $context = Get-AzContext
-    Connect-MgGraph -Scopes $Scopes -TenantId $context.Tenant.Id | Out-Null
+    if ([string]::IsNullOrEmpty($TenantId)) {
+        $context = Get-AzContext
+        $TenantId = $context.Tenant.Id
+    }
+
+    Connect-MgGraph -Scopes $Scopes -TenantId $TenantId | Out-Null
 }
 
 function Get-AzCurrentAzureADUser {
@@ -5492,7 +5802,9 @@ function Get-AzCurrentAzureADUser {
     $friendlyLogin = $context.Account.Id
     $friendlyLoginSplit = $friendlyLogin.Split("@")
 
-    Request-ConnectMsGraph -Scopes "Domain.Read.All"
+    Request-ConnectMsGraph `
+        -Scopes "Domain.Read.All" `
+        -RequiredModules @("Microsoft.Graph.Users", "Microsoft.Graph.Groups", "Microsoft.Graph.Identity.DirectoryManagement")
 
     $domains = Get-MgDomain
     $domainNames = $domains | Select-Object -ExpandProperty Id
@@ -6987,7 +7299,10 @@ function Move-OnPremSharePermissionsToAzureFileShare
         #Geting the OID of domain user/group using its SID
         try
         {
-            Request-ConnectMsGraph -Scopes "User.Read.All"
+            Request-ConnectMsGraph `
+                -Scopes "User.Read.All" `
+                -RequiredModules @("Microsoft.Graph.Users", "Microsoft.Graph.Groups", "Microsoft.Graph.Identity.DirectoryManagement")
+            
             $aadUser = Get-MgUser -Filter "OnPremisesSecurityIdentifier eq '$strSID'"
         }
         catch

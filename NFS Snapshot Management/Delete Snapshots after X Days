@@ -1,0 +1,36 @@
+##PowerShell Script to delete snapshots 
+
+Connect-AzAccount
+Set-AzContext -Subscription "Subscription Name"
+ 
+$resourceGroupName = "Resouce group Name"
+$accountName = "Storage account name"
+$shareName = "Share Name"
+ 
+$snapshotLifetimeInDays = "15"
+#$snapshotLifetimeInMinutes = ""
+$whatIf = $false
+ 
+$CurrentDateTime = (Get-Date).ToUniversalTime()
+$DateTimeThreshold = $CurrentDateTime.AddDays(-$snapshotLifetimeInDays)
+#$DateTimeThreshold = $CurrentDateTime.AddMinutes(-$snapshotLifetimeInMinutes)
+ 
+Write-Host "Querying all snapshots for share '$shareName'"
+$snapshotList = (Get-AzRmStorageShare -ResourceGroupName $resourcegroupname -StorageAccountName $accountName -IncludeSnapshot) | Where-Object { $_.Name -eq $shareName -and $_.snapshotTime -ne $null }
+$snapshotList
+ 
+Write-Host "Current date/time is $CurrentDateTime. Removing share snapshots older than '$DateTimeThreshold'"
+foreach ($snapshot in $snapshotList) {
+    if ($snapshot.SnapshotTime -lt $DateTimeThreshold) {
+        Write-Host "Removing snapshot '$($snapshot.snapshotTime)' of share '$($snapshot.Name)'"
+        if ($whatIf -ne $true) {
+Remove-AzRmStorageShare -ResourceGroupName $resourcegroupname -StorageAccountName $accountName -Name $snapshot.Name -snapshotTime $snapshot.snapshotTime -Force
+        }
+    } else {
+        Write-Host "Retaining recent snapshot '$($snapshot.snapshotTime)' of share '$($snapshot.Name)'"
+    }
+}
+ 
+Write-Host "Querying all snapshots for share '$shareName' after deletion of old snapshots"
+$snapshotListNew = (Get-AzRmStorageShare -ResourceGroupName $resourcegroupname -StorageAccountName $accountName -IncludeSnapshot)
+$snapshotListNew 
