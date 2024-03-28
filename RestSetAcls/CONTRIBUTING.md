@@ -60,6 +60,11 @@
     Creating file /dir-3/file-3.txt
     ```
 
+    In general, if $f$ is `NumberFilesPerDir`, $d$ is `NumberDirs` and $\Delta$ is `Depth`, this script will generate:
+    
+    $$\text{\\# of files} = f \cdot d^\Delta$$
+    $$\text{\\# of folders} = \sum_{i=1}^{\Delta} {d^i} = \frac{d(d^\Delta - 1)}{d-1}$$
+
 ## Comparing the speed to icacls
 
 1. Try to set permissions via icacls
