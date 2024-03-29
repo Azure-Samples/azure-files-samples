@@ -4027,7 +4027,7 @@ function Debug-EntraKerbAdminConsent {
             $TenantId = $Context.Tenant
             
             Request-ConnectMsGraph `
-                -Scopes "DelegatedPermissionGrant.Read.All" ` #TODO(maybe update scopes)
+                -Scopes "DelegatedPermissionGrant.Read.All" `
                 -RequiredModules @("Microsoft.Graph.Applications", "Microsoft.Graph.Identity.SignIns") `
                 -TenantId $TenantId
 
