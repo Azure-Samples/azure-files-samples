@@ -1,35 +1,5 @@
-function Ask([Parameter(Mandatory=$true)][string] $question)
-{
-    while ($true) {
-        $yn = Read-Host "${question} [Y/n]"
-        $yn = $yn.Trim().ToLower()
-        if ($yn -eq 'n') {
-            return $false
-        } elseif ($yn -eq '' -or $yn -eq 'y') {
-            return $true
-        }
-        Write-Host "Invalid answer '$yn'. Answer with either 'y' or 'n'" -ForegroundColor Red
-    }
-}
-
-function Get-IsPowerShellIse {
-    return $host.Name -eq "Windows PowerShell ISE Host"
-}
-
-function Get-SpecialCharactersPrintable {
-    # Windows Terminal supports it
-    if ($env:WT_SESSION) {
-        return $true
-    }
-
-    # PowerShell 6+ supports it
-    if ($PSVersionTable.PSVersion.Major -ge 6) {
-        return $true
-    }
-
-    # Older versions don't
-    return $false
-}
+. $PSScriptRoot/SddlUtils.ps1
+. $PSScriptRoot/PrintUtils.ps1
 
 function Write-LiveFilesAndFoldersProcessingStatus {
     [OutputType([int])]
@@ -87,10 +57,8 @@ function Write-LiveFilesAndFoldersProcessingStatus {
             
             $lastPrint = Get-Date
         }
-    }
 
-    end {
-        return $i
+        Write-Output $_
     }
 }
 
@@ -110,14 +78,6 @@ function Write-FinalFilesAndFoldersProcessed {
         [int]$MaxErrorsToShow = 10
     )
 
-     # Backwards compat with older PowerShell versions
-    $specialChars = Get-SpecialCharactersPrintable
-    $checkmark = [System.Char]::ConvertFromUtf32([System.Convert]::ToInt32("2713", 16))
-    $cross = [System.Char]::ConvertFromUtf32([System.Convert]::ToInt32("2717", 16))
-    $doneStatus = if ($specialChars) { "($checkmark) Done: " } else { "Done: " }
-    $partialStatus = if ($specialChars) { "($cross) Partial: " } else { "Partial: " }
-    $failedStatus = if ($specialChars) { "($cross) Failed: " } else { "Failed: " }
-
     $successCount = $ProcessedCount - $Errors.Count
     $errorCount = $Errors.Count
 
@@ -126,7 +86,7 @@ function Write-FinalFilesAndFoldersProcessed {
     if ($errorCount -gt 0) {        
         if ($errorCount -eq $processedCount) {
             # Setting ACLs failed for all files; report it.
-            Write-Host $failedStatus -ForegroundColor Red -NoNewline
+            Write-FailedHeader
             Write-Host "Failed to set " -NoNewline
             Write-Host $errorCount -ForegroundColor Red -NoNewline
             Write-Host " permissions. Total time " -NoNewline
@@ -134,7 +94,7 @@ function Write-FinalFilesAndFoldersProcessed {
             Write-Host " seconds. Errors:"
         }
         else {
-            Write-Host $partialStatus -ForegroundColor Yellow -NoNewline
+            Write-PartialHeader
             Write-Host "Set " -NoNewline
             Write-Host $successCount -ForegroundColor Blue -NoNewline
             Write-Host " permissions, " -NoNewline
@@ -168,7 +128,7 @@ function Write-FinalFilesAndFoldersProcessed {
     } else {
         $itemsPerSec = [math]::Round($successCount / $TotalTime.TotalSeconds, 1)
 
-        Write-Host $doneStatus -ForegroundColor Green -NoNewline
+        Write-DoneHeader
         Write-Host "Set " -NoNewline
         Write-Host $successCount -ForegroundColor Blue -NoNewline
         Write-Host " permissions in " -NoNewline
@@ -180,6 +140,32 @@ function Write-FinalFilesAndFoldersProcessed {
     }
 }
 
+function Write-SddlWarning {
+    param (
+        [Parameter(Mandatory=$true)]
+        [string]$Sddl,
+
+        [Parameter(Mandatory=$true)]
+        [string]$NewSddl
+    )
+    Write-WarningHeader
+    Write-Host "The SDDL string has non-standard inheritance rules."
+    Write-Host "It is recommended to set OI (Object Inherit) and CI (Container Inherit) on every permission. " -ForegroundColor DarkGray
+    Write-Host "This ensures that the permissions are inherited by files and folders created in the future." -ForegroundColor DarkGray
+    Write-Host
+    Write-Host "   Current:     "  -NoNewline -ForegroundColor Yellow
+    Write-Host $Sddl
+    Write-Host "   Recommended: " -NoNewline -ForegroundColor Green
+    Write-Host $NewSddl
+    Write-Host
+
+    Write-Host "Do you want to continue with the " -NoNewline
+    Write-Host "current" -ForegroundColor Yellow -NoNewline
+    Write-Host " SDDL?" -NoNewline
+
+    return Ask ""
+}
+
 function Get-AzureFilesRecursive {
     param (
         [Parameter(Mandatory=$true, ValueFromPipeline=$true, ValueFromPipelineByPropertyName=$true)]
@@ -189,15 +175,22 @@ function Get-AzureFilesRecursive {
         [Microsoft.WindowsAzure.Commands.Storage.AzureStorageContext]$Context,
 
         [Parameter(Mandatory=$false)]
-        [string]$DirectoryPath = ""
+        [string]$DirectoryPath = "",
+
+        [Parameter(Mandatory=$false)]
+        [switch]$SkipFiles = $false,
+
+        [Parameter(Mandatory=$false)]
+        [switch]$SkipDirectories = $false
     )
 
     foreach ($file in $DirectoryContents) {
         $fullPath = "${DirectoryPath}$($file.Name)"
+        $isDirectory = $file.GetType().Name -eq "AzureStorageFileDirectory"
 
         $file.Context = $Context
 
-        if ($file.GetType().Name -eq "AzureStorageFileDirectory") {
+        if ($isDirectory) {
             $fullPath += "/"
 
             # Get the contents of the directory.
@@ -205,19 +198,63 @@ function Get-AzureFilesRecursive {
             # where items are either AzureStorageFile or AzureStorageFileDirectory.
             # Therefore, when recursing, we can cast Object[] to AzureStorageBase[].
             $subdirectoryContents = Get-AzStorageFile -Directory $file.CloudFileDirectory
+
             if ($null -ne $subdirectoryContents) {
-                Get-AzureFilesRecursive -Context $Context -DirectoryContents $subdirectoryContents -DirectoryPath $fullPath
+                Get-AzureFilesRecursive `
+                    -Context $Context `
+                    -DirectoryContents $subdirectoryContents `
+                    -DirectoryPath $fullPath `
+                    -SkipFiles:$SkipFiles `
+                    -SkipDirectories:$SkipDirectories
             }
         }
 
-        Write-Output @{
-            FullPath = $fullPath
-            File = $file   
+        if (($isDirectory -and !$SkipDirectories) -or (!$isDirectory -and !$SkipFiles)) {
+            Write-Output @{
+                FullPath = $fullPath
+                File = $file   
+            }
         }
     }
 }
 
-function Set-AzureFilesAcl {
+function New-AzureFilePermission {
+    [OutputType([string])]
+    param (
+        [Parameter(Mandatory=$true, HelpMessage="Azure storage context")]
+        [Microsoft.WindowsAzure.Commands.Storage.AzureStorageContext]$Context,
+
+        [Parameter(Mandatory=$true, HelpMessage="Name of the file share")]
+        [string]$FileShareName,
+        
+        [Parameter(
+            Mandatory=$true,
+            HelpMessage="File permission in the Security Descriptor Definition Language (SDDL). " +
+                        "SDDL must have an owner, group, and discretionary access control list (DACL). " +
+                        "The provided SDDL string format of the security descriptor should not have " +
+                        "domain relative identifier (like 'DU', 'DA', 'DD' etc) in it.")]
+        [string]$Sddl
+    )
+
+    $share = Get-AzStorageShare -Name $FileShareName -Context $Context
+    $permissionInfo = $share.ShareClient.CreatePermission($Sddl)
+    return $permissionInfo.Value.FilePermissionKey
+}
+
+function Get-AzureFilePermission {
+    [OutputType([string])]
+    param (
+        [Parameter(Mandatory=$true)]
+        [string]$PermissionKey,
+
+        [Parameter(Mandatory=$true)]
+        [Microsoft.WindowsAzure.Commands.Common.Storage.ResourceModel.AzureStorageFileShare]$Share
+    )
+
+    $Share.ShareClient.GetPermission($PermissionKey).Value
+}
+
+function Set-AzureFilePermission {
     param (
         [Parameter(Mandatory=$true, ValueFromPipeline=$true, ValueFromPipelineByPropertyName=$true)]
         [Microsoft.WindowsAzure.Commands.Common.Storage.ResourceModel.AzureStorageBase]$File,
@@ -243,6 +280,47 @@ function Set-AzureFilesAcl {
     }
 }
 
+function Set-AzureFilePermissionKey {
+    param (
+        [Parameter(Mandatory=$true, ValueFromPipeline=$true, ValueFromPipelineByPropertyName=$true)]
+        [Microsoft.WindowsAzure.Commands.Common.Storage.ResourceModel.AzureStorageBase]$File,
+
+        [Parameter(Mandatory=$true)]
+        [string]$FilePermissionKey
+    )
+
+    $smbProperties = New-Object Azure.Storage.Files.Shares.Models.FileSmbProperties
+    $smbProperties.FilePermissionKey = $FilePermissionKey
+
+    if ($File.GetType().Name -eq "AzureStorageFileDirectory") {
+        $directory = [Microsoft.WindowsAzure.Commands.Common.Storage.ResourceModel.AzureStorageFileDirectory]$File
+        $directory.ShareDirectoryClient.SetHttpHeaders($smbProperties) | Out-Null
+    } else {
+        $file = [Microsoft.WindowsAzure.Commands.Common.Storage.ResourceModel.AzureStorageFile]$File
+        $file.ShareFileClient.SetHttpHeaders(
+            $null, # newSize
+            $null, # httpHeaders
+            $smbProperties
+        ) | Out-Null
+    }
+}
+
+function Get-AzureFilePermissionKey {
+    [OutputType([string])]
+    param (
+        [Parameter(Mandatory=$true)]
+        [Microsoft.WindowsAzure.Commands.Common.Storage.ResourceModel.AzureStorageBase]$FileOrDirectory
+    )
+
+    if ($FileOrDirectory.GetType().Name -eq "AzureStorageFileDirectory") {
+        $directory = [Microsoft.WindowsAzure.Commands.Common.Storage.ResourceModel.AzureStorageFileDirectory]$FileOrDirectory
+        return $directory.ShareDirectoryProperties.SmbProperties.FilePermissionKey
+    } else {
+        $file = [Microsoft.WindowsAzure.Commands.Common.Storage.ResourceModel.AzureStorageFile]$FileOrDirectory
+        return $file.FileProperties.SmbProperties.FilePermissionKey
+    }
+}
+
 function Set-AzureFilesAclRecursive {
     param (
         [Parameter(Mandatory=$true)]
@@ -261,13 +339,68 @@ function Set-AzureFilesAclRecursive {
         [bool]$Parallel = $true,
 
         [Parameter(Mandatory=$false)]
-        [int]$ThrottleLimit = 10
+        [int]$ThrottleLimit = 10,
+
+        [Parameter(Mandatory=$false)]
+        [switch]$SkipFiles = $false,
+
+        [Parameter(Mandatory=$false)]
+        [switch]$SkipDirectories = $false,
+
+        [Parameter(Mandatory=$false)]
+        [switch]$WriteToPipeline = $false
     )
+
+    if ($SkipFiles -and $SkipDirectories) {
+        Write-Warning "Both -SkipFiles and -SkipDirectories are set. Nothing to do."
+        return
+    }
 
     # Check if parallel mode is supported
     if ($Parallel -and $PSVersionTable.PSVersion.Major -lt 7) {
         Write-Warning "-Parallel is only supported on PowerShell 7+. Falling back to single-threaded mode."
         $Parallel = $false
+    }
+
+    # Try to parse SDDL permission, check for common issues
+    try {
+        $securityDescriptor = ConvertTo-RawSecurityDescriptor -Sddl $SddlPermission
+    } catch {
+        Write-Failure "SDDL permission is invalid"
+        return
+    }
+
+    # Check if inheritance flags are okay
+    $shouldBeEnabled = "ContainerInherit, ObjectInherit"
+    $shouldBeDisabled = "NoPropagateInherit, InheritOnly"
+
+    $matchesTarget = Get-AllAceFlagsMatch `
+        -SecurityDescriptor $securityDescriptor `
+        -EnabledFlags $shouldBeEnabled `
+        -DisabledFlags $shouldBeDisabled
+
+    if (-not ($matchesTarget)) {
+        Set-AceFlags `
+            -SecurityDescriptor $securityDescriptor `
+            -EnableFlags $shouldBeEnabled `
+            -DisableFlags $shouldBeDisabled
+
+        $newSddl = ConvertFrom-RawSecurityDescriptor $securityDescriptor
+
+        $continue = Write-SddlWarning -Sddl $SddlPermission -NewSddl $newSddl
+        if (-not $continue) {
+            return
+        }
+    }
+
+    # Try to create permission on Azure Files
+    # The idea is to create the permission early. If this fails (e.g. due to invalid SDDL), we can fail early.
+    # Setting permission key should in theory also be slightly faster than setting SDDL directly (though this may not be noticeable in practice).
+    try {
+        $filePermissionKey = New-AzureFilePermission -Context $Context -FileShareName $FileShareName -Sddl $SddlPermission
+    } catch {
+        Write-Failure "Failed to create file permission" -Details $_.Exception.Message
+        return
     }
 
     # Get root directory
@@ -277,10 +410,7 @@ function Set-AzureFilesAclRecursive {
     try {
         $directory = Get-AzStorageFile -Context $Context -ShareName $FileShareName -Path $FilePath -ErrorAction Stop
     } catch {
-        Write-Host $failedStatus -ForegroundColor Red -NoNewline
-        Write-Host "Failed to read root directory"
-        Write-Host
-        Write-Host $_.Exception.Message -ForegroundColor Red
+        Write-Failure "Failed to read root directory" -Details $_.Exception.Message
         return
     }
 
@@ -290,55 +420,92 @@ function Set-AzureFilesAclRecursive {
     $ProgressPreference = "SilentlyContinue"
 
     if ($Parallel) {
-        $funcDef = ${function:Set-AzureFilesAcl}.ToString()
-        $processedCount = Get-AzureFilesRecursive -Context $Context -DirectoryContents @($directory) `
-            | ForEach-Object -ThrottleLimit $ThrottleLimit -Parallel {
-                # Set the ACL
-                ${function:Set-AzureFilesAcl} = $using:funcDef
-                $errorMessage = $null            
-                try {
-                    Set-AzureFilesAcl -File $_.File -SddlPermission $using:SddlPermission
-                } catch {
-                    $errorMessage = $_.Exception.Message
-                }
+        $funcDef = ${function:Set-AzureFilePermissionKey}.ToString()
+        Get-AzureFilesRecursive `
+            -Context $Context `
+            -DirectoryContents @($directory) `
+            -SkipFiles:$SkipFiles `
+            -SkipDirectories:$SkipDirectories `
+        | ForEach-Object -ThrottleLimit $ThrottleLimit -Parallel {
+            # Set the ACL
+            ${function:Set-AzureFilePermissionKey} = $using:funcDef
+            $success = $true
+            $errorMessage = ""            
+            try {
+                Set-AzureFilePermissionKey -File $_.File -FilePermissionKey $using:filePermissionKey
+            } catch {
+                $success = $false
+                $errorMessage = $_.Exception.Message
+            }
+            
+            # Write full output if requested, otherwise write minimal output
+            if ($using:WriteToPipeline) {
                 Write-Output @{
+                    Time = (Get-Date).ToString("o")
                     FullPath = $_.FullPath
+                    Permission = $using:SddlPermission
+                    Success = $success
                     ErrorMessage = $errorMessage
                 }
-            } `
-            | ForEach-Object {
-                $success = $true
-                
-                # Can't write in the parallel block, so we write here
-                if ($null -ne $_.ErrorMessage) {
-                    $errors[$_.FullPath] = $_.ErrorMessage
-                    $success = $false
+            } else {
+                Write-Output @{
+                    FullPath = $_.FullPath
+                    Success = $success
+                    ErrorMessage = $errorMessage
                 }
+            }
+        } `
+        | ForEach-Object {
+            # Can't write in the parallel block, so we write here
+            if (-not $_.Success) {
+                $errors[$_.FullPath] = $_.ErrorMessage
+            }
+            $processedCount++
+            Write-Output $_
+        } `
+        | Write-LiveFilesAndFoldersProcessingStatus -RefreshRateHertz 10 -StartTime $startTime `
+        | ForEach-Object { if ($WriteToPipeline) { Write-Output $_ } }
+    } else {       
+        Get-AzureFilesRecursive `
+            -Context $Context `
+            -DirectoryContents @($directory) `
+            -SkipFiles:$SkipFiles `
+            -SkipDirectories:$SkipDirectories `
+        | ForEach-Object {
+            $fullPath = $_.FullPath
+            $success = $true
+            $errorMessage = ""
+            
+            # Set the ACL
+            try {
+                Set-AzureFilePermissionKey -File $_.File -FilePermissionKey $filePermissionKey
+            } catch {
+                $success = $false
+                $errorMessage = $_.Exception.Message
+                $errors[$fullPath] = $errorMessage
+            }
 
+            $processedCount++
+            
+            # Write full output if requested, otherwise write minimal output
+            if ($WriteToPipeline) {
                 Write-Output @{
-                    FullPath = $_.FullPath
-                    Success = $success
+                    Time = (Get-Date).ToString("o")
+                    FullPath = $fullPath
+                    Permission = $SddlPermission
+                    Success =  $success
+                    ErrorMessage = $errorMessage
                 }
-            } `
-            | Write-LiveFilesAndFoldersProcessingStatus -RefreshRateHertz 10 -StartTime $startTime
-    } else {
-        $processedCount = Get-AzureFilesRecursive -Context $Context -DirectoryContents @($directory) `
-            | ForEach-Object {
-                # Set the ACL
-                $fullPath = $_.FullPath
-                $success = $true
-                try {
-                    Set-AzureFilesAcl -File $_.File -SddlPermission $SddlPermission
-                } catch {
-                    $errors[$fullPath] = $_.Exception.Message
-                    $success = $false
-                }
+            } else {
                 Write-Output @{
-                    FullPath = $_.FullPath
+                    FullPath = $fullPath
                     Success = $success
+                    ErrorMessage = $errorMessage
                 }
-            } `
-            | Write-LiveFilesAndFoldersProcessingStatus -RefreshRateHertz 10 -StartTime $startTime
+            }            
+        } `
+        | Write-LiveFilesAndFoldersProcessingStatus -RefreshRateHertz 10 -StartTime $startTime `
+        | ForEach-Object { if ($WriteToPipeline) { Write-Output $_ } }
     }
 
     $ProgressPreference = "Continue"
