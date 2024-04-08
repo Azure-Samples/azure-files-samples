@@ -42,6 +42,9 @@ start() {
   dump_debug_stats
   echo "=================================================" >> cifs_diag.txt
 
+  echo "======= Dumping Process callstacks at start =====" > process_callstack.txt
+  dump_process_callstacks
+  echo "=================================================" >> process_callstack.txt
 
   if [[ "$*" =~ "CaptureNetwork" ]]; then
     capture_network
@@ -151,6 +154,14 @@ dump_debug_stats() {
   ss -t | grep microsoft >> cifs_diag.txt
 }
 
+dump_process_callstacks() {
+  # Iterate through all stack files in /proc/*/stack
+  for stack_file in /proc/*/stack; do
+    echo "Process: $stack_file" >> process_callstack.txt
+    cat "$stack_file" >> process_callstack.txt
+    echo -e "\n\n" >> process_callstack.txt
+  done
+}
 
 capture_network() {
   nohup tcpdump -p -s 0 port ${CIFS_PORT} -w "${DIRNAME}/cifs_traffic.pcap" &
@@ -167,8 +178,13 @@ stop() {
   stop_capture_network
   echo -e "\n\n======= Dumping CIFS Debug Stats at the end =======" >> cifs_diag.txt
   dump_debug_stats
+
+  echo -e "\n\n======= Dumping Process callstacks at end  ========" >> process_callstack.txt
+  dump_process_callstacks
+
   mv cifs_diag.txt "${DIRNAME}"
   mv os_details.txt "${DIRNAME}"
+  mv process_callstack.txt "${DIRNAME}"
   zip -r "$(basename ${DIRNAME}).zip" "${DIRNAME}"
   return 0;
 }
