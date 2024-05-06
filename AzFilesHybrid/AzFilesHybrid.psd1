@@ -12,7 +12,7 @@
     RootModule = 'AzFilesHybrid.psm1'
     
     # Version number of this module.
-    ModuleVersion = '0.2.7.0'
+    ModuleVersion = '0.2.9.0'
     
     # Supported PSEditions
     CompatiblePSEditions = "Core", "Desktop"
@@ -96,8 +96,12 @@
         "Update-AzStorageAccountADObjectPassword",
         "Join-AzStorageAccount", 
         "Invoke-AzStorageAccountADObjectPasswordRotation",
-        "Debug-AzStorageAccountAuth",
         "Update-AzStorageAccountAuthForAES256",
+
+        # Azure Files debug cmdlets
+        "Debug-AzStorageAccountAuth",
+        "Debug-AzStorageAccountADDSAuth",
+        "Debug-AzStorageAccountEntraKerbAuth",
 
         # General Azure cmdlets
         "Expand-AzResourceId",

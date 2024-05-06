@@ -6,17 +6,28 @@ CIFS_PORT=445
 TRACE_CIFSBPF_ABS_PATH="$(cd "$(dirname "trace-cifsbpf")" && pwd)/$(basename "trace-cifsbpf")"
 PYTHON_PROG='python'
 STDLOG_FILE='/dev/null'
+CIFS_FYI_ENABLED=0
 
+am_i_root() {
+    local euid=$(id -u)
+    if (( $euid != 0 ));
+    then
+        echo "Please run $0 as root";
+        exit
+    fi
+}
 
 main() {
+  am_i_root
+
   if [[ "$*" =~ "start" ]]
   then
-    start "$@" 0<&- > "${STDLOG_FILE}" 2>&1
+    start "$@"
   elif [[  "$*" =~ "stop" ]]
   then
-    stop 0<&- > "${STDLOG_FILE}" 2>&1
+    stop
   else
-    echo "Usage: ./smbclientlogs.sh <start | stop> <CaptureNetwork>"
+    echo "Usage: ./smbclientlogs.sh <start | stop> <CaptureNetwork> <VerboseLogs>"
     exit 1
   fi
 
@@ -25,7 +36,7 @@ main() {
 
 start() {
   init
-  start_trace
+  start_trace $@
   dump_os_information
   echo "======= Dumping CIFS Debug Stats at start =======" > cifs_diag.txt
   dump_debug_stats
@@ -43,13 +54,11 @@ start() {
 
 init() {
   check_utils
-  rm -r "$DIRNAME" 
+  if [[ -f $DIRNAME ]];
+  then
+    rm -rf "$DIRNAME"
+  fi
   mkdir -p "$DIRNAME"
-
-  dmesg -Tc > /dev/null
-  # rm -f "${DIRNAME}/cifs_dmesg"
-  # rm -f "${DIRNAME}/cifs_trace"
-  # rm -f "${DIRNAME}/cifs_traffic.pcap"
 }
 
 check_utils() {
@@ -59,9 +68,27 @@ check_utils() {
     exit 1
   fi
 
+  if (( ($(which apt |egrep -c apt) > 0) && ($(which zgrep |egrep -c zgrep) == 0) ));
+  then
+    echo "zgrep is not installed, please install zgrep"
+    exit 1
+  fi
+
+  which tcpdump > /dev/null
+  if [ $? != 0 ]; then
+    echo "tcpdump is not installed. Please install tcpdump if you intend to capture network traces."
+    #Not exiting since packet capture is optional
+  fi
+
   which zip > /dev/null
   if [ $? == 1 ]; then
     echo "zip is not installed, please install zip to continue"
+    exit 1
+  fi
+
+  which ss > /dev/null
+  if [ $? == 1 ]; then
+    echo "ss is not installed, please install ss to continue"
     exit 1
   fi
 
@@ -77,9 +104,12 @@ check_utils() {
 }
 
 start_trace() {
-  echo 'module cifs +p' > /sys/kernel/debug/dynamic_debug/control
-  echo 'file fs/cifs/* +p' > /sys/kernel/debug/dynamic_debug/control
-  echo 7 > /proc/fs/cifs/cifsFYI
+  if [[ "$*" =~ "VerboseLogs" ]]; then
+    echo 'module cifs +p' > /sys/kernel/debug/dynamic_debug/control
+    echo 'file fs/cifs/* +p' > /sys/kernel/debug/dynamic_debug/control
+    echo 7 > /proc/fs/cifs/cifsFYI
+    CIFS_FYI_ENABLED=1
+  fi
   trace-cmd start -e cifs
 }
 
@@ -94,6 +124,17 @@ dump_os_information() {
   last reboot -5 >> os_details.txt
   echo -e "\nSystem Uptime:" >> os_details.txt
   cat /proc/uptime >> os_details.txt
+  echo -e "\npackage install details:" >> os_details.txt
+  if (( $(which rpm |egrep -c rpm) > 0));
+  then
+    rpm -qa --last |grep keyutils >> os_details.txt
+    rpm -qa --last |grep cifs-utils >> os_details.txt
+  elif (( $(which apt |egrep -c apt) > 0 ));
+  then
+    zgrep -B5 -A5 keyutils /var/log/apt/history.log* >> os_details.txt
+    zgrep -B5 -A5 cifs-utils /var/log/apt/history.log* >> os_details.txt
+  fi
+
 }
 
 dump_debug_stats() {
@@ -138,7 +179,9 @@ stop_trace() {
   trace-cmd report > "${DIRNAME}/cifs_trace"
   trace-cmd stop
   trace-cmd reset
-  echo 0 > /proc/fs/cifs/cifsFYI
+  if [ $CIFS_FYI_ENABLED -ne 0 ]; then
+    echo 0 > /proc/fs/cifs/cifsFYI
+  fi
   rm -rf trace.dat*
 }
 

@@ -17,9 +17,13 @@ param(
     [int]$RecordSeconds,
 
     [switch]$OnAnomaly,
+    [switch]$OnNamedEvent,
 
     [switch]$OnConnectivityError,
     [int[]]$OnConnectivityEventId,
+
+    [switch]$OnSessionSetupTimeout,
+    [int]$SessionSetupTimeoutInMs,
 
     [switch]$OnOperationalError,
     [int[]]$OnOperationalEventId,
@@ -30,6 +34,8 @@ param(
     [switch]$OnHighLatency,
     [switch]$OnHighAvgIOLatency,
     [int]$HighLatencyMs = 20000,
+    [double]$HighLatencyPercentile = 1.0, # 0.99
+    [int]$HighLatencyPercentileCount = 1,
     [int]$HighAvgIOLatencyMs = 5000,
 
     [switch]$OnCreditStall,
@@ -59,17 +65,22 @@ param(
     [byte[]]$NetworkIpProtocols, # 6 for TCP
 
     [switch]$NoCompression,
+    [switch]$UseCompression,
 
     [double]$RestartIntervalSeconds = 300,
     [int]$SampleIntervalSeconds = 1,
+
+    [int]$SampleWindowSeconds = 1,
 
     [switch]$UseMemoryBuffer,
     [int]$AccessLogMemoryBufferLineCount = 1000000,
 
     [switch]$SkipKnownErrors,
-    [int[]]$KnownConnectivityErrors = @(30805, 30822),
+    [string]$KnownConnectivityErrors = "30805, 30822",
     [int[]]$KnownOperationalErrors,
     [int[]]$KnownSecurityErrors,
+
+    [string]$NamedEventName = "SmbClientLogsEvent",
 
     [string[]]$FlagsOverride,
     [string[]]$LevelOverride,
@@ -89,6 +100,7 @@ param(
     [string[]]$LogChannels,
 
     [switch]$Silent
+
 )
 
 $ErrorActionPreference = "Stop"
@@ -220,6 +232,32 @@ function Get-NewEventsInternal
     }
 }
 
+
+function Get-SessionSetupTimeoutEventLogReasonHelper
+{
+    param([int]$timeoutTriggerInMs
+    )
+
+    $elapsedTimeStr = "ElapsedTime(ms):"
+    $guidanceStr = "Guidance:"
+
+    $events = Get-NewEventsInternal -LogName  "Microsoft-Windows-SMBClient/Connectivity"
+
+    $matchingEvents = $events | Where-Object { ($_.Message.contains("Command: Session setup") )}
+
+    foreach($evt in $matchingEvents)
+    {
+       $strIndex = $evt.Message.LastIndexOf($elapsedTimeStr)+$elapsedTimeStr.length
+       $length = $evt.Message.LastIndexOf($guidanceStr)-$strIndex
+       [int]$timeout = $evt.Message.Substring($strIndex, $length)
+
+       if($timeout -gt $timeoutTriggerInMs)
+       {
+            return "SessionSetupTimeOut$timeout"
+       }
+    }
+}
+
 function Get-EventLogReasonHelper
 {
     param(
@@ -277,7 +315,7 @@ function Initialize-EventLog
 {
     $settings = Get-Settings
 
-    if ($settings.OnConnectivityError -or $settings.OnConnectivityEventId)
+    if ($settings.OnConnectivityError -or $settings.OnConnectivityEventId -or $settings.OnSessionSetupTimeout)
     {
         Initialize-EventLogHelper "Microsoft-Windows-SMBClient/Connectivity"
     }
@@ -299,6 +337,11 @@ function Get-EventLogReason
 
     $reason = ''
 
+    if (!$reason -and $settings.OnSessionSetupTimeout)
+    {
+       $reason = Get-SessionSetupTimeoutEventLogReasonHelper $settings.SessionSetupTimeoutInMs
+    }
+
     if (!$reason)
     {
         $reason = Get-EventLogReasonHelper "Connectivity" "Microsoft-Windows-SMBClient/Connectivity" -onError:$settings.OnConnectivityError  -eventId $settings.OnConnectivityEventId -knownErrors $settings.KnownConnectivityErrors
@@ -315,6 +358,19 @@ function Get-EventLogReason
     }
 
     return $reason
+}
+
+
+function Get-NamedEventReason
+{
+    $settings = Get-Settings
+
+    if ($settings.OnNamedEvent -and $script:NamedEvent -and $script:NamedEvent.WaitOne(0))
+    {
+        return "NamedEvent"
+    }
+
+    return ""
 }
 
 $global:SmbAccessLogInstanceTypeLoaded = $false
@@ -497,6 +553,18 @@ namespace SmbAccessLog
 
         private DateTime nextFlush = DateTime.UtcNow;
 
+        // percentile begin
+
+        private SmbPacket? highLatencyPacketMax;
+
+        private int highLatencyPacketCount;
+
+        private int lowLatencyPacketCount;
+
+        private DateTime nextHighLatencyCheck;
+
+        // percentile end
+
         public string LoggerName { get; set; }
 
         public int TextFileSizeLimitMB { get; set; }
@@ -506,6 +574,10 @@ namespace SmbAccessLog
         public TimeSpan FlushInterval { get; set; }
 
         public double HighLatencyMs { get; set; }
+
+        public double HighLatencyPercentile { get; set; }
+
+        public int HighLatencyPercentileCount { get; set; }
 
         public List<uint> StatusCodesToFind { get; set; }
 
@@ -529,6 +601,8 @@ namespace SmbAccessLog
             FileNamePrefix = "SmbAccessLog-";
             FlushInterval = TimeSpan.FromSeconds(5);
             HighLatencyMs = 1000.0;
+            HighLatencyPercentile = 1.0;
+            HighLatencyPercentileCount = 1;
         }
 
         public void Start()
@@ -628,7 +702,7 @@ namespace SmbAccessLog
             }
         }
 
-        void OnPacket(ref SmbPacket packet)
+        void OnPacket(ref SmbPacket packet, DateTime now)
         {
             if (MemoryBufferLineCount > 0)
             {
@@ -644,9 +718,37 @@ namespace SmbAccessLog
                 WritePacketToFile(packet);
             }
 
-            if (packet.Elapsed.TotalMilliseconds >= HighLatencyMs)
+            if (packet.IsResponse)
             {
-                HighLatencyPacket = packet;
+                if (packet.Elapsed.TotalMilliseconds >= HighLatencyMs)
+                {
+                    if (highLatencyPacketMax == null || packet.Elapsed > highLatencyPacketMax.Value.Elapsed)
+                    {
+                        highLatencyPacketMax = packet;
+                    }
+
+                    ++highLatencyPacketCount;
+                }
+                else
+                {
+                    ++lowLatencyPacketCount;
+                }
+
+                if (nextHighLatencyCheck <= now)
+                {
+                    if (HighLatencyPacket == null &&
+                        highLatencyPacketMax != null &&
+                        highLatencyPacketCount >= Math.Max(HighLatencyPercentileCount,
+                                                           (lowLatencyPacketCount + highLatencyPacketCount) * (1.0 - HighLatencyPercentile)))
+                    {
+                        HighLatencyPacket = highLatencyPacketMax;
+                    }
+
+                    lowLatencyPacketCount = 0;
+                    highLatencyPacketCount = 0;
+                    highLatencyPacketMax = null;
+                    nextHighLatencyCheck = now + TimeSpan.FromSeconds(1);
+                }
             }
 
             if (StatusCodesToFind != null && StatusCodesToFind.BinarySearch(packet.Header.Status) >= 0)
@@ -779,7 +881,7 @@ namespace SmbAccessLog
                 }
             }
 
-            OnPacket(ref packet);
+            OnPacket(ref packet, now);
 
             return true;
         }
@@ -980,9 +1082,11 @@ namespace SmbAccessLog
     class NativeMethods
     {
         [DllImport("advapi32.dll", EntryPoint = "OpenTraceW", CharSet = CharSet.Unicode, SetLastError = true)]
+        [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
         public static extern long OpenTrace([In, Out] ref EventTraceLogfile logfile);
 
         [DllImport("advapi32.dll")]
+        [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
         public static extern int ProcessTrace(
             [In] long[] handleArray,
             [In] uint handleCount,
@@ -990,6 +1094,7 @@ namespace SmbAccessLog
             [In] IntPtr endTime);
 
         [DllImport("advapi32.dll")]
+        [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
         public static extern int CloseTrace(long traceHandle);
     }
 
@@ -1111,6 +1216,8 @@ function Start-SmbAccessLog
     $global:SmbAccessLogInstance.TextFileSizeLimitMB = $settings.BufferSizeMB
     $global:SmbAccessLogInstance.FileNamePrefix = Join-Path $directory $name
     $global:SmbAccessLogInstance.HighLatencyMs = $settings.HighLatencyMs
+    $global:SmbAccessLogInstance.HighLatencyPercentile = $settings.HighLatencyPercentile
+    $global:SmbAccessLogInstance.HighLatencyPercentileCount = $settings.HighLatencyPercentileCount
     if ($settings.StatusCodes)
     {
         $global:SmbAccessLogInstance.StatusCodesToFind = $settings.StatusCodes
@@ -1197,47 +1304,109 @@ function Get-CounterReason
             )
         }
 
-        $value = Get-Counter $counters -SampleInterval $settings.SampleIntervalSeconds -ErrorAction SilentlyContinue
+        $values = Get-Counter $counters -SampleInterval $settings.SampleIntervalSeconds -MaxSamples $settings.SampleWindowSeconds -ErrorAction SilentlyContinue
 
-        if ($value)
+        $latencyMs = $settings.HighAvgIOLatencyMs
+        if (!$latencyMs)
         {
-            $latencyMs = $settings.HighAvgIOLatencyMs
-            if (!$latencyMs)
+            $latencyMs = $settings.HighLatencyMs
+        }
+
+
+        $sumWriteLatencyDict = @{}
+        $sumReadLatencyDict = @{}
+        $sumCreditStallDict = @{}
+
+        foreach ($value in $values)
+        {
+            if ($value)
             {
-                $latencyMs = $settings.HighLatencyMs
-            }
-
-            Write-Verbose "Get-Counter samples: $($value.CounterSamples), latencyMs: $latencyMs"
-
-            foreach ($sample in $value.CounterSamples)
-            {
-                if ($settings.OnHighAvgIOLatency -and ($sample.CookedValue * 1000 -ge $latencyMs))
+                foreach ($sample in $value.CounterSamples)
                 {
-                    [int]$value = $sample.CookedValue * 1000
-                    if ($sample.Path.EndsWith('avg. sec/write'))
+                    if($sample.InstanceName.Contains("_total"))
                     {
-                        return "AvgIOLatency-Write-$value"
+                         continue;
                     }
-                    elseif ($sample.Path.EndsWith('avg. sec/read'))
-                    {
-                        return "AvgIOLatency-Read-$value"
-                    }
-                }
 
-                if ($settings.OnCreditStall -and ($sample.CookedValue -ge $settings.CreditStallThreshold))
-                {
-                    [int]$value = $sample.CookedValue
-                    if ($sample.Path.EndsWith('credit stalls/sec'))
-                    {
-                        return "CreditStall-$value"
-                    }
+                     $sumCreditStallDict[$sample.InstanceName] = 0
+                     $sumReadLatencyDict[$sample.InstanceName] = 0
+                     $sumWriteLatencyDict[$sample.InstanceName] = 0
                 }
             }
         }
-        else
+
+        foreach ($value in $values)
         {
-            Write-Verbose "Get-Counter no samples, sleeping: $($settings.SampleIntervalSeconds)"
-            Start-Sleep $settings.SampleIntervalSeconds
+            if ($value)
+            {
+
+                Write-Verbose "Get-Counter samples: $($value.CounterSamples), latencyMs: $latencyMs"
+
+                foreach ($sample in $value.CounterSamples)
+                {
+                    if($sample.InstanceName.Contains("_total"))
+                    {
+                         continue;
+                    }
+
+                    if ($settings.OnHighAvgIOLatency)
+                    {
+                        if ($sample.Path.EndsWith('avg. sec/write'))
+                        {
+                            $sumWriteLatencyDict[$sample.InstanceName] = $sumWriteLatencyDict[$sample.InstanceName] +  ($sample.CookedValue * 1000 )
+                        }
+                        elseif ($sample.Path.EndsWith('avg. sec/read'))
+                        {
+                            $sumReadLatencyDict[$sample.InstanceName] = $sumReadLatencyDict[$sample.InstanceName] +  ($sample.CookedValue * 1000 )
+                        }
+                    }
+
+                    if ($settings.OnCreditStall)
+                    {
+                        $sumCreditStallDict[$sample.InstanceName] = $sumCreditStallDict[$sample.InstanceName] + $sample.CookedValue
+                    }
+                }
+            }
+            else
+            {
+                Write-Verbose "Get-Counter no samples, sleeping: $($settings.SampleIntervalSeconds)"
+                Start-Sleep $settings.SampleIntervalSeconds
+            }
+        }
+
+        if($values -ne $null -and $values.count -gt 0)
+        {
+            foreach($share in  $sumCreditStallDict.Keys)
+            {
+                [int]$avgWriteLatency = $sumWriteLatencyDict[$share]/$values.count
+                [int]$avgReadLatency = $sumReadLatencyDict[$share]/$values.count
+                [int]$avgCreditStall = $sumCreditStallDict[$share]/$values.count
+
+                $smaples = $values.count
+                $sumWriteLatency = $sumWriteLatencyDict[$share]
+                $sumReadLatency = $sumReadLatencyDict[$share]
+                $sumCreditStall = $sumCreditStallDict[$share]
+
+                Write-Log "Share $share Time $smaples  WriteLatencyTotal $sumWriteLatency WriteLatencyAvg $avgWriteLatency "
+                Write-Log "Share $share Time $smaples ReadLatencyTotal $sumReadLatency ReadLatencyAvg $avgReadLatency"
+                Write-Log "Share $share Time $smaples CreditStallTotal $sumCreditStall CreditStallAvg $avgCreditStall"
+
+                $nShare = $share.Replace("\","--")
+                if($avgWriteLatency -ge $latencyMs)
+                {
+                    return "AvgIOLatency-Write-$avgWriteLatency-$nShare"
+                }
+
+                if($avgReadLatency -ge $latencyMs)
+                {
+                    return "AvgIOLatency-Read-$avgReadLatency-$nShare"
+                }
+
+               if($avgCreditStall -ge $settings.CreditStallThreshold)
+               {
+                    return "CreditStal-$avgCreditStall-$nShare"
+               }
+            }
         }
     }
 }
@@ -1267,6 +1436,8 @@ function Set-Settings
         $settingsDict['OnSecurityError'] = $true
         $settingsDict['OnHighAvgIOLatency'] = $true
         $settingsDict['OnCreditStall'] = $true
+        $settingsDict['OnNamedEvent'] = $true
+        $settingsDict['OnSessionSetupTimeout'] = $true
 
         if (! $agentMode)
         {
@@ -1274,6 +1445,11 @@ function Set-Settings
             $settingsDict['OnStatusCode'] = $true
         }
     }
+
+   if ($settingsDict['OnSessionSetupTimeout'])
+   {
+       $SessionSetupTimeoutInMs = 60000
+   }
 
     if ($settingsDict['OnHighLatency'] -or $settingsDict['OnStatusCode'])
     {
@@ -1294,20 +1470,18 @@ function Set-Settings
 
     if (!$settingsDict['Fskm'])
     {
-        if ($agentMode)
-        {
-            $settingsDict['Fskm'] = @('handle', 'network')
-        }
-        else
-        {
-            $settingsDict['Fskm'] = @('handle', 'network', 'io', 'readwrite')
-        }
+        $settingsDict['Fskm'] = @('handle', 'network', 'io', 'readwrite')
     }
 
     if ($agentMode)
     {
         $settingsDict['StopBeforeStart'] = $true
         $settingsDict['NoCompression'] = $true
+    }
+
+    if ($settingsDict['UseCompression'])
+    {
+        $settingsDict['NoCompression'] = $false
     }
 
     $settingsDict['LogChannels'] = [string[]] ($settingsDict['LogChannels'])
@@ -1319,7 +1493,7 @@ function Set-Settings
 
     if ($settingsDict['CaptureNetwork'])
     {
-        $settingsDict['LogChannels'] += 'network'
+        $settingsDict['LogChannels'] += 'networkcapture'
     }
 
     if ($settingsDict['EnableAccessLog'])
@@ -1335,6 +1509,11 @@ function Set-Settings
     if ($settingsDict['OutputDirectory'])
     {
         $settingsDict['OutputDirectory'] = [IO.Path]::GetFullPath($settingsDict['OutputDirectory'])
+    }
+
+    if ($settingsDict['KnownConnectivityErrors'])
+    {
+        $settingsDict['KnownConnectivityErrors'] = [int[]] ($settingsDict['KnownConnectivityErrors'].Split(','))
     }
 
     $script:Settings = [PSCustomObject]$settingsDict
@@ -1397,6 +1576,7 @@ function Get-EventBasedSettingsDict
         "OnHighLatency"
         "OnStatusCode"
         "OnCreditStall"
+        "OnSessionSetupTimeout"
     )
 
     foreach ($name in $eventBasedSettingsNames)
@@ -1648,7 +1828,7 @@ function Invoke-StartInternal
         Invoke-TraceUpdate $prefix "tcp" "eb004a05-9b1a-11d4-9123-0050047759bc" "0x1000" "2"
     }
 
-    if ($settings.LogChannels -icontains 'network')
+    if ($settings.LogChannels -icontains 'networkcapture')
     {
         Invoke-CaptureNetworkStart $directory $prefix
     }
@@ -1751,6 +1931,8 @@ function Get-Prefix
     }
     catch {
         Write-LogWarning "Get-Prefix failed: $_"
+        $result = Get-MainPrefix
+        Write-Log "Returning default prefix - $result"
     }
 
     Write-Verbose "Get-Prefix $directory $result"
@@ -2103,23 +2285,36 @@ function Invoke-CaptureNetworkStopAll
 function Invoke-TraceQuery
 {
     param(
-        [bool]$useEts = $true
+        [bool]$useEts = $true,
+        [string]$ExcludePrefix = ""
     )
 
     $etsArg = if ($useEts) { "-ets" } else { $null }
+    $MainPrefix = Get-MainPrefix
+    $nameMatch = { $_.StartsWith($MainPrefix) -and (!$ExcludePrefix -or !($_.StartsWith($ExcludePrefix))) }
 
     $tracers = $null
+
     try {
-        $tracers = Invoke-Cmd logman query $etsArg | ForEach-Object{ $_.Split(' ')[0].Trim() }
+        if ($useEts)
+        {
+            $tracers = Get-EtwTraceSession -Name "*" | Select-Object -ExpandProperty Name | Where-Object $nameMatch
+        }
+        else
+        {
+            $tracers = Invoke-Cmd logman query | ForEach-Object{ $_.Split(' ')[0].Trim() } | Where-Object $nameMatch
+        }
     }
     catch {
-        Write-Log 'logman query failed, waiting 5sec and retry'
+        $cmdName = if ($useEts) { "Get-ETWTraceSession" } else { "logman query" }
+        Write-Log "$cmdName failed, waiting 5sec and retry"
         Start-sleep -Seconds 5 | Out-Null
     }
 
     if (! $tracers)
     {
-        $tracers = Invoke-Cmd logman query $etsArg | ForEach-Object{ $_.Split(' ')[0].Trim() }
+        Write-Log "Using logman query $etsArg to query"
+        $tracers = Invoke-Cmd logman query $etsArg | ForEach-Object{ $_.Split(' ')[0].Trim() } | Where-Object $nameMatch
     }
 
     return $tracers
@@ -2147,7 +2342,7 @@ function Invoke-TraceStopAll
 
     foreach ($useEts in @($true, $false))
     {
-        $tracers = @(Invoke-TraceQuery -useEts $useEts | Where-Object $nameMatch)
+        $tracers = @(Invoke-TraceQuery -useEts $useEts -ExcludePrefix $ExcludePrefix)
 
         foreach ($name in $tracers)
         {
@@ -2172,7 +2367,12 @@ function Invoke-TraceStopAll
 
     Write-verbose "Excluding prefix: $ExcludePrefix"
 
-    Write-Log "Stopped: $($oldNames.Count), stopped capture networks: $($oldCaptureNetworks.Count), directory: $directory"
+    if ($oldCaptureNetworks.Count -gt 0)
+    {
+        Write-Log "Stopped capture networks: $($oldCaptureNetworks.Count)"
+    }
+
+    Write-Log "Stopped: $($oldNames.Count), directory: $directory"
 
     if ($CreatePackage -and $directory)
     {
@@ -2266,7 +2466,19 @@ function Save-Package
             $newDirectory = "$newDirectory-$reasonShort"
         }
 
-        Rename-Item -Force $directory $newDirectory | Out-Null
+        try
+        {
+            Rename-Item -Force $directory $newDirectory | Out-Null
+        }
+        catch
+        {
+            Write-Log "Rename failed trying to copy and zip"
+            Write-Log $_
+            Write-Log "copying $directory to $newDirectory"
+            Copy-Item -Force -Recurse $directory $newDirectory
+
+        }
+
         $directory = $newDirectory
     }
 
@@ -2337,7 +2549,7 @@ function Get-SmbClientItems
         Write-verbose "Get-SmbClientItems excludes: $Exclude"
 
         $output = Get-ChildItem $directory -Filter (Get-DirectoryPrefixFilter) |
-            Sort-Object -Property LastWriteTime |
+            Sort-Object -Property LastWriteTime -Descending |
             Select-Object -ExpandProperty FullName |
             Where-Object { !($Exclude -icontains $_) }
 
@@ -2373,7 +2585,15 @@ function Invoke-Stop
 
     foreach ($directory in Get-SmbClientItems -Running -Exclude $ExcludeDirectory)
     {
-        Remove-Item $directory -Recurse -Force | Out-Null
+        try
+        {
+            Remove-Item $directory -Recurse -Force | Out-Null
+        }
+        catch
+        {
+            Write-Log "Removing old item failed : $directory"
+            Write-Log $_
+        }
     }
 
     if ($MaxOutputFiles -gt 0)
@@ -2381,7 +2601,7 @@ function Invoke-Stop
         Write-Log "Removing old items in $OutputDirectory, filter: $(Get-DirectoryPrefixFilter), MaxOutputFiles: $MaxOutputFiles"
         Write-Verbose "ExcludeDirectory: $ExcludeDirectory"
         Write-Verbose "Saved: $saved"
-        $items = @(Get-SmbClientItems -Exclude $ExcludeDirectory, $saved)
+        $items = @(Get-SmbClientItems -Exclude $ExcludeDirectory, $saved) | Sort-Object
 
         Write-Verbose "items.count: $($items.Count), MaxOutputFiles: $MaxOutputFiles"
 
@@ -2505,6 +2725,42 @@ function Initialize-Script
     }
 
     Invoke-LogSettings
+
+    Initialize-NamedEvent
+}
+
+$script:NamedEvent = $null
+
+function Initialize-NamedEvent
+{
+    if ($script:NamedEvent)
+    {
+        $script:NamedEvent.Close()
+        $script:NamedEvent.Dispose()
+        $script:NamedEvent = $null
+    }
+
+    if ($settings.OnNamedEvent)
+    {
+        $mode = [System.Threading.EventResetMode]::AutoReset
+        $name = $settings.NamedEventName
+
+        $created = $false
+        $reference = New-Object -TypeName System.Management.Automation.PSReference -ArgumentList $created
+
+        $eventWaitHandleSecurity = New-Object System.Security.AccessControl.EventWaitHandleSecurity
+
+        $sid = [System.Security.Principal.WellKnownSidType]::WorldSid
+        $securityIdentifier = New-Object System.Security.Principal.SecurityIdentifier -ArgumentList $sid, $null
+
+        $fullControl = [System.Security.AccessControl.EventWaitHandleRights]::FullControl
+        $allow = [System.Security.AccessControl.AccessControlType]::Allow
+        $eventWaitHandleAccessRule = New-Object System.Security.AccessControl.EventWaitHandleAccessRule -ArgumentList $securityIdentifier, $fullControl, $allow
+
+        $eventWaitHandleSecurity.AddAccessRule($eventWaitHandleAccessRule)
+        $script:NamedEvent = New-Object -TypeName System.Threading.EventWaitHandle -ArgumentList $false, $mode, $name, $reference, $eventWaitHandleSecurity
+
+    }
 }
 
 function Invoke-EventLoopInternal
@@ -2549,6 +2805,11 @@ function Invoke-EventLoopInternal
         if (!$reason)
         {
             $reason = Get-EventLogReason
+        }
+
+        if (!$reason)
+        {
+            $reason = Get-NamedEventReason
         }
 
         if ($reason)
@@ -2675,7 +2936,7 @@ else
     Write-Log @"
 SmbClientLogs.ps1 - script to capture SMB Client logs. After capture is done it creates zip package in the current directory (OutputDirectory).
 
-Version: 3.3
+Version: 3.60
 
 Options:
 
@@ -2687,6 +2948,7 @@ Options:
     -RecordSeconds 0
 
     -OnAnomaly
+    -OnNamedEvent
 
     -OnConnectivityError
     -OnConnectivityEventId 123
@@ -2700,6 +2962,8 @@ Options:
     -OnHighLatency
     -OnHighAvgIOLatency
     -HighLatencyMs 20000
+    -HighLatencyPercentile 1.0 # 0.90
+    -HighLatencyPercentileCount 1
     -HighAvgIOLatencyMs 5000
 
     -OnCreditStall
@@ -2709,9 +2973,11 @@ Options:
     -StatusCodes
 
     -SkipKnownErrors
-    -KnownConnectivityErrors 30805, 30822
+    -KnownConnectivityErrors "30805, 30822"
     -KnownOperationalErrors
     -KnownSecurityErrors
+
+    -NamedEventName "SmbClientLogsEvent"
 
     -BufferSizeMB 300
     -CounterSizeMB 50
@@ -2732,9 +2998,11 @@ Options:
     -NetworkIpProtocols # 6 for tcp
 
     -NoCompression
+    -UseCompression
 
     -RestartIntervalSeconds 300
     -SampleIntervalSeconds 1
+    -SampleWindowSeconds 1
     -AccessLogMemoryBufferLineCount 1000000
 
     -StopBeforeStart
