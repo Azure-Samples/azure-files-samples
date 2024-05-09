@@ -3921,7 +3921,11 @@ function Debug-AzStorageAccountEntraKerbAuth {
             try {
                 $checksExecuted += 1;
                 Write-Verbose "CheckRegKey - START"
-                $RegKey = Get-ItemProperty -Path Registry::HKLM\SYSTEM\CurrentControlSet\Control\Lsa\Kerberos\Parameters
+                
+                $RegKey = Get-ItemProperty -Path Registry::HKLM\Software\Microsoft\Windows\CurrentVersion\Policies\System\Kerberos\Parameters
+                if ($null -eq $RegKey) {
+                    $RegKey = Get-ItemProperty -Path Registry::HKLM\SYSTEM\CurrentControlSet\Control\Lsa\Kerberos\Parameters
+                }
                 if($null -ne $RegKey -and $RegKey.CloudKerberosTicketRetrievalEnabled -eq "1")
                 {
                     $checks["CheckRegKey"].Result = "Passed"
