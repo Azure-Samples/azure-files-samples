@@ -15,7 +15,7 @@
 2. Run the tests
 
     ```powershell
-    Invoke-Pester -Output Detailed
+    .\test.ps1
     ```
 
 ## Setting up a test run
@@ -40,7 +40,7 @@
 1. Create test files
 
     ```powershell
-    .\RestSetAcls\TestSetup.ps1 -Context $context -FileShareName $FileShareName -NumberDirs 3 -NumberFilesPerDir 3 -Depth 1
+    .\RestSetAcls\test\TestSetup.ps1 -Context $context -FileShareName $FileShareName -NumberDirs 3 -NumberFilesPerDir 3 -Depth 1
     ```
 
     This will create a directory structure with 3 directories, each containing 3 files:
