@@ -20,19 +20,25 @@ jobs:
         shell: pwsh
         run: Invoke-Pester .\RestSetAcls\ -Output Detailed
   
+  test-manifest:
+    name: Test .psd1 manifest file
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test .psd1 file
+        shell: pwsh
+        run: |
+          Set-PSRepository PSGallery -InstallationPolicy Trusted
+          Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+          Install-Module -Name Az -Repository PSGallery -Force -AllowClobber
+          Test-ModuleManifest -Path .\RestSetAcls\RestSetAcls.psd1
+
   lint-with-PSScriptAnalyzer:
     name: Install and run PSScriptAnalyzer
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Setup PowerShell module cache
-        id: cacher
-        uses: actions/cache@v3
-        with:
-          path: "C:\\Users\\runneradmin\\Documents\\PowerShell\\Modules\\"
-          key: ${{ runner.os }}-PSScriptAnalyzer
       - name: Install PSScriptAnalyzer module
-        if: steps.cacher.outputs.cache-hit != 'true'
         shell: pwsh
         run: |
           Set-PSRepository PSGallery -InstallationPolicy Trusted
