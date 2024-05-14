@@ -112,10 +112,10 @@ $targetFileShareSASURI = "'" + $targetShareSASURI + "'"
 # Check if target file share contains data
 $targetFileShare = Get-AzStorageFile -Sharename $targetStorageFileShareName -Context $destinationContext.Context
 
-# If target share already contains data, use AzCopy sync to sync data from source to target
+# If target share already contains data, use AzCopy sync to sync data from source to target (files on target will be deleted which don't exist on source)
 # Else if target share is empty, use AzCopy copy as it will be more efficient
 if ($targetFileShare) {
-     $command = "azcopy " + "sync " + $sourceSnapshotSASURI + " " + $targetFileShareSASURI + " --preserve-smb-info" + " --preserve-smb-permissions" + " --recursive"
+     $command = "azcopy " + "sync " + $sourceSnapshotSASURI + " " + $targetFileShareSASURI + " --preserve-smb-info" + " --preserve-smb-permissions" + " --recursive" + " --delete-destination"
 }
 Else {
      $command = "azcopy " + "copy " + $sourceSnapshotSASURI + " " + $targetFileShareSASURI + " --preserve-smb-info" + " --preserve-smb-permissions" + " --recursive"
