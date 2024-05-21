@@ -976,6 +976,54 @@ function Request-MSGraphModule {
     Remove-Module -Name PackageManagement -ErrorAction SilentlyContinue
 }
 
+function Request-MSGraphModuleVersion {
+    [CmdletBinding(SupportsShouldProcess, ConfirmImpact="High")]
+    param(
+        [Parameter(Mandatory=$true)]
+        [Version]$MinimumVersion
+    )
+
+    $availableModules = Get-Module Microsoft.Graph -ListAvailable
+    $usableModules = $availableModules | Where-Object { $_.Version -ge $MinimumVersion }
+
+    # Install if needed
+    if ($null -eq $usableModules) {
+        # Print why we could not find a usable module:
+        if ($null -eq $availableModules) {
+            Write-Error "The Microsoft.Graph module is not installed."
+        } else {
+            $maxAvailableVersion = ($availableModules.Version | Measure-Object -Maximum).Maximum
+            Write-Error "The Microsoft.Graph module is installed with version $maxAvailableVersion, but $MinimumVersion is required."
+        }
+        
+        # Request to install with the adequate min version
+        $caption = "Install missing Microsoft.Graph PowerShell module"
+        $verboseConfirmMessage = "This cmdlet requires the Microsoft.Graph PowerShell module. It can be automatically installed now if you are running in an elevated sessions."
+        if ($PSCmdlet.ShouldProcess($verboseConfirmMessage, $verboseConfirmMessage, $caption)) {
+            if (!(Get-IsElevatedSession)) {
+                Write-Error `
+                        -Message "To install the missing Microsoft.Graph module, you must run this cmdlet as an administrator. This cmdlet may not generally require administrator privileges." `
+                        -ErrorAction Stop
+            }
+            
+            Write-Host "Installing missing module Microsoft.Graph"
+            Install-Module `
+                -Name Microsoft.Graph `
+                -MinimumVersion $MinimumVersion `
+                -Repository PSGallery `
+                -AllowClobber `
+                -Force `
+                -ErrorAction Stop
+        }
+
+        Remove-Module -Name PowerShellGet -ErrorAction SilentlyContinue
+        Remove-Module -Name PackageManagement -ErrorAction SilentlyContinue
+    }
+    
+    Remove-Module -Name Microsoft.Graph* -ErrorAction SilentlyContinue
+    Import-Module Microsoft.Graph -MinimumVersion $MinimumVersion -ErrorAction Continue
+}
+
 function Request-AzPowerShellModule {
     [CmdletBinding(SupportsShouldProcess, ConfirmImpact="High")]
     param()
@@ -4029,13 +4077,17 @@ function Debug-EntraKerbAdminConsent {
             Write-Verbose "CheckAdminConsent - START"
             $Context = Get-AzContext
             $TenantId = $Context.Tenant
+
+            # Detect if the Microsoft.Graph.Applications module is installed and at least version 2.2.0.
+            # Get-MgServicePrincipalByAppId was added in Microsoft.Graph.Applications v2.2.0.
+            Request-MSGraphModuleVersion -MinimumVersion 2.2.0
             
             Request-ConnectMsGraph `
                 -Scopes "DelegatedPermissionGrant.Read.All" `
                 -RequiredModules @("Microsoft.Graph.Applications", "Microsoft.Graph.Identity.SignIns") `
                 -TenantId $TenantId
 
-            Import-Module Microsoft.Graph.Applications
+            Import-Module Microsoft.Graph.Applications -MinimumVersion 2.2.0 -ErrorAction SilentlyContinue
             Import-Module Microsoft.Graph.Identity.SignIns
 
             $MsGraphSp = Get-MgServicePrincipalByAppId -AppId 00000003-0000-0000-c000-000000000000 
