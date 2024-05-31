@@ -3755,7 +3755,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
         [string]$Filter,
 
         [Parameter(Mandatory=$False, Position=3, HelpMessage="Optional parameter for filter 'CheckSidHasAadUser' and 'CheckUserFileAccess'. The user name to check.")]
-        [string]$UserName,
+        [string]$UserPrincipalName,
 
         [Parameter(Mandatory=$False, Position=4, HelpMessage="Optional parameter for filter 'CheckSidHasAadUser', 'CheckUserFileAccess' and 'CheckAadUserHasSid'. The domain name to look up the user.")]
         [string]$Domain,
@@ -3769,10 +3769,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
 
     process
     {
-        if(![string]::IsNullOrEmpty($UserName))
-        {
-            Write-Error "The debug cmdlet for Microsoft Entra Kerberos (AADKERB) accounts does not yet implement support for -UserName parameter. It will be ignored."
-        }
+        
         if(![string]::IsNullOrEmpty($Domain) )
         {
             Write-Error "The debug cmdlet for Microsoft Entra Kerberos (AADKERB) accounts does not yet implement support for -ObjectId parameter. It will be ignored."
@@ -3790,7 +3787,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
             "CheckRegKey" = [CheckResult]::new("CheckRegKey");
             "CheckKerbRealmMapping" = [CheckResult]::new("CheckKerbRealmMapping");
             "CheckAdminConsent" = [CheckResult]::new("CheckAdminConsent");
-            ""=[]::new("") 
+            "CheckDefaultShareRBACPermission"=[CheckResult]::new("CheckDefaultShareRBACPermission") 
         }
         #
         # Port 445 check 
@@ -4019,17 +4016,26 @@ function Debug-AzStorageAccountEntraKerbAuth {
                     -ResourceGroupName $ResourceGroupName `
                     -StorageAccountName $StorageAccountName `
                     -ErrorAction Stop
- 
-                $DefaultSharePermission = $StorageAccountObject.AzureFilesIdentityBasedAuth.DefaultSharePermission
                 
-                # If DefaultSharePermission is null or 'None'
-                if((!$DefaultSharePermission) -or ($DefaultSharePermission -eq 'None')){
-                    Debug-RBACCheck -StorageAccountName $StorageAccountName -checkResult $checks["CheckDefaultShareRBACPermission"]
-                    #$DefaultSharePermission = "Not Configured. Please visit https://docs.microsoft.com/en-us/azure/storage/files/storage-files-identity-ad-ds-assign-permissions?tabs=azure-portal for more information if needed."
+                if ($null -eq $StorageAccountObject.AzureFilesIdentityBasedAuth)
+                { 
+                    $checks["CheckDefaultShareRBACPermission"].Result = "Failed"
+                    $checks["CheckDefaultShareRBACPermission"].Issue = "AzureFilesIdentityBasedAuth IS NULL"
+                    Write-Error "CheckDefaultShareRBACPermission - FAILED"
                 }
-                Write-Verbose "CheckDefaultShareRBACPermission: $CheckDefaultShareRBACPermission"
-                Write-Verbose "CheckDefaultShareRBACPermission - SUCCESS"
-                $checks["CheckDefaultShareRBACPermission"].Result = "Passed"
+                else 
+                {
+                    $DefaultSharePermission = $StorageAccountObject.AzureFilesIdentityBasedAuth.DefaultSharePermission
+                    
+                    if((!$DefaultSharePermission) -or ($DefaultSharePermission -eq 'None'))
+                    {
+                        Debug-RBACCheck -StorageAccountName $StorageAccountName -UserPrincipalName $UserPrincipalName -checkResult $checks["CheckDefaultShareRBACPermission"]
+                        #$DefaultSharePermission = "Not Configured. Please visit https://docs.microsoft.com/en-us/azure/storage/files/storage-files-identity-ad-ds-assign-permissions?tabs=azure-portal for more information if needed."
+                    }
+                    Write-Verbose "CheckDefaultShareRBACPermission: $CheckDefaultShareRBACPermission"
+                    Write-Verbose "CheckDefaultShareRBACPermission - SUCCESS"
+                    $checks["CheckDefaultShareRBACPermission"].Result = "Passed"
+                }
             } catch {
                 $checks["CheckDefaultShareRBACPermission"].Result = "Failed"
                 $checks["CheckDefaultShareRBACPermission"].Issue = $_
@@ -4047,11 +4053,10 @@ function Debug-RBACCheck {
     param (
         [Parameter(Mandatory=$True, Position=0, HelpMessage="Storage account name")]
         [string]$StorageAccountName,
-        [Parameter(Mandatory=$True, Position=0, HelpMessage="User Principal name")]
+        [Parameter(Mandatory=$True, Position=1, HelpMessage="User Principal name")]
         [string]$UserPrincipalName,
-        [Parameter(Mandatory=$True, Position=1, HelpMessage="Check result object")]
+        [Parameter(Mandatory=$True, Position=2, HelpMessage="Check result object")]
         [CheckResult]$checkResult
-
     )
     process {
         try {
@@ -4064,23 +4069,35 @@ function Debug-RBACCheck {
             $groupIds = Get-MgUserMemberOf -UserId $userOid | Select-Id
 
             $roleNames = @(
-            "Storage File Data SMB Share Reader",
-            "Storage File Data SMB Share Contributor",
-            "Storage File Data SMB Share Elevated Contributor"
+                "Storage File Data SMB Share Reader",
+                "Storage File Data SMB Share Contributor",
+                "Storage File Data SMB Share Elevated Contributor"
             )
+
             $listOfRoleNames = @{}
-            foreach ($roleName in $roleNames) {
-                $assignments = Get-AzRoleAssignment -RoleDefinitionName $roleName
-            foreach ($assignment in $assignments) {
-                if ($assignment.ObjectType -eq "User") {
-                    if ($assignment.ObjectId -eq $userOid) {
-                            # yes, add the $roleName to the list of roles the user has
+            foreach ($roleName in $roleNames) 
+            {
+                $scope = "/subscriptions/$subscription/resourceGroups/$resourceGroup/providers/Microsoft.Storage/storageAccounts/$storageAccount/fileServices/default/fileshares/$fileShare"
+                $assignments = Get-AzRoleAssignment -RoleDefinitionName $roleName -Scope $scope
+                
+                foreach ($assignment in $assignments) 
+                {
+                    if ($assignment.ObjectType -eq "User") 
+                    {
+                        if ($assignment.ObjectId -eq $userOid) 
+                        {
+                            $listOfRoleNames.Add($roleName)
+                            break
+                        }
                     }
-                }
-                elseif ($assignment.ObjectType -eq "Group") {
-                if ($groupIds -contains $assignment.ObjectId) {
-                            # yes, add the $roleName to the list of roles the user has
-                }
+                    elseif ($assignment.ObjectType -eq "Group") 
+                    {
+                        if ($groupIds -contains $assignment.ObjectId) 
+                        {
+                            $listOfRoleNames.Add($roleName)
+                            break
+                        }
+                    }
                 }
             }
 
@@ -4099,10 +4116,10 @@ function Debug-RBACCheck {
             Write-Error "CheckDefaultShareRBACPermission - FAILED"
             Write-Error $_
         }
-        
+    } 
 
 }
-}
+
 function Debug-EntraKerbAdminConsent {
     [CmdletBinding()]
     param (
