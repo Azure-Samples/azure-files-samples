@@ -129,10 +129,13 @@ dump_os_information() {
   then
     rpm -qa --last |grep keyutils >> os_details.txt
     rpm -qa --last |grep cifs-utils >> os_details.txt
+    rpm -qi keyutils >> os_details.txt
+    rpm -qi cifs-utils >> os_details.txt
   elif (( $(which apt |egrep -c apt) > 0 ));
   then
     zgrep -B5 -A5 keyutils /var/log/apt/history.log* >> os_details.txt
     zgrep -B5 -A5 cifs-utils /var/log/apt/history.log* >> os_details.txt
+    dpkg -s keyutils cifs-utils >> os_details.txt 
   fi
 
 }
