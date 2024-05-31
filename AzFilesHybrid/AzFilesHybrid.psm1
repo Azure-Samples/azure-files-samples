@@ -3754,7 +3754,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
         [Parameter(Mandatory=$False, Position=2, HelpMessage="Filter")]
         [string]$Filter,
 
-        [Parameter(Mandatory=$False, Position=3, HelpMessage="Optional parameter for filter 'CheckSidHasAadUser' and 'CheckUserFileAccess'. The user name to check.")]
+        [Parameter(Mandatory=$False, Position=3, HelpMessage="Optional parameter for filter 'CheckSidHasAadUser' and 'CheckUserFileAccess'. The user Principal name to check.")]
         [string]$UserPrincipalName,
 
         [Parameter(Mandatory=$False, Position=4, HelpMessage="Optional parameter for filter 'CheckSidHasAadUser', 'CheckUserFileAccess' and 'CheckAadUserHasSid'. The domain name to look up the user.")]
@@ -3787,7 +3787,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
             "CheckRegKey" = [CheckResult]::new("CheckRegKey");
             "CheckKerbRealmMapping" = [CheckResult]::new("CheckKerbRealmMapping");
             "CheckAdminConsent" = [CheckResult]::new("CheckAdminConsent");
-            "CheckDefaultShareRBACPermission"=[CheckResult]::new("CheckDefaultShareRBACPermission") 
+            "CheckRBAC"=[CheckResult]::new("CheckRBAC") 
         }
         #
         # Port 445 check 
@@ -4006,11 +4006,11 @@ function Debug-AzStorageAccountEntraKerbAuth {
         }
         #
         #Check Default share and RBAC permissions
-        if (!$filterIsPresent -or $Filter -match "CheckDefaultShareRBACPermission")
+        if (!$filterIsPresent -or $Filter -match "CheckRBAC")
         {
             try {
                 $checksExecuted += 1
-                Write-Verbose "CheckDefaultShareRBACPermission - START"
+                Write-Verbose "CheckRBAC - START"
 
                 $StorageAccountObject = Validate-StorageAccount `
                     -ResourceGroupName $ResourceGroupName `
@@ -4019,9 +4019,9 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 
                 if ($null -eq $StorageAccountObject.AzureFilesIdentityBasedAuth)
                 { 
-                    $checks["CheckDefaultShareRBACPermission"].Result = "Failed"
-                    $checks["CheckDefaultShareRBACPermission"].Issue = "AzureFilesIdentityBasedAuth IS NULL"
-                    Write-Error "CheckDefaultShareRBACPermission - FAILED"
+                    $checks["CheckRBAC"].Result = "Failed"
+                    $checks["CheckRBAC"].Issue = "AzureFilesIdentityBasedAuth IS NULL"
+                    Write-Error "CheckRBAC - FAILED"
                 }
                 else 
                 {
@@ -4029,17 +4029,13 @@ function Debug-AzStorageAccountEntraKerbAuth {
                     
                     if((!$DefaultSharePermission) -or ($DefaultSharePermission -eq 'None'))
                     {
-                        Debug-RBACCheck -StorageAccountName $StorageAccountName -UserPrincipalName $UserPrincipalName -checkResult $checks["CheckDefaultShareRBACPermission"]
-                        #$DefaultSharePermission = "Not Configured. Please visit https://docs.microsoft.com/en-us/azure/storage/files/storage-files-identity-ad-ds-assign-permissions?tabs=azure-portal for more information if needed."
+                        Debug-RBACCheck -StorageAccountName $StorageAccountName -UserPrincipalName $UserPrincipalName -checkResult $checks["CheckRBAC"]
                     }
-                    Write-Verbose "CheckDefaultShareRBACPermission: $CheckDefaultShareRBACPermission"
-                    Write-Verbose "CheckDefaultShareRBACPermission - SUCCESS"
-                    $checks["CheckDefaultShareRBACPermission"].Result = "Passed"
                 }
             } catch {
-                $checks["CheckDefaultShareRBACPermission"].Result = "Failed"
-                $checks["CheckDefaultShareRBACPermission"].Issue = $_
-                Write-Error "CheckDefaultShareRBACPermission - FAILED"
+                $checks["CheckRBAC"].Result = "Failed"
+                $checks["CheckRBAC"].Issue = $_
+                Write-Error "CheckRBAC - FAILED"
                 Write-Error $_
             }
         }
@@ -4113,7 +4109,7 @@ function Debug-RBACCheck {
         } catch {
             $checkResult.Result = "Failed"
             $checkResult.Issue = $_
-            Write-Error "CheckDefaultShareRBACPermission - FAILED"
+            Write-Error "CheckRBAC - FAILED"
             Write-Error $_
         }
     } 
