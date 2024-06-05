@@ -3757,7 +3757,8 @@ function Debug-AzStorageAccountAuth {
 
         if ($directoryServiceOptions -eq "AD")
         {
-            Write-Verbose "Running Debug cmdlet for AD DS joined account: "
+            Write-Host "Storage account is configured for AD DS auth."
+            Write-Host "Running AD DS checks."
             Debug-AzStorageAccountADDSAuth `
                 -StorageAccountName $StorageAccountName `
                 -ResourceGroupName $ResourceGroupName `
@@ -3769,7 +3770,8 @@ function Debug-AzStorageAccountAuth {
         }
         elseif ($directoryServiceOptions -eq "AADKERB")
         {
-            Write-Verbose "Running Debug cmdlet for Microsoft Entra kerberos(AADKERB) joined account:"
+            Write-Host "Storage account is configured for Microsoft Entra Kerberos (AADKERB) auth."
+            Write-Host "Running Entra Kerberos checks."
             Debug-AzStorageAccountEntraKerbAuth `
                 -StorageAccountName $StorageAccountName `
                 -ResourceGroupName $ResourceGroupName `
