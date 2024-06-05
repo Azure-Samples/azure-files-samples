@@ -3789,7 +3789,8 @@ function Debug-AzStorageAccountEntraKerbAuth {
             "CheckEntraObject" = [CheckResult]::new("CheckEntraObject");
             "CheckRegKey" = [CheckResult]::new("CheckRegKey");
             "CheckKerbRealmMapping" = [CheckResult]::new("CheckKerbRealmMapping");
-            "CheckAdminConsent" = [CheckResult]::new("CheckAdminConsent")  
+            "CheckAdminConsent" = [CheckResult]::new("CheckAdminConsent");
+            "CheckWindowServices" = [CheckResult]::new("CheckWindowServices")
         }
         #
         # Port 445 check 
@@ -4005,6 +4006,44 @@ function Debug-AzStorageAccountEntraKerbAuth {
         {
             $checksExecuted += 1;
             Debug-EntraKerbAdminConsent -StorageAccountName $StorageAccountName -checkResult $checks["CheckAdminConsent"]
+        }
+
+        #
+        # Check if WinHttpAutoProxySvc and iphlpsvc service is running
+        #
+        if (!$filterIsPresent -or $Filter -match "CheckWindowServices")
+        {   
+           try {
+                $checksExecuted += 1;
+                if(Get-Service WinHttpAutoProxySvc -eq $null -and Get-Service iphlpsvc -eq $null)
+                {
+                    $checks["CheckWindowServices"].Result = "Failed"
+                    Write-Error "CheckWindowServices - FAILED"
+                }
+                if((Get-Service WinHttpAutoProxySvc).Status -eq "Running")
+                {
+                    $checks["CheckWindowServices"].Result = "Passed"
+                    Write-Verbose "CheckWindowServices - SUCCESS"
+                }
+                If((Get-Service iphlpsvc).Status -eq "Running")
+                {
+                    $checks["CheckWindowServices"].Result = "Passed"
+                    Write-Verbose "CheckWindowServices - SUCCESS"
+                }
+                else {
+                    $checks["CheckWindowServices"].Result = "Failed"
+                    Write-Error "CheckWindowServices - FAILED"
+                    Write-Error "The services () need to be in running state in order to "
+                }
+            
+            }
+            catch {
+                $checks["CheckWindowServices"].Result = "Failed"
+                $checks["CheckWindowServices"].Issue = $_
+                Write-Error "CheckWindowServices - FAILED"
+                Write-Error $_
+            }
+
         }
 
         SummaryOfChecks -filterIsPresent $filterIsPresent -checksExecuted $checksExecuted
