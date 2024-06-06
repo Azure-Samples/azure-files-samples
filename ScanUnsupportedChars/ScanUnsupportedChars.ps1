@@ -14,8 +14,8 @@
    Note - this script might report false positive i.e. a file name is supported but this script might say its not supported.
           This is by design to keep the script simple and allow customer to rename such files proactively.
 
-   Version 5.5
-   Last Modified Date: May 6th, 2024
+   Version 5.6
+   Last Modified Date: June 5th, 2024
 
    Note: Please open powershell in full screen mode to avoid output truncation.
 
@@ -410,7 +410,6 @@ public class ListFiles
     // Assume directoryPath passed in is already prefixed with \\?\
     public void FindFilesAndDirs(string directoryPath)
     {
-        SharePathLength = directoryPath.Length;
         WIN32_FIND_DATA findData;
 
         if (directoryPath.EndsWith(@"\"))
