@@ -4014,28 +4014,22 @@ function Debug-AzStorageAccountEntraKerbAuth {
         #
         if (!$filterIsPresent -or $Filter -match "CheckWinHttpAutoProxySvcService")
         {   
-           try {
+           try 
+           {
                 $checksExecuted += 1;
                 $service = Get-Service WinHttpAutoProxySvc
-                if($service -eq $null)
+                if (($service -eq $null) -or ($service.Status -ne "Running"))
                 {
                     $checks["CheckWinHttpAutoProxySvcService"].Result = "Failed"
                     Write-Error "CheckWinHttpAutoProxySvcService - FAILED"
                 }
-                if($service.Status -eq "Running")
-                {
+                else {
                     $checks["CheckWinHttpAutoProxySvcService"].Result = "Passed"
                     Write-Verbose "CheckWinHttpAutoProxySvcService - SUCCESS"
                 }
-                
-                else {
-                    $checks["CheckWinHttpAutoProxySvcService"].Result = "Failed"
-                    Write-Error "CheckWinHttpAutoProxySvcService - FAILED"
-                    Write-Error "These services need to be in running state."
-                }
-            
             }
-            catch {
+            catch 
+            {
                 $checks["CheckWinHttpAutoProxySvcService"].Result = "Failed"
                 $checks["CheckWinHttpAutoProxySvcService"].Issue = $_
                 Write-Error "CheckWinHttpAutoProxySvcService - FAILED"
@@ -4048,28 +4042,24 @@ function Debug-AzStorageAccountEntraKerbAuth {
         #
         if (!$filterIsPresent -or $Filter -match "CheckiphlpsvcService")
         {   
-           try {
+           try 
+           {
                 $checksExecuted += 1;
                 $services = Get-Service iphlpsvc
-                if($services -eq $null)
+                if (($services -eq $null) -or ($services.Status -ne "Running"))
                 {
                     $checks["CheckiphlpsvcService"].Result = "Failed"
                     Write-Error "CheckiphlpsvcService - FAILED"
-                }
-                if($services.Status -eq "Running")
+                    Write-Error "These services need to be in running state."
+                }                
+                else 
                 {
                     $checks["CheckiphlpsvcService"].Result = "Passed"
                     Write-Verbose "CheckiphlpsvcService - SUCCESS"
                 }
-                
-                else {
-                    $checks["CheckiphlpsvcService"].Result = "Failed"
-                    Write-Error "CheckiphlpsvcService - FAILED"
-                    Write-Error "These services need to be in running state."
-                }
-            
             }
-            catch {
+            catch 
+            {
                 $checks["CheckiphlpsvcService"].Result = "Failed"
                 $checks["CheckiphlpsvcService"].Issue = $_
                 Write-Error "CheckiphlpsvcService - FAILED"
