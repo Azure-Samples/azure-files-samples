@@ -3790,8 +3790,8 @@ function Debug-AzStorageAccountEntraKerbAuth {
             "CheckRegKey" = [CheckResult]::new("CheckRegKey");
             "CheckKerbRealmMapping" = [CheckResult]::new("CheckKerbRealmMapping");
             "CheckAdminConsent" = [CheckResult]::new("CheckAdminConsent");
-            "CheckWinHttpAutoProxySvcService" = [CheckResult]::new("CheckWinHttpAutoProxySvcService");
-            "CheckiphlpsvcService" = [CheckResult]::new("Checkiphlpsvc")
+            "CheckWinHttpAutoProxySvc" = [CheckResult]::new("CheckWinHttpAutoProxySvc");
+            "CheckIpHlpScv" = [CheckResult]::new("CheckIpHlpScv")
         }
         #
         # Port 445 check 
@@ -4012,7 +4012,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
         #
         # Check if WinHttpAutoProxySvc service is running
         #
-        if (!$filterIsPresent -or $Filter -match "CheckWinHttpAutoProxySvcService")
+        if (!$filterIsPresent -or $Filter -match "CheckWinHttpAutoProxySvc")
         {   
            try 
            {
@@ -4020,19 +4020,19 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 $service = Get-Service WinHttpAutoProxySvc
                 if (($service -eq $null) -or ($service.Status -ne "Running"))
                 {
-                    $checks["CheckWinHttpAutoProxySvcService"].Result = "Failed"
-                    Write-Error "CheckWinHttpAutoProxySvcService - FAILED"
+                    $checks["CheckWinHttpAutoProxySvc"].Result = "Failed"
+                    Write-Error "CheckWinHttpAutoProxySvc - FAILED"
                 }
                 else {
-                    $checks["CheckWinHttpAutoProxySvcService"].Result = "Passed"
-                    Write-Verbose "CheckWinHttpAutoProxySvcService - SUCCESS"
+                    $checks["CheckWinHttpAutoProxySvc"].Result = "Passed"
+                    Write-Verbose "CheckWinHttpAutoProxySvc - SUCCESS"
                 }
             }
             catch 
             {
-                $checks["CheckWinHttpAutoProxySvcService"].Result = "Failed"
-                $checks["CheckWinHttpAutoProxySvcService"].Issue = $_
-                Write-Error "CheckWinHttpAutoProxySvcService - FAILED"
+                $checks["CheckWinHttpAutoProxySvc"].Result = "Failed"
+                $checks["CheckWinHttpAutoProxySvc"].Issue = $_
+                Write-Error "CheckWinHttpAutoProxySvc - FAILED"
                 Write-Error $_
             }
 
@@ -4040,7 +4040,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
         #
         #Check if iphlpsvc service is running
         #
-        if (!$filterIsPresent -or $Filter -match "CheckiphlpsvcService")
+        if (!$filterIsPresent -or $Filter -match "CheckIpHlpScv")
         {   
            try 
            {
@@ -4048,21 +4048,21 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 $services = Get-Service iphlpsvc
                 if (($services -eq $null) -or ($services.Status -ne "Running"))
                 {
-                    $checks["CheckiphlpsvcService"].Result = "Failed"
-                    Write-Error "CheckiphlpsvcService - FAILED"
+                    $checks["CheckIpHlpScv"].Result = "Failed"
+                    Write-Error "CheckIpHlpScv - FAILED"
                     Write-Error "These services need to be in running state."
                 }                
                 else 
                 {
-                    $checks["CheckiphlpsvcService"].Result = "Passed"
-                    Write-Verbose "CheckiphlpsvcService - SUCCESS"
+                    $checks["CheckIpHlpScv"].Result = "Passed"
+                    Write-Verbose "CheckIpHlpScv - SUCCESS"
                 }
             }
             catch 
             {
-                $checks["CheckiphlpsvcService"].Result = "Failed"
-                $checks["CheckiphlpsvcService"].Issue = $_
-                Write-Error "CheckiphlpsvcService - FAILED"
+                $checks["CheckIpHlpScv"].Result = "Failed"
+                $checks["CheckIpHlpScv"].Issue = $_
+                Write-Error "CheckIpHlpScv - FAILED"
                 Write-Error $_
             }
 
