@@ -4016,12 +4016,13 @@ function Debug-AzStorageAccountEntraKerbAuth {
         {   
            try {
                 $checksExecuted += 1;
-                if((Get-Service WinHttpAutoProxySvc) -eq $null)
+                $service = Get-Service WinHttpAutoProxySvc
+                if($service -eq $null)
                 {
                     $checks["CheckWinHttpAutoProxySvcService"].Result = "Failed"
                     Write-Error "CheckWinHttpAutoProxySvcService - FAILED"
                 }
-                if((Get-Service WinHttpAutoProxySvc).Status -eq "Running")
+                if($service.Status -eq "Running")
                 {
                     $checks["CheckWinHttpAutoProxySvcService"].Result = "Passed"
                     Write-Verbose "CheckWinHttpAutoProxySvcService - SUCCESS"
@@ -4045,16 +4046,17 @@ function Debug-AzStorageAccountEntraKerbAuth {
         #
         #Check if iphlpsvc service is running
         #
-        if (!$filterIsPresent -or $Filter -match "CheckWinHttpAutoProxySvcService")
+        if (!$filterIsPresent -or $Filter -match "CheckiphlpsvcService")
         {   
            try {
                 $checksExecuted += 1;
-                if((Get-Service iphlpsvc) -eq $null)
+                $services = Get-Service iphlpsvc
+                if($services -eq $null)
                 {
                     $checks["CheckiphlpsvcService"].Result = "Failed"
                     Write-Error "CheckiphlpsvcService - FAILED"
                 }
-                if((Get-Service iphlpsvc).Status -eq "Running")
+                if($services.Status -eq "Running")
                 {
                     $checks["CheckiphlpsvcService"].Result = "Passed"
                     Write-Verbose "CheckiphlpsvcService - SUCCESS"
