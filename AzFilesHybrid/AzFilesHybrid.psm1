@@ -3839,7 +3839,9 @@ function Debug-AzStorageAccountEntraKerbAuth {
             "CheckEntraObject" = [CheckResult]::new("CheckEntraObject");
             "CheckRegKey" = [CheckResult]::new("CheckRegKey");
             "CheckKerbRealmMapping" = [CheckResult]::new("CheckKerbRealmMapping");
-            "CheckAdminConsent" = [CheckResult]::new("CheckAdminConsent")  
+            "CheckAdminConsent" = [CheckResult]::new("CheckAdminConsent");
+            "CheckWinHttpAutoProxySvc" = [CheckResult]::new("CheckWinHttpAutoProxySvc");
+            "CheckIpHlpScv" = [CheckResult]::new("CheckIpHlpScv")
         }
         #
         # Port 445 check 
@@ -4059,6 +4061,65 @@ function Debug-AzStorageAccountEntraKerbAuth {
         {
             $checksExecuted += 1;
             Debug-EntraKerbAdminConsent -StorageAccountName $StorageAccountName -checkResult $checks["CheckAdminConsent"]
+        }
+
+        #
+        # Check if WinHttpAutoProxySvc service is running
+        #
+        if (!$filterIsPresent -or $Filter -match "CheckWinHttpAutoProxySvc")
+        {   
+           try 
+           {
+                $checksExecuted += 1;
+                $service = Get-Service WinHttpAutoProxySvc
+                if (($service -eq $null) -or ($service.Status -ne "Running"))
+                {
+                    $checks["CheckWinHttpAutoProxySvc"].Result = "Failed"
+                    Write-Error "CheckWinHttpAutoProxySvc - FAILED"
+                }
+                else {
+                    $checks["CheckWinHttpAutoProxySvc"].Result = "Passed"
+                    Write-Verbose "CheckWinHttpAutoProxySvc - SUCCESS"
+                }
+            }
+            catch 
+            {
+                $checks["CheckWinHttpAutoProxySvc"].Result = "Failed"
+                $checks["CheckWinHttpAutoProxySvc"].Issue = $_
+                Write-Error "CheckWinHttpAutoProxySvc - FAILED"
+                Write-Error $_
+            }
+
+        }
+        #
+        #Check if iphlpsvc service is running
+        #
+        if (!$filterIsPresent -or $Filter -match "CheckIpHlpScv")
+        {   
+           try 
+           {
+                $checksExecuted += 1;
+                $services = Get-Service iphlpsvc
+                if (($services -eq $null) -or ($services.Status -ne "Running"))
+                {
+                    $checks["CheckIpHlpScv"].Result = "Failed"
+                    Write-Error "CheckIpHlpScv - FAILED"
+                    Write-Error "These services need to be in running state."
+                }                
+                else 
+                {
+                    $checks["CheckIpHlpScv"].Result = "Passed"
+                    Write-Verbose "CheckIpHlpScv - SUCCESS"
+                }
+            }
+            catch 
+            {
+                $checks["CheckIpHlpScv"].Result = "Failed"
+                $checks["CheckIpHlpScv"].Issue = $_
+                Write-Error "CheckIpHlpScv - FAILED"
+                Write-Error $_
+            }
+
         }
 
         SummaryOfChecks -filterIsPresent $filterIsPresent -checksExecuted $checksExecuted
