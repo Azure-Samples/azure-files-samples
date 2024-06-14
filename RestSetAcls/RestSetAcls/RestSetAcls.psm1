@@ -322,6 +322,7 @@ function Get-AzureFilePermissionKey {
 }
 
 function Set-AzureFilesAclRecursive {
+    [CmdletBinding()]
     param (
         [Parameter(Mandatory=$true)]
         [Microsoft.WindowsAzure.Commands.Storage.AzureStorageContext]$Context,
