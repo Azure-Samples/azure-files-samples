@@ -3841,7 +3841,8 @@ function Debug-AzStorageAccountEntraKerbAuth {
             "CheckKerbRealmMapping" = [CheckResult]::new("CheckKerbRealmMapping");
             "CheckAdminConsent" = [CheckResult]::new("CheckAdminConsent");
             "CheckWinHttpAutoProxySvc" = [CheckResult]::new("CheckWinHttpAutoProxySvc");
-            "CheckIpHlpScv" = [CheckResult]::new("CheckIpHlpScv")
+            "CheckIpHlpScv" = [CheckResult]::new("CheckIpHlpScv");
+            "CheckFiddlerProxy" = [CheckResult]::new("CheckFiddlerProxy")
         }
         #
         # Port 445 check 
@@ -4117,6 +4118,36 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 $checks["CheckIpHlpScv"].Result = "Failed"
                 $checks["CheckIpHlpScv"].Issue = $_
                 Write-Error "CheckIpHlpScv - FAILED"
+                Write-Error $_
+            }
+
+        }
+        #
+        #Check if Fiddler Proxy is cleaned up
+        #
+        if (!$filterIsPresent -or $Filter -match "CheckFiddlerProxy")
+        {   
+           try 
+           {
+                $checksExecuted += 1;
+                
+                if (CheckFiddlerProxy)
+                {
+                    $checks["CheckFiddlerProxy"].Result = "Failed"
+                    Write-Error "CheckFiddlerProxy - FAILED"
+                    Write-Error "These services need to be in running state."
+                }                
+                else 
+                {
+                    $checks["CheckFiddlerProxy"].Result = "Passed"
+                    Write-Verbose "CheckFiddlerProxy - SUCCESS"
+                }
+            }
+            catch 
+            {
+                $checks["CheckFiddlerProxy"].Result = "Failed"
+                $checks["CheckFiddlerProxy"].Issue = $_
+                Write-Error "CheckFiddlerProxy - FAILED"
                 Write-Error $_
             }
 
