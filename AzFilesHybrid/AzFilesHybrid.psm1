@@ -976,6 +976,54 @@ function Request-MSGraphModule {
     Remove-Module -Name PackageManagement -ErrorAction SilentlyContinue
 }
 
+function Request-MSGraphModuleVersion {
+    [CmdletBinding(SupportsShouldProcess, ConfirmImpact="High")]
+    param(
+        [Parameter(Mandatory=$true)]
+        [Version]$MinimumVersion
+    )
+
+    $availableModules = Get-Module Microsoft.Graph -ListAvailable
+    $usableModules = $availableModules | Where-Object { $_.Version -ge $MinimumVersion }
+
+    # Install if needed
+    if ($null -eq $usableModules) {
+        # Print why we could not find a usable module:
+        if ($null -eq $availableModules) {
+            Write-Error "The Microsoft.Graph module is not installed."
+        } else {
+            $maxAvailableVersion = ($availableModules.Version | Measure-Object -Maximum).Maximum
+            Write-Error "The Microsoft.Graph module is installed with version $maxAvailableVersion, but $MinimumVersion is required."
+        }
+        
+        # Request to install with the adequate min version
+        $caption = "Install missing Microsoft.Graph PowerShell module"
+        $verboseConfirmMessage = "This cmdlet requires the Microsoft.Graph PowerShell module. It can be automatically installed now if you are running in an elevated sessions."
+        if ($PSCmdlet.ShouldProcess($verboseConfirmMessage, $verboseConfirmMessage, $caption)) {
+            if (!(Get-IsElevatedSession)) {
+                Write-Error `
+                        -Message "To install the missing Microsoft.Graph module, you must run this cmdlet as an administrator. This cmdlet may not generally require administrator privileges." `
+                        -ErrorAction Stop
+            }
+            
+            Write-Host "Installing missing module Microsoft.Graph"
+            Install-Module `
+                -Name Microsoft.Graph `
+                -MinimumVersion $MinimumVersion `
+                -Repository PSGallery `
+                -AllowClobber `
+                -Force `
+                -ErrorAction Stop
+        }
+
+        Remove-Module -Name PowerShellGet -ErrorAction SilentlyContinue
+        Remove-Module -Name PackageManagement -ErrorAction SilentlyContinue
+    }
+    
+    Remove-Module -Name Microsoft.Graph* -ErrorAction SilentlyContinue
+    Import-Module Microsoft.Graph -MinimumVersion $MinimumVersion -ErrorAction Continue
+}
+
 function Request-AzPowerShellModule {
     [CmdletBinding(SupportsShouldProcess, ConfirmImpact="High")]
     param()
@@ -3709,7 +3757,8 @@ function Debug-AzStorageAccountAuth {
 
         if ($directoryServiceOptions -eq "AD")
         {
-            Write-Verbose "Running Debug cmdlet for AD DS joined account: "
+            Write-Host "Storage account is configured for AD DS auth."
+            Write-Host "Running AD DS checks."
             Debug-AzStorageAccountADDSAuth `
                 -StorageAccountName $StorageAccountName `
                 -ResourceGroupName $ResourceGroupName `
@@ -3721,7 +3770,8 @@ function Debug-AzStorageAccountAuth {
         }
         elseif ($directoryServiceOptions -eq "AADKERB")
         {
-            Write-Verbose "Running Debug cmdlet for Microsoft Entra kerberos(AADKERB) joined account:"
+            Write-Host "Storage account is configured for Microsoft Entra Kerberos (AADKERB) auth."
+            Write-Host "Running Entra Kerberos checks."
             Debug-AzStorageAccountEntraKerbAuth `
                 -StorageAccountName $StorageAccountName `
                 -ResourceGroupName $ResourceGroupName `
@@ -3923,7 +3973,11 @@ function Debug-AzStorageAccountEntraKerbAuth {
             try {
                 $checksExecuted += 1;
                 Write-Verbose "CheckRegKey - START"
-                $RegKey = Get-ItemProperty -Path Registry::HKLM\SYSTEM\CurrentControlSet\Control\Lsa\Kerberos\Parameters
+                
+                $RegKey = Get-ItemProperty -Path Registry::HKLM\Software\Microsoft\Windows\CurrentVersion\Policies\System\Kerberos\Parameters
+                if ($null -eq $RegKey) {
+                    $RegKey = Get-ItemProperty -Path Registry::HKLM\SYSTEM\CurrentControlSet\Control\Lsa\Kerberos\Parameters
+                }
                 if($null -ne $RegKey -and $RegKey.CloudKerberosTicketRetrievalEnabled -eq "1")
                 {
                     $checks["CheckRegKey"].Result = "Passed"
@@ -4022,6 +4076,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 {
                     $checks["CheckWinHttpAutoProxySvc"].Result = "Failed"
                     Write-Error "CheckWinHttpAutoProxySvc - FAILED"
+                    $checks["CheckWinHttpAutoProxySvc"].Issue ="WinHttpAutoProxy service need to be in running state."
                 }
                 else {
                     $checks["CheckWinHttpAutoProxySvc"].Result = "Passed"
@@ -4031,9 +4086,8 @@ function Debug-AzStorageAccountEntraKerbAuth {
             catch 
             {
                 $checks["CheckWinHttpAutoProxySvc"].Result = "Failed"
-                $checks["CheckWinHttpAutoProxySvc"].Issue = $_
                 Write-Error "CheckWinHttpAutoProxySvc - FAILED"
-                Write-Error $_
+                $checks["CheckWinHttpAutoProxySvc"].Issue ="WinHttpAutoProxy service need to be in running state."
             }
 
         }
@@ -4049,8 +4103,8 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 if (($services -eq $null) -or ($services.Status -ne "Running"))
                 {
                     $checks["CheckIpHlpScv"].Result = "Failed"
+                    $checks["CheckIpHlpScv"].Issue ="IP Help service need to be in running state."
                     Write-Error "CheckIpHlpScv - FAILED"
-                    Write-Error "These services need to be in running state."
                 }                
                 else 
                 {
@@ -4061,9 +4115,8 @@ function Debug-AzStorageAccountEntraKerbAuth {
             catch 
             {
                 $checks["CheckIpHlpScv"].Result = "Failed"
-                $checks["CheckIpHlpScv"].Issue = $_
                 Write-Error "CheckIpHlpScv - FAILED"
-                Write-Error $_
+                $checks["CheckIpHlpScv"].Issue = "IP Help service need to be in running state."
             }
 
         }
@@ -4086,13 +4139,17 @@ function Debug-EntraKerbAdminConsent {
             Write-Verbose "CheckAdminConsent - START"
             $Context = Get-AzContext
             $TenantId = $Context.Tenant
+
+            # Detect if the Microsoft.Graph.Applications module is installed and at least version 2.2.0.
+            # Get-MgServicePrincipalByAppId was added in Microsoft.Graph.Applications v2.2.0.
+            Request-MSGraphModuleVersion -MinimumVersion 2.2.0
             
             Request-ConnectMsGraph `
                 -Scopes "DelegatedPermissionGrant.Read.All" `
                 -RequiredModules @("Microsoft.Graph.Applications", "Microsoft.Graph.Identity.SignIns") `
                 -TenantId $TenantId
 
-            Import-Module Microsoft.Graph.Applications
+            Import-Module Microsoft.Graph.Applications -MinimumVersion 2.2.0 -ErrorAction SilentlyContinue
             Import-Module Microsoft.Graph.Identity.SignIns
 
             $MsGraphSp = Get-MgServicePrincipalByAppId -AppId 00000003-0000-0000-c000-000000000000 
@@ -4284,9 +4341,9 @@ function Debug-AzStorageAccountADDSAuth {
                 {
                     $message = "Machine is not domain-joined." `
                         + " Being domain-joined to an AD DS domain is a prerequisite for mounting" `
-                        + " Azure file shares without having to explicitly provide user credentials at every mount.See[https://docs.microsoft.com/en-us/azure/storage/files/storage-files-identity-auth-active-directory-enable#prerequisites].\n\n" `
+                        + " Azure file shares without having to explicitly provide user credentials at every mount.See https://docs.microsoft.com/en-us/azure/storage/files/storage-files-identity-auth-active-directory-enable#prerequisites.\n\n" `
                         + " Mounting through a machine that isn't domain-joined is also supported," `
-                        + " but you must (1) have line of sight to the domain controller, and (2) explicitly provide AD DS user credentials when mounting. See[https://learn.microsoft.com/en-us/azure/storage/files/storage-files-identity-ad-ds-mount-file-share#mount-the-file-share-from-a-non-domain-joined-vm-or-a-vm-joined-to-a-different-ad-domain]"
+                        + " but you must (1) have unimpeded network connectivity to the domain controller, and (2) explicitly provide AD DS user credentials when mounting. See https://learn.microsoft.com/en-us/azure/storage/files/storage-files-identity-ad-ds-mount-file-share#mount-the-file-share-from-a-non-domain-joined-vm-or-a-vm-joined-to-a-different-ad-domain "
                     Write-Error -Message $message -ErrorAction Stop
                 }
 
