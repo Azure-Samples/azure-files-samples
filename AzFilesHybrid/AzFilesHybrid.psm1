@@ -4131,16 +4131,22 @@ function Debug-AzStorageAccountEntraKerbAuth {
            {
                 $checksExecuted += 1;
                 
-                if (CheckFiddlerProxy)
+                $ProxysubFolder = Get-ChildItem -Path Registry::HKLM\SYSTEM\CurrentControlSet\Services\iphlpsvc\Parameters\ProxyMgr
+                foreach($folder in $ProxysubFolder)
                 {
-                    $checks["CheckFiddlerProxy"].Result = "Failed"
-                    Write-Error "CheckFiddlerProxy - FAILED"
-                    Write-Error "These services need to be in running state."
-                }                
-                else 
-                {
-                    $checks["CheckFiddlerProxy"].Result = "Passed"
-                    Write-Verbose "CheckFiddlerProxy - SUCCESS"
+                    $properties = $folder | Get-ItemProperty
+                    if(($null -ne $properties.StaticProxy) -or ($properties.StaticProxy.Contains("https=127.0.0.1:")))
+                    {
+                        $checks["CheckFiddlerProxy"].Result = "Failed"
+                        Write-Error "CheckFiddlerProxy - FAILED"
+                        Write-Error "Fiddler Proxy is set, you need to delete any registry nodes under ${$properties.PSParentPath} "
+                    }
+                    else
+                    {
+                        $checks["CheckFiddlerProxy"].Result = "Passed"
+                        Write-Verbose "CheckFiddlerProxy - SUCCESS"
+                    }
+
                 }
             }
             catch 
