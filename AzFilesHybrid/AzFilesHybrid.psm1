@@ -4090,7 +4090,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 $checks["CheckWinHttpAutoProxySvc"].Issue = $_
 
                 Write-Error "CheckWinHttpAutoProxySvc - FAILED"
-                Write-Error Issue
+                Write-Error $_
             }
 
         }
@@ -4108,7 +4108,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
                     $checks["CheckIpHlpScv"].Result = "Failed"
                     Write-Error "CheckIpHlpScv - FAILED"
                     $checks["CheckIpHlpScv"].Issue = "The IpHlp service needs to be in running state."
-                    Write-Error Issue
+                    Write-Error $_
                 }                
                 else 
                 {
@@ -4122,7 +4122,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 $checks["CheckIpHlpScv"].Issue = $_
 
                 Write-Error "CheckIpHlpScv - FAILED"
-                Write-Error Issue
+                Write-Error $_
             }
 
         }
