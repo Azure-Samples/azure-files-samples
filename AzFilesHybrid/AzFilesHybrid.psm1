@@ -3841,7 +3841,8 @@ function Debug-AzStorageAccountEntraKerbAuth {
             "CheckKerbRealmMapping" = [CheckResult]::new("CheckKerbRealmMapping");
             "CheckAdminConsent" = [CheckResult]::new("CheckAdminConsent");
             "CheckWinHttpAutoProxySvc" = [CheckResult]::new("CheckWinHttpAutoProxySvc");
-            "CheckIpHlpScv" = [CheckResult]::new("CheckIpHlpScv")
+            "CheckIpHlpScv" = [CheckResult]::new("CheckIpHlpScv");
+            "CheckFiddlerProxy" = [CheckResult]::new("CheckFiddlerProxy")
         }
         #
         # Port 445 check 
@@ -4120,6 +4121,42 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 $checks["CheckIpHlpScv"].Issue = $_
 
                 Write-Error "CheckIpHlpScv - FAILED"
+                Write-Error $_
+            }
+
+        }
+        #
+        #Check if Fiddler Proxy is cleaned up
+        #
+        if (!$filterIsPresent -or $Filter -match "CheckFiddlerProxy")
+        {   
+           try 
+           {
+                $checksExecuted += 1;
+                
+                $ProxysubFolder = Get-ChildItem -Path Registry::HKLM\SYSTEM\CurrentControlSet\Services\iphlpsvc\Parameters\ProxyMgr
+                foreach($folder in $ProxysubFolder)
+                {
+                    $properties = $folder | Get-ItemProperty
+                    if(($null -ne $properties.StaticProxy) -or ($properties.StaticProxy.Contains("https=127.0.0.1:")))
+                    {
+                        $checks["CheckFiddlerProxy"].Result = "Failed"
+                        Write-Error "CheckFiddlerProxy - FAILED"
+                        Write-Error "Fiddler Proxy is set, you need to delete any registry nodes under ${$properties.PSParentPath} "
+                    }
+                    else
+                    {
+                        $checks["CheckFiddlerProxy"].Result = "Passed"
+                        Write-Verbose "CheckFiddlerProxy - SUCCESS"
+                    }
+
+                }
+            }
+            catch 
+            {
+                $checks["CheckFiddlerProxy"].Result = "Failed"
+                $checks["CheckFiddlerProxy"].Issue = $_
+                Write-Error "CheckFiddlerProxy - FAILED"
                 Write-Error $_
             }
 
