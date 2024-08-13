@@ -4121,6 +4121,42 @@ function Debug-AzStorageAccountEntraKerbAuth {
             }
 
         }
+        #
+        #Check if the machine is HAADJ or AADJ
+        #
+        if (!$filterIsPresent -or $Filter -match "CheckforHAADJ/AADJ")
+        {   
+           try 
+           {
+                $checksExecuted += 1;
+                if(-not (Get-IsAdmin)){
+                    throw "Access Denied: The cmdlet needs to be executed with administrator priviledges."
+               }
+               $dsregcmd = dsregcmd /status
+               $status = New-Object -TypeName PSObject
+               $dsregcmd | Select-String -Pattern " *[A-z]+ : [A-z]+ *" | ForEach-Object {
+                         Add-Member -InputObject $status -MemberType NoteProperty -Name (([String]$_).Trim() -split " : ")[0] -Value (([String]$_).Trim() -split " : ")[1]
+                    }
+               return $status
+
+               if(($status.AzureAdJoined -eq "YES") -and ($status.DomainJoined -eq "NO"))
+               {
+                    Write-Host "It is an AAD Joined machine"
+               }
+               if(($status.AzureAdJoined -eq "YES") -and ($status.DomainJoined -eq "YES"))
+               {
+                Write-Host "It is an Hybrid AAD Joined machine"
+               }
+            }
+            catch 
+            {
+                $checks["CheckforHAADJ/AADJ"].Result = "Failed"
+                $checks["CheckforHAADJ/AADJ"].Issue = $_
+                Write-Error "CheckforHAADJ/AADJ - FAILED"
+                Write-Error $_
+            }
+
+        }
 
         SummaryOfChecks -filterIsPresent $filterIsPresent -checksExecuted $checksExecuted
     }
