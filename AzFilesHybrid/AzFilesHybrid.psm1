@@ -4031,6 +4031,9 @@ function Debug-AzStorageAccountEntraKerbAuth {
                     {
                         Debug-RBACCheck -StorageAccountName $StorageAccountName -UserPrincipalName $UserPrincipalName -checkResult $checks["CheckRBAC"]
                     }
+                    else {
+                        Write-Host "Access is granted via the default share permission"
+                    }
                 }
             } catch {
                 $checks["CheckRBAC"].Result = "Failed"
@@ -4062,7 +4065,7 @@ function Debug-RBACCheck {
                     
             $userOid = $(Get-MgUser -Filter "UserPrincipalName eq $UserPrincipalName" -Property Id).Id
 
-            $groupIds = Get-MgUserMemberOf -UserId $userOid | Select-Id
+            $groupIds = (Get-MgUserMemberOf -UserId $userOid).Id
 
             $roleNames = @(
                 "Storage File Data SMB Share Reader",
@@ -4103,6 +4106,9 @@ function Debug-RBACCheck {
                         + " configure proper share-level permission following the guidance at" `
                         + " https://docs.microsoft.com/en-us/azure/storage/files/storage-files-identity-ad-ds-assign-permissions"
                     Write-Error -Message $message -ErrorAction Stop
+            }
+            else {
+                
             }
 
 
