@@ -4128,24 +4128,30 @@ function Debug-AzStorageAccountEntraKerbAuth {
         {   
            try 
            {
-                $checksExecuted += 1;
-                if(-not (Get-IsAdmin)){
-                    throw "Access Denied: The cmdlet needs to be executed with administrator priviledges."
-               }
+               $checksExecuted += 1; 
                $dsregcmd = dsregcmd /status
                $status = New-Object -TypeName PSObject
-               $dsregcmd | Select-String -Pattern " *[A-z]+ : [A-z]+ *" | ForEach-Object {
-                         Add-Member -InputObject $status -MemberType NoteProperty -Name (([String]$_).Trim() -split " : ")[0] -Value (([String]$_).Trim() -split " : ")[1]
-                    }
-               return $status
+               $dsregcmd `
+               | Select-String -Pattern " *[A-z]+ : [A-z]+ *" `
+               | ForEach-Object 
+               {
+                   $parts = (([String]$_).Trim() -split " : ")
+                   $key = $parts[0]
+                   $value = $parts[1]
+                   Add-Member -InputObject $status -MemberType NoteProperty -Name $key -Value $value
+               }
 
                if(($status.AzureAdJoined -eq "YES") -and ($status.DomainJoined -eq "NO"))
                {
                     Write-Host "It is an AAD Joined machine"
                }
+
                if(($status.AzureAdJoined -eq "YES") -and ($status.DomainJoined -eq "YES"))
                {
                 Write-Host "It is an Hybrid AAD Joined machine"
+               }
+               else {
+                Write-Error "Entra Kerb requires AADJ or HAADJ machine."
                }
             }
             catch 
