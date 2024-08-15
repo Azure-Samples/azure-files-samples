@@ -4135,11 +4135,11 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 foreach($folder in $ProxysubFolder)
                 {
                     $properties = $folder | Get-ItemProperty
-                    if(($null -ne $properties.StaticProxy) -or ($properties.StaticProxy.Contains("https=127.0.0.1:")))
+                    if(($null -ne $properties.StaticProxy) -and ($properties.StaticProxy.Contains("https=127.0.0.1:")))
                     {
                         $checks["CheckFiddlerProxy"].Result = "Failed"
                         Write-Error "CheckFiddlerProxy - FAILED"
-                        Write-Error "Fiddler Proxy is set, you need to delete any registry nodes under ${$properties.PSParentPath} "
+                        Write-Error "Fiddler Proxy is set, you need to delete any registry nodes under ${$properties.PSParentPath}. To prevent this issue from re-appearing in the future, you can also uninstall Fiddler."
                     }
                     else
                     {
