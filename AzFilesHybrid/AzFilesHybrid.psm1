@@ -3841,7 +3841,8 @@ function Debug-AzStorageAccountEntraKerbAuth {
             "CheckKerbRealmMapping" = [CheckResult]::new("CheckKerbRealmMapping");
             "CheckAdminConsent" = [CheckResult]::new("CheckAdminConsent");
             "CheckWinHttpAutoProxySvc" = [CheckResult]::new("CheckWinHttpAutoProxySvc");
-            "CheckIpHlpScv" = [CheckResult]::new("CheckIpHlpScv")
+            "CheckIpHlpScv" = [CheckResult]::new("CheckIpHlpScv");
+            "CheckforHAADJ/AADJ" = [CheckResult]::new("CheckforHAADJ/AADJ")
         }
         #
         # Port 445 check 
@@ -4135,22 +4136,20 @@ function Debug-AzStorageAccountEntraKerbAuth {
                | Select-String -Pattern " *[A-z]+ : [A-z]+ *" `
                | ForEach-Object 
                {
-                   $parts = (([String]$_).Trim() -split " : ")
-                   $key = $parts[0]
-                   $value = $parts[1]
-                   Add-Member -InputObject $status -MemberType NoteProperty -Name $key -Value $value
-               }
+                Add-Member -InputObject $status -MemberType NoteProperty -Name (([String]$_).Trim() -split " : ")[0] -Value (([String]$_).Trim() -split " : ")[1]
+                }
 
                if(($status.AzureAdJoined -eq "YES") -and ($status.DomainJoined -eq "NO"))
                {
-                    Write-Host "It is an AAD Joined machine"
+                Write-Host "It is an AAD Joined machine"
                }
 
                if(($status.AzureAdJoined -eq "YES") -and ($status.DomainJoined -eq "YES"))
                {
                 Write-Host "It is an Hybrid AAD Joined machine"
                }
-               else {
+               else 
+               {
                 Write-Error "Entra Kerb requires AADJ or HAADJ machine."
                }
             }
