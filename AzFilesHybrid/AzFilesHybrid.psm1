@@ -4108,8 +4108,9 @@ function Debug-RBACCheck {
                     Write-Error -Message $message -ErrorAction Stop
             }
             else {
-                Write-Host "You have access to the shares: Here is the list of Roles you have {$listOfRoleNames}"
-
+                Write-Host "You have access to the shares: Here is the list of Roles you have: "
+                foreach ($role in $listOfRoleNames.Keys) {
+                Write-Output $role
             }
 
 
