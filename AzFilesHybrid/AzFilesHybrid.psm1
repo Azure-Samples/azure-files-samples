@@ -4035,7 +4035,8 @@ function Debug-AzStorageAccountEntraKerbAuth {
                         Write-Host "Access is granted via the default share permission"
                     }
                 }
-            } catch {
+            } catch 
+            {
                 $checks["CheckRBAC"].Result = "Failed"
                 $checks["CheckRBAC"].Issue = $_
                 Write-Error "CheckRBAC - FAILED"
@@ -4114,7 +4115,9 @@ function Debug-RBACCheck {
             }
 
 
-        } catch {
+        }
+        } 
+        catch {
             $checkResult.Result = "Failed"
             $checkResult.Issue = $_
             Write-Error "CheckRBAC - FAILED"
