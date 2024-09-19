@@ -4132,25 +4132,26 @@ function Debug-AzStorageAccountEntraKerbAuth {
                $checksExecuted += 1; 
                $dsregcmd = dsregcmd /status
                $status = New-Object -TypeName PSObject
-               $dsregcmd `
-               | Select-String -Pattern " *[A-z]+ : [A-z]+ *" `
-               | ForEach-Object 
+               $dsregcmd | Select-String -Pattern " *[A-z]+ : [A-z]+ *" | ForEach-Object 
                {
                 Add-Member -InputObject $status -MemberType NoteProperty -Name (([String]$_).Trim() -split " : ")[0] -Value (([String]$_).Trim() -split " : ")[1]
                 }
-
+                
                if(($status.AzureAdJoined -eq "YES") -and ($status.DomainJoined -eq "NO"))
                {
                 Write-Host "It is an AAD Joined machine"
+                $checks["CheckforHAADJ/AADJ"].Result = "Passed"
                }
 
                if(($status.AzureAdJoined -eq "YES") -and ($status.DomainJoined -eq "YES"))
                {
                 Write-Host "It is an Hybrid AAD Joined machine"
+                $checks["CheckforHAADJ/AADJ"].Result = "Passed"
                }
                else 
                {
                 Write-Error "Entra Kerb requires AADJ or HAADJ machine."
+                $checks["CheckforHAADJ/AADJ"].Result = "Failed"
                }
             }
             catch 
