@@ -4148,7 +4148,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 else
                 {
                     $checks["CheckEntraJoinType"].Result = "Failed"
-                    Write-Error "Entra Kerb requires AADJ or HAADJ machine."
+                    Write-Error "Entra Kerb requires Entra joined or Hybrid Entra joined machine."
                 }
             }
             catch 
