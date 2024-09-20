@@ -3841,7 +3841,8 @@ function Debug-AzStorageAccountEntraKerbAuth {
             "CheckKerbRealmMapping" = [CheckResult]::new("CheckKerbRealmMapping");
             "CheckAdminConsent" = [CheckResult]::new("CheckAdminConsent");
             "CheckWinHttpAutoProxySvc" = [CheckResult]::new("CheckWinHttpAutoProxySvc");
-            "CheckIpHlpScv" = [CheckResult]::new("CheckIpHlpScv")
+            "CheckIpHlpScv" = [CheckResult]::new("CheckIpHlpScv");
+            "CheckEntraJoinType" = [CheckResult]::new("CheckEntraJoinType")
         }
         #
         # Port 445 check 
@@ -4120,9 +4121,69 @@ function Debug-AzStorageAccountEntraKerbAuth {
             }
 
         }
+        #
+        #Check if the machine is HAADJ or AADJ
+        #
+        if (!$filterIsPresent -or $Filter -match "CheckEntraJoinType")
+        {   
+            try 
+            {
+                $checksExecuted += 1; 
+                $status = Get-DsRegStatus
+                
+                if ($status.AzureAdJoined -eq "YES")
+                {
+                    if ($status.DomainJoined -eq "NO")
+                    {
+                        Write-Host "It is an Entra Joined machine"
+                    }
+                    elseif ($status.DomainJoined -eq "YES")
+                    {
+                        Write-Host "It is an Hybrid Entra Joined machine"
+                    }
+
+                    $checks["CheckEntraJoinType"].Result = "Passed"
+                }
+                else
+                {
+                    $checks["CheckEntraJoinType"].Result = "Failed"
+                    Write-Error "Entra Kerb requires Entra joined or Hybrid Entra joined machine."
+                }
+            }
+            catch 
+            {
+                $checks["CheckEntraJoinType"].Result = "Failed"
+                $checks["CheckEntraJoinType"].Issue = $_
+                Write-Error "CheckEntraJoinType - FAILED"
+                Write-Error $_
+            }
+
+        }
 
         SummaryOfChecks -filterIsPresent $filterIsPresent -checksExecuted $checksExecuted
     }
+}
+
+function Get-DsRegStatus {
+    $dsregcmd = dsregcmd /status
+    $status = New-Object -TypeName PSObject
+    $dsregcmd `
+        | Select-String -Pattern " *[A-z]+ : [A-z]+ *" `
+        | ForEach-Object {
+            $parts = ([String]$_).Trim() -split " : "
+            $key = $parts[0]
+            $value = $parts[1]
+
+            if (-not (Get-Member -inputobject $status -name $key -Membertype Properties)) {
+                Add-Member `
+                    -InputObject $status `
+                    -MemberType NoteProperty `
+                    -Name $key `
+                    -Value $value
+            }
+        }
+
+    return $status
 }
 
 function Test-IsCloudKerberosTicketRetrievalEnabled {
