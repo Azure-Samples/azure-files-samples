@@ -3974,12 +3974,8 @@ function Debug-AzStorageAccountEntraKerbAuth {
             try {
                 $checksExecuted += 1;
                 Write-Verbose "CheckRegKey - START"
-                
-                $RegKey = Get-ItemProperty -Path Registry::HKLM\Software\Microsoft\Windows\CurrentVersion\Policies\System\Kerberos\Parameters
-                if ($null -eq $RegKey) {
-                    $RegKey = Get-ItemProperty -Path Registry::HKLM\SYSTEM\CurrentControlSet\Control\Lsa\Kerberos\Parameters
-                }
-                if($null -ne $RegKey -and $RegKey.CloudKerberosTicketRetrievalEnabled -eq "1")
+
+                if (Test-IsCloudKerberosTicketRetrievalEnabled)
                 {
                     $checks["CheckRegKey"].Result = "Passed"
                     Write-Verbose "CheckRegKey - SUCCESS"
@@ -4077,6 +4073,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 {
                     $checks["CheckWinHttpAutoProxySvc"].Result = "Failed"
                     Write-Error "CheckWinHttpAutoProxySvc - FAILED"
+                    $checks["CheckWinHttpAutoProxySvc"].Issue = "The WinHttpAutoProxy service needs to be in running state."
                 }
                 else {
                     $checks["CheckWinHttpAutoProxySvc"].Result = "Passed"
@@ -4087,6 +4084,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
             {
                 $checks["CheckWinHttpAutoProxySvc"].Result = "Failed"
                 $checks["CheckWinHttpAutoProxySvc"].Issue = $_
+
                 Write-Error "CheckWinHttpAutoProxySvc - FAILED"
                 Write-Error $_
             }
@@ -4105,7 +4103,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 {
                     $checks["CheckIpHlpScv"].Result = "Failed"
                     Write-Error "CheckIpHlpScv - FAILED"
-                    Write-Error "These services need to be in running state."
+                    $checks["CheckIpHlpScv"].Issue = "The IpHlp service needs to be in running state."
                 }                
                 else 
                 {
@@ -4117,6 +4115,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
             {
                 $checks["CheckIpHlpScv"].Result = "Failed"
                 $checks["CheckIpHlpScv"].Issue = $_
+
                 Write-Error "CheckIpHlpScv - FAILED"
                 Write-Error $_
             }
@@ -4185,6 +4184,20 @@ function Get-DsRegStatus {
         }
 
     return $status
+}
+
+function Test-IsCloudKerberosTicketRetrievalEnabled {
+    $regKeyFolder = Get-ItemProperty -Path Registry::HKLM\Software\Microsoft\Windows\CurrentVersion\Policies\System\Kerberos\Parameters
+    
+    if ($null -eq $regKeyFolder) {
+        $regKeyFolder = Get-ItemProperty -Path Registry::HKLM\SYSTEM\CurrentControlSet\Control\Lsa\Kerberos\Parameters
+    }
+
+    if ($null -eq $regKeyFolder) {
+        return $false
+    }
+
+    return $regKeyFolder.CloudKerberosTicketRetrievalEnabled -eq "1"
 }
 
 function Debug-EntraKerbAdminConsent {
@@ -4863,14 +4876,12 @@ function Debug-AzStorageAccountADDSAuth {
             try {
                 $checksExecuted += 1;
                 Write-Verbose "CheckAadKerberosRegistryKeyIsOff - START"
-                $RegKey = Get-ItemProperty -Path Registry::HKLM\SYSTEM\CurrentControlSet\Control\Lsa\Kerberos\Parameters
 
-                if(( $RegKey -eq $null) -or ($RegKey.CloudKerberosTicketRetrievalEnabled -eq $null) -or ($RegKey.CloudKerberosTicketRetrievalEnabled -eq "0"))
+                if (-not (Test-IsCloudKerberosTicketRetrievalEnabled))
                 {
                     $checks["CheckAadKerberosRegistryKeyIsOff"].Result = "Passed"
                     Write-Verbose "CheckAadKerberosRegistryKeyIsOff - SUCCESS"
                 }
-                
                 else 
                 {
                     $checks["CheckAadKerberosRegistryKeyIsOff"].Result = "Failed"
