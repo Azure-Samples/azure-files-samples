@@ -3842,6 +3842,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
             "CheckAdminConsent" = [CheckResult]::new("CheckAdminConsent");
             "CheckWinHttpAutoProxySvc" = [CheckResult]::new("CheckWinHttpAutoProxySvc");
             "CheckIpHlpScv" = [CheckResult]::new("CheckIpHlpScv");
+            "CheckFiddlerProxy" = [CheckResult]::new("CheckFiddlerProxy");
             "CheckEntraJoinType" = [CheckResult]::new("CheckEntraJoinType")
         }
         #
@@ -4122,6 +4123,56 @@ function Debug-AzStorageAccountEntraKerbAuth {
 
         }
         #
+        #Check if Fiddler Proxy is cleaned up
+        #
+        if (!$filterIsPresent -or $Filter -match "CheckFiddlerProxy")
+        {   
+           try 
+           {
+                $checksExecuted += 1;
+                
+                $ProxysubFolder = Get-ChildItem `
+                    -Path Registry::HKLM\SYSTEM\CurrentControlSet\Services\iphlpsvc\Parameters\ProxyMgr `
+                    -ErrorAction SilentlyContinue
+                
+                $success = $true
+                foreach ($folder in $ProxysubFolder)
+                {
+                    $properties = $folder | Get-ItemProperty
+                    if (($null -ne $properties.StaticProxy) -and ($properties.StaticProxy.Contains("https=127.0.0.1:")))
+                    {
+                        # If this is the first failure detected, print "FAILED"
+                        if ($success)
+                        {
+                            $checks["CheckFiddlerProxy"].Result = "Failed"
+                            Write-Error "CheckFiddlerProxy - FAILED"
+                            $success = $false
+                        }
+
+                        # Report the registry path every time a failure is detected
+                        Write-Error "Fiddler Proxy is set, you need to delete any registry nodes under '$($folder.Name)'."
+                    }
+                }
+
+                if ($success)
+                {
+                    $checks["CheckFiddlerProxy"].Result = "Passed"
+                    Write-Verbose "CheckFiddlerProxy - SUCCESS"
+                }
+                else
+                {
+                    Write-Error "To prevent this issue from re-appearing in the future, you should also uninstall Fiddler."
+                }
+             }
+             catch 
+             {
+                $checks["CheckFiddlerProxy"].Result = "Failed"
+                $checks["CheckFiddlerProxy"].Issue = $_
+                Write-Error "CheckFiddlerProxy - FAILED"
+             }
+        }
+
+        #
         #Check if the machine is HAADJ or AADJ
         #
         if (!$filterIsPresent -or $Filter -match "CheckEntraJoinType")
@@ -4157,7 +4208,6 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 Write-Error "CheckEntraJoinType - FAILED"
                 Write-Error $_
             }
-
         }
 
         SummaryOfChecks -filterIsPresent $filterIsPresent -checksExecuted $checksExecuted
