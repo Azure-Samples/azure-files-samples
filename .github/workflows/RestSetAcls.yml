@@ -1,0 +1,54 @@
+name: Test RestSetAcls
+on:
+  push:
+    paths:
+      - ".github/workflows/RestSetAcls.yml"
+      - "RestSetAcls/**"
+  pull_request:
+    paths:
+      - ".github/workflows/RestSetAcls.yml"
+      - "RestSetAcls/**"
+
+jobs:
+  pester-test:
+    name: Pester test
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: .\RestSetAcls
+        shell: pwsh
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v4
+      - name: Run all Pester tests
+        run: |
+          .\init.ps1
+          .\test.ps1
+  
+  Check-manifest:
+    name: Check .psd1 manifest file
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: .\RestSetAcls
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check .psd1 file with Test-ModuleManifest
+        run: |
+          .\init.ps1
+          .\check-manifest.ps1
+
+  lint-with-PSScriptAnalyzer:
+    name: Install and run PSScriptAnalyzer
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: .\RestSetAcls
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lint with PSScriptAnalyzer
+        run: |
+          .\init.ps1
+          .\lint.ps1

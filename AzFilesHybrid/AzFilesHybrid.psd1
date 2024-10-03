@@ -12,7 +12,7 @@
     RootModule = 'AzFilesHybrid.psm1'
     
     # Version number of this module.
-    ModuleVersion = '0.2.9.0'
+    ModuleVersion = '0.3.1.0'
     
     # Supported PSEditions
     CompatiblePSEditions = "Core", "Desktop"
@@ -30,7 +30,7 @@
     Copyright = '(c) 2020 Microsoft'
     
     # Description of the functionality provided by this module
-    # Description = ''
+    Description = 'The AzFilesHybrid PowerShell module provides cmdlets for deploying and configuring Azure Files. It offers cmdlets for domain joining storage accounts to your on-premises Active Directory, configuring your DNS servers, and troubleshooting  authentication issues.'
     
     # Minimum version of the Windows PowerShell engine required by this module
     PowerShellVersion = '5.1'

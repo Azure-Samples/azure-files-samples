@@ -14,8 +14,8 @@
    Note - this script might report false positive i.e. a file name is supported but this script might say its not supported.
           This is by design to keep the script simple and allow customer to rename such files proactively.
 
-   Version 5.4
-   Last Modified Date: November 7th, 2023
+   Version 5.6
+   Last Modified Date: June 5th, 2024
 
    Note: Please open powershell in full screen mode to avoid output truncation.
 
@@ -390,16 +390,26 @@ public class ListFiles
 
             return filePath.Substring(0, fileNameIndex + 1) + updatedFileName.ToString();
         }
-        else
+
+        if (fileName.EndsWith(@".")) // Filenames with trailing dots are not supported
         {
-            return string.Empty;
+            InvalidCharInfo info = new InvalidCharInfo();
+
+            info.Code = 0x0000002E;
+            info.Position = filePath.Length;
+            info.Message = "File name ends with '.'";
+
+            InvalidCharFileInformation.Add(filePath, info);
+            fileName = fileName.TrimEnd(new char [] {'.'});
+            return filePath.Substring(0, fileNameIndex + 1) + fileName + ReplacementString;
         }
+
+        return string.Empty;
     }
 
     // Assume directoryPath passed in is already prefixed with \\?\
     public void FindFilesAndDirs(string directoryPath)
     {
-        SharePathLength = directoryPath.Length;
         WIN32_FIND_DATA findData;
 
         if (directoryPath.EndsWith(@"\"))

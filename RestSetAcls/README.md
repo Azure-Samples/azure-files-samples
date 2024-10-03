@@ -20,8 +20,9 @@ RestSetAcls.psm1 is a PowerShell module that provides functions to set Access Co
 
 ## Installation
 
-1. Download the `RestSetAcls.psm1` file from this repo.
-1. Save the file to a local directory.
+```powershell
+Install-Module RestSetAcls
+```
 
 ## Usage
 
@@ -58,7 +59,6 @@ RestSetAcls.psm1 is a PowerShell module that provides functions to set Access Co
    ```powershell
    $FileShareName = "<file-share-name>" # replace with the name of your file share
    
-   Import-Module -Name "Path\To\RestSetAcls.psm1" # replace with the path to the downloaded RestSetAcls.psm1 file
    Set-AzureFilesAclRecursive -Context $context -FileShareName $FileShareName -FilePath "/" -SddlPermission $sddl
    ```
 

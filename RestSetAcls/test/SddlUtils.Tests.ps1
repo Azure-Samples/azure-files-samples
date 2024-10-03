@@ -1,5 +1,5 @@
 BeforeAll {
-    . $PSScriptRoot/SddlUtils.ps1
+    . $PSScriptRoot/../RestSetAcls/SddlUtils.ps1
 }
 
 Describe "ConvertTo-RawSecurityDescriptor" {

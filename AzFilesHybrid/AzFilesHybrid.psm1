@@ -976,6 +976,54 @@ function Request-MSGraphModule {
     Remove-Module -Name PackageManagement -ErrorAction SilentlyContinue
 }
 
+function Request-MSGraphModuleVersion {
+    [CmdletBinding(SupportsShouldProcess, ConfirmImpact="High")]
+    param(
+        [Parameter(Mandatory=$true)]
+        [Version]$MinimumVersion
+    )
+
+    $availableModules = Get-Module Microsoft.Graph -ListAvailable
+    $usableModules = $availableModules | Where-Object { $_.Version -ge $MinimumVersion }
+
+    # Install if needed
+    if ($null -eq $usableModules) {
+        # Print why we could not find a usable module:
+        if ($null -eq $availableModules) {
+            Write-Error "The Microsoft.Graph module is not installed."
+        } else {
+            $maxAvailableVersion = ($availableModules.Version | Measure-Object -Maximum).Maximum
+            Write-Error "The Microsoft.Graph module is installed with version $maxAvailableVersion, but $MinimumVersion is required."
+        }
+        
+        # Request to install with the adequate min version
+        $caption = "Install missing Microsoft.Graph PowerShell module"
+        $verboseConfirmMessage = "This cmdlet requires the Microsoft.Graph PowerShell module. It can be automatically installed now if you are running in an elevated sessions."
+        if ($PSCmdlet.ShouldProcess($verboseConfirmMessage, $verboseConfirmMessage, $caption)) {
+            if (!(Get-IsElevatedSession)) {
+                Write-Error `
+                        -Message "To install the missing Microsoft.Graph module, you must run this cmdlet as an administrator. This cmdlet may not generally require administrator privileges." `
+                        -ErrorAction Stop
+            }
+            
+            Write-Host "Installing missing module Microsoft.Graph"
+            Install-Module `
+                -Name Microsoft.Graph `
+                -MinimumVersion $MinimumVersion `
+                -Repository PSGallery `
+                -AllowClobber `
+                -Force `
+                -ErrorAction Stop
+        }
+
+        Remove-Module -Name PowerShellGet -ErrorAction SilentlyContinue
+        Remove-Module -Name PackageManagement -ErrorAction SilentlyContinue
+    }
+    
+    Remove-Module -Name Microsoft.Graph* -ErrorAction SilentlyContinue
+    Import-Module Microsoft.Graph -MinimumVersion $MinimumVersion -ErrorAction Continue
+}
+
 function Request-AzPowerShellModule {
     [CmdletBinding(SupportsShouldProcess, ConfirmImpact="High")]
     param()
@@ -3709,7 +3757,8 @@ function Debug-AzStorageAccountAuth {
 
         if ($directoryServiceOptions -eq "AD")
         {
-            Write-Verbose "Running Debug cmdlet for AD DS joined account: "
+            Write-Host "Storage account is configured for AD DS auth."
+            Write-Host "Running AD DS checks."
             Debug-AzStorageAccountADDSAuth `
                 -StorageAccountName $StorageAccountName `
                 -ResourceGroupName $ResourceGroupName `
@@ -3721,7 +3770,8 @@ function Debug-AzStorageAccountAuth {
         }
         elseif ($directoryServiceOptions -eq "AADKERB")
         {
-            Write-Verbose "Running Debug cmdlet for Microsoft Entra kerberos(AADKERB) joined account:"
+            Write-Host "Storage account is configured for Microsoft Entra Kerberos (AADKERB) auth."
+            Write-Host "Running Entra Kerberos checks."
             Debug-AzStorageAccountEntraKerbAuth `
                 -StorageAccountName $StorageAccountName `
                 -ResourceGroupName $ResourceGroupName `
@@ -3787,7 +3837,11 @@ function Debug-AzStorageAccountEntraKerbAuth {
             "CheckRegKey" = [CheckResult]::new("CheckRegKey");
             "CheckKerbRealmMapping" = [CheckResult]::new("CheckKerbRealmMapping");
             "CheckAdminConsent" = [CheckResult]::new("CheckAdminConsent");
-            "CheckRBAC"=[CheckResult]::new("CheckRBAC") 
+            "CheckRBAC"=[CheckResult]::new("CheckRBAC")
+            "CheckWinHttpAutoProxySvc" = [CheckResult]::new("CheckWinHttpAutoProxySvc");
+            "CheckIpHlpScv" = [CheckResult]::new("CheckIpHlpScv");
+            "CheckFiddlerProxy" = [CheckResult]::new("CheckFiddlerProxy");
+            "CheckEntraJoinType" = [CheckResult]::new("CheckEntraJoinType")
         }
         #
         # Port 445 check 
@@ -3919,8 +3973,8 @@ function Debug-AzStorageAccountEntraKerbAuth {
             try {
                 $checksExecuted += 1;
                 Write-Verbose "CheckRegKey - START"
-                $RegKey = Get-ItemProperty -Path Registry::HKLM\SYSTEM\CurrentControlSet\Control\Lsa\Kerberos\Parameters
-                if($null -ne $RegKey -and $RegKey.CloudKerberosTicketRetrievalEnabled -eq "1")
+
+                if (Test-IsCloudKerberosTicketRetrievalEnabled)
                 {
                     $checks["CheckRegKey"].Result = "Passed"
                     Write-Verbose "CheckRegKey - SUCCESS"
@@ -3949,7 +4003,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
         {
             try {
                 $checksExecuted += 1;
-                $hostToRealm = Get-ChildItem Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Lsa\Kerberos\HostToRealm
+                $hostToRealm = Get-ChildItem Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Lsa\Kerberos\HostToRealm -ErrorAction SilentlyContinue
                 if($null -eq $hostToRealm)
                 {
                     $checks["CheckKerbRealmMapping"].Result = "Passed"
@@ -4044,6 +4098,155 @@ function Debug-AzStorageAccountEntraKerbAuth {
             }
         }
 
+        #
+        # Check if WinHttpAutoProxySvc service is running
+        #
+        if (!$filterIsPresent -or $Filter -match "CheckWinHttpAutoProxySvc")
+        {   
+           try 
+           {
+                $checksExecuted += 1;
+                $service = Get-Service WinHttpAutoProxySvc
+                if (($service -eq $null) -or ($service.Status -ne "Running"))
+                {
+                    $checks["CheckWinHttpAutoProxySvc"].Result = "Failed"
+                    Write-Error "CheckWinHttpAutoProxySvc - FAILED"
+                    $checks["CheckWinHttpAutoProxySvc"].Issue = "The WinHttpAutoProxy service needs to be in running state."
+                }
+                else {
+                    $checks["CheckWinHttpAutoProxySvc"].Result = "Passed"
+                    Write-Verbose "CheckWinHttpAutoProxySvc - SUCCESS"
+                }
+            }
+            catch 
+            {
+                $checks["CheckWinHttpAutoProxySvc"].Result = "Failed"
+                $checks["CheckWinHttpAutoProxySvc"].Issue = $_
+
+                Write-Error "CheckWinHttpAutoProxySvc - FAILED"
+                Write-Error $_
+            }
+
+        }
+        #
+        #Check if iphlpsvc service is running
+        #
+        if (!$filterIsPresent -or $Filter -match "CheckIpHlpScv")
+        {   
+           try 
+           {
+                $checksExecuted += 1;
+                $services = Get-Service iphlpsvc
+                if (($services -eq $null) -or ($services.Status -ne "Running"))
+                {
+                    $checks["CheckIpHlpScv"].Result = "Failed"
+                    Write-Error "CheckIpHlpScv - FAILED"
+                    $checks["CheckIpHlpScv"].Issue = "The IpHlp service needs to be in running state."
+                }                
+                else 
+                {
+                    $checks["CheckIpHlpScv"].Result = "Passed"
+                    Write-Verbose "CheckIpHlpScv - SUCCESS"
+                }
+            }
+            catch 
+            {
+                $checks["CheckIpHlpScv"].Result = "Failed"
+                $checks["CheckIpHlpScv"].Issue = $_
+
+                Write-Error "CheckIpHlpScv - FAILED"
+                Write-Error $_
+            }
+
+        }
+        #
+        #Check if Fiddler Proxy is cleaned up
+        #
+        if (!$filterIsPresent -or $Filter -match "CheckFiddlerProxy")
+        {   
+           try 
+           {
+                $checksExecuted += 1;
+                
+                $ProxysubFolder = Get-ChildItem `
+                    -Path Registry::HKLM\SYSTEM\CurrentControlSet\Services\iphlpsvc\Parameters\ProxyMgr `
+                    -ErrorAction SilentlyContinue
+                
+                $success = $true
+                foreach ($folder in $ProxysubFolder)
+                {
+                    $properties = $folder | Get-ItemProperty
+                    if (($null -ne $properties.StaticProxy) -and ($properties.StaticProxy.Contains("https=127.0.0.1:")))
+                    {
+                        # If this is the first failure detected, print "FAILED"
+                        if ($success)
+                        {
+                            $checks["CheckFiddlerProxy"].Result = "Failed"
+                            Write-Error "CheckFiddlerProxy - FAILED"
+                            $success = $false
+                        }
+
+                        # Report the registry path every time a failure is detected
+                        Write-Error "Fiddler Proxy is set, you need to delete any registry nodes under '$($folder.Name)'."
+                    }
+                }
+
+                if ($success)
+                {
+                    $checks["CheckFiddlerProxy"].Result = "Passed"
+                    Write-Verbose "CheckFiddlerProxy - SUCCESS"
+                }
+                else
+                {
+                    Write-Error "To prevent this issue from re-appearing in the future, you should also uninstall Fiddler."
+                }
+             }
+             catch 
+             {
+                $checks["CheckFiddlerProxy"].Result = "Failed"
+                $checks["CheckFiddlerProxy"].Issue = $_
+                Write-Error "CheckFiddlerProxy - FAILED"
+             }
+        }
+
+        #
+        #Check if the machine is HAADJ or AADJ
+        #
+        if (!$filterIsPresent -or $Filter -match "CheckEntraJoinType")
+        {   
+            try 
+            {
+                $checksExecuted += 1; 
+                $status = Get-DsRegStatus
+                
+                if ($status.AzureAdJoined -eq "YES")
+                {
+                    if ($status.DomainJoined -eq "NO")
+                    {
+                        Write-Host "It is an Entra Joined machine"
+                    }
+                    elseif ($status.DomainJoined -eq "YES")
+                    {
+                        Write-Host "It is an Hybrid Entra Joined machine"
+                    }
+
+                    $checks["CheckEntraJoinType"].Result = "Passed"
+                }
+                else
+                {
+                    $checks["CheckEntraJoinType"].Result = "Failed"
+                    Write-Error "Entra Kerb requires Entra joined or Hybrid Entra joined machine."
+                }
+            }
+            catch 
+            {
+                $checks["CheckEntraJoinType"].Result = "Failed"
+                $checks["CheckEntraJoinType"].Issue = $_
+                Write-Error "CheckEntraJoinType - FAILED"
+                Write-Error $_
+            }
+        }
+
         SummaryOfChecks -filterIsPresent $filterIsPresent -checksExecuted $checksExecuted
     }
 }
@@ -4124,7 +4327,42 @@ function Debug-RBACCheck {
             Write-Error $_
         }
     } 
+}
 
+function Get-DsRegStatus {
+    $dsregcmd = dsregcmd /status
+    $status = New-Object -TypeName PSObject
+    $dsregcmd `
+        | Select-String -Pattern " *[A-z]+ : [A-z]+ *" `
+        | ForEach-Object {
+            $parts = ([String]$_).Trim() -split " : "
+            $key = $parts[0]
+            $value = $parts[1]
+
+            if (-not (Get-Member -inputobject $status -name $key -Membertype Properties)) {
+                Add-Member `
+                    -InputObject $status `
+                    -MemberType NoteProperty `
+                    -Name $key `
+                    -Value $value
+            }
+        }
+
+    return $status
+}
+
+function Test-IsCloudKerberosTicketRetrievalEnabled {
+    $regKeyFolder = Get-ItemProperty -Path Registry::HKLM\Software\Microsoft\Windows\CurrentVersion\Policies\System\Kerberos\Parameters -ErrorAction SilentlyContinue
+    
+    if ($null -eq $regKeyFolder) {
+        $regKeyFolder = Get-ItemProperty -Path Registry::HKLM\SYSTEM\CurrentControlSet\Control\Lsa\Kerberos\Parameters -ErrorAction SilentlyContinue
+    }
+
+    if ($null -eq $regKeyFolder) {
+        return $false
+    }
+
+    return $regKeyFolder.CloudKerberosTicketRetrievalEnabled -eq "1"
 }
 
 function Debug-EntraKerbAdminConsent {
@@ -4141,13 +4379,17 @@ function Debug-EntraKerbAdminConsent {
             Write-Verbose "CheckAdminConsent - START"
             $Context = Get-AzContext
             $TenantId = $Context.Tenant
+
+            # Detect if the Microsoft.Graph.Applications module is installed and at least version 2.2.0.
+            # Get-MgServicePrincipalByAppId was added in Microsoft.Graph.Applications v2.2.0.
+            Request-MSGraphModuleVersion -MinimumVersion 2.2.0
             
             Request-ConnectMsGraph `
                 -Scopes "DelegatedPermissionGrant.Read.All" `
                 -RequiredModules @("Microsoft.Graph.Applications", "Microsoft.Graph.Identity.SignIns") `
                 -TenantId $TenantId
 
-            Import-Module Microsoft.Graph.Applications
+            Import-Module Microsoft.Graph.Applications -MinimumVersion 2.2.0 -ErrorAction SilentlyContinue
             Import-Module Microsoft.Graph.Identity.SignIns
 
             $MsGraphSp = Get-MgServicePrincipalByAppId -AppId 00000003-0000-0000-c000-000000000000 
@@ -4339,9 +4581,9 @@ function Debug-AzStorageAccountADDSAuth {
                 {
                     $message = "Machine is not domain-joined." `
                         + " Being domain-joined to an AD DS domain is a prerequisite for mounting" `
-                        + " Azure file shares without having to explicitly provide user credentials at every mount.See[https://docs.microsoft.com/en-us/azure/storage/files/storage-files-identity-auth-active-directory-enable#prerequisites].\n\n" `
+                        + " Azure file shares without having to explicitly provide user credentials at every mount.See https://docs.microsoft.com/en-us/azure/storage/files/storage-files-identity-auth-active-directory-enable#prerequisites.\n\n" `
                         + " Mounting through a machine that isn't domain-joined is also supported," `
-                        + " but you must (1) have line of sight to the domain controller, and (2) explicitly provide AD DS user credentials when mounting. See[https://learn.microsoft.com/en-us/azure/storage/files/storage-files-identity-ad-ds-mount-file-share#mount-the-file-share-from-a-non-domain-joined-vm-or-a-vm-joined-to-a-different-ad-domain]"
+                        + " but you must (1) have unimpeded network connectivity to the domain controller, and (2) explicitly provide AD DS user credentials when mounting. See https://learn.microsoft.com/en-us/azure/storage/files/storage-files-identity-ad-ds-mount-file-share#mount-the-file-share-from-a-non-domain-joined-vm-or-a-vm-joined-to-a-different-ad-domain "
                     Write-Error -Message $message -ErrorAction Stop
                 }
 
@@ -4799,14 +5041,12 @@ function Debug-AzStorageAccountADDSAuth {
             try {
                 $checksExecuted += 1;
                 Write-Verbose "CheckAadKerberosRegistryKeyIsOff - START"
-                $RegKey = Get-ItemProperty -Path Registry::HKLM\SYSTEM\CurrentControlSet\Control\Lsa\Kerberos\Parameters
 
-                if(( $RegKey -eq $null) -or ($RegKey.CloudKerberosTicketRetrievalEnabled -eq $null) -or ($RegKey.CloudKerberosTicketRetrievalEnabled -eq "0"))
+                if (-not (Test-IsCloudKerberosTicketRetrievalEnabled))
                 {
                     $checks["CheckAadKerberosRegistryKeyIsOff"].Result = "Passed"
                     Write-Verbose "CheckAadKerberosRegistryKeyIsOff - SUCCESS"
                 }
-                
                 else 
                 {
                     $checks["CheckAadKerberosRegistryKeyIsOff"].Result = "Failed"
