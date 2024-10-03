@@ -4004,7 +4004,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
         {
             try {
                 $checksExecuted += 1;
-                $hostToRealm = Get-ChildItem Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Lsa\Kerberos\HostToRealm
+                $hostToRealm = Get-ChildItem Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Lsa\Kerberos\HostToRealm -ErrorAction SilentlyContinue
                 if($null -eq $hostToRealm)
                 {
                     $checks["CheckKerbRealmMapping"].Result = "Passed"
@@ -4187,10 +4187,10 @@ function Get-DsRegStatus {
 }
 
 function Test-IsCloudKerberosTicketRetrievalEnabled {
-    $regKeyFolder = Get-ItemProperty -Path Registry::HKLM\Software\Microsoft\Windows\CurrentVersion\Policies\System\Kerberos\Parameters
+    $regKeyFolder = Get-ItemProperty -Path Registry::HKLM\Software\Microsoft\Windows\CurrentVersion\Policies\System\Kerberos\Parameters -ErrorAction SilentlyContinue
     
     if ($null -eq $regKeyFolder) {
-        $regKeyFolder = Get-ItemProperty -Path Registry::HKLM\SYSTEM\CurrentControlSet\Control\Lsa\Kerberos\Parameters
+        $regKeyFolder = Get-ItemProperty -Path Registry::HKLM\SYSTEM\CurrentControlSet\Control\Lsa\Kerberos\Parameters -ErrorAction SilentlyContinue
     }
 
     if ($null -eq $regKeyFolder) {
