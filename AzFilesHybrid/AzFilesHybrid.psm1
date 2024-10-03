@@ -3842,7 +3842,8 @@ function Debug-AzStorageAccountEntraKerbAuth {
             "CheckAdminConsent" = [CheckResult]::new("CheckAdminConsent");
             "CheckWinHttpAutoProxySvc" = [CheckResult]::new("CheckWinHttpAutoProxySvc");
             "CheckIpHlpScv" = [CheckResult]::new("CheckIpHlpScv");
-            "CheckFiddlerProxy" = [CheckResult]::new("CheckFiddlerProxy")
+            "CheckFiddlerProxy" = [CheckResult]::new("CheckFiddlerProxy");
+            "CheckEntraJoinType" = [CheckResult]::new("CheckEntraJoinType")
         }
         #
         # Port 445 check 
@@ -3974,12 +3975,8 @@ function Debug-AzStorageAccountEntraKerbAuth {
             try {
                 $checksExecuted += 1;
                 Write-Verbose "CheckRegKey - START"
-                
-                $RegKey = Get-ItemProperty -Path Registry::HKLM\Software\Microsoft\Windows\CurrentVersion\Policies\System\Kerberos\Parameters
-                if ($null -eq $RegKey) {
-                    $RegKey = Get-ItemProperty -Path Registry::HKLM\SYSTEM\CurrentControlSet\Control\Lsa\Kerberos\Parameters
-                }
-                if($null -ne $RegKey -and $RegKey.CloudKerberosTicketRetrievalEnabled -eq "1")
+
+                if (Test-IsCloudKerberosTicketRetrievalEnabled)
                 {
                     $checks["CheckRegKey"].Result = "Passed"
                     Write-Verbose "CheckRegKey - SUCCESS"
@@ -4008,7 +4005,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
         {
             try {
                 $checksExecuted += 1;
-                $hostToRealm = Get-ChildItem Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Lsa\Kerberos\HostToRealm
+                $hostToRealm = Get-ChildItem Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Lsa\Kerberos\HostToRealm -ErrorAction SilentlyContinue
                 if($null -eq $hostToRealm)
                 {
                     $checks["CheckKerbRealmMapping"].Result = "Passed"
@@ -4077,6 +4074,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 {
                     $checks["CheckWinHttpAutoProxySvc"].Result = "Failed"
                     Write-Error "CheckWinHttpAutoProxySvc - FAILED"
+                    $checks["CheckWinHttpAutoProxySvc"].Issue = "The WinHttpAutoProxy service needs to be in running state."
                 }
                 else {
                     $checks["CheckWinHttpAutoProxySvc"].Result = "Passed"
@@ -4087,6 +4085,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
             {
                 $checks["CheckWinHttpAutoProxySvc"].Result = "Failed"
                 $checks["CheckWinHttpAutoProxySvc"].Issue = $_
+
                 Write-Error "CheckWinHttpAutoProxySvc - FAILED"
                 Write-Error $_
             }
@@ -4105,7 +4104,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 {
                     $checks["CheckIpHlpScv"].Result = "Failed"
                     Write-Error "CheckIpHlpScv - FAILED"
-                    Write-Error "These services need to be in running state."
+                    $checks["CheckIpHlpScv"].Issue = "The IpHlp service needs to be in running state."
                 }                
                 else 
                 {
@@ -4117,6 +4116,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
             {
                 $checks["CheckIpHlpScv"].Result = "Failed"
                 $checks["CheckIpHlpScv"].Issue = $_
+
                 Write-Error "CheckIpHlpScv - FAILED"
                 Write-Error $_
             }
@@ -4146,21 +4146,92 @@ function Debug-AzStorageAccountEntraKerbAuth {
                         $checks["CheckFiddlerProxy"].Result = "Passed"
                         Write-Verbose "CheckFiddlerProxy - SUCCESS"
                     }
+                }
+             }
+             catch 
+             {
+                $checks["CheckFiddlerProxy"].Result = "Failed"
+                $checks["CheckFiddlerProxy"].Issue = $_
+                Write-Error "CheckFiddlerProxy - FAILED"
+             }
+        }
 
+        #
+        #Check if the machine is HAADJ or AADJ
+        #
+        if (!$filterIsPresent -or $Filter -match "CheckEntraJoinType")
+        {   
+            try 
+            {
+                $checksExecuted += 1; 
+                $status = Get-DsRegStatus
+                
+                if ($status.AzureAdJoined -eq "YES")
+                {
+                    if ($status.DomainJoined -eq "NO")
+                    {
+                        Write-Host "It is an Entra Joined machine"
+                    }
+                    elseif ($status.DomainJoined -eq "YES")
+                    {
+                        Write-Host "It is an Hybrid Entra Joined machine"
+                    }
+
+                    $checks["CheckEntraJoinType"].Result = "Passed"
+                }
+                else
+                {
+                    $checks["CheckEntraJoinType"].Result = "Failed"
+                    Write-Error "Entra Kerb requires Entra joined or Hybrid Entra joined machine."
                 }
             }
             catch 
             {
-                $checks["CheckFiddlerProxy"].Result = "Failed"
-                $checks["CheckFiddlerProxy"].Issue = $_
-                Write-Error "CheckFiddlerProxy - FAILED"
+                $checks["CheckEntraJoinType"].Result = "Failed"
+                $checks["CheckEntraJoinType"].Issue = $_
+                Write-Error "CheckEntraJoinType - FAILED"
                 Write-Error $_
             }
-
         }
 
         SummaryOfChecks -filterIsPresent $filterIsPresent -checksExecuted $checksExecuted
     }
+}
+
+function Get-DsRegStatus {
+    $dsregcmd = dsregcmd /status
+    $status = New-Object -TypeName PSObject
+    $dsregcmd `
+        | Select-String -Pattern " *[A-z]+ : [A-z]+ *" `
+        | ForEach-Object {
+            $parts = ([String]$_).Trim() -split " : "
+            $key = $parts[0]
+            $value = $parts[1]
+
+            if (-not (Get-Member -inputobject $status -name $key -Membertype Properties)) {
+                Add-Member `
+                    -InputObject $status `
+                    -MemberType NoteProperty `
+                    -Name $key `
+                    -Value $value
+            }
+        }
+
+    return $status
+}
+
+function Test-IsCloudKerberosTicketRetrievalEnabled {
+    $regKeyFolder = Get-ItemProperty -Path Registry::HKLM\Software\Microsoft\Windows\CurrentVersion\Policies\System\Kerberos\Parameters -ErrorAction SilentlyContinue
+    
+    if ($null -eq $regKeyFolder) {
+        $regKeyFolder = Get-ItemProperty -Path Registry::HKLM\SYSTEM\CurrentControlSet\Control\Lsa\Kerberos\Parameters -ErrorAction SilentlyContinue
+    }
+
+    if ($null -eq $regKeyFolder) {
+        return $false
+    }
+
+    return $regKeyFolder.CloudKerberosTicketRetrievalEnabled -eq "1"
 }
 
 function Debug-EntraKerbAdminConsent {
@@ -4839,14 +4910,12 @@ function Debug-AzStorageAccountADDSAuth {
             try {
                 $checksExecuted += 1;
                 Write-Verbose "CheckAadKerberosRegistryKeyIsOff - START"
-                $RegKey = Get-ItemProperty -Path Registry::HKLM\SYSTEM\CurrentControlSet\Control\Lsa\Kerberos\Parameters
 
-                if(( $RegKey -eq $null) -or ($RegKey.CloudKerberosTicketRetrievalEnabled -eq $null) -or ($RegKey.CloudKerberosTicketRetrievalEnabled -eq "0"))
+                if (-not (Test-IsCloudKerberosTicketRetrievalEnabled))
                 {
                     $checks["CheckAadKerberosRegistryKeyIsOff"].Result = "Passed"
                     Write-Verbose "CheckAadKerberosRegistryKeyIsOff - SUCCESS"
                 }
-                
                 else 
                 {
                     $checks["CheckAadKerberosRegistryKeyIsOff"].Result = "Failed"
