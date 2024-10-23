@@ -4307,7 +4307,8 @@ function Debug-RBACCheck {
                     }
                     elseif ($assignment.ObjectType -eq "Group") 
                     {
-                        if ($groupIds -contains $assignment.ObjectId) 
+                        if ($hybridGroupIds -contains $assignment.ObjectId) 
+
                         {
                             $listOfRoleNames.Add($roleName)
                             break
