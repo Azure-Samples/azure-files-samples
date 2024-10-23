@@ -4267,7 +4267,19 @@ function Debug-RBACCheck {
                     -Scopes "User.Read.All", "GroupMember.Read.All" `
                     -RequiredModules @("Microsoft.Graph.Users", "Microsoft.Graph.Groups", "Microsoft.Graph.Identity.DirectoryManagement")
                     
-            $userOid = $(Get-MgUser -Filter "UserPrincipalName eq $UserPrincipalName" -Property Id).Id
+            $user = Get-MgUser -Filter "UserPrincipalName eq '$UserPrincipalName'" -Property Id,OnPremisesSecurityIdentifier
+            
+            if (!$user.OnPremisesSecurityIdentifier) {
+                $checkResult.Result = "Failed"
+                $checkResult.Issue = "User is a cloud-only user, cannot have RBAC access"
+                Write-Error "CheckRBAC - FAILED"
+                return
+            }
+            
+            $groups = Get-MgUserMemberOfAsGroup -UserId $user.Id -Property DisplayName,Id,OnPremisesSecurityIdentifier
+            
+            $hybridGroups = $groups | Where-Object { $_.OnPremisesSecurityIdentifier } 
+            $hybridGroupIds = $hybridGroups.Id
 
             $groupIds = (Get-MgUserMemberOf -UserId $userOid).Id
 
