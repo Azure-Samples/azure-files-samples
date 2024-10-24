@@ -4289,10 +4289,10 @@ function Debug-RBACCheck {
                 "Storage File Data SMB Share Elevated Contributor"
             )
 
+            $scope = "/subscriptions/$subscription/resourceGroups/$resourceGroup/providers/Microsoft.Storage/storageAccounts/$storageAccount/fileServices/default/fileshares/$fileShare"
             $listOfRoleNames = @{}
             foreach ($roleName in $roleNames) 
             {
-                $scope = "/subscriptions/$subscription/resourceGroups/$resourceGroup/providers/Microsoft.Storage/storageAccounts/$storageAccount/fileServices/default/fileshares/$fileShare"
                 $assignments = Get-AzRoleAssignment -RoleDefinitionName $roleName -Scope $scope
                 
                 foreach ($assignment in $assignments) 
