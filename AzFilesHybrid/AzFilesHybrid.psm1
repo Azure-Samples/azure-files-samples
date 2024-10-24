@@ -4086,7 +4086,9 @@ function Debug-AzStorageAccountEntraKerbAuth {
                         Debug-RBACCheck -StorageAccountName $StorageAccountName -UserPrincipalName $UserPrincipalName -checkResult $checks["CheckRBAC"]
                     }
                     else {
+                        $checks["CheckRBAC"].Result = "Passed"
                         Write-Host "Access is granted via the default share permission"
+
                     }
                 }
             } catch 
