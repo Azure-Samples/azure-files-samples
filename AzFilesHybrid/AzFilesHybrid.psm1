@@ -3776,7 +3776,7 @@ function Debug-AzStorageAccountAuth {
                 -StorageAccountName $StorageAccountName `
                 -ResourceGroupName $ResourceGroupName `
                 -Filter $Filter `
-                -UserName $UserName `
+                -UserPrincipalName $UserName `
                 -Domain $Domain `
                 -ObjectId $ObjectId `
                 -FilePath $FilePath
