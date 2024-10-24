@@ -3776,7 +3776,7 @@ function Debug-AzStorageAccountAuth {
                 -StorageAccountName $StorageAccountName `
                 -ResourceGroupName $ResourceGroupName `
                 -Filter $Filter `
-                -UserName $UserName `
+                -UserPrincipalName $UserName `
                 -Domain $Domain `
                 -ObjectId $ObjectId `
                 -FilePath $FilePath
@@ -3804,8 +3804,8 @@ function Debug-AzStorageAccountEntraKerbAuth {
         [Parameter(Mandatory=$False, Position=2, HelpMessage="Filter")]
         [string]$Filter,
 
-        [Parameter(Mandatory=$False, Position=3, HelpMessage="Optional parameter for filter 'CheckSidHasAadUser' and 'CheckUserFileAccess'. The user name to check.")]
-        [string]$UserName,
+        [Parameter(Mandatory=$False, Position=3, HelpMessage="Optional parameter for filter 'CheckSidHasAadUser' and 'CheckUserFileAccess'. The user Principal name to check.")]
+        [string]$UserPrincipalName,
 
         [Parameter(Mandatory=$False, Position=4, HelpMessage="Optional parameter for filter 'CheckSidHasAadUser', 'CheckUserFileAccess' and 'CheckAadUserHasSid'. The domain name to look up the user.")]
         [string]$Domain,
@@ -3819,10 +3819,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
 
     process
     {
-        if(![string]::IsNullOrEmpty($UserName))
-        {
-            Write-Error "The debug cmdlet for Microsoft Entra Kerberos (AADKERB) accounts does not yet implement support for -UserName parameter. It will be ignored."
-        }
+        
         if(![string]::IsNullOrEmpty($Domain) )
         {
             Write-Error "The debug cmdlet for Microsoft Entra Kerberos (AADKERB) accounts does not yet implement support for -ObjectId parameter. It will be ignored."
@@ -3840,6 +3837,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
             "CheckRegKey" = [CheckResult]::new("CheckRegKey");
             "CheckKerbRealmMapping" = [CheckResult]::new("CheckKerbRealmMapping");
             "CheckAdminConsent" = [CheckResult]::new("CheckAdminConsent");
+            "CheckRBAC"=[CheckResult]::new("CheckRBAC")
             "CheckWinHttpAutoProxySvc" = [CheckResult]::new("CheckWinHttpAutoProxySvc");
             "CheckIpHlpScv" = [CheckResult]::new("CheckIpHlpScv");
             "CheckFiddlerProxy" = [CheckResult]::new("CheckFiddlerProxy");
@@ -4060,6 +4058,47 @@ function Debug-AzStorageAccountEntraKerbAuth {
             $checksExecuted += 1;
             Debug-EntraKerbAdminConsent -StorageAccountName $StorageAccountName -checkResult $checks["CheckAdminConsent"]
         }
+        #
+        #Check Default share and RBAC permissions
+        if (!$filterIsPresent -or $Filter -match "CheckRBAC")
+        {
+            try {
+                $checksExecuted += 1
+                Write-Verbose "CheckRBAC - START"
+
+                $StorageAccountObject = Validate-StorageAccount `
+                    -ResourceGroupName $ResourceGroupName `
+                    -StorageAccountName $StorageAccountName `
+                    -ErrorAction Stop
+                
+                if ($null -eq $StorageAccountObject.AzureFilesIdentityBasedAuth)
+                { 
+                    $checks["CheckRBAC"].Result = "Failed"
+                    $checks["CheckRBAC"].Issue = "AzureFilesIdentityBasedAuth IS NULL"
+                    Write-Error "CheckRBAC - FAILED"
+                }
+                else 
+                {
+                    $DefaultSharePermission = $StorageAccountObject.AzureFilesIdentityBasedAuth.DefaultSharePermission
+                    
+                    if((!$DefaultSharePermission) -or ($DefaultSharePermission -eq 'None'))
+                    {
+                        Debug-RBACCheck -StorageAccountName $StorageAccountName -UserPrincipalName $UserPrincipalName -checkResult $checks["CheckRBAC"]
+                    }
+                    else {
+                        $checks["CheckRBAC"].Result = "Passed"
+                        Write-Host "Access is granted via the default share permission"
+
+                    }
+                }
+            } catch 
+            {
+                $checks["CheckRBAC"].Result = "Failed"
+                $checks["CheckRBAC"].Issue = $_
+                Write-Error "CheckRBAC - FAILED"
+                Write-Error $_
+            }
+        }
 
         #
         # Check if WinHttpAutoProxySvc service is running
@@ -4212,6 +4251,96 @@ function Debug-AzStorageAccountEntraKerbAuth {
 
         SummaryOfChecks -filterIsPresent $filterIsPresent -checksExecuted $checksExecuted
     }
+}
+
+function Debug-RBACCheck {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory=$True, Position=0, HelpMessage="Storage account name")]
+        [string]$StorageAccountName,
+        [Parameter(Mandatory=$True, Position=1, HelpMessage="User Principal name")]
+        [string]$UserPrincipalName,
+        [Parameter(Mandatory=$True, Position=2, HelpMessage="Check result object")]
+        [CheckResult]$checkResult
+    )
+    process {
+        try {
+            Request-ConnectMsGraph `
+                    -Scopes "User.Read.All", "GroupMember.Read.All" `
+                    -RequiredModules @("Microsoft.Graph.Users", "Microsoft.Graph.Groups", "Microsoft.Graph.Identity.DirectoryManagement")
+                    
+            $user = Get-MgUser -Filter "UserPrincipalName eq '$UserPrincipalName'" -Property Id,OnPremisesSecurityIdentifier
+            
+            if (!$user.OnPremisesSecurityIdentifier) {
+                $checkResult.Result = "Failed"
+                $checkResult.Issue = "User is a cloud-only user, cannot have RBAC access"
+                Write-Error "CheckRBAC - FAILED"
+                return
+            }
+            
+            $groups = Get-MgUserMemberOfAsGroup -UserId $user.Id -Property DisplayName,Id,OnPremisesSecurityIdentifier
+            
+            $hybridGroups = $groups | Where-Object { $_.OnPremisesSecurityIdentifier } 
+            $hybridGroupIds = $hybridGroups.Id
+
+            $roleNames = @(
+                "Storage File Data SMB Share Reader",
+                "Storage File Data SMB Share Contributor",
+                "Storage File Data SMB Share Elevated Contributor"
+            )
+
+            $scope = "/subscriptions/$subscription/resourceGroups/$resourceGroup/providers/Microsoft.Storage/storageAccounts/$storageAccount/fileServices/default/fileshares/$fileShare"
+            $listOfRoleNames = @{}
+            foreach ($roleName in $roleNames) 
+            {
+                $assignments = Get-AzRoleAssignment -RoleDefinitionName $roleName -Scope $scope
+                
+                foreach ($assignment in $assignments) 
+                {
+                    if ($assignment.ObjectType -eq "User") 
+                    {
+                        if ($assignment.ObjectId -eq $userOid) 
+                        {
+                            $listOfRoleNames.Add($roleName)
+                            break
+                        }
+                    }
+                    elseif ($assignment.ObjectType -eq "Group") 
+                    {
+                        if ($hybridGroupIds -contains $assignment.ObjectId) 
+
+                        {
+                            $listOfRoleNames.Add($roleName)
+                            break
+                        }
+                    }
+                }
+            }
+
+                if ($listOfRoleNames.size -eq 0) {
+                    $message = "User '$($user.UserPrincipalName)' is not assigned any SMB share-level permission to" `
+                            + " storage account '$StorageAccountName' in resource group '$ResourceGroupName'. Please" `
+                            + " configure proper share-level permission following the guidance at" `
+                            + " https://docs.microsoft.com/en-us/azure/storage/files/storage-files-identity-ad-ds-assign-permissions"
+                        Write-Error -Message $message -ErrorAction Stop
+                }
+                else 
+                { 
+                    $checkResult.Result = "Passed"
+                    Write-Host "You have access to the shares: Here is the list of Roles you have: "
+                    foreach ($role in $listOfRoleNames.Keys) 
+                    {
+                        Write-Output $role
+                    }
+                }
+        } 
+        catch {
+            $checkResult.Result = "Failed"
+            $checkResult.Issue = $_
+            Write-Error "CheckRBAC - FAILED"
+            Write-Error $_
+        }
+    } 
 }
 
 function Get-DsRegStatus {
