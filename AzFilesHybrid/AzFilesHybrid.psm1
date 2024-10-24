@@ -4326,13 +4326,12 @@ function Debug-RBACCheck {
                 }
                 else 
                 { 
+                    $checkResult.Result = "Passed"
                     Write-Host "You have access to the shares: Here is the list of Roles you have: "
                     foreach ($role in $listOfRoleNames.Keys) 
                     {
-                    Write-Output $role
-                    }  
-
-
+                        Write-Output $role
+                    }
                 }
         } 
         catch {
