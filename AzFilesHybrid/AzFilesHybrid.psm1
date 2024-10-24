@@ -4283,8 +4283,6 @@ function Debug-RBACCheck {
             $hybridGroups = $groups | Where-Object { $_.OnPremisesSecurityIdentifier } 
             $hybridGroupIds = $hybridGroups.Id
 
-            $groupIds = (Get-MgUserMemberOf -UserId $userOid).Id
-
             $roleNames = @(
                 "Storage File Data SMB Share Reader",
                 "Storage File Data SMB Share Contributor",
