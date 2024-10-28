@@ -3776,7 +3776,7 @@ function Debug-AzStorageAccountAuth {
                 -StorageAccountName $StorageAccountName `
                 -ResourceGroupName $ResourceGroupName `
                 -Filter $Filter `
-                -UserPrincipalName $UserName `
+                -UserName $UserName `
                 -Domain $Domain `
                 -ObjectId $ObjectId `
                 -FilePath $FilePath
@@ -3804,8 +3804,8 @@ function Debug-AzStorageAccountEntraKerbAuth {
         [Parameter(Mandatory=$False, Position=2, HelpMessage="Filter")]
         [string]$Filter,
 
-        [Parameter(Mandatory=$False, Position=3, HelpMessage="Optional parameter for filter 'CheckRBAC'. The user Principal name to check.")]
-        [string]$UserPrincipalName,
+        [Parameter(Mandatory=$False, Position=3, HelpMessage="Optional parameter for filter 'CheckRBAC'. The User Principal Name (UPN) of the user to check.")]
+        [string]$UserName,
 
         [Parameter(Mandatory=$False, Position=4, HelpMessage="Not yet supported for Entra Kerberos accounts.")]
         [string]$Domain,
@@ -4090,15 +4090,15 @@ function Debug-AzStorageAccountEntraKerbAuth {
                         $checks["CheckRBAC"].Result = "Passed"
                         Write-Host "Access is granted via the default share permission"
                     }
-                    elseif ($UserPrincipalName)
+                    elseif (-not $UserName)
                     {
-                        Debug-RBACCheck -StorageAccountName $StorageAccountName -UserPrincipalName $UserPrincipalName -checkResult $checks["CheckRBAC"]
+                        $checks["CheckRBAC"].Result = "Skipped"
+                        $checks["CheckRBAC"].Issue = "User Principal Name is not provided, and no default share-level permissions are configured. Pass the -UserName parameter to check RBAC permissions of a particular user."
+                        Write-Error "CheckRBAC - Skipped"
                     }
                     else
                     {
-                        $checks["CheckRBAC"].Result = "Skipped"
-                        $checks["CheckRBAC"].Issue = "UserPrincipalName is not provided. Pass the -UserPrincipalName or -UserName parameter to check RBAC permissions."
-                        Write-Error "CheckRBAC - Skipped"
+                        Debug-RBACCheck -StorageAccountName $StorageAccountName -UserPrincipalName $UserName -checkResult $checks["CheckRBAC"]
                     }
                 }
             } catch 
