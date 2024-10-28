@@ -4317,6 +4317,13 @@ function Debug-RBACCheck {
                     
             $user = Get-MgUser -Filter "UserPrincipalName eq '$UserPrincipalName'" -Property Id,OnPremisesSecurityIdentifier
             
+            if ($null -eq $user) {
+                $checkResult.Result = "Failed"
+                $checkResult.Issue = "User '$UserPrincipalName' not found. Please check whether the provided user principal name is correct or not."
+                Write-Error "CheckRBAC - FAILED"
+                return
+            }
+            
             if (!$user.OnPremisesSecurityIdentifier) {
                 $checkResult.Result = "Failed"
                 $checkResult.Issue = "User is a cloud-only user, cannot have RBAC access"
