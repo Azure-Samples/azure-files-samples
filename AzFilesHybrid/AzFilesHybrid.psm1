@@ -3728,39 +3728,45 @@ function Debug-AzStorageAccountAuth {
 
     [CmdletBinding()]
     param (
-        [Parameter(Mandatory=$True, Position=0, HelpMessage="Storage account name")]
+        [Parameter(Mandatory=$True, HelpMessage="Storage account name")]
         [string]$StorageAccountName,
 
-        [Parameter(Mandatory=$True, Position=1, HelpMessage="Resource group name")]
+        [Parameter(Mandatory=$True, HelpMessage="Resource group name")]
         [string]$ResourceGroupName,
 
-        [Parameter(Mandatory=$False, Position=2, HelpMessage="Filter")]
+        [Parameter(Mandatory=$False, HelpMessage="File share name")]
+        [string]$FileShareName,
+
+        [Parameter(Mandatory=$False, HelpMessage="Filter")]
         [string]$Filter,
 
-        [Parameter(Mandatory=$False, Position=3, HelpMessage="Optional parameter for filter 'CheckSidHasAadUser' and 'CheckUserFileAccess'. The user name to check.")]
+        [Parameter(Mandatory=$False, HelpMessage="Optional parameter for filter 'CheckSidHasAadUser' and 'CheckUserFileAccess'. The user name to check.")]
         [string]$UserName,
 
-        [Parameter(Mandatory=$False, Position=4, HelpMessage="Optional parameter for filter 'CheckSidHasAadUser', 'CheckUserFileAccess' and 'CheckAadUserHasSid'. The domain name to look up the user.")]
+        [Parameter(Mandatory=$False, HelpMessage="Optional parameter for filter 'CheckSidHasAadUser', 'CheckUserFileAccess' and 'CheckAadUserHasSid'. The domain name to look up the user.")]
         [string]$Domain,
 
-        [Parameter(Mandatory=$False, Position=5, HelpMessage="Required parameter for filter 'CheckAadUserHasSid'. The Azure object ID or user principal name to check.")]
+        [Parameter(Mandatory=$False, HelpMessage="Required parameter for filter 'CheckAadUserHasSid'. The Azure object ID or user principal name to check.")]
         [string]$ObjectId,
 
-        [Parameter(Mandatory=$False, Position=6, HelpMessage="Required parameter for filter 'CheckUserFileAccess'. The SMB file path on the Azure file share mounted locally using storage account key.")]
+        [Parameter(Mandatory=$False, HelpMessage="Required parameter for filter 'CheckUserFileAccess'. The SMB file path on the Azure file share mounted locally using storage account key.")]
         [string]$FilePath
     )
 
     process
     {
+        # Check prerequisite: you must be connected to Azure before running this cmdlet.
         $context = Get-AzContext
         if ($null -eq $context)
         {
             Write-Error "Please login to Azure using Connect-AzAccount before running this cmdlet." -ErrorAction Stop
         }
-
-        $storageAccount = Get-AzStorageAccount -ResourceGroupName $ResourceGroupName -StorageAccountName $StorageAccountName
+        
+        # Check that resource group, storage account and (optionally) file share exist
+        $storageAccount = Validate-StorageAccount -ResourceGroupName $ResourceGroupName -StorageAccountName $StorageAccountName
+        
+        # Dispatch to the right set of checks, depending on directoryServiceOptions
         $directoryServiceOptions = $storageAccount.AzureFilesIdentityBasedAuth.DirectoryServiceOptions
-
         if ($directoryServiceOptions -eq "AD")
         {
             Write-Host "Storage account is configured for AD DS auth."
@@ -3781,6 +3787,7 @@ function Debug-AzStorageAccountAuth {
             Debug-AzStorageAccountEntraKerbAuth `
                 -StorageAccountName $StorageAccountName `
                 -ResourceGroupName $ResourceGroupName `
+                -FileShareName $FileShareName `
                 -Filter $Filter `
                 -UserName $UserName `
                 -Domain $Domain `
@@ -3801,25 +3808,28 @@ function Debug-AzStorageAccountAuth {
 function Debug-AzStorageAccountEntraKerbAuth {
     [CmdletBinding()]
     param (
-        [Parameter(Mandatory=$True, Position=0, HelpMessage="Storage account name")]
+        [Parameter(Mandatory=$True, HelpMessage="Storage account name")]
         [string]$StorageAccountName,
 
-        [Parameter(Mandatory=$True, Position=1, HelpMessage="Resource group name")]
+        [Parameter(Mandatory=$True, HelpMessage="Resource group name")]
         [string]$ResourceGroupName,
 
-        [Parameter(Mandatory=$False, Position=2, HelpMessage="Filter")]
+        [Parameter(Mandatory=$False, HelpMessage="File share name")]
+        [string]$FileShareName,
+
+        [Parameter(Mandatory=$False, HelpMessage="Filter")]
         [string]$Filter,
 
-        [Parameter(Mandatory=$False, Position=3, HelpMessage="Optional parameter for filter 'CheckRBAC'. The User Principal Name (UPN) of the user to check.")]
+        [Parameter(Mandatory=$False, HelpMessage="Optional parameter for filter 'CheckRBAC'. The User Principal Name (UPN) of the user to check.")]
         [string]$UserName,
 
-        [Parameter(Mandatory=$False, Position=4, HelpMessage="Not yet supported for Entra Kerberos accounts.")]
+        [Parameter(Mandatory=$False, HelpMessage="Not yet supported for Entra Kerberos accounts.")]
         [string]$Domain,
 
-        [Parameter(Mandatory=$False, Position=5, HelpMessage="Not yet supported for Entra Kerberos accounts.")]
+        [Parameter(Mandatory=$False, HelpMessage="Not yet supported for Entra Kerberos accounts.")]
         [string]$ObjectId,
 
-        [Parameter(Mandatory=$False, Position=6, HelpMessage="Not yet supported for Entra Kerberos accounts.")]
+        [Parameter(Mandatory=$False, HelpMessage="Not yet supported for Entra Kerberos accounts.")]
         [string]$FilePath
     )
 
@@ -4098,13 +4108,23 @@ function Debug-AzStorageAccountEntraKerbAuth {
                     }
                     elseif (-not $UserName)
                     {
-                        $checks["CheckRBAC"].Result = "Skipped"
+                        $checks["CheckRBAC"].Result = "Failed"
                         $checks["CheckRBAC"].Issue = "User Principal Name is not provided, and no default share-level permissions are configured. Pass the -UserName parameter to check RBAC permissions of a particular user."
-                        Write-Error "CheckRBAC - Skipped"
+                        Write-Error "CheckRBAC - Failed"
+                    }
+                    elseif (-not $FileShareName) {
+                        $checks["CheckRBAC"].Result = "Failed"
+                        $checks["CheckRBAC"].Issue = "File share name is not provided, and no default share-level permissions are configured. Pass the -FileShareName parameter to check RBAC permissions of a particular file share."
+                        Write-Error "CheckRBAC - Failed"
                     }
                     else
                     {
-                        Debug-RBACCheck -StorageAccountName $StorageAccountName -UserPrincipalName $UserName -checkResult $checks["CheckRBAC"]
+                        Debug-RBACCheck `
+                            -StorageAccountName $StorageAccountName `
+                            -ResourceGroupName $ResourceGroupName `
+                            -FileShareName $FileShareName `
+                            -UserPrincipalName $UserName `
+                            -checkResult $checks["CheckRBAC"]
                     }
                 }
             } catch 
@@ -4272,11 +4292,19 @@ function Debug-AzStorageAccountEntraKerbAuth {
 function Debug-RBACCheck {
     [CmdletBinding()]
     param (
-        [Parameter(Mandatory=$True, Position=0, HelpMessage="Storage account name")]
+        [Parameter(Mandatory=$true, HelpMessage="Storage account name")]
         [string]$StorageAccountName,
-        [Parameter(Mandatory=$True, Position=1, HelpMessage="User Principal name")]
+
+        [Parameter(Mandatory=$true, HelpMessage="Resource group name")]
+        [string]$ResourceGroupName,
+
+        [Parameter(Mandatory=$true, HelpMessage="File share name")]
+        [string]$FileShareName,
+
+        [Parameter(Mandatory=$true, HelpMessage="User Principal name")]
         [string]$UserPrincipalName,
-        [Parameter(Mandatory=$True, Position=2, HelpMessage="Check result object")]
+        
+        [Parameter(Mandatory=$true, HelpMessage="Check result object")]
         [CheckResult]$checkResult
     )
     process {
@@ -4298,8 +4326,12 @@ function Debug-RBACCheck {
             
             $groups = Get-MgUserMemberOfAsGroup -UserId $user.Id -Property DisplayName,Id,OnPremisesSecurityIdentifier
             
-            $hybridGroups = $groups | Where-Object { $_.OnPremisesSecurityIdentifier } 
-            $hybridGroupIds = $hybridGroups.Id
+            $hybridGroups = $groups | Where-Object { $_.OnPremisesSecurityIdentifier }
+
+            $hybridGroupIdToName = @{}
+            foreach ($group in $hybridGroups) {
+                $hybridGroupIdToName[$group.Id] = $group.DisplayName
+            }
 
             $roleNames = @(
                 "Storage File Data SMB Share Reader",
@@ -4307,9 +4339,13 @@ function Debug-RBACCheck {
                 "Storage File Data SMB Share Elevated Contributor"
             )
 
-            $scope = "/subscriptions/$subscription/resourceGroups/$resourceGroup/providers/Microsoft.Storage/storageAccounts/$storageAccount/fileServices/default/fileshares/$fileShare"
-            $listOfRoleNames = @{}
-            foreach ($roleName in $roleNames) 
+            $storageAccount = Validate-StorageAccount -ResourceGroupName $ResourceGroupName -StorageAccountName $StorageAccountName
+            $scope = "$($storageAccount.Id)/fileServices/default/fileshares/$FileShareName"
+            
+            # Mapping of role name -> identity
+            $assignedRoles = @{}
+            
+            foreach ($roleName in $roleNames)
             {
                 $assignments = Get-AzRoleAssignment -RoleDefinitionName $roleName -Scope $scope
                 
@@ -4317,38 +4353,42 @@ function Debug-RBACCheck {
                 {
                     if ($assignment.ObjectType -eq "User") 
                     {
-                        if ($assignment.ObjectId -eq $userOid) 
+                        if ($assignment.ObjectId -eq $user.Id) 
                         {
-                            $listOfRoleNames.Add($roleName)
+                            $assignedRoles.Add($roleName, $UserPrincipalName)
                             break
                         }
                     }
                     elseif ($assignment.ObjectType -eq "Group") 
                     {
-                        if ($hybridGroupIds -contains $assignment.ObjectId) 
+                        if ($hybridGroupIdToName.ContainsKey($assignment.ObjectId))
                         {
-                            $listOfRoleNames.Add($roleName)
+                            $groupDisplayName = $hybridGroupIdToName[$assignment.ObjectId]
+                            $assignedRoles.Add($roleName, "group '$groupDisplayName'")
                             break
                         }
                     }
                 }
             }
 
-            if ($listOfRoleNames.size -eq 0) {
-                $message = "User '$($user.UserPrincipalName)' is not assigned any SMB share-level permission to" `
+            if ($assignedRoles.Count -eq 0) {
+                $message = "User '$UserPrincipalName' is not assigned any SMB share-level permission to" `
                         + " storage account '$StorageAccountName' in resource group '$ResourceGroupName'. Please" `
                         + " configure proper share-level permission following the guidance at" `
                         + " https://docs.microsoft.com/en-us/azure/storage/files/storage-files-identity-ad-ds-assign-permissions"
                     Write-Error -Message $message -ErrorAction Stop
             }
             else
-            { 
+            {
                 $checkResult.Result = "Passed"
-                Write-Host "You have access to the shares: Here is the list of Roles you have: "
-                foreach ($role in $listOfRoleNames.Keys) 
+                Write-Host "You have access to the shares, via the following roles:"
+                foreach ($item in $assignedRoles.GetEnumerator())
                 {
-                    Write-Output $role
+                    $role = $item.Name
+                    $identity = $item.Value
+                    Write-Host "  - '$role' via $identity"
                 }
+                Write-Host
             }
         } 
         catch
