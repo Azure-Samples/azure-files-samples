@@ -3804,16 +3804,16 @@ function Debug-AzStorageAccountEntraKerbAuth {
         [Parameter(Mandatory=$False, Position=2, HelpMessage="Filter")]
         [string]$Filter,
 
-        [Parameter(Mandatory=$False, Position=3, HelpMessage="Optional parameter for filter 'CheckSidHasAadUser' and 'CheckUserFileAccess'. The user Principal name to check.")]
+        [Parameter(Mandatory=$False, Position=3, HelpMessage="Optional parameter for filter 'CheckRBAC'. The user Principal name to check.")]
         [string]$UserPrincipalName,
 
-        [Parameter(Mandatory=$False, Position=4, HelpMessage="Optional parameter for filter 'CheckSidHasAadUser', 'CheckUserFileAccess' and 'CheckAadUserHasSid'. The domain name to look up the user.")]
+        [Parameter(Mandatory=$False, Position=4, HelpMessage="Not yet supported for Entra Kerberos accounts.")]
         [string]$Domain,
 
-        [Parameter(Mandatory=$False, Position=5, HelpMessage="Required parameter for filter 'CheckAadUserHasSid'. The Azure object ID or user principal name to check.")]
+        [Parameter(Mandatory=$False, Position=5, HelpMessage="Not yet supported for Entra Kerberos accounts.")]
         [string]$ObjectId,
 
-        [Parameter(Mandatory=$False, Position=6, HelpMessage="Required parameter for filter 'CheckUserFileAccess'. The SMB file path on the Azure file share mounted locally using storage account key.")]
+        [Parameter(Mandatory=$False, Position=6, HelpMessage="Not yet supported for Entra Kerberos accounts.")]
         [string]$FilePath
     )
 
@@ -3821,6 +3821,10 @@ function Debug-AzStorageAccountEntraKerbAuth {
     {
         
         if(![string]::IsNullOrEmpty($Domain) )
+        {
+            Write-Error "The debug cmdlet for Microsoft Entra Kerberos (AADKERB) accounts does not yet implement support for -Domain parameter. It will be ignored."
+        }
+        if(![string]::IsNullOrEmpty($ObjectId))
         {
             Write-Error "The debug cmdlet for Microsoft Entra Kerberos (AADKERB) accounts does not yet implement support for -ObjectId parameter. It will be ignored."
         }
