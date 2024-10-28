@@ -4308,7 +4308,6 @@ function Debug-RBACCheck {
                     elseif ($assignment.ObjectType -eq "Group") 
                     {
                         if ($hybridGroupIds -contains $assignment.ObjectId) 
-
                         {
                             $listOfRoleNames.Add($roleName)
                             break
@@ -4317,24 +4316,25 @@ function Debug-RBACCheck {
                 }
             }
 
-                if ($listOfRoleNames.size -eq 0) {
-                    $message = "User '$($user.UserPrincipalName)' is not assigned any SMB share-level permission to" `
-                            + " storage account '$StorageAccountName' in resource group '$ResourceGroupName'. Please" `
-                            + " configure proper share-level permission following the guidance at" `
-                            + " https://docs.microsoft.com/en-us/azure/storage/files/storage-files-identity-ad-ds-assign-permissions"
-                        Write-Error -Message $message -ErrorAction Stop
+            if ($listOfRoleNames.size -eq 0) {
+                $message = "User '$($user.UserPrincipalName)' is not assigned any SMB share-level permission to" `
+                        + " storage account '$StorageAccountName' in resource group '$ResourceGroupName'. Please" `
+                        + " configure proper share-level permission following the guidance at" `
+                        + " https://docs.microsoft.com/en-us/azure/storage/files/storage-files-identity-ad-ds-assign-permissions"
+                    Write-Error -Message $message -ErrorAction Stop
+            }
+            else
+            { 
+                $checkResult.Result = "Passed"
+                Write-Host "You have access to the shares: Here is the list of Roles you have: "
+                foreach ($role in $listOfRoleNames.Keys) 
+                {
+                    Write-Output $role
                 }
-                else 
-                { 
-                    $checkResult.Result = "Passed"
-                    Write-Host "You have access to the shares: Here is the list of Roles you have: "
-                    foreach ($role in $listOfRoleNames.Keys) 
-                    {
-                        Write-Output $role
-                    }
-                }
+            }
         } 
-        catch {
+        catch
+        {
             $checkResult.Result = "Failed"
             $checkResult.Issue = $_
             Write-Error "CheckRBAC - FAILED"
