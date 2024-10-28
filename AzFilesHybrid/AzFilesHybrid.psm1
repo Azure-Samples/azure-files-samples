@@ -4084,15 +4084,21 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 else 
                 {
                     $DefaultSharePermission = $StorageAccountObject.AzureFilesIdentityBasedAuth.DefaultSharePermission
-                    
-                    if((!$DefaultSharePermission) -or ($DefaultSharePermission -eq 'None'))
+
+                    if ($DefaultSharePermission -and $DefaultSharePermission -ne "None")
+                    {
+                        $checks["CheckRBAC"].Result = "Passed"
+                        Write-Host "Access is granted via the default share permission"
+                    }
+                    elseif ($UserPrincipalName)
                     {
                         Debug-RBACCheck -StorageAccountName $StorageAccountName -UserPrincipalName $UserPrincipalName -checkResult $checks["CheckRBAC"]
                     }
-                    else {
-                        $checks["CheckRBAC"].Result = "Passed"
-                        Write-Host "Access is granted via the default share permission"
-
+                    else
+                    {
+                        $checks["CheckRBAC"].Result = "Skipped"
+                        $checks["CheckRBAC"].Issue = "UserPrincipalName is not provided. Pass the -UserPrincipalName or -UserName parameter to check RBAC permissions."
+                        Write-Error "CheckRBAC - Skipped"
                     }
                 }
             } catch 
