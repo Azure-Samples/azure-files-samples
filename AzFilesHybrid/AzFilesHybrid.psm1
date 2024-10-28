@@ -3752,8 +3752,14 @@ function Debug-AzStorageAccountAuth {
 
     process
     {
-        $VerifyAD = get-AzStorageAccount -ResourceGroupName $ResourceGroupName -StorageAccountName $StorageAccountName  
-        $directoryServiceOptions = $VerifyAD.AzureFilesIdentityBasedAuth.DirectoryServiceOptions
+        $context = Get-AzContext
+        if ($null -eq $context)
+        {
+            Write-Error "Please login to Azure using Connect-AzAccount before running this cmdlet." -ErrorAction Stop
+        }
+
+        $storageAccount = Get-AzStorageAccount -ResourceGroupName $ResourceGroupName -StorageAccountName $StorageAccountName
+        $directoryServiceOptions = $storageAccount.AzureFilesIdentityBasedAuth.DirectoryServiceOptions
 
         if ($directoryServiceOptions -eq "AD")
         {
@@ -4275,9 +4281,11 @@ function Debug-RBACCheck {
     )
     process {
         try {
+            $context = Get-AzContext
             Request-ConnectMsGraph `
                     -Scopes "User.Read.All", "GroupMember.Read.All" `
-                    -RequiredModules @("Microsoft.Graph.Users", "Microsoft.Graph.Groups", "Microsoft.Graph.Identity.DirectoryManagement")
+                    -RequiredModules @("Microsoft.Graph.Users", "Microsoft.Graph.Groups", "Microsoft.Graph.Identity.DirectoryManagement") `
+                    -TenantId $context.Tenant
                     
             $user = Get-MgUser -Filter "UserPrincipalName eq '$UserPrincipalName'" -Property Id,OnPremisesSecurityIdentifier
             
