@@ -172,7 +172,7 @@ function Get-AzureFilesRecursive {
         [Microsoft.WindowsAzure.Commands.Common.Storage.ResourceModel.AzureStorageBase[]]$DirectoryContents,
 
         [Parameter(Mandatory=$true)]
-        [Microsoft.WindowsAzure.Commands.Storage.AzureStorageContext]$Context,
+        [Microsoft.Azure.Commands.Common.Authentication.Abstractions.IStorageContext]$Context,
 
         [Parameter(Mandatory=$false)]
         [string]$DirectoryPath = "",
@@ -222,7 +222,7 @@ function New-AzureFilePermission {
     [OutputType([string])]
     param (
         [Parameter(Mandatory=$true, HelpMessage="Azure storage context")]
-        [Microsoft.WindowsAzure.Commands.Storage.AzureStorageContext]$Context,
+        [Microsoft.Azure.Commands.Common.Authentication.Abstractions.IStorageContext]$Context,
 
         [Parameter(Mandatory=$true, HelpMessage="Name of the file share")]
         [string]$FileShareName,
@@ -325,7 +325,7 @@ function Set-AzureFilesAclRecursive {
     [CmdletBinding()]
     param (
         [Parameter(Mandatory=$true)]
-        [Microsoft.WindowsAzure.Commands.Storage.AzureStorageContext]$Context,
+        [Microsoft.Azure.Commands.Common.Authentication.Abstractions.IStorageContext]$Context,
 
         [Parameter(Mandatory=$true)]
         [string]$FileShareName,
