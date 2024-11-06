@@ -16,7 +16,30 @@
 .\test.ps1
 ```
 
-## Setting up a test run
+## Publishing the module locally
+
+This is a useful test before publishing to the PSGallery.
+
+```powershell
+.\publish-local.ps1
+
+Install-Module RestSetAcls -Repository LocalRepo
+Uninstall-Module RestSetAcls
+
+.\unpublish-local.ps1
+```
+
+## Publishing the module to the PSGallery
+
+1. Bump the version in `RestSetAcls.psd1`.
+1. Get your API key from the [PowerShell Gallery](https://www.powershellgallery.com/account/apikeys).
+1. Run the following command:
+
+    ```powershell
+    .\publish-psgallery.ps1 -apiKey "<api-key>"
+    ```
+
+## Setting up an E2E test run
 
 1. Create a new Azure Storage account with a file share. Take note of the storage account key.
 1. Define the following in your PowerShell session:
