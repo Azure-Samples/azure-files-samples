@@ -4,19 +4,17 @@
 > These instructions are only meant for contributors to this project.
 > If you want to use the script, refer to the README.
 
+## Installing development dependencies
+
+```powershell
+.\init.ps1
+```
+
 ## Running unit tests
 
-1. Install Pester. You should use Pester 5.x or later.
-
-    ```powershell
-    Install-Module -Name Pester -Force
-    ```
-
-2. Run the tests
-
-    ```powershell
-    .\test.ps1
-    ```
+```powershell
+.\test.ps1
+```
 
 ## Setting up a test run
 
