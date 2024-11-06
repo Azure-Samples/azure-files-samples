@@ -12,3 +12,4 @@ Write-Host
 # This will also run Test-ModuleManifest
 Write-Host "Publishing" -ForegroundColor White
 Publish-Module -Path $PSScriptRoot\RestSetAcls -NuGetApiKey $apiKey -WhatIf:$WhatIfPreference
+Write-Host "Done" -ForegroundColor Green
