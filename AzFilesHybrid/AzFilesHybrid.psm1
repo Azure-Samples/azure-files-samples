@@ -3905,12 +3905,12 @@ function Debug-AzStorageAccountEntraKerbAuth {
         {
             [string] $aadConnectionIntro = "Checking AAD Connectivity"
             Write-Host $aadConnectionIntro
-            try {
+            try {                
                 $checksExecuted += 1;
                 Write-Verbose "CheckAADConnectivity - START"
                 $Context = Get-AzContext
                 $TenantId = $Context.Tenant
-                $Response = Invoke-WebRequest -Method POST https://login.microsoftonline.com/$TenantId/kerberos               
+                $Response = Invoke-WebRequest -Method POST https://login.microsoftonline.com/$TenantId/kerberos                               
                 if ($Response.StatusCode -eq 200)
                 {
                     $checks["CheckAADConnectivity"].Result = "Passed"
@@ -3919,21 +3919,15 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 else{
                     $checks["CheckAADConnectivity"].Result = "Failed"
                     $checks["CheckAADConnectivity"].Issue = "Expected response is 200, but we got $($Response.StatusCode)"
-                    [string]$aadUnexpectedError = "`t$($PSStyle.Foreground.BrightRed)FAILED$($PSStyle.Reset): Unexpected failure"
-                    Write-FailedPSStyle("Unexpected failure")
-                    #old code 
-                    #Write-Error "Unexpected failure"
+                    [string]$aadUnexpectedError = "Expected response is 200, but we got $($Response.StatusCode)"
+                    Write-FailedPSStyle($aadUnexpectedError)                    
                 }
                 
             } catch {
                 $checks["CheckAADConnectivity"].Result = "Failed"
                 $checks["CheckAADConnectivity"].Issue = $_
-                [string]$aadError = "`t$($PSStyle.Foreground.BrightRed)FAILED$($PSStyle.Reset)"
-                Write-Host "${aad445Error}: ${_}"
-                <# Old Code
-                Write-Error "CheckAADConnectivity - FAILED"
-                Write-Error $_
-                #>
+                [string]$aadError = $_                
+                Write-FailedPSStyle($aadError)                
             }
         }
         #
