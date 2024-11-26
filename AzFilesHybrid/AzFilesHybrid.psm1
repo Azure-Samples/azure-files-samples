@@ -3967,11 +3967,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
                     $checks["CheckEntraObject"].Result = "Failed"
                     $checks["CheckEntraObject"].Issue = "Service Principal is missing SPN ' CIFS/${StorageAccountName}.file.core.windows.net'."
                     [string]$aadNoSPN = "SPN Value is not set correctly, It should be $($PSStyle.Foreground.BrightCyan)'CIFS/Storageaccountname.file.core.windows.net'$($PSStyle.Reset)"
-                    Write-FailedPSStyle($aadNoSPN)
-                    <#
-                    Write-Error "CheckEntraObject - FAILED"
-                    Write-Error 
-                    #>
+                    Write-FailedPSStyle($aadNoSPN)                    
                 }
                 if(-not $ServicePrincipal.AccountEnabled)
                 {
