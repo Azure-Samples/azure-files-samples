@@ -3952,8 +3952,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
 
                 $Application = Get-MgApplication `
                     -Filter "identifierUris/any (uri:uri eq 'api://${TenantId}/CIFS/${StorageAccountName}.file.core.windows.net')" `
-                    -ConsistencyLevel eventual
-                $Application = $null # TODO DELETE ME AFTER TESTING
+                    -ConsistencyLevel eventual              
                 if($null -eq $Application)
                 {
                     $checks["CheckEntraObject"].Result = "Failed"
