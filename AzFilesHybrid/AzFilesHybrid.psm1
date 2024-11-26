@@ -3952,17 +3952,14 @@ function Debug-AzStorageAccountEntraKerbAuth {
 
                 $Application = Get-MgApplication `
                     -Filter "identifierUris/any (uri:uri eq 'api://${TenantId}/CIFS/${StorageAccountName}.file.core.windows.net')" `
-                    -ConsistencyLevel eventual                
+                    -ConsistencyLevel eventual
+                $Application = $null # TODO DELETE ME AFTER TESTING
                 if($null -eq $Application)
                 {
                     $checks["CheckEntraObject"].Result = "Failed"
                     $checks["CheckEntraObject"].Issue = "Could not find the application with SPN ' api://${TenantId}/CIFS/${StorageAccountName}.file.core.windows.net'."
                     [string]$noAppSPN = "Could not find the application with SPN $($PSStyle.Foreground.BrightCyan)'api://${TenantId}/CIFS/${StorageAccountName}.file.core.windows.net'$($PSStyle.Reset)"
-                    Write-FailedPSStyle($noAppSPN)
-                    <# Old Code
-                    Write-Error "CheckEntraObject - FAILED"
-                    Write-Error "Could not find the application with SPN 'api://${TenantId}/CIFS/${StorageAccountName}.file.core.windows.net' "
-                    #>
+                    Write-FailedPSStyle($noAppSPN)                    
                     
                 }
                 $ServicePrincipal = Get-MgServicePrincipal -Filter "servicePrincipalNames/any (name:name eq 'api://$TenantId/CIFS/$StorageAccountName.file.core.windows.net')" -ConsistencyLevel eventual               
