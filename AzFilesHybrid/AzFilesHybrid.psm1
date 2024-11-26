@@ -3894,11 +3894,8 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 $checks["CheckPort445Connectivity"].Result = "Failed"
                 $checks["CheckPort445Connectivity"].Issue = $_
                
-                Write-FailedPSStyle("${_}")
-                <# Old Code
-                #Write-Error "CheckPort445Connectivity - FAILED"
-                #Write-Error $_
-                #>
+                [string]$port445Error = $_
+                Write-FailedPSStyle($port445Error)               
             }
         }
         #
