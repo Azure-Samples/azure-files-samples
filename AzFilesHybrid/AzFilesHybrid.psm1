@@ -4544,15 +4544,12 @@ function Debug-EntraKerbAdminConsent {
             }
             
             $Consent = Get-MgOauth2PermissionGrant -Filter "ClientId eq '$($ServicePrincipal.Id)' and ResourceId eq '$($MSGraphSp.Id)' and consentType eq 'AllPrincipals'"
-            if($true <#$null -eq $Consent -or $null -eq $Consent.Scope#>)
+            if($null -eq $Consent -or $null -eq $Consent.Scope)
             {
                 $checkResult.Result = "Failed"
                 $checkResult.Issue = "Admin Consent is not granted"
                 [string]$grantAdminConsentError = "Please grant admin consent using $($PSStyle.Foreground.BrightCyan)'https://aka.ms/azfiles/entra-adminconsent'$($PSStyle.Reset)"
-                Write-FailedPSStyle($grantAdminConsentError)
-                # old code
-                # Write-Error "CheckAdminConsent - FAILED"
-                # Write-Error "Please grant admin consent using 'https://learn.microsoft.com/en-us/azure/storage/files/storage-files-identity-auth-hybrid-identities-enable?tabs=azure-portal#grant-admin-consent-to-the-new-service-principal'"
+                Write-FailedPSStyle($grantAdminConsentError)                
                 return
             }
 
@@ -4560,7 +4557,7 @@ function Debug-EntraKerbAdminConsent {
             foreach ($permission in $Consent.Scope.Split(" ")) {                
                 $permissions.Add($permission) | Out-Null
             }
-
+           
             if ($permissions.Contains("openid") -and 
                 $permissions.Contains("profile") -and 
                 $permissions.Contains("User.Read")) 
@@ -4572,20 +4569,14 @@ function Debug-EntraKerbAdminConsent {
             {
                 $checkResult.Result = "Failed"
                 $checkResult.Issue = "Admin Consent is not granted"
-                [string]$grantAdminConsentError_Two = "Please grant admin consent using $($PSStyle.Foreground.BrightCyan)'https://learn.microsoft.com/en-us/azure/storage/files/storage-files-identity-auth-hybrid-identities-enable?tabs=azure-portal#grant-admin-consent-to-the-new-service-principal'$($PSStyle.Reset)"
-                Write-FailedPSStyle($grantAdminConsentError_Two)
-                # old code
-                # Write-Error "CheckAdminConsent - FAILED"
-                # Write-Error "Please grant admin consent using 'https://learn.microsoft.com/en-us/azure/storage/files/storage-files-identity-auth-hybrid-identities-enable?tabs=azure-portal#grant-admin-consent-to-the-new-service-principal'"
+                [string]$grantAdminConsentError_Two = "Please grant admin consent using $($PSStyle.Foreground.BrightCyan)'https://aka.ms/azfiles/entra-adminconsent'$($PSStyle.Reset)"
+                Write-FailedPSStyle($grantAdminConsentError_Two)               
             }                          
         } catch {
             $checkResult.Result = "Failed"
             $checkResult.Issue = $_
             [string]$adminConsentError = $_
             Write-FailedPSStyle($adminConsentError)
-            # old code
-            # Write-Error "CheckAdminConsent - FAILED"
-            # Write-Error $_
         }
     }
 }
