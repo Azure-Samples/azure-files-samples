@@ -4113,15 +4113,13 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 $StorageAccountObject = Validate-StorageAccount `
                     -ResourceGroupName $ResourceGroupName `
                     -StorageAccountName $StorageAccountName `
-                    -ErrorAction Stop
-                
-                if ($null -eq $StorageAccountObject.AzureFilesIdentityBasedAuth)
+                    -ErrorAction Stop                
+                if ($true <#$null -eq $StorageAccountObject.AzureFilesIdentityBasedAuth#>)
                 { 
                     $checks["CheckRBAC"].Result = "Failed"
                     $checks["CheckRBAC"].Issue = "AzureFilesIdentityBasedAuth IS NULL"
-                    [string]$azFilesIdentityBasedAuthError = "Azure Files Identity Based Authorization FAILED"
-                    Write-FailedPSStyle($azFilesIdentityBasedAuthError)
-                    # Write-Error "CheckRBAC - FAILED"
+                    [string]$azFilesIdentityBasedAuthError = "AzureFilesIdentityBasedAuth IS NULL"
+                    Write-FailedPSStyle($azFilesIdentityBasedAuthError)                    
                 }
                 else 
                 {
@@ -4134,7 +4132,6 @@ function Debug-AzStorageAccountEntraKerbAuth {
                     else {
                         $checks["CheckRBAC"].Result = "Passed"
                         Write-Host "`tAccess is granted via the default share permission"
-
                     }
                 }
             } catch 
@@ -4143,9 +4140,6 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 $checks["CheckRBAC"].Issue = $_
                 [string]$rbacCheckFailed = $_
                 Write-FailedPSStyle($rbacCheckFailed)
-                
-                # Write-Error "CheckRBAC - FAILED"
-                # Write-Error $_
             }
         }
 
