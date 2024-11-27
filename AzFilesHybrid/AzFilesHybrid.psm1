@@ -4023,24 +4023,14 @@ function Debug-AzStorageAccountEntraKerbAuth {
                     $checks["CheckRegKey"].Issue = "The CloudKerberosTicketRetrievalEnabled need to be enabled to get kerberos ticket"
                     
                     [string] $regKeyDoesNotExist = "The registry key $($PSStyle.Foreground.BrightCyan)HKLM\SYSTEM\CurrentControlSet\Control\Lsa\Kerberos\Parameters\CloudKerberosTicketRetrievalEnabled$($PSStyle.Reset) was non-existent or 0."
-                    [string] $regKeyDoesNotExistAdditionalInfo = "`n`tFor AAD Kerberos authentication, it should be set to 1.`n`tTo fix this error, enable the registry key and reboot the machine.`n`tSee $($PSStyle.Foreground.BrightCyan)'https://learn.microsoft.com/en-us/azure/storage/files/storage-files-identity-auth-hybrid-identities-enable?tabs=azure-portal#configure-the-clients-to-retrieve-kerberos-tickets'$($PSStyle.Reset)"
-                    
-                    Write-FailedPSStyle($regKeyDoesNotExist)
-                    Write-Host $regKeyDoesNotExistAdditionalInfo
-                    # Write-Error "CheckRegKey - FAILED"
-                    # Write-Error "The registry key HKLM\SYSTEM\CurrentControlSet\Control\Lsa\Kerberos\Parameters\CloudKerberosTicketRetrievalEnabled was non-existent or 0."
-                    # Write-Error "For AAD Kerberos authentication, it should be set to 1."
-                    # Write-Error "To fix this error, enable the registry key and reboot the machine."
-                    # Write-Error "See https://learn.microsoft.com/en-us/azure/storage/files/storage-files-identity-auth-hybrid-identities-enable?tabs=azure-portal#configure-the-clients-to-retrieve-kerberos-tickets"
-                }
-                
+                    [string] $regKeyDoesNotExistAdditionalInfo = "`n`tFor AAD Kerberos authentication, it should be set to 1.`n`tTo fix this error, enable the registry key and reboot the machine.`n`tSee $($PSStyle.Foreground.BrightCyan)'https://learn.microsoft.com/en-us/azure/storage/files/storage-files-identity-auth-hybrid-identities-enable?tabs=azure-portal#configure-the-clients-to-retrieve-kerberos-tickets'$($PSStyle.Reset)"                    
+                    Write-FailedPSStyle($regKeyDoesNotExist + $regKeyDoesNotExistAdditionalInfo)                    
+                }               
             } catch {
                 $checks["CheckRegKey"].Result = "Failed"
                 $checks["CheckRegKey"].Issue = $_
                 [string]$regKeyError = $_
-                Write-FailedPSStyle($regKeyError)
-                # Write-Error "CheckRegKey - FAILED"
-                # Write-Error $_
+                Write-FailedPSStyle($regKeyError)                
             }
         }
         #
