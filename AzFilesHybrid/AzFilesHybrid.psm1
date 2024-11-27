@@ -4040,7 +4040,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
         {
             [string] $kerbRealmMappingIntro = "Checking Kerberos Realm Mapping"
             Write-Host $kerbRealmMappingIntro
-            try {
+            try {                
                 $checksExecuted += 1;
                 $hostToRealm = Get-ChildItem Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Lsa\Kerberos\HostToRealm -ErrorAction SilentlyContinue
                 if($null -eq $hostToRealm)
@@ -4048,12 +4048,13 @@ function Debug-AzStorageAccountEntraKerbAuth {
                     $checks["CheckKerbRealmMapping"].Result = "Passed"
                     Write-Verbose "CheckKerbRealmMapping - SUCCESS"
                 }
-                $failure = $false
+                $failure = $false                
                 foreach ($domainKey in $hostToRealm) 
-                {
+                {                    
                     $properties = $domainKey | Get-ItemProperty
                     $realmName = $properties.PSChildName
                     $spnMappings = $($domainKey | Get-ItemProperty).SpnMappings
+                    
                     foreach ($hostName in $spnMappings) {
                         if ($hostName -eq "${StorageAccountName}.file.core.windows.net" -or
                             $hostName -eq ".file.core.windows.net" -or
@@ -4064,26 +4065,20 @@ function Debug-AzStorageAccountEntraKerbAuth {
                             $hostName -eq ".privatelink.file.core.windows.net")
                         {
                             if ($realmName -eq "KERBEROS.MICROSOFTONLINE.COM") 
-                            {
+                            {                                
                                 if (!$failure) {
                                     $checks["CheckKerbRealmMapping"].Result = "Warning"
                                     $checks["CheckKerbRealmMapping"].Issue = "The Storage account ${StorageAccountName} has been mapped to ${realmName}"
-                                    # TODO: TEST ME
+                                   
                                     [string]$kerbRealmMapWarning = "To retrieve Kerberos tickets run the ksetup Windows command on the client(s): 'ksetup /delhosttorealmmap ${hostName} ${realmName}'."
-                                    Write-WarningPSStyle($kerbRealmMapWarning)
-                                    # Write-Warning "CheckKerbRealmMapping - Warning"
-                                    # Write-Warning "To retrieve Kerberos tickets run the ksetup Windows command on the client(s): 'ksetup /delhosttorealmmap ${hostName} ${realmName}'. "
+                                    Write-WarningPSStyle($kerbRealmMapWarning)                                    
                                 }
                             } else {
                                 $failure = $true
                                 $checks["CheckKerbRealmMapping"].Result = "Failed"
-                                $checks["CheckKerbRealmMapping"].Issue = "The storage account '${StorageAccountName}' is mapped to '${realmName}'. "
-                                # TODO: TEST ME
-                                [string]$kerbRealmMapError = "To retrieve Kerberos tickets run the ksetup Windows command on the client(s) : 'ksetup /delhosttoreakmmap $hostName $realmName'"
-                                Write-FailedPSStyle($kerbRealmMapError)
-                                # Write-Error "CheckKerbRealmMapping - FAILED" 
-                                # Write-Error "To retrieve Kerberos tickets run the ksetup Windows command on the client(s) : 'ksetup /delhosttoreakmmap $hostName $realmName'"
-
+                                $checks["CheckKerbRealmMapping"].Issue = "The storage account '${StorageAccountName}' is mapped to '${realmName}'. "                                
+                                [string]$kerbRealmMapError = "To retrieve Kerberos tickets run the ksetup Windows command on the client(s) : 'ksetup /delhosttorealmmap $hostName $realmName'"
+                                Write-FailedPSStyle($kerbRealmMapError)                                
                             }
                         }
                     }
@@ -4092,9 +4087,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 $checks["CheckKerbRealmMapping"].Result = "Failed"
                 $checks["CheckKerbRealmMapping"].Issue = $_
                 [string]$kerbRealmMapCheckError = $_
-                Write-FailedPSStyle($kerbRealmMapCheckError)
-                # Write-Error "CheckKerbRealmMapping - FAILED"
-                # Write-Error $_
+                Write-FailedPSStyle($kerbRealmMapCheckError)               
             }
         }
         #
@@ -4545,21 +4538,17 @@ function Debug-EntraKerbAdminConsent {
             {
                 $checkResult.Result = "Failed"
                 $checkResult.Issue = "Could not find the application with SPN '$spn'. "
-
                 [string]$noSpnError = "Could not find the application with SPN $($PSStyle.Foreground.BrightCyan)'$spn'$($PSStyle.Reset)"
-                Write-FailedPSStyle($noSpnError)
-                # old code
-                # Write-Error "CheckAdminConsent - FAILED"
-                # Write-Error "Could not find the application with SPN '$spn'"
+                Write-FailedPSStyle($noSpnError)                
                 return
             }
             
             $Consent = Get-MgOauth2PermissionGrant -Filter "ClientId eq '$($ServicePrincipal.Id)' and ResourceId eq '$($MSGraphSp.Id)' and consentType eq 'AllPrincipals'"
-            if($null -eq $Consent -or $null -eq $Consent.Scope)
+            if($true <#$null -eq $Consent -or $null -eq $Consent.Scope#>)
             {
                 $checkResult.Result = "Failed"
                 $checkResult.Issue = "Admin Consent is not granted"
-                [string]$grantAdminConsentError = "Please grant admin consent using $($PSStyle.Foreground.BrightCyan)'https://learn.microsoft.com/en-us/azure/storage/files/storage-files-identity-auth-hybrid-identities-enable?tabs=azure-portal#grant-admin-consent-to-the-new-service-principal'$($PSStyle.Reset)"
+                [string]$grantAdminConsentError = "Please grant admin consent using $($PSStyle.Foreground.BrightCyan)'https://aka.ms/azfiles/entra-adminconsent'$($PSStyle.Reset)"
                 Write-FailedPSStyle($grantAdminConsentError)
                 # old code
                 # Write-Error "CheckAdminConsent - FAILED"
