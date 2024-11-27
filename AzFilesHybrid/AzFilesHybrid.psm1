@@ -4150,7 +4150,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
                     }
                     else {
                         $checks["CheckRBAC"].Result = "Passed"
-                        Write-Host "Access is granted via the default share permission"
+                        Write-Host "`tAccess is granted via the default share permission"
 
                     }
                 }
@@ -4359,7 +4359,7 @@ function SummaryOfChecks {
         [string]$filterIsPresent,
 
         [Parameter(Mandatory=$True, Position=1, HelpMessage="CheckExecuted")]
-        [string]$checksExecuted
+        [string]$checksExecuted                    
     )
 
 
@@ -4555,13 +4555,13 @@ function Debug-EntraKerbAdminConsent {
 
                 [string]$noSpnError = "Could not find the application with SPN $($PSStyle.Foreground.BrightCyan)'$spn'$($PSStyle.Reset)"
                 Write-FailedPSStyle($noSpnError)
-                # old cod
+                # old code
                 # Write-Error "CheckAdminConsent - FAILED"
                 # Write-Error "Could not find the application with SPN '$spn'"
                 return
             }
             
-            $Consent = Get-MgOauth2PermissionGrant -Filter "ClientId eq '$($ServicePrincipal.Id)' and ResourceId eq '$($MSGraphSp.Id)' and consentType eq 'AllPrincipals'" 
+            $Consent = Get-MgOauth2PermissionGrant -Filter "ClientId eq '$($ServicePrincipal.Id)' and ResourceId eq '$($MSGraphSp.Id)' and consentType eq 'AllPrincipals'"
             if($null -eq $Consent -or $null -eq $Consent.Scope)
             {
                 $checkResult.Result = "Failed"
@@ -4574,9 +4574,9 @@ function Debug-EntraKerbAdminConsent {
                 return
             }
 
-            $permissions = New-Object System.Collections.Generic.HashSet[string] 
-            foreach ($permission in $Consent.Scope.Split(" ")) {
-                $permissions.Add($permission)
+            $permissions = New-Object System.Collections.Generic.HashSet[string]            
+            foreach ($permission in $Consent.Scope.Split(" ")) {                
+                $permissions.Add($permission) | Out-Null
             }
 
             if ($permissions.Contains("openid") -and 
