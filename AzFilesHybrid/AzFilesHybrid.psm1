@@ -4145,7 +4145,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
                     $DefaultSharePermission = $StorageAccountObject.AzureFilesIdentityBasedAuth.DefaultSharePermission
                     
                     if((!$DefaultSharePermission) -or ($DefaultSharePermission -eq 'None'))
-                    {
+                    { 
                         Debug-RBACCheck -StorageAccountName $StorageAccountName -UserPrincipalName $UserPrincipalName -checkResult $checks["CheckRBAC"]
                     }
                     else {
@@ -4366,6 +4366,7 @@ function SummaryOfChecks {
 
     process
     {
+        $PSStyle.Formatting.TableHeader = $PSStyle.Foreground.BrightGreen
         if ($filterIsPresent -and $checksExecuted -eq 0)
         {
             $message = "Filter '$Filter' provided does not match any options. No checks were executed." `
@@ -4379,13 +4380,15 @@ function SummaryOfChecks {
             
             $issues = $checks.Values | Where-Object { $_.Result -ieq "Failed" }
 
+            <# TODO: Check with Max if this output looks better
             if ($issues.Length -gt 0) {
-                Write-Host "Issues found:"
+                Write-Host "$($PSStyle.Foreground.BrightRed)Issues found:$($PSStyle.Reset)"
                 $issues | ForEach-Object { Write-Host -ForegroundColor Red "---- $($_.Name) ----`n$($_.Issue)" }
             }
+            #>
         }
-
-        Write-Host "This cmdlet does not support all the checks for Microsoft Entra Kerberos authentication yet, You can run Debug-AzStorageAccountADDSAuth to run the AD DS authentication checks instead, but note that while some checks may provide useful information, not all AD DS checks are expected to pass for a storage account with Microsoft Entra Kerberos authentication."
+        # $PSStyle.Formatting.TableHeader = $PSStyle.Reset
+        Write-Host "This cmdlet does not support all the checks for Microsoft Entra Kerberos authentication yet,`nYou can run Debug-AzStorageAccountADDSAuth to run the AD DS authentication checks instead, `nbut note that while some checks may provide useful information, not all AD DS checks are expected to pass for a storage account`nwith Microsoft Entra Kerberos authentication."
     
     }
     
