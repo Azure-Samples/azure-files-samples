@@ -3977,7 +3977,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
                     Write-FailedPSStyle($aadAccountSetError)
                 }
                 
-                elseif(<#-not#> $ServicePrincipal.ServicePrincipalNames.Contains("CIFS/${StorageAccountName}.file.core.windows.net")  )
+                elseif(-not $ServicePrincipal.ServicePrincipalNames.Contains("CIFS/${StorageAccountName}.file.core.windows.net")  )
                 {
                     $checks["CheckEntraObject"].Result = "Failed"
                     $checks["CheckEntraObject"].Issue = "Service Principal is missing SPN ' CIFS/${StorageAccountName}.file.core.windows.net'."
@@ -3994,15 +3994,12 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 else {
                     $checks["CheckEntraObject"].Result = "Passed"
                     Write-Verbose "CheckEntraObject - SUCCESS" 
-                }                
+                }
             } catch {
                 $checks["CheckEntraObject"].Result = "Failed"
                 $checks["CheckEntraObject"].Issue = $_
-                Write-FailedPSStyle("${_}")
-                <# old code
-                Write-Error "CheckEntraObject - FAILED"
-                Write-Error $_
-                #>
+                $aadTryCatchError = $_
+                Write-FailedPSStyle($aadTryCatchError)                
             }
         }
         #
@@ -4015,19 +4012,18 @@ function Debug-AzStorageAccountEntraKerbAuth {
             try {
                 $checksExecuted += 1;
                 Write-Verbose "CheckRegKey - START"
-
+                
                 if (Test-IsCloudKerberosTicketRetrievalEnabled)
                 {
                     $checks["CheckRegKey"].Result = "Passed"
                     Write-Verbose "CheckRegKey - SUCCESS"
                 }
-                else {
-                    # TODO: TEST ME
+                else {                    
                     $checks["CheckRegKey"].Result = "Failed"
                     $checks["CheckRegKey"].Issue = "The CloudKerberosTicketRetrievalEnabled need to be enabled to get kerberos ticket"
                     
                     [string] $regKeyDoesNotExist = "The registry key $($PSStyle.Foreground.BrightCyan)HKLM\SYSTEM\CurrentControlSet\Control\Lsa\Kerberos\Parameters\CloudKerberosTicketRetrievalEnabled$($PSStyle.Reset) was non-existent or 0."
-                    [string] $regKeyDoesNotExistAdditionalInfo = "For AAD Kerberos authentication, it should be set to 1.`n`tTo fix this error, enable the registry key and reboot the machine.`n`tSee $($PSStyle.Foreground.BrightCyan)'https://learn.microsoft.com/en-us/azure/storage/files/storage-files-identity-auth-hybrid-identities-enable?tabs=azure-portal#configure-the-clients-to-retrieve-kerberos-tickets'$($PSStyle.Reset)"
+                    [string] $regKeyDoesNotExistAdditionalInfo = "`n`tFor AAD Kerberos authentication, it should be set to 1.`n`tTo fix this error, enable the registry key and reboot the machine.`n`tSee $($PSStyle.Foreground.BrightCyan)'https://learn.microsoft.com/en-us/azure/storage/files/storage-files-identity-auth-hybrid-identities-enable?tabs=azure-portal#configure-the-clients-to-retrieve-kerberos-tickets'$($PSStyle.Reset)"
                     
                     Write-FailedPSStyle($regKeyDoesNotExist)
                     Write-Host $regKeyDoesNotExistAdditionalInfo
