@@ -3976,7 +3976,8 @@ function Debug-AzStorageAccountEntraKerbAuth {
                     [string]$aadAccountSetError = "The service principal should have AccountEnabled to be set to true"
                     Write-FailedPSStyle($aadAccountSetError)
                 }
-                elseif(-not $ServicePrincipal.ServicePrincipalNames.Contains("CIFS/${StorageAccountName}.file.core.windows.net")  )
+                
+                elseif(<#-not#> $ServicePrincipal.ServicePrincipalNames.Contains("CIFS/${StorageAccountName}.file.core.windows.net")  )
                 {
                     $checks["CheckEntraObject"].Result = "Failed"
                     $checks["CheckEntraObject"].Issue = "Service Principal is missing SPN ' CIFS/${StorageAccountName}.file.core.windows.net'."
@@ -3985,21 +3986,15 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 }
                 elseif (-not $ServicePrincipal.ServicePrincipalNames.Contains("api://${TenantId}/CIFS/${StorageAccountName}.file.core.windows.net"))                
                 {
-                    $checks["CheckEntraObject"].Result = "Partial"
-                    
-                    #TODO TEST ME
+                    $checks["CheckEntraObject"].Result = "Partial"                                        
                     [string]$aadObjWarning = "Service Principal is missing SPN $($PSStyle.Foreground.BrightCyan)'api://${TenantId}/CIFS/${StorageAccountName}.file.core.windows.net'$($PSStyle.Reset).`n`tIt is okay to not have this value for now, but it is good to have this configured in future if you want to continue getting kerberos tickets."
-                    Write-WarningPSStyle($aadObjWarning)
-                    # old code
-                    #Write-Warning "Service Principal is missing SPN 'api://${TenantId}/CIFS/${StorageAccountName}.file.core.windows.net'."
-                    #Write-Warning "It is okay to not have this value for now, but it is good to have this configured in future if you want to continue getting kerberos tickets."
-
+                    Write-WarningPSStyle($aadObjWarning)                   
                     Write-Verbose "CheckEntraObject - SUCCESS"
                 }
                 else {
                     $checks["CheckEntraObject"].Result = "Passed"
                     Write-Verbose "CheckEntraObject - SUCCESS" 
-                }
+                }                
             } catch {
                 $checks["CheckEntraObject"].Result = "Failed"
                 $checks["CheckEntraObject"].Issue = $_
