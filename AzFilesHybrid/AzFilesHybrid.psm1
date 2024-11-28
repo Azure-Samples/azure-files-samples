@@ -4259,7 +4259,6 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 $checks["CheckFiddlerProxy"].Issue = $_
                 [string] $fiddlerProxyError = $_
                 Write-FailedPSStyle($fiddlerProxyError)
-                # Write-Error "CheckFiddlerProxy - FAILED"
              }
         }
 
@@ -4273,19 +4272,16 @@ function Debug-AzStorageAccountEntraKerbAuth {
             try 
             {
                 $checksExecuted += 1; 
-                $status = Get-DsRegStatus               
-                
+                $status = Get-DsRegStatus                               
                 if ($status.AzureAdJoined -eq "YES")
                 {
                     if ($status.DomainJoined -eq "NO")
                     {
                         Write-Host "`tEntra Join confirmed"
-                        # Write-Host "It is an Entra Joined machine"
                     }
                     elseif ($status.DomainJoined -eq "YES")
                     {
                         Write-Host "`tHybrid Entra Join confirmed"
-                        # Write-Host "It is an Hybrid Entra Joined machine"
                     }
 
                     $checks["CheckEntraJoinType"].Result = "Passed"
@@ -4295,7 +4291,6 @@ function Debug-AzStorageAccountEntraKerbAuth {
                     $checks["CheckEntraJoinType"].Result = "Failed"
                     [string]$entraJoinFailed = "Entra Kerb requires Entra joined or Hybrid Entra joined machine."
                     Write-FailedPSStyle($entraJoinFailed)
-                    # Write-Error "Entra Kerb requires Entra joined or Hybrid Entra joined machine."
                 }
             }
             catch 
@@ -4304,9 +4299,6 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 $checks["CheckEntraJoinType"].Issue = $_
                 [string]$entrajoinedError = $_
                 Write-FailedPSStyle($entrajoinedError)
-                # old code
-                # Write-Error "CheckEntraJoinType - FAILED"
-                # Write-Error $_
             }
         }
 
