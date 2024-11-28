@@ -4185,19 +4185,15 @@ function Debug-AzStorageAccountEntraKerbAuth {
            Write-Host $iphlpsvcIntro
            try 
            {
+               throw "Try/Catch Error"
                 $checksExecuted += 1;
                 $services = Get-Service iphlpsvc
                 if (($services -eq $null) -or ($services.Status -ne "Running"))
-                {
-                    # TODO: TEST ME
+                {                 
                     $checks["CheckIpHlpScv"].Result = "Failed"
                     $checks["CheckIpHlpScv"].Issue = "The IpHlp service needs to be in running state."
                     [string]$iphlpsvcFailed = "The IpHlp Service is not running"
                     Write-FailedPSStyle($iphlpsvcFailed)
-                    
-                    # old code
-                    #Write-Error "CheckIpHlpScv - FAILED"
-
                 }                
                 else 
                 {
@@ -4206,15 +4202,11 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 }
             }
             catch 
-            {
-                # TODO: TEST ME
+            {                
                 $checks["CheckIpHlpScv"].Result = "Failed"
                 $checks["CheckIpHlpScv"].Issue = $_
                 [string]$iphlpsvcError = $_
                 Write-FailedPSStyle($iphlpsvcError)
-                # old code
-                # Write-Error "CheckIpHlpScv - FAILED"
-                # Write-Error $_
             }
 
         }
