@@ -4114,7 +4114,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
                     -ResourceGroupName $ResourceGroupName `
                     -StorageAccountName $StorageAccountName `
                     -ErrorAction Stop                
-                if ($true <#$null -eq $StorageAccountObject.AzureFilesIdentityBasedAuth#>)
+                if ($null -eq $StorageAccountObject.AzureFilesIdentityBasedAuth)
                 { 
                     $checks["CheckRBAC"].Result = "Failed"
                     $checks["CheckRBAC"].Issue = "AzureFilesIdentityBasedAuth IS NULL"
@@ -4151,14 +4151,14 @@ function Debug-AzStorageAccountEntraKerbAuth {
            [string] $WinHttpAutoProxySvcIntro = "Checking WinHttpAutoProxySvc"
            Write-Host $WinHttpAutoProxySvcIntro
            try 
-           {
+           {               
                 $checksExecuted += 1;
                 $service = Get-Service WinHttpAutoProxySvc
                 if (($service -eq $null) -or ($service.Status -ne "Running"))
                 {
                     $checks["CheckWinHttpAutoProxySvc"].Result = "Failed"
                     $checks["CheckWinHttpAutoProxySvc"].Issue = "The WinHttpAutoProxy service needs to be in running state."
-                    $winHttpAutoProxyFailed = "WinHttpAutoProxySvc has FAILED"
+                    $winHttpAutoProxyFailed = "The WinHttpAutoProxy service needs to be in running state."
                     Write-FailedPSStyle($winHttpAutoProxyFailed)
                     # Write-Error "CheckWinHttpAutoProxySvc - FAILED"
 
@@ -4174,10 +4174,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 $checks["CheckWinHttpAutoProxySvc"].Issue = $_
                 [string]$winHttpAutoProxyError = $_
                 Write-FailedPSStyle($winHttpAutoProxyError)
-                # Write-Error "CheckWinHttpAutoProxySvc - FAILED"
-                # Write-Error $_
             }
-
         }
         #
         #Check if iphlpsvc service is running
