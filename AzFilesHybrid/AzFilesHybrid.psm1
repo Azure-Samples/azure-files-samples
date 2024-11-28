@@ -4184,8 +4184,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
            [string] $iphlpsvcIntro = "Checking Iphplpsvc Service"
            Write-Host $iphlpsvcIntro
            try 
-           {
-               throw "Try/Catch Error"
+           {               
                 $checksExecuted += 1;
                 $services = Get-Service iphlpsvc
                 if (($services -eq $null) -or ($services.Status -ne "Running"))
@@ -4223,39 +4222,35 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 
                 $ProxysubFolder = Get-ChildItem `
                     -Path Registry::HKLM\SYSTEM\CurrentControlSet\Services\iphlpsvc\Parameters\ProxyMgr `
-                    -ErrorAction SilentlyContinue
-                
+                    -ErrorAction SilentlyContinue                
                 $success = $true
                 foreach ($folder in $ProxysubFolder)
                 {
                     $properties = $folder | Get-ItemProperty
                     if (($null -ne $properties.StaticProxy) -and ($properties.StaticProxy.Contains("https=127.0.0.1:")))
-                    {
+                    {                        
                         # If this is the first failure detected, print "FAILED"
                         if ($success)
                         {
-                            $checks["CheckFiddlerProxy"].Result = "Failed"
-                            # Write-Error "CheckFiddlerProxy - FAILED"
+                            $checks["CheckFiddlerProxy"].Result = "Failed"                           
                             Write-FailedPSStyle("")
                             $success = $false
                         }
 
                         # Report the registry path every time a failure is detected
-                        Write-Host "Fiddler Proxy is set, you need to delete any registry nodes under $($PSStyle.Foreground.BrightCyan)'$($folder.Name)'$($PSStyle.Reset)."
+                        Write-Host "`tFiddler Proxy is set, you need to delete any registry nodes under $($PSStyle.Foreground.BrightCyan)'$($folder.Name)'$($PSStyle.Reset)."
                     }
                 }
-
+                throw "Try/Catch error" #TODO DELETE ME
                 if ($success)
                 {
                     $checks["CheckFiddlerProxy"].Result = "Passed"
                     Write-Verbose "CheckFiddlerProxy - SUCCESS"
                 }
                 else
-                {
-                    #TODO: Does this need to be a warning instead?
+                {                    
                     [string] $fiddlerReappearWarning = "To prevent this issue from re-appearing in the future, you should also uninstall Fiddler."
-                    Write-WarningPSStyle($fiddlerReappearWarning)
-                    # Write-Error "To prevent this issue from re-appearing in the future, you should also uninstall Fiddler."
+                    Write-FailedPSStyle($fiddlerReappearWarning)
                 }
              }
              catch 
