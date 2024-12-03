@@ -3978,7 +3978,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
             } catch {
                 $checks["CheckRegKey"].Result = "Failed"
                 $checks["CheckRegKey"].Issue = $_
-                Write-FailedPSStyle($_)
+                Write-FailedPSStyle $_
             }
         }
         #
@@ -4010,18 +4010,19 @@ function Debug-AzStorageAccountEntraKerbAuth {
                             $hostName -eq "${StorageAccountName}.privatelink.file.core.windows.net" -or
                             $hostName -eq ".privatelink.file.core.windows.net")
                         {
+                            [string]$kerbStorageAccountError = "To retrieve Kerberos tickets run the ksetup Windows command on the client(s): '$($PSStyle.Foreground.BrightCyan)ksetup /delhosttorealmmap ${hostName} ${realmName}$($PSStyle.Reset)'."
                             if ($realmName -eq "KERBEROS.MICROSOFTONLINE.COM")
                             {                                
                                 if (!$failure) {
                                     $checks["CheckKerbRealmMapping"].Result = "Warning"
                                     $checks["CheckKerbRealmMapping"].Issue = "The Storage account ${StorageAccountName} has been mapped to ${realmName}"
-                                    Write-WarningPSStyle "To retrieve Kerberos tickets run the ksetup Windows command on the client(s): '$($PSStyle.Foreground.BrightCyan)ksetup /delhosttorealmmap ${hostName} ${realmName}$($PSStyle.Reset)'."
+                                    Write-WarningPSStyle $kerbStorageAccountError
                                 }
                             } else {
                                 $failure = $true
                                 $checks["CheckKerbRealmMapping"].Result = "Failed"
                                 $checks["CheckKerbRealmMapping"].Issue = "The storage account '${StorageAccountName}' is mapped to '${realmName}'."
-                                Write-FailedPSStyle "To retrieve Kerberos tickets run the ksetup Windows command on the client(s) : '$($PSStyle.Foreground.BrightCyan)ksetup /delhosttorealmmap $hostName $realmName$($PSStyle.Reset)'"
+                                Write-FailedPSStyle $kerbStorageAccountError
                             }
                         }
                     }
@@ -4056,7 +4057,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 { 
                     $checks["CheckRBAC"].Result = "Failed"
                     $checks["CheckRBAC"].Issue = "AzureFilesIdentityBasedAuth IS NULL"
-                    Write-FailedPSStyle "AzureFilesIdentityBasedAuth IS NULL"                  
+                    Write-FailedPSStyle "AzureFilesIdentityBasedAuth is null"                  
                 }
                 else 
                 {
