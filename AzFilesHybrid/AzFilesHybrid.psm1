@@ -3753,19 +3753,7 @@ function Debug-AzStorageAccountAuth {
     process
     {
         $VerifyAD = get-AzStorageAccount -ResourceGroupName $ResourceGroupName -StorageAccountName $StorageAccountName  
-        $directoryServiceOptions = $VerifyAD.AzureFilesIdentityBasedAuth.DirectoryServiceOptions
-
-        # Checks for account type
-        # AD DS
-        # AADKERB
-        # AADS
-        <#
-            ~~ Output ~~
-            Storage Account Config: (AccountType)
-            Running Checks...
-        #>
-
-        
+        $directoryServiceOptions = $VerifyAD.AzureFilesIdentityBasedAuth.DirectoryServiceOptions                
         if ($directoryServiceOptions -eq "AD")
         {     
             Write-Host "Storage account is configured for AD DS auth."
@@ -3794,30 +3782,14 @@ function Debug-AzStorageAccountAuth {
         }
         elseif ($directoryServiceOptions -eq "AADDS")
         {
-            Write-Host "This cmdlet does not support Microsoft Entra Domain Services authentication yet.`nYou can run Debug-AzStorageAccountADDSAuth to run the AD DS authentication checks instead,`nbut note that while some checks may provide useful information,`nnot all AD DS checks are expected to pass for a storage account with Microsoft Entra Domain Services authentication."
+            Write-Host "This cmdlet does not support Microsoft Entra Domain Services authentication yet."
+            Write-Host "You can run Debug-AzStorageAccountADDSAuth to run the AD DS authentication checks instead,"
+            Write-Host "but note that while some checks may provide useful information,"
+            Write-Host "not all AD DS checks are expected to pass for a storage account with Microsoft Entra Domain Services authentication."
         }
         else
         {
-            #output
-            <#
-             [Header]H
-             PLacement of Files
-             process
-            #>
-            #
-            
-
-            $doneHeader = Write-DoneHeader
-         
-            [char] $eANSI = [char]27
-
-            [string] $aStr = "Hello, world!"
-            Write-Host "Running $($PSStyle.Background.Blue)PowerShell$($PSStyle.Reset) on $($PSStyle.Foreground.BrightCyan)Windows$($PSStyle.Reset)."
-            Write-Host "$eANSI[38;5;27m$aStr $eANSI[0m"
-
-            # New
-            [string]$s = "This account is not configured with any authentication option"
-            Write-Host $s
+            Write-Host "This account is not configured with any authentication option"
         }
     }
 }
@@ -3834,7 +3806,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
         [Parameter(Mandatory=$False, Position=2, HelpMessage="Filter")]
         [string]$Filter,
 
-        [Parameter(Mandatory=$False, Position=3, HelpMessage="Optional parameter for filter 'CheckSidHasAadUser' and 'CheckUserFileAccess'. The user Principal name to check.")]
+         [Parameter(Mandatory=$False, Position=3, HelpMessage="Optional parameter for filter 'CheckSidHasAadUser' and 'CheckUserFileAccess'. The user Principal name to check.")]
         [string]$UserPrincipalName,
 
         [Parameter(Mandatory=$False, Position=4, HelpMessage="Optional parameter for filter 'CheckSidHasAadUser', 'CheckUserFileAccess' and 'CheckAadUserHasSid'. The domain name to look up the user.")]
@@ -3852,11 +3824,11 @@ function Debug-AzStorageAccountEntraKerbAuth {
         
         if(![string]::IsNullOrEmpty($Domain) )
         {
-            Write-Error "The debug cmdlet for Microsoft Entra Kerberos (AADKERB) accounts does not yet implement support for -ObjectId parameter. It will be ignored."
+            Write-FailedPSStyle "The debug cmdlet for Microsoft Entra Kerberos (AADKERB) accounts does not yet implement support for -ObjectId parameter. It will be ignored."
         }
         if(![string]::IsNullOrEmpty($FilePath))
         {
-            Write-Error "The debug cmdlet for Microsoft Entra Kerberos (AADKERB) accounts does not yet implement support for -FilePath parameter. It will be ignored."
+            Write-FailedPSStyle "The debug cmdlet for Microsoft Entra Kerberos (AADKERB) accounts does not yet implement support for -FilePath parameter. It will be ignored."
         }
         $checksExecuted = 0;
         $filterIsPresent = ![string]::IsNullOrEmpty($Filter);
@@ -3878,24 +3850,17 @@ function Debug-AzStorageAccountEntraKerbAuth {
         #        
         if (!$filterIsPresent -or $Filter -match "CheckPort445Connectivity")
         {
-            [string] $port445Intro = "Checking Port 445 Connectivity"
-            Write-Host $port445Intro
+            Write-Host "Checking Port 445 Connectivity"
             try {
                 $checksExecuted += 1;
-                Write-Verbose "CheckPort445Connectivity - START"
-
-                Test-Port445Connectivity -StorageAccount
-                Name $StorageAccountName `
+                Test-Port445Connectivity -StorageAccount Name $StorageAccountName `
                     -ResourceGroupName $ResourceGroupName -ErrorAction Stop
-
                 $checks["CheckPort445Connectivity"].Result = "Passed"
                 Write-Verbose "CheckPort445Connectivity - SUCCESS"
             } catch {
                 $checks["CheckPort445Connectivity"].Result = "Failed"
                 $checks["CheckPort445Connectivity"].Issue = $_
-               
-                [string]$port445Error = $_
-                Write-FailedPSStyle($port445Error)               
+                Write-FailedPSStyle $_
             }
         }
         #
@@ -3903,14 +3868,12 @@ function Debug-AzStorageAccountEntraKerbAuth {
         #
         if (!$filterIsPresent -or $Filter -match "CheckAADConnectivity")
         {
-            [string] $aadConnectionIntro = "Checking AAD Connectivity"
-            Write-Host $aadConnectionIntro
+            Write-Host "Checking AAD Connectivity"
             try {                
                 $checksExecuted += 1;
-                Write-Verbose "CheckAADConnectivity - START"
                 $Context = Get-AzContext
                 $TenantId = $Context.Tenant
-                $Response = Invoke-WebRequest -Method POST https://login.microsoftonline.com/$TenantId/kerberos                               
+                $Response = Invoke-WebRequest -Method POST https://login.microsoftonline.com/$TenantId/kerberos
                 if ($Response.StatusCode -eq 200)
                 {
                     $checks["CheckAADConnectivity"].Result = "Passed"
@@ -3919,15 +3882,13 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 else{
                     $checks["CheckAADConnectivity"].Result = "Failed"
                     $checks["CheckAADConnectivity"].Issue = "Expected response is 200, but we got $($Response.StatusCode)"
-                    [string]$aadUnexpectedError = "Expected response is 200, but we got $($Response.StatusCode)"
-                    Write-FailedPSStyle($aadUnexpectedError)                    
+                    Write-FailedPSStyle "Expected response is 200, but we got $($Response.StatusCode)"
                 }
                 
             } catch {
                 $checks["CheckAADConnectivity"].Result = "Failed"
                 $checks["CheckAADConnectivity"].Issue = $_
-                [string]$aadError = $_                
-                Write-FailedPSStyle($aadError)                
+                Write-FailedPSStyle $_
             }
         }
         #
@@ -3935,11 +3896,9 @@ function Debug-AzStorageAccountEntraKerbAuth {
         #
         if (!$filterIsPresent -or $Filter -match "CheckEntraObject")
         {
-            [string] $aadObjIntro = "Checking AAD Object"
-            Write-Host $aadObjIntro
+            Write-Host "Checking AAD Object"
             try {
                 $checksExecuted += 1;
-                Write-Verbose "CheckEntraObject - START"
                 $Context = Get-AzContext
                 $TenantId = $Context.Tenant
 
