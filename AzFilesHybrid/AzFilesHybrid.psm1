@@ -3964,7 +3964,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
             Write-Host "Checking Registry Key"
             try {
                 $checksExecuted += 1;
-                if (Test-IsCloudKerberosTicketRetrievalEnabled)
+                if ($false<#Test-IsCloudKerberosTicketRetrievalEnabled#>)
                 {
                     $checks["CheckRegKey"].Result = "Passed"
                     Write-Verbose "CheckRegKey - SUCCESS"
@@ -3972,9 +3972,8 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 else {                    
                     $checks["CheckRegKey"].Result = "Failed"
                     $checks["CheckRegKey"].Issue = "The CloudKerberosTicketRetrievalEnabled need to be enabled to get kerberos ticket"
-                    Write-FailedPSStyle "The registry key $($PSStyle.Foreground.BrightCyan)HKLM\SYSTEM\CurrentControlSet\Control\Lsa\Kerberos\Parameters\CloudKerberosTicketRetrievalEnabled$($PSStyle.Reset) was non-existent or 0."
-                    Write-Host "`tFor AAD Kerberos authentication, it should be set to 1. To fix this error, enable the registry key and reboot the machine."
-                    Write-Host "`tSee '$($PSStyle.Foreground.BrightCyan)https://aka.ms/azfiles/entra-kerbregkey$($PSStyle.Reset)'"
+                    Write-FailedPSStyle "The CloudKerberosTicketRetrievalEnabled setting was not set on this machine."
+                    Write-Host "`tTo fix this error see: '$($PSStyle.Foreground.BrightCyan)https://aka.ms/azfiles/entra-kerbregkey$($PSStyle.Reset)'"
                 }               
             } catch {
                 $checks["CheckRegKey"].Result = "Failed"
@@ -4094,8 +4093,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 {
                     $checks["CheckWinHttpAutoProxySvc"].Result = "Failed"
                     $checks["CheckWinHttpAutoProxySvc"].Issue = "The WinHttpAutoProxy service needs to be in running state."
-                    $winHttpAutoProxyFailed = "The WinHttpAutoProxy service needs to be in running state."
-                    Write-FailedPSStyle($winHttpAutoProxyFailed)
+                    Write-FailedPSStyle "The WinHttpAutoProxy service needs to be in running state."
                 }
                 else {
                     $checks["CheckWinHttpAutoProxySvc"].Result = "Passed"
@@ -4113,9 +4111,8 @@ function Debug-AzStorageAccountEntraKerbAuth {
         #Check if iphlpsvc service is running
         #
         if (!$filterIsPresent -or $Filter -match "CheckIpHlpScv")
-        {   
-           [string] $iphlpsvcIntro = "Checking Iphplpsvc Service"
-           Write-Host $iphlpsvcIntro
+        {
+           Write-Host "Checking Iphplpsvc Service"
            try 
            {               
                 $checksExecuted += 1;
@@ -4124,8 +4121,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 {                 
                     $checks["CheckIpHlpScv"].Result = "Failed"
                     $checks["CheckIpHlpScv"].Issue = "The IpHlp service needs to be in running state."
-                    [string]$iphlpsvcFailed = "The IpHlp Service is not running"
-                    Write-FailedPSStyle($iphlpsvcFailed)
+                    Write-FailedPSStyle "The IpHlp Service is not running"
                 }                
                 else 
                 {
@@ -4137,8 +4133,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
             {                
                 $checks["CheckIpHlpScv"].Result = "Failed"
                 $checks["CheckIpHlpScv"].Issue = $_
-                [string]$iphlpsvcError = $_
-                Write-FailedPSStyle($iphlpsvcError)
+                Write-FailedPSStyle $_
             }
 
         }
@@ -4146,16 +4141,15 @@ function Debug-AzStorageAccountEntraKerbAuth {
         #Check if Fiddler Proxy is cleaned up
         #
         if (!$filterIsPresent -or $Filter -match "CheckFiddlerProxy")
-        {   
-           [string] $fiddlerProxyIntro = "Checking Fiddler Proxy"
-           Write-Host $fiddlerProxyIntro 
-           try 
+        {
+           Write-Host "Checking Fiddler Proxy"
+           try
            {
                 $checksExecuted += 1;
                 
                 $ProxysubFolder = Get-ChildItem `
                     -Path Registry::HKLM\SYSTEM\CurrentControlSet\Services\iphlpsvc\Parameters\ProxyMgr `
-                    -ErrorAction SilentlyContinue                
+                    -ErrorAction SilentlyContinue
                 $success = $true
                 foreach ($folder in $ProxysubFolder)
                 {
@@ -4165,7 +4159,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
                         # If this is the first failure detected, print "FAILED"
                         if ($success)
                         {
-                            $checks["CheckFiddlerProxy"].Result = "Failed"                           
+                            $checks["CheckFiddlerProxy"].Result = "Failed"
                             Write-FailedPSStyle("")
                             $success = $false
                         }
@@ -4174,24 +4168,21 @@ function Debug-AzStorageAccountEntraKerbAuth {
                         Write-Host "`tFiddler Proxy is set, you need to delete any registry nodes under $($PSStyle.Foreground.BrightCyan)'$($folder.Name)'$($PSStyle.Reset)."
                     }
                 }
-                throw "Try/Catch error" #TODO DELETE ME
                 if ($success)
                 {
                     $checks["CheckFiddlerProxy"].Result = "Passed"
                     Write-Verbose "CheckFiddlerProxy - SUCCESS"
                 }
                 else
-                {                    
-                    [string] $fiddlerReappearWarning = "To prevent this issue from re-appearing in the future, you should also uninstall Fiddler."
-                    Write-FailedPSStyle($fiddlerReappearWarning)
+                {
+                    Write-FailedPSStyle "To prevent this issue from re-appearing in the future, you should also uninstall Fiddler."
                 }
              }
              catch 
              {
                 $checks["CheckFiddlerProxy"].Result = "Failed"
                 $checks["CheckFiddlerProxy"].Issue = $_
-                [string] $fiddlerProxyError = $_
-                Write-FailedPSStyle($fiddlerProxyError)
+                Write-FailedPSStyle $_
              }
         }
 
@@ -4200,12 +4191,11 @@ function Debug-AzStorageAccountEntraKerbAuth {
         #
         if (!$filterIsPresent -or $Filter -match "CheckEntraJoinType")
         {   
-            [string]$entraJoinIntro = "Checking your machine's Entra Join Type"
-            Write-Host $entraJoinIntro           
+            Write-Host "Checking your machine's Entra Join Type"
             try 
             {
                 $checksExecuted += 1; 
-                $status = Get-DsRegStatus                               
+                $status = Get-DsRegStatus
                 if ($status.AzureAdJoined -eq "YES")
                 {
                     if ($status.DomainJoined -eq "NO")
@@ -4222,19 +4212,16 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 else
                 {
                     $checks["CheckEntraJoinType"].Result = "Failed"
-                    [string]$entraJoinFailed = "Entra Kerb requires Entra joined or Hybrid Entra joined machine."
-                    Write-FailedPSStyle($entraJoinFailed)
+                    Write-FailedPSStyle "Entra Kerb requires Entra joined or Hybrid Entra joined machine."
                 }
             }
             catch 
             {
                 $checks["CheckEntraJoinType"].Result = "Failed"
                 $checks["CheckEntraJoinType"].Issue = $_
-                [string]$entrajoinedError = $_
-                Write-FailedPSStyle($entrajoinedError)
+                Write-FailedPSStyle $_
             }
         }
-
         SummaryOfChecks -filterIsPresent $filterIsPresent -checksExecuted $checksExecuted
     }
 }
@@ -4247,9 +4234,6 @@ function SummaryOfChecks {
         [Parameter(Mandatory=$True, Position=1, HelpMessage="CheckExecuted")]
         [string]$checksExecuted                    
     )
-
-
-
     process
     {
         $PSStyle.Formatting.TableHeader = $PSStyle.Foreground.BrightGreen
