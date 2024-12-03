@@ -3911,43 +3911,39 @@ function Debug-AzStorageAccountEntraKerbAuth {
 
                 $Application = Get-MgApplication `
                     -Filter "identifierUris/any (uri:uri eq 'api://${TenantId}/CIFS/${StorageAccountName}.file.core.windows.net')" `
-                    -ConsistencyLevel eventual              
+                    -ConsistencyLevel eventual
                 if($null -eq $Application)
                 {
                     $checks["CheckEntraObject"].Result = "Failed"
                     $checks["CheckEntraObject"].Issue = "Could not find the application with SPN ' api://${TenantId}/CIFS/${StorageAccountName}.file.core.windows.net'."
-                    [string]$noAppSPN = "Could not find the application with SPN $($PSStyle.Foreground.BrightCyan)'api://${TenantId}/CIFS/${StorageAccountName}.file.core.windows.net'$($PSStyle.Reset)"
-                    Write-FailedPSStyle($noAppSPN)                    
-                    
+                    Write-FailedPSStyle "Could not find the application with SPN $($PSStyle.Foreground.BrightCyan)'api://${TenantId}/CIFS/${StorageAccountName}.file.core.windows.net'$($PSStyle.Reset)"
                 }
-                $ServicePrincipal = Get-MgServicePrincipal -Filter "servicePrincipalNames/any (name:name eq 'api://$TenantId/CIFS/$StorageAccountName.file.core.windows.net')" -ConsistencyLevel eventual               
+                $ServicePrincipal = Get-MgServicePrincipal -Filter "servicePrincipalNames/any (name:name eq 'api://$TenantId/CIFS/$StorageAccountName.file.core.windows.net')" -ConsistencyLevel eventual
+                [string]$aadServicePrincipalError = "SPN Value is not set correctly, It should be '$($PSStyle.Foreground.BrightCyan)CIFS/${Storageaccountname}.file.core.windows.net$($PSStyle.Reset)'"
                 if($null -eq $ServicePrincipal)
                 {
                     $checks["CheckEntraObject"].Result = "Failed"
-                    $checks["CheckEntraObject"].Issue = "Service Principal is missing SPN ' CIFS/${StorageAccountName}.file.core.windows.net'."
-                    [string]$aadNoSPN = "SPN Value is not set correctly, It should be $($PSStyle.Foreground.BrightCyan)'CIFS/Storageaccountname.file.core.windows.net'$($PSStyle.Reset)"
-                    Write-FailedPSStyle($aadNoSPN)                    
+                    $checks["CheckEntraObject"].Issue = "Service Principal is missing SPN 'CIFS/${StorageAccountName}.file.core.windows.net'."
+                    Write-FailedPSStyle $aadServicePrincipalError
                 }
                 if(-not $ServicePrincipal.AccountEnabled)
                 {
                     $checks["CheckEntraObject"].Result = "Failed"
-                    $checks["CheckEntraObject"].Issue = "Expected AccountEnabled to be set to true"
-                    [string]$aadAccountSetError = "The service principal should have AccountEnabled to be set to true"
-                    Write-FailedPSStyle($aadAccountSetError)
+                    $checks["CheckEntraObject"].Issue = "Expected AccountEnabled set to true"
+                    Write-FailedPSStyle "Service Principal should have AccountEnabled set to true"
                 }
                 
-                elseif(-not $ServicePrincipal.ServicePrincipalNames.Contains("CIFS/${StorageAccountName}.file.core.windows.net")  )
+                elseif(-not $ServicePrincipal.ServicePrincipalNames.Contains("CIFS/${StorageAccountName}.file.core.windows.net"))
                 {
                     $checks["CheckEntraObject"].Result = "Failed"
                     $checks["CheckEntraObject"].Issue = "Service Principal is missing SPN ' CIFS/${StorageAccountName}.file.core.windows.net'."
-                    [string]$aadServicePrincipalError = "SPN Value is not set correctly, It should be $($PSStyle.Foreground.BrightCyan)'CIFS/Storageaccountname.file.core.windows.net'$($PSStyle.Reset)"
-                    Write-FailedPSStyle($aadServicePrincipalError)
+                    Write-FailedPSStyle $aadServicePrincipalError
                 }
-                elseif (-not $ServicePrincipal.ServicePrincipalNames.Contains("api://${TenantId}/CIFS/${StorageAccountName}.file.core.windows.net"))                
+                elseif (-not $ServicePrincipal.ServicePrincipalNames.Contains("api://${TenantId}/CIFS/${StorageAccountName}.file.core.windows.net"))
                 {
-                    $checks["CheckEntraObject"].Result = "Partial"                                        
-                    [string]$aadObjWarning = "Service Principal is missing SPN $($PSStyle.Foreground.BrightCyan)'api://${TenantId}/CIFS/${StorageAccountName}.file.core.windows.net'$($PSStyle.Reset).`n`tIt is okay to not have this value for now, but it is good to have this configured in future if you want to continue getting kerberos tickets."
-                    Write-WarningPSStyle($aadObjWarning)                   
+                    $checks["CheckEntraObject"].Result = "Partial"
+                    Write-WarningPSStyle "Service Principal is missing SPN '$($PSStyle.Foreground.BrightCyan)api://${TenantId}/CIFS/${StorageAccountName}.file.core.windows.net$($PSStyle.Reset)'."`
+                        "`n`tIt is okay to not have this value for now, but it is good to have this configured in future if you want to continue getting kerberos tickets."
                     Write-Verbose "CheckEntraObject - SUCCESS"
                 }
                 else {
@@ -3957,8 +3953,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
             } catch {
                 $checks["CheckEntraObject"].Result = "Failed"
                 $checks["CheckEntraObject"].Issue = $_
-                $aadTryCatchError = $_
-                Write-FailedPSStyle($aadTryCatchError)                
+                Write-FailedPSStyle $_
             }
         }
         #
