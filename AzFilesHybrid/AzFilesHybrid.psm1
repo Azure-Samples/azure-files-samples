@@ -3853,8 +3853,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
             Write-Host "Checking Port 445 Connectivity"
             try {
                 $checksExecuted += 1;
-                Test-Port445Connectivity -StorageAccount Name $StorageAccountName `
-                    -ResourceGroupName $ResourceGroupName -ErrorAction Stop
+                Test-Port445Connectivity -StorageAccountName $StorageAccountName -ResourceGroupName $ResourceGroupName -ErrorAction Stop
                 $checks["CheckPort445Connectivity"].Result = "Passed"
                 Write-Verbose "CheckPort445Connectivity - SUCCESS"
             } catch {
@@ -3916,7 +3915,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 {
                     $checks["CheckEntraObject"].Result = "Failed"
                     $checks["CheckEntraObject"].Issue = "Could not find the application with SPN ' api://${TenantId}/CIFS/${StorageAccountName}.file.core.windows.net'."
-                    Write-FailedPSStyle "Could not find the application with SPN $($PSStyle.Foreground.BrightCyan)'api://${TenantId}/CIFS/${StorageAccountName}.file.core.windows.net'$($PSStyle.Reset)"
+                    Write-FailedPSStyle "Could not find the application with SPN '$($PSStyle.Foreground.BrightCyan)api://${TenantId}/CIFS/${StorageAccountName}.file.core.windows.net$($PSStyle.Reset)'"
                 }
                 $ServicePrincipal = Get-MgServicePrincipal -Filter "servicePrincipalNames/any (name:name eq 'api://$TenantId/CIFS/$StorageAccountName.file.core.windows.net')" -ConsistencyLevel eventual
                 [string]$aadServicePrincipalError = "SPN Value is not set correctly, It should be '$($PSStyle.Foreground.BrightCyan)CIFS/${Storageaccountname}.file.core.windows.net$($PSStyle.Reset)'"
@@ -3942,13 +3941,11 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 
                 elseif ($ServicePrincipal.ServicePrincipalNames.Contains("api://${TenantId}/CIFS/${StorageAccountName}.file.core.windows.net"))
                 {
-                    Write-Host "Checkpoint 4"
                     $checks["CheckEntraObject"].Result = "Partial"
                     Write-WarningPSStyle "Service Principal is missing SPN '$($PSStyle.Foreground.BrightCyan)api://${TenantId}/CIFS/${StorageAccountName}.file.core.windows.net$($PSStyle.Reset)'."
                     Write-Host "`tIt is okay to not have this value for now, but it is good to have this configured in future if you want to continue getting kerberos tickets."
                     Write-Verbose "CheckEntraObject - SUCCESS"
                 }
-                Write-Host "Checkpoint 5"
                 else {
                     $checks["CheckEntraObject"].Result = "Passed"
                     Write-Verbose "CheckEntraObject - SUCCESS" 
@@ -3975,16 +3972,14 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 else {                    
                     $checks["CheckRegKey"].Result = "Failed"
                     $checks["CheckRegKey"].Issue = "The CloudKerberosTicketRetrievalEnabled need to be enabled to get kerberos ticket"
-                    
-                    [string] $regKeyDoesNotExist = "The registry key $($PSStyle.Foreground.BrightCyan)HKLM\SYSTEM\CurrentControlSet\Control\Lsa\Kerberos\Parameters\CloudKerberosTicketRetrievalEnabled$($PSStyle.Reset) was non-existent or 0."
-                    [string] $regKeyDoesNotExistAdditionalInfo = "`n`tFor AAD Kerberos authentication, it should be set to 1.`n`tTo fix this error, enable the registry key and reboot the machine.`n`tSee $($PSStyle.Foreground.BrightCyan)'https://learn.microsoft.com/en-us/azure/storage/files/storage-files-identity-auth-hybrid-identities-enable?tabs=azure-portal#configure-the-clients-to-retrieve-kerberos-tickets'$($PSStyle.Reset)"                    
-                    Write-FailedPSStyle($regKeyDoesNotExist + $regKeyDoesNotExistAdditionalInfo)                    
+                    Write-FailedPSStyle "The registry key $($PSStyle.Foreground.BrightCyan)HKLM\SYSTEM\CurrentControlSet\Control\Lsa\Kerberos\Parameters\CloudKerberosTicketRetrievalEnabled$($PSStyle.Reset) was non-existent or 0."
+                    Write-Host "`tFor AAD Kerberos authentication, it should be set to 1. To fix this error, enable the registry key and reboot the machine."
+                    Write-Host "`tSee '$($PSStyle.Foreground.BrightCyan)https://aka.ms/azfiles/entra-kerbregkey$($PSStyle.Reset)'"
                 }               
             } catch {
                 $checks["CheckRegKey"].Result = "Failed"
                 $checks["CheckRegKey"].Issue = $_
-                [string]$regKeyError = $_
-                Write-FailedPSStyle($regKeyError)                
+                Write-FailedPSStyle($_)
             }
         }
         #
