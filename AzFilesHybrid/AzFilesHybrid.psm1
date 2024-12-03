@@ -3987,8 +3987,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
         #
         if (!$filterIsPresent -or $Filter -match "CheckKerbRealmMapping")
         {
-            [string] $kerbRealmMappingIntro = "Checking Kerberos Realm Mapping"
-            Write-Host $kerbRealmMappingIntro
+            Write-Host "Checking Kerberos Realm Mapping"
             try {                
                 $checksExecuted += 1;
                 $hostToRealm = Get-ChildItem Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Lsa\Kerberos\HostToRealm -ErrorAction SilentlyContinue
@@ -3997,13 +3996,12 @@ function Debug-AzStorageAccountEntraKerbAuth {
                     $checks["CheckKerbRealmMapping"].Result = "Passed"
                     Write-Verbose "CheckKerbRealmMapping - SUCCESS"
                 }
-                $failure = $false                
+                $failure = $false
                 foreach ($domainKey in $hostToRealm) 
                 {                    
                     $properties = $domainKey | Get-ItemProperty
                     $realmName = $properties.PSChildName
                     $spnMappings = $($domainKey | Get-ItemProperty).SpnMappings
-                    
                     foreach ($hostName in $spnMappings) {
                         if ($hostName -eq "${StorageAccountName}.file.core.windows.net" -or
                             $hostName -eq ".file.core.windows.net" -or
@@ -4013,21 +4011,18 @@ function Debug-AzStorageAccountEntraKerbAuth {
                             $hostName -eq "${StorageAccountName}.privatelink.file.core.windows.net" -or
                             $hostName -eq ".privatelink.file.core.windows.net")
                         {
-                            if ($realmName -eq "KERBEROS.MICROSOFTONLINE.COM") 
+                            if ($realmName -eq "KERBEROS.MICROSOFTONLINE.COM")
                             {                                
                                 if (!$failure) {
                                     $checks["CheckKerbRealmMapping"].Result = "Warning"
                                     $checks["CheckKerbRealmMapping"].Issue = "The Storage account ${StorageAccountName} has been mapped to ${realmName}"
-                                   
-                                    [string]$kerbRealmMapWarning = "To retrieve Kerberos tickets run the ksetup Windows command on the client(s): 'ksetup /delhosttorealmmap ${hostName} ${realmName}'."
-                                    Write-WarningPSStyle($kerbRealmMapWarning)                                    
+                                    Write-WarningPSStyle "To retrieve Kerberos tickets run the ksetup Windows command on the client(s): '$($PSStyle.Foreground.BrightCyan)ksetup /delhosttorealmmap ${hostName} ${realmName}$($PSStyle.Reset)'."
                                 }
                             } else {
                                 $failure = $true
                                 $checks["CheckKerbRealmMapping"].Result = "Failed"
-                                $checks["CheckKerbRealmMapping"].Issue = "The storage account '${StorageAccountName}' is mapped to '${realmName}'. "                                
-                                [string]$kerbRealmMapError = "To retrieve Kerberos tickets run the ksetup Windows command on the client(s) : 'ksetup /delhosttorealmmap $hostName $realmName'"
-                                Write-FailedPSStyle($kerbRealmMapError)                                
+                                $checks["CheckKerbRealmMapping"].Issue = "The storage account '${StorageAccountName}' is mapped to '${realmName}'."
+                                Write-FailedPSStyle "To retrieve Kerberos tickets run the ksetup Windows command on the client(s) : '$($PSStyle.Foreground.BrightCyan)ksetup /delhosttorealmmap $hostName $realmName$($PSStyle.Reset)'"
                             }
                         }
                     }
@@ -4035,8 +4030,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
             } catch {
                 $checks["CheckKerbRealmMapping"].Result = "Failed"
                 $checks["CheckKerbRealmMapping"].Issue = $_
-                [string]$kerbRealmMapCheckError = $_
-                Write-FailedPSStyle($kerbRealmMapCheckError)               
+                Write-FailedPSStyle $_
             }
         }
         #
@@ -4044,8 +4038,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
         #
         if (!$filterIsPresent -or $Filter -match "CheckAdminConsent")
         {
-            [string]$checkAdminConsentIntro = "Checking Admin Consent"
-            Write-Host $checkAdminConsentIntro
+            Write-Host "Checking Admin Consent"
             $checksExecuted += 1;
             Debug-EntraKerbAdminConsent -StorageAccountName $StorageAccountName -checkResult $checks["CheckAdminConsent"]
         }
@@ -4053,12 +4046,9 @@ function Debug-AzStorageAccountEntraKerbAuth {
         #Check Default share and RBAC permissions
         if (!$filterIsPresent -or $Filter -match "CheckRBAC")
         {
-            [string]$checkAdminConsentIntro = "Checking Default Share and RBAC Permissions"
-            Write-Host $checkAdminConsentIntro
+            Write-Host $checkAdminConsentIntro "Checking Default Share and RBAC Permissions"
             try {
                 $checksExecuted += 1
-                Write-Verbose "CheckRBAC - START"
-
                 $StorageAccountObject = Validate-StorageAccount `
                     -ResourceGroupName $ResourceGroupName `
                     -StorageAccountName $StorageAccountName `
@@ -4067,8 +4057,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 { 
                     $checks["CheckRBAC"].Result = "Failed"
                     $checks["CheckRBAC"].Issue = "AzureFilesIdentityBasedAuth IS NULL"
-                    [string]$azFilesIdentityBasedAuthError = "AzureFilesIdentityBasedAuth IS NULL"
-                    Write-FailedPSStyle($azFilesIdentityBasedAuthError)                    
+                    Write-FailedPSStyle "AzureFilesIdentityBasedAuth IS NULL"                  
                 }
                 else 
                 {
@@ -4087,8 +4076,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
             {
                 $checks["CheckRBAC"].Result = "Failed"
                 $checks["CheckRBAC"].Issue = $_
-                [string]$rbacCheckFailed = $_
-                Write-FailedPSStyle($rbacCheckFailed)
+                Write-FailedPSStyle $_
             }
         }
 
@@ -4097,8 +4085,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
         #
         if (!$filterIsPresent -or $Filter -match "CheckWinHttpAutoProxySvc")
         {  
-           [string] $WinHttpAutoProxySvcIntro = "Checking WinHttpAutoProxySvc"
-           Write-Host $WinHttpAutoProxySvcIntro
+           Write-Host "Checking WinHttpAutoProxySvc"
            try 
            {               
                 $checksExecuted += 1;
@@ -4109,8 +4096,6 @@ function Debug-AzStorageAccountEntraKerbAuth {
                     $checks["CheckWinHttpAutoProxySvc"].Issue = "The WinHttpAutoProxy service needs to be in running state."
                     $winHttpAutoProxyFailed = "The WinHttpAutoProxy service needs to be in running state."
                     Write-FailedPSStyle($winHttpAutoProxyFailed)
-                    # Write-Error "CheckWinHttpAutoProxySvc - FAILED"
-
                 }
                 else {
                     $checks["CheckWinHttpAutoProxySvc"].Result = "Passed"
@@ -4120,9 +4105,8 @@ function Debug-AzStorageAccountEntraKerbAuth {
             catch 
             {
                 $checks["CheckWinHttpAutoProxySvc"].Result = "Failed"
-                $checks["CheckWinHttpAutoProxySvc"].Issue = $_
-                [string]$winHttpAutoProxyError = $_
-                Write-FailedPSStyle($winHttpAutoProxyError)
+                $checks["CheckWinHttpAutoProxySvc"].Issue = $_ 
+                Write-FailedPSStyle $_
             }
         }
         #
