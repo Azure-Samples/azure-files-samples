@@ -3964,7 +3964,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
             Write-Host "Checking Registry Key"
             try {
                 $checksExecuted += 1;
-                if ($false<#Test-IsCloudKerberosTicketRetrievalEnabled#>)
+                if (Test-IsCloudKerberosTicketRetrievalEnabled)
                 {
                     $checks["CheckRegKey"].Result = "Passed"
                     Write-Verbose "CheckRegKey - SUCCESS"
@@ -3996,7 +3996,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
                     Write-Verbose "CheckKerbRealmMapping - SUCCESS"
                 }
                 $failure = $false
-                foreach ($domainKey in $hostToRealm) 
+                foreach ($domainKey in $hostToRealm)
                 {                    
                     $properties = $domainKey | Get-ItemProperty
                     $realmName = $properties.PSChildName
@@ -4010,7 +4010,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
                             $hostName -eq "${StorageAccountName}.privatelink.file.core.windows.net" -or
                             $hostName -eq ".privatelink.file.core.windows.net")
                         {
-                            [string]$kerbStorageAccountError = "To retrieve Kerberos tickets run the ksetup Windows command on the client(s): '$($PSStyle.Foreground.BrightCyan)ksetup /delhosttorealmmap ${hostName} ${realmName}$($PSStyle.Reset)'."
+                            [string]$kerbStorageAccountError = "To retrieve Kerberos tickets run the ksetup Windows command on the client(s): '$($PSStyle.Foreground.BrightBlue)ksetup /delhosttorealmmap ${hostName} ${realmName}$($PSStyle.Reset)'."
                             if ($realmName -eq "KERBEROS.MICROSOFTONLINE.COM")
                             {                                
                                 if (!$failure) {
@@ -4052,12 +4052,12 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 $StorageAccountObject = Validate-StorageAccount `
                     -ResourceGroupName $ResourceGroupName `
                     -StorageAccountName $StorageAccountName `
-                    -ErrorAction Stop                
+                    -ErrorAction Stop
                 if ($null -eq $StorageAccountObject.AzureFilesIdentityBasedAuth)
                 { 
                     $checks["CheckRBAC"].Result = "Failed"
-                    $checks["CheckRBAC"].Issue = "AzureFilesIdentityBasedAuth IS NULL"
-                    Write-FailedPSStyle "AzureFilesIdentityBasedAuth is null"                  
+                    $checks["CheckRBAC"].Issue = "AzureFilesIdentityBasedAuth is null"
+                    Write-FailedPSStyle "AzureFilesIdentityBasedAuth is null"
                 }
                 else 
                 {
@@ -4223,17 +4223,18 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 Write-FailedPSStyle $_
             }
         }
-        SummaryOfChecks -filterIsPresent $filterIsPresent -checksExecuted $checksExecuted
+        SummaryOfChecks -checks $checks -filterIsPresent $filterIsPresent -checksExecuted $checksExecuted
     }
 }
 
 function SummaryOfChecks {
     param (
-        [Parameter(Mandatory=$True, Position=0, HelpMessage="Filter")]
-        [string]$filterIsPresent,
-
-        [Parameter(Mandatory=$True, Position=1, HelpMessage="CheckExecuted")]
-        [string]$checksExecuted                    
+        [Parameter(Mandatory=$True, Position=0, HelpMessage="List of checks and their results")]
+        [hashtable]$checks,
+        [Parameter(Mandatory=$True, Position=1, HelpMessage="Whether a filter param was passed")]
+        [bool]$filterIsPresent,
+        [Parameter(Mandatory=$True, Position=2, HelpMessage="Number of checks executed")]
+        [int]$checksExecuted
     )
     process
     {
@@ -4247,20 +4248,10 @@ function SummaryOfChecks {
         else
         {
             Write-Host "Summary of checks:"
-            $checks.Values | Format-Table -Property Name,Result
+            $checks.Values | Format-Table -Wrap
             
             $issues = $checks.Values | Where-Object { $_.Result -ieq "Failed" }
-
-            <# TODO: Check with Max if this output looks better
-            if ($issues.Length -gt 0) {
-                Write-Host "$($PSStyle.Foreground.BrightRed)Issues found:$($PSStyle.Reset)"
-                $issues | ForEach-Object { Write-Host -ForegroundColor Red "---- $($_.Name) ----`n$($_.Issue)" }
-            }
-            #>
-        }
-        # $PSStyle.Formatting.TableHeader = $PSStyle.Reset
-        Write-Host "This cmdlet does not support all the checks for Microsoft Entra Kerberos authentication yet,`nYou can run Debug-AzStorageAccountADDSAuth to run the AD DS authentication checks instead, `nbut note that while some checks may provide useful information, not all AD DS checks are expected to pass for a storage account`nwith Microsoft Entra Kerberos authentication."
-    
+        }    
     }
     
 }
