@@ -4046,7 +4046,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
         #Check Default share and RBAC permissions
         if (!$filterIsPresent -or $Filter -match "CheckRBAC")
         {
-            Write-Host $checkAdminConsentIntro "Checking Default Share and RBAC Permissions"
+            Write-Host "Checking Default Share and RBAC Permissions"
             try {
                 $checksExecuted += 1
                 $StorageAccountObject = Validate-StorageAccount `
