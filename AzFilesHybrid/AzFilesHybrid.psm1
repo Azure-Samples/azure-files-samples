@@ -2306,7 +2306,7 @@ function Validate-StorageAccount {
                 + " Please check whether the provided name '$ResourceGroupName' is valid or" `
                 + " whether the resource group exists by running" `
                 + " 'Get-AzResourceGroup -Name <ResourceGroupName>'" `
-                + " (https://docs.microsoft.com/en-us/azure/azure-resource-manager/management/manage-resource-groups-powershell)"
+                + " ($($PSStyle.Foreground.BrightCyan)https://aka.ms/azfiles/entra-manageresourcegroups$($PSStyle.Reset))"
             Write-Error -Message $message -ErrorAction Stop
         }
 
@@ -2318,7 +2318,7 @@ function Validate-StorageAccount {
                 + " Please check whether the provided name '$StorageAccountName' is valid or" `
                 + " whether the storage account exists by running" `
                 + " 'Get-AzStorageAccount -ResourceGroup <ResourceGroupName> -Name <StorageAccountName>'" `
-                + " (https://docs.microsoft.com/en-us/powershell/module/az.storage/get-azstorageaccount?view=azps-4.4.0)"
+                + " ($($PSStyle.Foreground.BrightCyan)https://aka.ms/azfiles/entra-getazstorageaccount$($PSStyle.Reset))"
             Write-Error -Message $message -ErrorAction Stop
         }
 
@@ -3385,11 +3385,11 @@ function Test-Port445Connectivity
         if ($result.TcpTestSucceeded -eq $False)
         {
             $message = "Unable to reach the storage account file endpoint." `
-                + " To debug connectivity problems, please refer to the troubleshooting tool for Azure" `
+                + "`n`tTo debug connectivity problems, please refer to the troubleshooting tool for Azure" `
                 + " Files mounting errors on Windows, 'AzFileDiagnostics.ps1'" `
-                + " (https://gallery.technet.microsoft.com/Troubleshooting-tool-for-a9fa1fe5)." `
-                + " For possible solutions please refer to" `
-                + " https://docs.microsoft.com/en-us/azure/storage/files/storage-troubleshoot-windows-file-connection-problems#cause-1-port-445-is-blocked"
+                + " `n`t(https://gallery.technet.microsoft.com/Troubleshooting-tool-for-a9fa1fe5)." `
+                + " `n`tFor possible solutions please refer to" `
+                + " https://aka.ms/azfiles/entra-port445"
             Write-Error -Message $message -ErrorAction Stop
         }
     }
