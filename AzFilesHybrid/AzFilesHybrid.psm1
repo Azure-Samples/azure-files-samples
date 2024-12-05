@@ -3755,7 +3755,7 @@ function Debug-AzStorageAccountAuth {
         $VerifyAD = get-AzStorageAccount -ResourceGroupName $ResourceGroupName -StorageAccountName $StorageAccountName  
         $directoryServiceOptions = $VerifyAD.AzureFilesIdentityBasedAuth.DirectoryServiceOptions                
         if ($directoryServiceOptions -eq "AD")
-        {     
+        {
             Write-Host "Storage account is configured for AD DS auth."
             Write-Host "Running AD DS checks."
             Debug-AzStorageAccountADDSAuth `
