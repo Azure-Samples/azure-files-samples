@@ -3852,11 +3852,13 @@ function Debug-AzStorageAccountEntraKerbAuth {
         {
             Write-Host "Checking Port 445 Connectivity"
             try {
+                Write-Host "`tTesting ... " -NoNewline
                 $checksExecuted += 1;
                 Test-Port445Connectivity -StorageAccountName $StorageAccountName -ResourceGroupName $ResourceGroupName -ErrorAction Stop
                 $checks["CheckPort445Connectivity"].Result = "Passed"
-                Write-Verbose "CheckPort445Connectivity - SUCCESS"
+                Write-TestingPassedPSStyle
             } catch {
+                Write-TestingFailedPSStyle
                 $checks["CheckPort445Connectivity"].Result = "Failed"
                 $checks["CheckPort445Connectivity"].Issue = $_
                 Write-FailedPSStyle $_
@@ -3868,7 +3870,8 @@ function Debug-AzStorageAccountEntraKerbAuth {
         if (!$filterIsPresent -or $Filter -match "CheckAADConnectivity")
         {
             Write-Host "Checking AAD Connectivity"
-            try {                
+            try {
+                Write-Host "`tTesting ... " -NoNewline
                 $checksExecuted += 1;
                 $Context = Get-AzContext
                 $TenantId = $Context.Tenant
@@ -3876,15 +3879,17 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 if ($Response.StatusCode -eq 200)
                 {
                     $checks["CheckAADConnectivity"].Result = "Passed"
-                    Write-Verbose "CheckAADConnectivity - SUCCESS"
+                    Write-TestingPassedPSStyle
                 }
                 else{
+                    Write-TestingFailedPSStyle
                     $checks["CheckAADConnectivity"].Result = "Failed"
                     $checks["CheckAADConnectivity"].Issue = "Expected response is 200, but we got $($Response.StatusCode)"
                     Write-FailedPSStyle "Expected response is 200, but we got $($Response.StatusCode)"
                 }
                 
             } catch {
+                Write-TestingFailedPSStyle
                 $checks["CheckAADConnectivity"].Result = "Failed"
                 $checks["CheckAADConnectivity"].Issue = $_
                 Write-FailedPSStyle $_
@@ -3897,6 +3902,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
         {
             Write-Host "Checking AAD Object"
             try {
+                Write-Host "`tTesting ... " -NoNewline
                 $checksExecuted += 1;
                 $Context = Get-AzContext
                 $TenantId = $Context.Tenant
@@ -3913,6 +3919,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
                     -ConsistencyLevel eventual
                 if($null -eq $Application)
                 {
+                    Write-TestingFailedPSStyle
                     $checks["CheckEntraObject"].Result = "Failed"
                     $checks["CheckEntraObject"].Issue = "Could not find the application with SPN ' api://${TenantId}/CIFS/${StorageAccountName}.file.core.windows.net'."
                     Write-FailedPSStyle "Could not find the application with SPN '$($PSStyle.Foreground.BrightCyan)api://${TenantId}/CIFS/${StorageAccountName}.file.core.windows.net$($PSStyle.Reset)'"
@@ -3921,19 +3928,21 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 [string]$aadServicePrincipalError = "SPN Value is not set correctly, It should be '$($PSStyle.Foreground.BrightCyan)CIFS/${Storageaccountname}.file.core.windows.net$($PSStyle.Reset)'"
                 if($null -eq $ServicePrincipal)
                 {
-
+                    Write-TestingFailedPSStyle
                     $checks["CheckEntraObject"].Result = "Failed"
                     $checks["CheckEntraObject"].Issue = "Service Principal is missing SPN 'CIFS/${StorageAccountName}.file.core.windows.net'."
                     Write-FailedPSStyle $aadServicePrincipalError
                 }
                 if($ServicePrincipal.AccountEnabled)
                 {
+                    Write-TestingFailedPSStyle
                     $checks["CheckEntraObject"].Result = "Failed"
                     $checks["CheckEntraObject"].Issue = "Expected AccountEnabled set to true"
                     Write-FailedPSStyle "Service Principal should have AccountEnabled set to true"
                 }
                 elseif(-not $ServicePrincipal.ServicePrincipalNames.Contains("CIFS/${StorageAccountName}.file.core.windows.net"))
                 {
+                    Write-TestingFailedPSStyle
                     $checks["CheckEntraObject"].Result = "Failed"
                     $checks["CheckEntraObject"].Issue = "Service Principal is missing SPN ' CIFS/${StorageAccountName}.file.core.windows.net'."
                     Write-FailedPSStyle $aadServicePrincipalError
@@ -3941,16 +3950,18 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 
                 elseif ($ServicePrincipal.ServicePrincipalNames.Contains("api://${TenantId}/CIFS/${StorageAccountName}.file.core.windows.net"))
                 {
+                    Write-TestingWarningPSStyle
                     $checks["CheckEntraObject"].Result = "Partial"
                     Write-WarningPSStyle "Service Principal is missing SPN '$($PSStyle.Foreground.BrightCyan)api://${TenantId}/CIFS/${StorageAccountName}.file.core.windows.net$($PSStyle.Reset)'."
                     Write-Host "`tIt is okay to not have this value for now, but it is good to have this configured in future if you want to continue getting kerberos tickets."
                     Write-Verbose "CheckEntraObject - SUCCESS"
                 }
                 else {
+                    Write-TestingPassedPSStyle
                     $checks["CheckEntraObject"].Result = "Passed"
-                    Write-Verbose "CheckEntraObject - SUCCESS" 
                 }
             } catch {
+                Write-TestingFailedPSStyle
                 $checks["CheckEntraObject"].Result = "Failed"
                 $checks["CheckEntraObject"].Issue = $_
                 Write-FailedPSStyle $_
@@ -3963,19 +3974,22 @@ function Debug-AzStorageAccountEntraKerbAuth {
         {
             Write-Host "Checking Registry Key"
             try {
+                Write-Host "`tTesting ... " -NoNewline
                 $checksExecuted += 1;
                 if (Test-IsCloudKerberosTicketRetrievalEnabled)
                 {
+                    Write-TestingPassedPSStyle
                     $checks["CheckRegKey"].Result = "Passed"
-                    Write-Verbose "CheckRegKey - SUCCESS"
                 }
-                else {                    
+                else {
+                    Write-TestingFailedPSStyle
                     $checks["CheckRegKey"].Result = "Failed"
                     $checks["CheckRegKey"].Issue = "The CloudKerberosTicketRetrievalEnabled need to be enabled to get kerberos ticket"
                     Write-FailedPSStyle "The CloudKerberosTicketRetrievalEnabled setting was not set on this machine."
                     Write-Host "`tTo fix this error see: '$($PSStyle.Foreground.BrightCyan)https://aka.ms/azfiles/entra-kerbregkey$($PSStyle.Reset)'"
                 }               
             } catch {
+                Write-TestingFailedPSStyle
                 $checks["CheckRegKey"].Result = "Failed"
                 $checks["CheckRegKey"].Issue = $_
                 Write-FailedPSStyle $_
@@ -3987,13 +4001,14 @@ function Debug-AzStorageAccountEntraKerbAuth {
         if (!$filterIsPresent -or $Filter -match "CheckKerbRealmMapping")
         {
             Write-Host "Checking Kerberos Realm Mapping"
-            try {                
+            try {
+                Write-Host "`tTesting ... " -NoNewline
                 $checksExecuted += 1;
                 $hostToRealm = Get-ChildItem Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Lsa\Kerberos\HostToRealm -ErrorAction SilentlyContinue
                 if($null -eq $hostToRealm)
                 {
+                    Write-TestingPassedPSStyle
                     $checks["CheckKerbRealmMapping"].Result = "Passed"
-                    Write-Verbose "CheckKerbRealmMapping - SUCCESS"
                 }
                 $failure = $false
                 foreach ($domainKey in $hostToRealm)
@@ -4014,11 +4029,13 @@ function Debug-AzStorageAccountEntraKerbAuth {
                             if ($realmName -eq "KERBEROS.MICROSOFTONLINE.COM")
                             {                                
                                 if (!$failure) {
+                                    Write-TestingWarningPSStyle
                                     $checks["CheckKerbRealmMapping"].Result = "Warning"
                                     $checks["CheckKerbRealmMapping"].Issue = "The Storage account ${StorageAccountName} has been mapped to ${realmName}"
                                     Write-WarningPSStyle $kerbStorageAccountError
                                 }
                             } else {
+                                Write-TestingFailedPSStyle
                                 $failure = $true
                                 $checks["CheckKerbRealmMapping"].Result = "Failed"
                                 $checks["CheckKerbRealmMapping"].Issue = "The storage account '${StorageAccountName}' is mapped to '${realmName}'."
@@ -4028,6 +4045,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
                     }
                 }
             } catch {
+                Write-TestingFailedPSStyle
                 $checks["CheckKerbRealmMapping"].Result = "Failed"
                 $checks["CheckKerbRealmMapping"].Issue = $_
                 Write-FailedPSStyle $_
@@ -4048,13 +4066,15 @@ function Debug-AzStorageAccountEntraKerbAuth {
         {
             Write-Host "Checking Default Share and RBAC Permissions"
             try {
+                Write-Host "`tTesting ... " -NoNewline
                 $checksExecuted += 1
                 $StorageAccountObject = Validate-StorageAccount `
                     -ResourceGroupName $ResourceGroupName `
                     -StorageAccountName $StorageAccountName `
                     -ErrorAction Stop
                 if ($null -eq $StorageAccountObject.AzureFilesIdentityBasedAuth)
-                { 
+                {
+                    Write-TestingFailedPSStyle
                     $checks["CheckRBAC"].Result = "Failed"
                     $checks["CheckRBAC"].Issue = "AzureFilesIdentityBasedAuth is null"
                     Write-FailedPSStyle "AzureFilesIdentityBasedAuth is null"
@@ -4062,18 +4082,19 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 else 
                 {
                     $DefaultSharePermission = $StorageAccountObject.AzureFilesIdentityBasedAuth.DefaultSharePermission
-                    
                     if((!$DefaultSharePermission) -or ($DefaultSharePermission -eq 'None'))
                     { 
                         Debug-RBACCheck -StorageAccountName $StorageAccountName -UserPrincipalName $UserPrincipalName -checkResult $checks["CheckRBAC"]
                     }
                     else {
+                        Write-TestingPassedPSStyle
                         $checks["CheckRBAC"].Result = "Passed"
                         Write-Host "`tAccess is granted via the default share permission"
                     }
                 }
             } catch 
             {
+                Write-TestingFailedPSStyle
                 $checks["CheckRBAC"].Result = "Failed"
                 $checks["CheckRBAC"].Issue = $_
                 Write-FailedPSStyle $_
@@ -4087,22 +4108,25 @@ function Debug-AzStorageAccountEntraKerbAuth {
         {  
            Write-Host "Checking WinHttpAutoProxySvc"
            try 
-           {               
+           {
+                Write-Host "`tTesting ... " -NoNewline
                 $checksExecuted += 1;
                 $service = Get-Service WinHttpAutoProxySvc
                 if (($service -eq $null) -or ($service.Status -ne "Running"))
                 {
+                    Write-TestingFailedPSStyle
                     $checks["CheckWinHttpAutoProxySvc"].Result = "Failed"
                     $checks["CheckWinHttpAutoProxySvc"].Issue = "The WinHttpAutoProxy service needs to be in running state."
                     Write-FailedPSStyle "The WinHttpAutoProxy service needs to be in running state."
                 }
                 else {
+                    Write-TestingPassedPSStyle
                     $checks["CheckWinHttpAutoProxySvc"].Result = "Passed"
-                    Write-Verbose "CheckWinHttpAutoProxySvc - SUCCESS"
                 }
             }
             catch 
             {
+                Write-TestingFailedPSStyle
                 $checks["CheckWinHttpAutoProxySvc"].Result = "Failed"
                 $checks["CheckWinHttpAutoProxySvc"].Issue = $_ 
                 Write-FailedPSStyle $_
@@ -4114,24 +4138,27 @@ function Debug-AzStorageAccountEntraKerbAuth {
         if (!$filterIsPresent -or $Filter -match "CheckIpHlpScv")
         {
            Write-Host "Checking Iphplpsvc Service"
-           try 
-           {               
+           try
+           {
+                Write-Host "`tTesting ... " -NoNewline
                 $checksExecuted += 1;
                 $services = Get-Service iphlpsvc
                 if (($services -eq $null) -or ($services.Status -ne "Running"))
-                {                 
+                {
+                    Write-TestingFailedPSStyle
                     $checks["CheckIpHlpScv"].Result = "Failed"
                     $checks["CheckIpHlpScv"].Issue = "The IpHlp service needs to be in running state."
                     Write-FailedPSStyle "The IpHlp Service is not running"
                 }                
                 else 
                 {
+                    Write-TestingPassedPSStyle
                     $checks["CheckIpHlpScv"].Result = "Passed"
-                    Write-Verbose "CheckIpHlpScv - SUCCESS"
                 }
             }
             catch 
-            {                
+            {
+                Write-TestingFailedPSStyle
                 $checks["CheckIpHlpScv"].Result = "Failed"
                 $checks["CheckIpHlpScv"].Issue = $_
                 Write-FailedPSStyle $_
@@ -4146,8 +4173,8 @@ function Debug-AzStorageAccountEntraKerbAuth {
            Write-Host "Checking Fiddler Proxy"
            try
            {
+                Write-Host "`tTesting ... " -NoNewline
                 $checksExecuted += 1;
-                
                 $ProxysubFolder = Get-ChildItem `
                     -Path Registry::HKLM\SYSTEM\CurrentControlSet\Services\iphlpsvc\Parameters\ProxyMgr `
                     -ErrorAction SilentlyContinue
@@ -4160,6 +4187,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
                         # If this is the first failure detected, print "FAILED"
                         if ($success)
                         {
+                            Write-TestingFailedPSStyle
                             $checks["CheckFiddlerProxy"].Result = "Failed"
                             Write-FailedPSStyle("")
                             $success = $false
@@ -4171,16 +4199,18 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 }
                 if ($success)
                 {
+                    Write-TestingPassedPSStyle
                     $checks["CheckFiddlerProxy"].Result = "Passed"
-                    Write-Verbose "CheckFiddlerProxy - SUCCESS"
                 }
                 else
                 {
+                    Write-TestingFailedPSStyle
                     Write-FailedPSStyle "To prevent this issue from re-appearing in the future, you should also uninstall Fiddler."
                 }
              }
              catch 
              {
+                Write-TestingFailedPSStyle
                 $checks["CheckFiddlerProxy"].Result = "Failed"
                 $checks["CheckFiddlerProxy"].Issue = $_
                 Write-FailedPSStyle $_
@@ -4193,12 +4223,14 @@ function Debug-AzStorageAccountEntraKerbAuth {
         if (!$filterIsPresent -or $Filter -match "CheckEntraJoinType")
         {   
             Write-Host "Checking your machine's Entra Join Type"
-            try 
+            try
             {
+                Write-Host "`tTesting ... " -NoNewline
                 $checksExecuted += 1; 
                 $status = Get-DsRegStatus
                 if ($status.AzureAdJoined -eq "YES")
                 {
+                    Write-TestingPassedPSStyle
                     if ($status.DomainJoined -eq "NO")
                     {
                         Write-Host "`tEntra Join confirmed"
@@ -4207,17 +4239,18 @@ function Debug-AzStorageAccountEntraKerbAuth {
                     {
                         Write-Host "`tHybrid Entra Join confirmed"
                     }
-
                     $checks["CheckEntraJoinType"].Result = "Passed"
                 }
                 else
                 {
+                    Write-TestingFailedPSStyle
                     $checks["CheckEntraJoinType"].Result = "Failed"
                     Write-FailedPSStyle "Entra Kerb requires Entra joined or Hybrid Entra joined machine."
                 }
             }
             catch 
             {
+                Write-TestingFailedPSStyle
                 $checks["CheckEntraJoinType"].Result = "Failed"
                 $checks["CheckEntraJoinType"].Issue = $_
                 Write-FailedPSStyle $_
@@ -4393,7 +4426,7 @@ function Debug-EntraKerbAdminConsent {
 
     process {
         try {
-            Write-Verbose "CheckAdminConsent - START"
+            Write-Host "`tTesting ... " -NoNewline
             $Context = Get-AzContext
             $TenantId = $Context.Tenant
 
@@ -4415,25 +4448,25 @@ function Debug-EntraKerbAdminConsent {
             $ServicePrincipal = Get-MgServicePrincipal -Filter "servicePrincipalNames/any (name:name eq '$spn')" -ConsistencyLevel eventual
             if($null -eq $ServicePrincipal -or $null -eq $ServicePrincipal.Id)
             {
+                Write-TestingFailedPSStyle
                 $checkResult.Result = "Failed"
                 $checkResult.Issue = "Could not find the application with SPN '$spn'. "
-                [string]$noSpnError = "Could not find the application with SPN $($PSStyle.Foreground.BrightCyan)'$spn'$($PSStyle.Reset)"
-                Write-FailedPSStyle($noSpnError)                
+                Write-FailedPSStyle "Could not find the application with SPN $($PSStyle.Foreground.BrightCyan)'$spn'$($PSStyle.Reset)"
                 return
             }
             
             $Consent = Get-MgOauth2PermissionGrant -Filter "ClientId eq '$($ServicePrincipal.Id)' and ResourceId eq '$($MSGraphSp.Id)' and consentType eq 'AllPrincipals'"
             if($null -eq $Consent -or $null -eq $Consent.Scope)
             {
+                Write-TestingFailedPSStyle
                 $checkResult.Result = "Failed"
                 $checkResult.Issue = "Admin Consent is not granted"
-                [string]$grantAdminConsentError = "Please grant admin consent using $($PSStyle.Foreground.BrightCyan)'https://aka.ms/azfiles/entra-adminconsent'$($PSStyle.Reset)"
-                Write-FailedPSStyle($grantAdminConsentError)                
+                Write-FailedPSStyle "Please grant admin consent using $($PSStyle.Foreground.BrightCyan)'https://aka.ms/azfiles/entra-adminconsent'$($PSStyle.Reset)"
                 return
             }
 
-            $permissions = New-Object System.Collections.Generic.HashSet[string]            
-            foreach ($permission in $Consent.Scope.Split(" ")) {                
+            $permissions = New-Object System.Collections.Generic.HashSet[string]
+            foreach ($permission in $Consent.Scope.Split(" ")) {
                 $permissions.Add($permission) | Out-Null
             }
            
@@ -4441,21 +4474,20 @@ function Debug-EntraKerbAdminConsent {
                 $permissions.Contains("profile") -and 
                 $permissions.Contains("User.Read")) 
             {
+                Write-TestingPassedPSStyle
                 $checkResult.Result = "Passed"
-                Write-Verbose " - SUCCESS"
             } 
             else 
             {
                 $checkResult.Result = "Failed"
                 $checkResult.Issue = "Admin Consent is not granted"
-                [string]$grantAdminConsentError_Two = "Please grant admin consent using $($PSStyle.Foreground.BrightCyan)'https://aka.ms/azfiles/entra-adminconsent'$($PSStyle.Reset)"
-                Write-FailedPSStyle($grantAdminConsentError_Two)               
+                Write-FailedPSStyle "Please grant admin consent using $($PSStyle.Foreground.BrightCyan)'https://aka.ms/azfiles/entra-adminconsent'$($PSStyle.Reset)"              
             }                          
         } catch {
+            Write-TestingFailedPSStyle
             $checkResult.Result = "Failed"
             $checkResult.Issue = $_
-            [string]$adminConsentError = $_
-            Write-FailedPSStyle($adminConsentError)
+            Write-FailedPSStyle $_
         }
     }
 }
