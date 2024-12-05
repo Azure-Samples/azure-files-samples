@@ -3389,7 +3389,7 @@ function Test-Port445Connectivity
                 + " Files mounting errors on Windows, 'AzFileDiagnostics.ps1'" `
                 + " `n`t(https://gallery.technet.microsoft.com/Troubleshooting-tool-for-a9fa1fe5)." `
                 + " `n`tFor possible solutions please refer to" `
-                + " https://aka.ms/azfiles/entra-port445"
+                + " '$($PSStyle.Foreground.BrightCyan)https://aka.ms/azfiles/entra-port445$($PSStyle.Reset)'"
             Write-Error -Message $message -ErrorAction Stop
         }
     }
