@@ -20,17 +20,29 @@ function Write-WarningPSStyle(
     Write-Host "${indentation}${warning}: $Message"
 }
 
-function Write-TestingPassedPSStyle {
+function Write-TestingPassedPSStyle(
+    [Parameter(Mandatory=$false, Position=0)]
+    [int]$Indents = 2
+) {
+    $indentation = "`t" * $Indents
     $checkmark = [System.Char]::ConvertFromUtf32([System.Convert]::ToInt32("2713", 16))
-    Write-Host "`r$($PSStyle.Foreground.BrightGreen)`t`t($checkmark) Passed$($PSStyle.Reset)"
+    Write-Host "`r$($PSStyle.Foreground.BrightGreen)${indentation}($checkmark) Passed$($PSStyle.Reset)"
 }
 
-function Write-TestingFailedPSStyle {
+function Write-TestingFailedPSStyle(
+    [Parameter(Mandatory=$false, Position=0)]
+    [int]$Indents = 2
+) {
+    $indentation = "`t" * $Indents
     $cross = [System.Char]::ConvertFromUtf32([System.Convert]::ToInt32("2715", 16))
-    Write-Host "`r$($PSStyle.Foreground.BrightRed)`t`t($cross) Failed$($PSStyle.Reset)"
+    Write-Host "`r$($PSStyle.Foreground.BrightRed)${indentation}($cross) Failed$($PSStyle.Reset)"
 }
 
-function Write-TestingWarningPSStyle {
+function Write-TestingWarningPSStyle(
+    [Parameter(Mandatory=$false, Position=0)]
+    [int]$Indents = 2
+) {
+    $indentation = "`t" * $Indents
     $warning = [System.Char]::ConvertFromUtf32([System.Convert]::ToInt32("26A0", 16))
-    Write-Host "`r$($PSStyle.Foreground.BrightYellow)`t`t($warning ) Partial$($PSStyle.Reset)"
+    Write-Host "`r$($PSStyle.Foreground.BrightYellow)${indentation}($warning ) Partial$($PSStyle.Reset)"
 }
