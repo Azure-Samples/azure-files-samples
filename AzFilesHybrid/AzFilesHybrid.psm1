@@ -3757,7 +3757,7 @@ function Debug-AzStorageAccountAuth {
         if ($directoryServiceOptions -eq "AD")
         {     
             Write-Host "Storage account is configured for AD DS auth."
-            Write-Host "Running AD DS checks." 
+            Write-Host "Running AD DS checks."
             Debug-AzStorageAccountADDSAuth `
                 -StorageAccountName $StorageAccountName `
                 -ResourceGroupName $ResourceGroupName `
