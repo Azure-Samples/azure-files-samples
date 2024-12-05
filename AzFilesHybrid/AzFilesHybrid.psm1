@@ -25,7 +25,7 @@ param(
 #   to adopt Azure Files to replace on-premises file servers.
 #   Share level permissions migration cmdlets, used to migrate share level permissions set on
 #   local (on-rem) server  to share on Azure storage.
-. ./AzFilesHybridUtilities.ps1
+. $PSScriptRoot\AzFilesHybridUtilities.ps1
 
 #region General cmdlets
 function Get-IsElevatedSession {
