@@ -1,17 +1,23 @@
 function Write-FailedPSStyle(
     [Parameter(Mandatory=$true, Position=0)]
-    [string]$message
+    [string]$Message,
+    [Parameter(Mandatory=$false, Position=1)]
+    [int]$Indents = 1
 ) {
-    [string]$redFailed = "`t$($PSStyle.Foreground.BrightRed)ERROR$($PSStyle.Reset)"
-    Write-Host "${redFailed}: $message"
+    $indentation = "`t" * $Indents
+    [string]$redFailed = "$($PSStyle.Foreground.BrightRed)ERROR$($PSStyle.Reset)"
+    Write-Host "${indentation}${redFailed}: $message"
 }
 
 function Write-WarningPSStyle(
     [Parameter(Mandatory=$true, Position=0)]
-    [string]$message
+    [string]$message,
+    [Parameter(Mandatory=$false, Position=1)]
+    [int]$Indents = 1
 ) {
-    [string]$warning = "`t$($PSStyle.Foreground.BrightYellow)WARNING$($PSStyle.Reset)"
-    Write-Host "${warning}: $message"
+    $indentation = "`t" * $Indents
+    [string]$warning = "$($PSStyle.Foreground.BrightYellow)WARNING$($PSStyle.Reset)"
+    Write-Host "${indentation}${warning}: $message"
 }
 
 function Write-TestingPassedPSStyle {
