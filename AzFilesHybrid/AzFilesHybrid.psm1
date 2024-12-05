@@ -4012,7 +4012,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 }
                 $failure = $false
                 foreach ($domainKey in $hostToRealm)
-                {                    
+                {
                     $properties = $domainKey | Get-ItemProperty
                     $realmName = $properties.PSChildName
                     $spnMappings = $($domainKey | Get-ItemProperty).SpnMappings
