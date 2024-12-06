@@ -3850,9 +3850,8 @@ function Debug-AzStorageAccountEntraKerbAuth {
         #        
         if (!$filterIsPresent -or $Filter -match "CheckPort445Connectivity")
         {
-            Write-Host "Checking Port 445 Connectivity"
+            Write-Host "Checking Port 445 Connectivity" -NoNewline
             try {
-                Write-Host "`tTesting ... " -NoNewline
                 $checksExecuted += 1;
                 Test-Port445Connectivity -StorageAccountName $StorageAccountName -ResourceGroupName $ResourceGroupName -ErrorAction Stop
                 $checks["CheckPort445Connectivity"].Result = "Passed"
@@ -3868,9 +3867,8 @@ function Debug-AzStorageAccountEntraKerbAuth {
         #
         if (!$filterIsPresent -or $Filter -match "CheckAADConnectivity")
         {
-            Write-Host "Checking AAD Connectivity"
+            Write-Host "Checking AAD Connectivity" -NoNewline
             try {
-                Write-Host "`tTesting ... " -NoNewline
                 $checksExecuted += 1;
                 $Context = Get-AzContext
                 $TenantId = $Context.Tenant
@@ -3897,9 +3895,8 @@ function Debug-AzStorageAccountEntraKerbAuth {
         #
         if (!$filterIsPresent -or $Filter -match "CheckEntraObject")
         {
-            Write-Host "Checking AAD Object"
+            Write-Host "Checking AAD Object" -NoNewline
             try {
-                Write-Host "`tTesting ... " -NoNewline
                 $checksExecuted += 1;
                 $Context = Get-AzContext
                 $TenantId = $Context.Tenant
@@ -3964,9 +3961,8 @@ function Debug-AzStorageAccountEntraKerbAuth {
         #
         if (!$filterIsPresent -or $Filter -match "CheckRegKey")
         {
-            Write-Host "Checking Registry Key"
+            Write-Host "Checking Registry Key" -NoNewline
             try {
-                Write-Host "`tTesting ... " -NoNewline
                 $checksExecuted += 1;
                 if (Test-IsCloudKerberosTicketRetrievalEnabled)
                 {
@@ -3990,9 +3986,8 @@ function Debug-AzStorageAccountEntraKerbAuth {
         #
         if (!$filterIsPresent -or $Filter -match "CheckKerbRealmMapping")
         {
-            Write-Host "Checking Kerberos Realm Mapping"
+            Write-Host "Checking Kerberos Realm Mapping" -NoNewline
             try {
-                Write-Host "`tTesting ... " -NoNewline
                 $checksExecuted += 1;
                 $hostToRealm = Get-ChildItem Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Lsa\Kerberos\HostToRealm -ErrorAction SilentlyContinue
                 if($null -eq $hostToRealm)
@@ -4044,7 +4039,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
         #
         if (!$filterIsPresent -or $Filter -match "CheckAdminConsent")
         {
-            Write-Host "Checking Admin Consent"
+            Write-Host "Checking Admin Consent" -NoNewline
             $checksExecuted += 1;
             Debug-EntraKerbAdminConsent -StorageAccountName $StorageAccountName -checkResult $checks["CheckAdminConsent"]
         }
@@ -4052,9 +4047,8 @@ function Debug-AzStorageAccountEntraKerbAuth {
         #Check Default share and RBAC permissions
         if (!$filterIsPresent -or $Filter -match "CheckRBAC")
         {
-            Write-Host "Checking Default Share and RBAC Permissions"
+            Write-Host "Checking Default Share and RBAC" -NoNewline
             try {
-                Write-Host "`tTesting ... " -NoNewline
                 $checksExecuted += 1
                 $StorageAccountObject = Validate-StorageAccount `
                     -ResourceGroupName $ResourceGroupName `
@@ -4092,10 +4086,9 @@ function Debug-AzStorageAccountEntraKerbAuth {
         #
         if (!$filterIsPresent -or $Filter -match "CheckWinHttpAutoProxySvc")
         {  
-           Write-Host "Checking WinHttpAutoProxySvc"
+           Write-Host "Checking WinHttpAutoProxySvc" -NoNewline
            try 
            {
-                Write-Host "`tTesting ... " -NoNewline
                 $checksExecuted += 1;
                 $service = Get-Service WinHttpAutoProxySvc
                 if (($service -eq $null) -or ($service.Status -ne "Running"))
@@ -4121,10 +4114,9 @@ function Debug-AzStorageAccountEntraKerbAuth {
         #
         if (!$filterIsPresent -or $Filter -match "CheckIpHlpScv")
         {
-           Write-Host "Checking Iphplpsvc Service"
+           Write-Host "Checking Iphplpsvc Service" -NoNewline
            try
            {
-                Write-Host "`tTesting ... " -NoNewline
                 $checksExecuted += 1;
                 $services = Get-Service iphlpsvc
                 if (($services -eq $null) -or ($services.Status -ne "Running"))
@@ -4152,10 +4144,9 @@ function Debug-AzStorageAccountEntraKerbAuth {
         #
         if (!$filterIsPresent -or $Filter -match "CheckFiddlerProxy")
         {
-           Write-Host "Checking Fiddler Proxy"
+           Write-Host "Checking Fiddler Proxy" -NoNewline
            try
            {
-                Write-Host "`tTesting ... " -NoNewline
                 $checksExecuted += 1;
                 $ProxysubFolder = Get-ChildItem `
                     -Path Registry::HKLM\SYSTEM\CurrentControlSet\Services\iphlpsvc\Parameters\ProxyMgr `
@@ -4201,10 +4192,9 @@ function Debug-AzStorageAccountEntraKerbAuth {
         #
         if (!$filterIsPresent -or $Filter -match "CheckEntraJoinType")
         {   
-            Write-Host "Checking your machine's Entra Join Type"
+            Write-Host "Checking Entra Join Type" -NoNewline
             try
             {
-                Write-Host "`tTesting ... " -NoNewline
                 $checksExecuted += 1; 
                 $status = Get-DsRegStatus
                 if ($status.AzureAdJoined -eq "YES")
@@ -4403,7 +4393,6 @@ function Debug-EntraKerbAdminConsent {
 
     process {
         try {
-            Write-Host "`tTesting ... " -NoNewline
             $Context = Get-AzContext
             $TenantId = $Context.Tenant
 
