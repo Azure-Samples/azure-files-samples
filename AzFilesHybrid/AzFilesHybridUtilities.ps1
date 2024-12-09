@@ -1,14 +1,3 @@
-function Write-WarningPSStyle(
-    [Parameter(Mandatory=$true, Position=0)]
-    [string]$Message,
-    [Parameter(Mandatory=$false, Position=1)]
-    [int]$Indents = 1
-) {
-    $indentation = "`t" * $Indents
-    [string]$warning = "$($PSStyle.Foreground.BrightYellow)WARNING$($PSStyle.Reset)"
-    Write-Host "${indentation}${warning}: $Message"
-}
-
 function Write-TestingPassedPSStyle(
     [Parameter(Mandatory=$false, Position=0)]
     [int]$Indents = 1
