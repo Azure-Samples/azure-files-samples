@@ -1,4 +1,4 @@
-function Write-TestingPassedPSStyle(
+function Write-TestingPassed(
     [Parameter(Mandatory=$false, Position=0)]
     [int]$Indents = 1
 ) {

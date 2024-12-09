@@ -3859,7 +3859,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 $checksExecuted += 1;
                 Test-Port445Connectivity -StorageAccountName $StorageAccountName -ResourceGroupName $ResourceGroupName -ErrorAction Stop
                 $checks["CheckPort445Connectivity"].Result = "Passed"
-                Write-TestingPassedPSStyle
+                Write-TestingPassed
             } catch {
                 Write-TestingFailed -Message $_
                 $checks["CheckPort445Connectivity"].Result = "Failed"
@@ -3880,7 +3880,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 if ($Response.StatusCode -eq 200)
                 {
                     $checks["CheckAADConnectivity"].Result = "Passed"
-                    Write-TestingPassedPSStyle
+                    Write-TestingPassed
                 }
                 else{
                     Write-TestingFailed -Message "Expected response is 200, but we got $($Response.StatusCode)"
@@ -3950,7 +3950,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
                     Write-Verbose "CheckEntraObject - SUCCESS"
                 }
                 else {
-                    Write-TestingPassedPSStyle
+                    Write-TestingPassed
                     $checks["CheckEntraObject"].Result = "Passed"
                 }
             } catch {
@@ -3969,7 +3969,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 $checksExecuted += 1;
                 if (Test-IsCloudKerberosTicketRetrievalEnabled)
                 {
-                    Write-TestingPassedPSStyle
+                    Write-TestingPassed
                     $checks["CheckRegKey"].Result = "Passed"
                 }
                 else {
@@ -3995,7 +3995,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 $hostToRealm = Get-ChildItem Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Lsa\Kerberos\HostToRealm -ErrorAction SilentlyContinue
                 if($null -eq $hostToRealm)
                 {
-                    Write-TestingPassedPSStyle
+                    Write-TestingPassed
                     $checks["CheckKerbRealmMapping"].Result = "Passed"
                 }
                 $failure = $false
@@ -4070,7 +4070,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
                         Debug-RBACCheck -StorageAccountName $StorageAccountName -UserPrincipalName $UserPrincipalName -checkResult $checks["CheckRBAC"]
                     }
                     else {
-                        Write-TestingPassedPSStyle
+                        Write-TestingPassed
                         $checks["CheckRBAC"].Result = "Passed"
                         Write-Host "`tAccess is granted via the default share permission"
                     }
@@ -4100,7 +4100,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
                     $checks["CheckWinHttpAutoProxySvc"].Issue = "The WinHttpAutoProxy service needs to be in running state."
                 }
                 else {
-                    Write-TestingPassedPSStyle
+                    Write-TestingPassed
                     $checks["CheckWinHttpAutoProxySvc"].Result = "Passed"
                 }
             }
@@ -4129,7 +4129,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 }                
                 else 
                 {
-                    Write-TestingPassedPSStyle
+                    Write-TestingPassed
                     $checks["CheckIpHlpScv"].Result = "Passed"
                 }
             }
@@ -4173,7 +4173,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 }
                 if ($success)
                 {
-                    Write-TestingPassedPSStyle
+                    Write-TestingPassed
                     $checks["CheckFiddlerProxy"].Result = "Passed"
                 }
                 else
@@ -4201,7 +4201,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 $status = Get-DsRegStatus
                 if ($status.AzureAdJoined -eq "YES")
                 {
-                    Write-TestingPassedPSStyle
+                    Write-TestingPassed
                     if ($status.DomainJoined -eq "NO")
                     {
                         Write-Host "`tEntra Join confirmed"
@@ -4437,7 +4437,7 @@ function Debug-EntraKerbAdminConsent {
                 $permissions.Contains("profile") -and
                 $permissions.Contains("User.Read"))
             {
-                Write-TestingPassedPSStyle
+                Write-TestingPassed
                 $checkResult.Result = "Passed"
             } 
             else
