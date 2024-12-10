@@ -3382,7 +3382,6 @@ function Test-Port445Connectivity
 
         $result = Test-NetConnection -ComputerName $endpoint -Port 445
 
-        Write-Error "This is a test error"
         if ($result.TcpTestSucceeded -eq $False)
         {
             $message = "Unable to reach the storage account file endpoint." `
@@ -4240,7 +4239,6 @@ function SummaryOfChecks {
     )
     process
     {
-        $PSStyle.Formatting.TableHeader = $PSStyle.Foreground.BrightGreen
         if ($filterIsPresent -and $checksExecuted -eq 0)
         {
             $message = "Filter '$Filter' provided does not match any options. No checks were executed." `
@@ -4249,6 +4247,7 @@ function SummaryOfChecks {
         }
         else
         {
+            $PSStyle.Formatting.TableHeader = $PSStyle.Foreground.BrightGreen
             Write-Host "Summary of checks:"
             $checks.Values | Format-Table -Wrap
             
