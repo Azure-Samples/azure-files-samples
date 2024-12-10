@@ -3895,11 +3895,11 @@ function Debug-AzStorageAccountEntraKerbAuth {
             }
         }
         #
-        # AAD Object check 
+        # Entra Object check 
         #
         if (!$filterIsPresent -or $Filter -match "CheckEntraObject")
         {
-            Write-Host "Checking AAD Object"
+            Write-Host "Checking Entra Object"
             try {
                 $checksExecuted += 1;
                 $Context = Get-AzContext
