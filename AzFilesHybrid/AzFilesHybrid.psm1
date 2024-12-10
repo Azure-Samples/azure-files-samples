@@ -3825,14 +3825,12 @@ function Debug-AzStorageAccountEntraKerbAuth {
         if(![string]::IsNullOrEmpty($Domain))
         {
             Write-TestingWarning `
-                -Message "The debug cmdlet for Microsoft Entra Kerberos (AADKERB) accounts does not yet implement support for -ObjectId parameter. It will be ignored." `
-                -Indents 1
+                -Message "The debug cmdlet for Microsoft Entra Kerberos (AADKERB) accounts does not yet implement support for -ObjectId parameter. It will be ignored."
         }
         if(![string]::IsNullOrEmpty($FilePath))
         {
             Write-TestingWarning `
-                -Message "The debug cmdlet for Microsoft Entra Kerberos (AADKERB) accounts does not yet implement support for -FilePath parameter. It will be ignored." `
-                -Indents 1
+                -Message "The debug cmdlet for Microsoft Entra Kerberos (AADKERB) accounts does not yet implement support for -FilePath parameter. It will be ignored."
         }
         $checksExecuted = 0;
         $filterIsPresent = ![string]::IsNullOrEmpty($Filter);
