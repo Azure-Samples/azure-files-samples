@@ -4158,7 +4158,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 {
                     $properties = $folder | Get-ItemProperty
                     if (($null -ne $properties.StaticProxy) -and ($properties.StaticProxy.Contains("https=127.0.0.1:")))
-                    {                        
+                    {
                         # If this is the first failure detected, print "FAILED"
                         if ($success)
                         {
