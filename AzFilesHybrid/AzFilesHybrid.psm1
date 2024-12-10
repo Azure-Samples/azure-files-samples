@@ -3940,7 +3940,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
                     $checks["CheckEntraObject"].Issue = "Service Principal is missing SPN ' CIFS/${StorageAccountName}.file.core.windows.net'."
                 }
                 
-                elseif ($ServicePrincipal.ServicePrincipalNames.Contains("api://${TenantId}/CIFS/${StorageAccountName}.file.core.windows.net"))
+                elseif (-not $ServicePrincipal.ServicePrincipalNames.Contains("api://${TenantId}/CIFS/${StorageAccountName}.file.core.windows.net"))
                 {
                     Write-TestingWarning -Message "Service Principal is missing SPN '$($PSStyle.Foreground.BrightCyan)api://${TenantId}/CIFS/${StorageAccountName}.file.core.windows.net$($PSStyle.Reset)'."
                     Write-Host "`tIt is okay to not have this value for now, but it is good to have this configured in future if you want to continue getting kerberos tickets."
@@ -4159,7 +4159,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
                         # If this is the first failure detected, print "FAILED"
                         if ($success)
                         {
-                            Write-TestingFailed -Message ""
+                            Write-TestingFailed -Message "Fiddler proxy detected"
                             $checks["CheckFiddlerProxy"].Result = "Failed"
                             $success = $false
                         }
