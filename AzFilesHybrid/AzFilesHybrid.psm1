@@ -4323,9 +4323,9 @@ function Debug-RBACCheck {
 
                 if ($listOfRoleNames.size -eq 0) {
                     $message = "User '$($user.UserPrincipalName)' is not assigned any SMB share-level permission to" `
-                            + " storage account '$StorageAccountName' in resource group '$ResourceGroupName'. Please" `
-                            + " configure proper share-level permission following the guidance at" `
-                            + " https://docs.microsoft.com/en-us/azure/storage/files/storage-files-identity-ad-ds-assign-permissions"
+                            + " `nstorage account '$StorageAccountName' in resource group '$ResourceGroupName'." `
+                            + " `nPlease configure proper share-level permission following the guidance at" `
+                            + " `n'$($PSStyle.Foreground.BrightCyan)https://docs.microsoft.com/en-us/azure/storage/files/storage-files-identity-ad-ds-assign-permissions$($PSStyle.Reset)'"
                         Write-Error -Message $message -ErrorAction Stop
                 }
                 else 
