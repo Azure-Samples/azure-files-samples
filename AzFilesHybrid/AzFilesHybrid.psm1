@@ -4279,7 +4279,7 @@ function Debug-RBACCheck {
             if (!$user.OnPremisesSecurityIdentifier) {
                 $checkResult.Result = "Failed"
                 $checkResult.Issue = "User is a cloud-only user, cannot have RBAC access"
-                Write-Error "CheckRBAC - FAILED"
+                Write-TestingFailed -Message "User is a cloud-only user, cannot have RBAC access"
                 return
             }
             
@@ -4342,8 +4342,7 @@ function Debug-RBACCheck {
         catch {
             $checkResult.Result = "Failed"
             $checkResult.Issue = $_
-            Write-Error "CheckRBAC - FAILED"
-            Write-Error $_
+            Write-TestingFailed -Message $_
         }
     } 
 }
