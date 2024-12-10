@@ -4012,7 +4012,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
                         {
                             [string]$kerbStorageAccountError = "To retrieve Kerberos tickets run the ksetup Windows command on the client(s): '$($PSStyle.Foreground.BrightBlue)ksetup /delhosttorealmmap ${hostName} ${realmName}$($PSStyle.Reset)'."
                             if ($realmName -eq "KERBEROS.MICROSOFTONLINE.COM")
-                            {                                
+                            {
                                 if (!$failure) {
                                     Write-TestingWarning -Message $kerbStorageAccountError
                                     $checks["CheckKerbRealmMapping"].Result = "Warning"
