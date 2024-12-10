@@ -11,3 +11,4 @@ if (!(Test-Path -Path $desiredModulePath)) {
 
 Copy-Item -Path ".\AzFilesHybrid.psd1" -Destination $desiredModulePath
 Copy-Item -Path ".\AzFilesHybrid.psm1" -Destination $desiredModulePath
+Copy-Item -Path ".\AzFilesHybridUtilities.ps1" -Destination $desiredModulePath
