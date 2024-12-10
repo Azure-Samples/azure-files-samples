@@ -3929,7 +3929,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
                     $checks["CheckEntraObject"].Result = "Failed"
                     $checks["CheckEntraObject"].Issue = "Service Principal is missing SPN 'CIFS/${StorageAccountName}.file.core.windows.net'."
                 }
-                if($ServicePrincipal.AccountEnabled)
+                if(-not $ServicePrincipal.AccountEnabled)
                 {
                     Write-TestingFailed -Message "Service Principal should have AccountEnabled set to true"
                     $checks["CheckEntraObject"].Result = "Failed"
