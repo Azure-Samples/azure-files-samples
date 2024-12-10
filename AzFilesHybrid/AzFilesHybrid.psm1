@@ -2438,9 +2438,9 @@ function Get-AzStorageAccountFileEndpoint {
 
     if ([string]::IsNullOrEmpty($storageAccountObject.PrimaryEndpoints.File)) {
         $message = "Cannot find the file service endpoint for storage account" `
-            + " '$StorageAccountName' in resource group '$ResourceGroupName'. This may happen" `
-            + " if the storage account type does not support file service" `
-            + " (https://docs.microsoft.com/en-us/azure/storage/common/storage-account-overview#types-of-storage-accounts)."
+            + " '$StorageAccountName' in resource group '$ResourceGroupName'. " `
+            + " `nThis may happen if the storage account type does not support file service" `
+            + " `n($($PSStyle.Foreground.BrightCyan)https://docs.microsoft.com/en-us/azure/storage/common/storage-account-overview#types-of-storage-accounts$($PSStyle.Reset))."
         Write-Error -Message $message -ErrorAction Stop
     }
 
@@ -3382,12 +3382,13 @@ function Test-Port445Connectivity
 
         $result = Test-NetConnection -ComputerName $endpoint -Port 445
 
+        Write-Error "This is a test error"
         if ($result.TcpTestSucceeded -eq $False)
         {
             $message = "Unable to reach the storage account file endpoint." `
                 + "`n`tTo debug connectivity problems, please refer to the troubleshooting tool for Azure" `
-                + " Files mounting errors on Windows, 'AzFileDiagnostics.ps1'" `
-                + " `n`t(https://gallery.technet.microsoft.com/Troubleshooting-tool-for-a9fa1fe5)." `
+                + " Files mounting errors on Windows, " `
+                + " `n`t'AzFileDiagnostics.ps1'($($PSStyle.Foreground.BrightCyan)https://gallery.technet.microsoft.com/Troubleshooting-tool-for-a9fa1fe5$($PSStyle.Reset))." `
                 + " `n`tFor possible solutions please refer to" `
                 + " '$($PSStyle.Foreground.BrightCyan)https://aka.ms/azfiles/entra-port445$($PSStyle.Reset)'"
             Write-Error -Message $message -ErrorAction Stop
@@ -3947,7 +3948,6 @@ function Debug-AzStorageAccountEntraKerbAuth {
                     Write-TestingWarning -Message "Service Principal is missing SPN '$($PSStyle.Foreground.BrightCyan)api://${TenantId}/CIFS/${StorageAccountName}.file.core.windows.net$($PSStyle.Reset)'."
                     Write-Host "`tIt is okay to not have this value for now, but it is good to have this configured in future if you want to continue getting kerberos tickets."
                     $checks["CheckEntraObject"].Result = "Partial"
-                    Write-Verbose "CheckEntraObject - SUCCESS"
                 }
                 else {
                     Write-TestingPassed
