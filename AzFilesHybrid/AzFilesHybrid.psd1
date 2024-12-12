@@ -51,7 +51,9 @@
     # ProcessorArchitecture = ''
     
     # Modules that must be imported into the global environment prior to importing this module
-    # RequiredModules = @()
+    RequiredModules = @(
+        @{ModuleName="PSStyle"; ModuleVersion="1.1.8"; GUID="aebeb4be-3ed1-4712-aaf6-b47c896dd97c"}
+    )
     
     # Assemblies that must be loaded prior to importing this module
     # RequiredAssemblies = @()
