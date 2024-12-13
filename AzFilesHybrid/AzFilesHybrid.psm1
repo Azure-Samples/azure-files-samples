@@ -3359,11 +3359,8 @@ function Test-Port445Connectivity
     [CmdletBinding()]
 
     param (
-        [Parameter(Mandatory=$True, Position=0, HelpMessage="Storage account name")]
-        [string]$StorageAccountName,
-
-        [Parameter(Mandatory=$True, Position=1, HelpMessage="Resource group name")]
-        [string]$ResourceGroupName
+        [Parameter(Mandatory=$True, Position=0, HelpMessage="Account FileEndPoint")]
+        [string]$StorageAccountFileEndPoint
     )
 
     process
@@ -3371,11 +3368,7 @@ function Test-Port445Connectivity
         #
         # Test-NetConnection -ComputerName <storageAccount>.file.core.windows.net -Port 445
         #
-
-        $fileEndpoint = Get-AzStorageAccountFileEndpoint -ResourceGroupName $ResourceGroupName `
-            -StorageAccountName $StorageAccountName -ErrorAction Stop
-
-        $endpoint = $fileEndpoint -replace 'https://', ''
+        $endpoint = $StorageAccountFileEndPoint -replace 'https://', ''
         $endpoint = $endpoint -replace '/', ''
 
         Write-Verbose "Executing 'Test-NetConnection -ComputerName $endpoint -Port 445'"
@@ -3868,7 +3861,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
             Write-Host "Checking Port 445 Connectivity"
             try {
                 $checksExecuted += 1;
-                Test-Port445Connectivity -StorageAccountName $StorageAccountName -ResourceGroupName $ResourceGroupName -ErrorAction Stop
+                Test-Port445Connectivity -StorageAccountFileEndPoint $accountRestEndpoint -ErrorAction Stop
                 $checks["CheckPort445Connectivity"].Result = "Passed"
                 Write-TestingPassed
             } catch {
