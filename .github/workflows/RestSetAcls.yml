@@ -24,7 +24,22 @@ jobs:
         run: |
           .\init.ps1
           Test
-  
+
+  test-format:
+    name: Test PowerShell formatting
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: .\RestSetAcls
+        shell: pwsh
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v4
+      - name: Run all Pester tests
+        run: |
+          .\init.ps1
+          Test-Format
+
   Check-manifest:
     name: Check .psd1 manifest file
     runs-on: windows-latest
