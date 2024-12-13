@@ -3821,6 +3821,19 @@ function Debug-AzStorageAccountEntraKerbAuth {
 
     process
     {
+        # call az-context, get context
+        $context = Get-AzContext
+        if($null -eq $context) 
+        {
+            Write-TestingFailed `
+                -Message "You should run $(PSStyle.Foreground.BrightBlue)Connect-AzAccount$($PSStyle.Reset) first, then try again."
+        } 
+        else 
+        {
+            $environment = $context.Environment.Name
+            $accountRestEndpoint = (New-AzStorageContext -StorageAccountName $StorageAccountName -Environment $environment).FileEndPoint
+            $entraEndpoint = $context.Environment.ActiveDirectoryAuthority
+        }
         
         if(![string]::IsNullOrEmpty($Domain))
         {
