@@ -4006,7 +4006,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
                     $realmName = $properties.PSChildName
                     $spnMappings = $($domainKey | Get-ItemProperty).SpnMappings
                     foreach ($hostName in $spnMappings) {
-                        if ($hostName -eq "${StorageAccountName}.file.core.windows.net" -or
+                        if ($hostName -eq $fileEndpoint -or
                             $hostName -eq ".file.core.windows.net" -or
                             $hostName -eq ".core.windows.net" -or
                             $hostName -eq ".windows.net" -or
