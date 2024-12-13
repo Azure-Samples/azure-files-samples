@@ -23,7 +23,7 @@ jobs:
       - name: Run all Pester tests
         run: |
           .\init.ps1
-          .\test.ps1
+          Test
   
   Check-manifest:
     name: Check .psd1 manifest file
@@ -37,7 +37,7 @@ jobs:
       - name: Check .psd1 file with Test-ModuleManifest
         run: |
           .\init.ps1
-          .\check-manifest.ps1
+          Test-Manifest
 
   lint-with-PSScriptAnalyzer:
     name: Install and run PSScriptAnalyzer
@@ -51,4 +51,4 @@ jobs:
       - name: Lint with PSScriptAnalyzer
         run: |
           .\init.ps1
-          .\lint.ps1
+          Lint

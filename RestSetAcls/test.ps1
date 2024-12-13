@@ -1,1 +1,0 @@
-Invoke-Pester -Path $PSScriptRoot\test -Output Detailed
