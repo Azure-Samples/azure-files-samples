@@ -3905,8 +3905,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
             Write-Host "Checking Entra Object"
             try {
                 $checksExecuted += 1;
-                $Context = Get-AzContext
-                $TenantId = $Context.Tenant
+                $TenantId = $context.Tenant
 
                 Request-ConnectMsGraph `
                     -Scopes "Application.Read.All" `
