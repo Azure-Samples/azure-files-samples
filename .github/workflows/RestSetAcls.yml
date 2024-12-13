@@ -35,7 +35,7 @@ jobs:
     steps:
       - name: Check out repository code
         uses: actions/checkout@v4
-      - name: Run all Pester tests
+      - name: Test PowerShell formatting
         run: |
           .\init.ps1
           Test-Format
