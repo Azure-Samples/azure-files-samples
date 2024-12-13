@@ -4,6 +4,12 @@
 > These instructions are only meant for contributors to this project.
 > If you want to use the script, refer to the README.
 
+## Editor configuration
+
+### VS Code
+
+This module has PR validations that enforce formatting rules, so it's recommended to configure VS Code to format on save, to ensure that your changes are always formatted correctly.
+
 ## Installing development dependencies
 
 ```powershell
