@@ -1,5 +1,4 @@
-function New-Arborescence
-{
+function New-Arborescence {
     [CmdletBinding(SupportsShouldProcess)]
     param (
         [Microsoft.WindowsAzure.Commands.Storage.AzureStorageContext]$context,
@@ -10,18 +9,17 @@ function New-Arborescence
         [int]$Depth
     )
 
-    if ($Depth -eq 0)
-    {
+    if ($Depth -eq 0) {
         # Create file
-        for ($j = 1; $j -le $NumberFilesPerDir; $j++)
-        {
+        for ($j = 1; $j -le $NumberFilesPerDir; $j++) {
             $fileName = "file-$j.txt"
             $filePath = $BasePath + "/" + $fileName
             $localFilePath = Join-Path -Path $env:TEMP -ChildPath $fileName
 
             if ($WhatIfPreference) {
                 Write-Host "WhatIf: Creating file $filePath"
-            } else {
+            }
+            else {
                 Write-Host "Creating file $filePath"
 
                 # Create file locally
@@ -44,16 +42,15 @@ function New-Arborescence
             }
         }
     }
-    else
-    {
-        for ($i = 1; $i -le $NumberDirs; $i++)
-        {
+    else {
+        for ($i = 1; $i -le $NumberDirs; $i++) {
             # Create dir
             $dirPath = "${BasePath}/dir-$i"
 
             if ($WhatIfPreference) {
                 Write-Host "WhatIf: Creating dir $dirPath"
-            } else {
+            }
+            else {
                 Write-Host "Creating dir $dirPath"
                 New-AzStorageDirectory `
                     -Context $Context `
@@ -73,3 +70,4 @@ function New-Arborescence
         }
     }
 }
+

@@ -23,8 +23,23 @@ jobs:
       - name: Run all Pester tests
         run: |
           .\init.ps1
-          .\test.ps1
-  
+          Test
+
+  test-format:
+    name: Test PowerShell formatting
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: .\RestSetAcls
+        shell: pwsh
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v4
+      - name: Test PowerShell formatting
+        run: |
+          .\init.ps1
+          Test-Format
+
   Check-manifest:
     name: Check .psd1 manifest file
     runs-on: windows-latest
@@ -37,7 +52,7 @@ jobs:
       - name: Check .psd1 file with Test-ModuleManifest
         run: |
           .\init.ps1
-          .\check-manifest.ps1
+          Test-Manifest
 
   lint-with-PSScriptAnalyzer:
     name: Install and run PSScriptAnalyzer
@@ -51,4 +66,4 @@ jobs:
       - name: Lint with PSScriptAnalyzer
         run: |
           .\init.ps1
-          .\lint.ps1
+          Lint

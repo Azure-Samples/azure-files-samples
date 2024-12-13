@@ -1,6 +1,6 @@
 function ConvertTo-RawSecurityDescriptor {
     param (
-        [Parameter(Mandatory=$true, ValueFromPipeline=$true)]
+        [Parameter(Mandatory = $true, ValueFromPipeline = $true)]
         [string]$sddl
     )
     
@@ -20,7 +20,7 @@ function ConvertTo-RawSecurityDescriptor {
 
 function ConvertFrom-RawSecurityDescriptor {
     param (
-        [Parameter(Mandatory=$true, ValueFromPipeline=$true)]
+        [Parameter(Mandatory = $true, ValueFromPipeline = $true)]
         [System.Security.AccessControl.RawSecurityDescriptor]$descriptor
     )
     return $descriptor.GetSddlForm([System.Security.AccessControl.AccessControlSections]::All)
@@ -28,13 +28,13 @@ function ConvertFrom-RawSecurityDescriptor {
 
 function Get-AllAceFlagsMatch {
     param (
-        [Parameter(Mandatory=$true, ValueFromPipeline=$true)]
+        [Parameter(Mandatory = $true, ValueFromPipeline = $true)]
         [System.Security.AccessControl.RawSecurityDescriptor]$SecurityDescriptor,
         
-        [Parameter(Mandatory=$true)]
+        [Parameter(Mandatory = $true)]
         [System.Security.AccessControl.AceFlags]$EnabledFlags,
 
-        [Parameter(Mandatory=$true)]
+        [Parameter(Mandatory = $true)]
         [System.Security.AccessControl.AceFlags]$DisabledFlags
     )
 
@@ -51,13 +51,13 @@ function Get-AllAceFlagsMatch {
 
 function Set-AceFlags {
     param (
-        [Parameter(Mandatory=$true, ValueFromPipeline=$true)]
+        [Parameter(Mandatory = $true, ValueFromPipeline = $true)]
         [System.Security.AccessControl.RawSecurityDescriptor]$SecurityDescriptor,
         
-        [Parameter(Mandatory=$true)]
+        [Parameter(Mandatory = $true)]
         [System.Security.AccessControl.AceFlags]$EnableFlags,
 
-        [Parameter(Mandatory=$true)]
+        [Parameter(Mandatory = $true)]
         [System.Security.AccessControl.AceFlags]$DisableFlags
     )
 
@@ -77,7 +77,8 @@ function Set-AceFlags {
                 $_.SecurityIdentifier,
                 $_.IsCallback,
                 $_.GetOpaque())
-        } else {
+        }
+        else {
             throw "Unsupported ACE type: $($_.GetType().Name)"
         }
     }
