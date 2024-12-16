@@ -3826,6 +3826,8 @@ function Debug-AzStorageAccountEntraKerbAuth {
             $environment = $context.Environment.Name
             $accountRestEndpoint = (New-AzStorageContext -StorageAccountName $StorageAccountName -Environment $environment).FileEndPoint
             $entraEndpoint = $context.Environment.ActiveDirectoryAuthority
+            $contextUriObject = [System.Uri]::new($entraEndpoint)
+            $contextDnsSafeHost = $contextUriObject.DnsSafeHost
         }
         
         if(![string]::IsNullOrEmpty($Domain))
@@ -3906,30 +3908,28 @@ function Debug-AzStorageAccountEntraKerbAuth {
             try {
                 $checksExecuted += 1;
                 $TenantId = $context.Tenant
-
                 Request-ConnectMsGraph `
                     -Scopes "Application.Read.All" `
                     -RequiredModules @("Microsoft.Graph.Applications") `
                     -TenantId $TenantId
-                
                 Import-Module Microsoft.Graph.Applications
 
                 $Application = Get-MgApplication `
-                    -Filter "identifierUris/any (uri:uri eq 'api://${TenantId}/CIFS/${StorageAccountName}.file.core.windows.net')" `
+                    -Filter "identifierUris/any (uri:uri eq 'api://${TenantId}/CIFS/${contextDnsSafeHost}')" `
                     -ConsistencyLevel eventual
                 if($null -eq $Application)
                 {
-                    Write-TestingFailed -Message "Could not find the application with SPN '$($PSStyle.Foreground.BrightCyan)api://${TenantId}/CIFS/${StorageAccountName}.file.core.windows.net$($PSStyle.Reset)'"
+                    Write-TestingFailed -Message "Could not find the application with SPN '$($PSStyle.Foreground.BrightCyan)api://${TenantId}/CIFS/${contextDnsSafeHost}$($PSStyle.Reset)'"
                     $checks["CheckEntraObject"].Result = "Failed"
-                    $checks["CheckEntraObject"].Issue = "Could not find the application with SPN ' api://${TenantId}/CIFS/${StorageAccountName}.file.core.windows.net'."
+                    $checks["CheckEntraObject"].Issue = "Could not find the application with SPN ' api://${TenantId}/CIFS/${contextDnsSafeHost}'."
                 }
-                $ServicePrincipal = Get-MgServicePrincipal -Filter "servicePrincipalNames/any (name:name eq 'api://$TenantId/CIFS/$StorageAccountName.file.core.windows.net')" -ConsistencyLevel eventual
-                [string]$aadServicePrincipalError = "SPN Value is not set correctly, It should be '$($PSStyle.Foreground.BrightCyan)CIFS/${Storageaccountname}.file.core.windows.net$($PSStyle.Reset)'"
+                $ServicePrincipal = Get-MgServicePrincipal -Filter "servicePrincipalNames/any (name:name eq 'api://$TenantId/CIFS/$contextDnsSafeHost')" -ConsistencyLevel eventual
+                [string]$aadServicePrincipalError = "SPN Value is not set correctly, It should be '$($PSStyle.Foreground.BrightCyan)CIFS/${contextDnsSafeHost}$($PSStyle.Reset)'"
                 if($null -eq $ServicePrincipal)
                 {
                     Write-TestingFailed -Message $aadServicePrincipalError
                     $checks["CheckEntraObject"].Result = "Failed"
-                    $checks["CheckEntraObject"].Issue = "Service Principal is missing SPN 'CIFS/${StorageAccountName}.file.core.windows.net'."
+                    $checks["CheckEntraObject"].Issue = "Service Principal is missing SPN 'CIFS/${contextDnsSafeHost}'."
                 }
                 if(-not $ServicePrincipal.AccountEnabled)
                 {
@@ -3937,16 +3937,16 @@ function Debug-AzStorageAccountEntraKerbAuth {
                     $checks["CheckEntraObject"].Result = "Failed"
                     $checks["CheckEntraObject"].Issue = "Expected AccountEnabled set to true"
                 }
-                elseif(-not $ServicePrincipal.ServicePrincipalNames.Contains("CIFS/${StorageAccountName}.file.core.windows.net"))
+                elseif(-not $ServicePrincipal.ServicePrincipalNames.Contains("CIFS/${contextDnsSafeHost}"))
                 {
                     Write-TestingFailed -Message $aadServicePrincipalError
                     $checks["CheckEntraObject"].Result = "Failed"
-                    $checks["CheckEntraObject"].Issue = "Service Principal is missing SPN ' CIFS/${StorageAccountName}.file.core.windows.net'."
+                    $checks["CheckEntraObject"].Issue = "Service Principal is missing SPN ' CIFS/${contextDnsSafeHost}'."
                 }
                 
-                elseif (-not $ServicePrincipal.ServicePrincipalNames.Contains("api://${TenantId}/CIFS/${StorageAccountName}.file.core.windows.net"))
+                elseif (-not $ServicePrincipal.ServicePrincipalNames.Contains("api://${TenantId}/CIFS/${contextDnsSafeHost}"))
                 {
-                    Write-TestingWarning -Message "Service Principal is missing SPN '$($PSStyle.Foreground.BrightCyan)api://${TenantId}/CIFS/${StorageAccountName}.file.core.windows.net$($PSStyle.Reset)'."
+                    Write-TestingWarning -Message "Service Principal is missing SPN '$($PSStyle.Foreground.BrightCyan)api://${TenantId}/CIFS/${contextDnsSafeHost}$($PSStyle.Reset)'."
                     Write-Host "`tIt is okay to not have this value for now, but it is good to have this configured in future if you want to continue getting kerberos tickets."
                     $checks["CheckEntraObject"].Result = "Partial"
                 }
