@@ -3829,7 +3829,6 @@ function Debug-AzStorageAccountEntraKerbAuth {
             $contextUriObject = [System.Uri]::new($entraEndpoint)
             $contextDnsSafeHost = $contextUriObject.DnsSafeHost
         }
-        
         if(![string]::IsNullOrEmpty($Domain))
         {
             Write-TestingWarning `
@@ -3915,21 +3914,21 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 Import-Module Microsoft.Graph.Applications
 
                 $Application = Get-MgApplication `
-                    -Filter "identifierUris/any (uri:uri eq 'api://${TenantId}/CIFS/${contextDnsSafeHost}')" `
+                    -Filter "identifierUris/any (uri:uri eq 'api://${TenantId}/CIFS/$($contextUriObject.DnsSafeHost)')" `
                     -ConsistencyLevel eventual
                 if($null -eq $Application)
                 {
-                    Write-TestingFailed -Message "Could not find the application with SPN '$($PSStyle.Foreground.BrightCyan)api://${TenantId}/CIFS/${contextDnsSafeHost}$($PSStyle.Reset)'"
+                    Write-TestingFailed -Message "Could not find the application with SPN '$($PSStyle.Foreground.BrightCyan)api://${TenantId}/CIFS/$($contextUriObject.DnsSafeHost)$($PSStyle.Reset)'"
                     $checks["CheckEntraObject"].Result = "Failed"
-                    $checks["CheckEntraObject"].Issue = "Could not find the application with SPN ' api://${TenantId}/CIFS/${contextDnsSafeHost}'."
+                    $checks["CheckEntraObject"].Issue = "Could not find the application with SPN ' api://${TenantId}/CIFS/$($contextUriObject.DnsSafeHost)'."
                 }
-                $ServicePrincipal = Get-MgServicePrincipal -Filter "servicePrincipalNames/any (name:name eq 'api://$TenantId/CIFS/$contextDnsSafeHost')" -ConsistencyLevel eventual
-                [string]$aadServicePrincipalError = "SPN Value is not set correctly, It should be '$($PSStyle.Foreground.BrightCyan)CIFS/${contextDnsSafeHost}$($PSStyle.Reset)'"
+                $ServicePrincipal = Get-MgServicePrincipal -Filter "servicePrincipalNames/any (name:name eq 'api://$TenantId/CIFS/$($contextUriObject.DnsSafeHost)')" -ConsistencyLevel eventual
+                [string]$aadServicePrincipalError = "SPN Value is not set correctly, It should be '$($PSStyle.Foreground.BrightCyan)CIFS/$($contextUriObject.DnsSafeHost)$($PSStyle.Reset)'"
                 if($null -eq $ServicePrincipal)
                 {
                     Write-TestingFailed -Message $aadServicePrincipalError
                     $checks["CheckEntraObject"].Result = "Failed"
-                    $checks["CheckEntraObject"].Issue = "Service Principal is missing SPN 'CIFS/${contextDnsSafeHost}'."
+                    $checks["CheckEntraObject"].Issue = "Service Principal is missing SPN 'CIFS/$($contextUriObject.DnsSafeHost)'."
                 }
                 if(-not $ServicePrincipal.AccountEnabled)
                 {
@@ -3937,16 +3936,16 @@ function Debug-AzStorageAccountEntraKerbAuth {
                     $checks["CheckEntraObject"].Result = "Failed"
                     $checks["CheckEntraObject"].Issue = "Expected AccountEnabled set to true"
                 }
-                elseif(-not $ServicePrincipal.ServicePrincipalNames.Contains("CIFS/${contextDnsSafeHost}"))
+                elseif(-not $ServicePrincipal.ServicePrincipalNames.Contains("CIFS/$($contextUriObject.DnsSafeHost)"))
                 {
                     Write-TestingFailed -Message $aadServicePrincipalError
                     $checks["CheckEntraObject"].Result = "Failed"
-                    $checks["CheckEntraObject"].Issue = "Service Principal is missing SPN ' CIFS/${contextDnsSafeHost}'."
+                    $checks["CheckEntraObject"].Issue = "Service Principal is missing SPN ' CIFS/$($contextUriObject.DnsSafeHost)'."
                 }
                 
-                elseif (-not $ServicePrincipal.ServicePrincipalNames.Contains("api://${TenantId}/CIFS/${contextDnsSafeHost}"))
+                elseif (-not $ServicePrincipal.ServicePrincipalNames.Contains("api://${TenantId}/CIFS/$($contextUriObject.DnsSafeHost)"))
                 {
-                    Write-TestingWarning -Message "Service Principal is missing SPN '$($PSStyle.Foreground.BrightCyan)api://${TenantId}/CIFS/${contextDnsSafeHost}$($PSStyle.Reset)'."
+                    Write-TestingWarning -Message "Service Principal is missing SPN '$($PSStyle.Foreground.BrightCyan)api://${TenantId}/CIFS/$($contextUriObject.DnsSafeHost)$($PSStyle.Reset)'."
                     Write-Host "`tIt is okay to not have this value for now, but it is good to have this configured in future if you want to continue getting kerberos tickets."
                     $checks["CheckEntraObject"].Result = "Partial"
                 }
