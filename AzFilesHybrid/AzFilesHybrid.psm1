@@ -4363,7 +4363,7 @@ function Debug-RBACCheck {
                     {
                         if ($assignment.ObjectId -eq $user.Id) 
                         {
-                            $assignedRoles.Add($roleName, $UserPrincipalName)
+                            $assignedRoles.Add($roleName, "user '$UserPrincipalName'")
                             break
                         }
                     }
@@ -4381,22 +4381,23 @@ function Debug-RBACCheck {
 
             if ($assignedRoles.Count -eq 0) {
                 $message = "User '$UserPrincipalName' is not assigned any SMB share-level permission to" `
-                        + " `nstorage account '$StorageAccountName' in resource group '$ResourceGroupName'." `
-                        + " `nPlease configure proper share-level permission following the guidance at" `
-                        + " `n'$($PSStyle.Foreground.BrightCyan)https://docs.microsoft.com/en-us/azure/storage/files/storage-files-identity-ad-ds-assign-permissions$($PSStyle.Reset)'"
-                    Write-Error -Message $message -ErrorAction Stop
+                        + " `n`tstorage account '$StorageAccountName' in resource group '$ResourceGroupName'." `
+                        + " `n`tPlease configure proper share-level permission following the guidance at" `
+                        + " `n`t'$($PSStyle.Foreground.BrightCyan)https://docs.microsoft.com/en-us/azure/storage/files/storage-files-identity-ad-ds-assign-permissions$($PSStyle.Reset)'"
+                
+                $checkResult.Result = "Failed"
+                Write-TestingFailed $message
             }
             else 
             { 
                 $checkResult.Result = "Passed"
-                Write-Host "You have access to the shares, via the following roles:"
                 foreach ($item in $assignedRoles.GetEnumerator())
                 {
                     $role = $item.Name
                     $identity = $item.Value
-                    Write-Host "  - '$role' via $identity"
+                    Write-Host "`t'$role' granted via $identity"
                 }
-                Write-Host
+                Write-TestingPassed
             }
         } 
         catch
