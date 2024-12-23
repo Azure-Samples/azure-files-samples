@@ -4364,7 +4364,6 @@ function Debug-RBACCheck {
                         if ($assignment.ObjectId -eq $user.Id) 
                         {
                             $assignedRoles.Add($roleName, "user '$UserPrincipalName'")
-                            break
                         }
                     }
                     elseif ($assignment.ObjectType -eq "Group") 
@@ -4373,7 +4372,6 @@ function Debug-RBACCheck {
                         {
                             $groupDisplayName = $hybridGroupIdToName[$assignment.ObjectId]
                             $assignedRoles.Add($roleName, "group '$groupDisplayName'")
-                            break
                         }
                     }
                 }
