@@ -3755,15 +3755,8 @@ function Debug-AzStorageAccountAuth {
 
     process
     {
-        # Check prerequisite: you must be connected to Azure before running this cmdlet.
-        $context = Get-AzContext
-        if ($null -eq $context)
-        {
-            Write-Error "Please login to Azure using Connect-AzAccount before running this cmdlet." -ErrorAction Stop
-        }
-        
-        # Check that resource group, storage account and (optionally) file share exist
-        $storageAccount = Validate-StorageAccount -ResourceGroupName $ResourceGroupName -StorageAccountName $StorageAccountName
+        $VerifyAD = Get-AzStorageAccount -ResourceGroupName $ResourceGroupName -StorageAccountName $StorageAccountName -ErrorAction Stop
+        $directoryServiceOptions = $VerifyAD.AzureFilesIdentityBasedAuth.DirectoryServiceOptions 
         
         # Dispatch to the right set of checks, depending on directoryServiceOptions
         $directoryServiceOptions = $storageAccount.AzureFilesIdentityBasedAuth.DirectoryServiceOptions
