@@ -12,3 +12,6 @@ This repository contains supporting code (PowerShell modules/scripts, ARM templa
 
 ### How to contribute
 We welcome issue submission and direct contributions. Please feel free to create pull requests or issues as needed.
+
+### Additional Resources
+- [Azure-Samples/azure-files-samples repository](https://github.com/Azure-Samples/azure-files-samples): This repository contains various samples and scripts for working with Azure Files, including examples for using the Azure Files REST API, PowerShell scripts, and ARM templates.
