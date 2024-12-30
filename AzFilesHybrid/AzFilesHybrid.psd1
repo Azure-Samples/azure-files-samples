@@ -52,7 +52,26 @@
     
     # Modules that must be imported into the global environment prior to importing this module
     RequiredModules = @(
-        @{ModuleName="PSStyle"; ModuleVersion="1.1.8"; GUID="aebeb4be-3ed1-4712-aaf6-b47c896dd97c"}
+        @{
+            ModuleName = "Az"
+            GUID = "d48d710e-85cb-46a1-990f-22dae76f6b5f"
+            ModuleVersion = "2.8.0"
+        },
+        @{
+            ModuleName = "Az.Storage"
+            GUID = "dfa9e4ea-1407-446d-9111-79122977ab20"
+            ModuleVersion = "4.3.0"
+        },
+        @{
+            ModuleName = "Microsoft.Graph"
+            GUID = "fceec1eb-c2e8-4b2b-a120-0fab3f0d7b47"
+            ModuleVersion = "2.2.0"
+        },
+        @{
+            ModuleName = "PSStyle"
+            GUID = "aebeb4be-3ed1-4712-aaf6-b47c896dd97c"
+            ModuleVersion = "1.1.8"
+        }
     )
     
     # Assemblies that must be loaded prior to importing this module

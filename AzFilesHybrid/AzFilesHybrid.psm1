@@ -895,215 +895,6 @@ function Request-ADFeature {
     }
 }
 
-function Request-PowerShellGetModule {
-    [CmdletBinding(SupportsShouldProcess, ConfirmImpact="High")]
-    param()
-
-    $psGetModule = Get-Module -Name PowerShellGet -ListAvailable | `
-        Sort-Object -Property Version -Descending
-
-    if ($null -eq $psGetModule -or $psGetModule[0].Version -lt [Version]::new(1,6,0)) {
-        $caption = "Install updated version of PowerShellGet"
-        $verboseConfirmMessage = "This module requires PowerShellGet 1.6.0+. This can be installed now if you are running as an administrator. At the end of the installation, importing this module will fail as you must close all open instances of PowerShell for the updated version of PowerShellGet to be available."
-        
-        if ($PSCmdlet.ShouldProcess($verboseConfirmMessage, $verboseConfirmMessage, $caption)) {
-            if (!(Get-IsElevatedSession)) {
-                Write-Error -Message "To install PowerShellGet, you must import this module as an administrator. This module package does not generally require administrator privileges, so successive imports of this module can be from a non-elevated session." -ErrorAction Stop
-            }
-
-            try {
-                Remove-Module -Name PowerShellGet, PackageManagement -Force -ErrorAction SilentlyContinue
-                Install-PackageProvider -Name NuGet -Force | Out-Null
-    
-                Install-Module `
-                        -Name PowerShellGet `
-                        -Repository PSGallery `
-                        -Force `
-                        -ErrorAction Stop `
-                        -SkipPublisherCheck
-            } catch {
-                Write-Error -Message "PowerShellGet was not successfully installed, and is a requirement of this module. See https://docs.microsoft.com/powershell/scripting/gallery/installing-psget for information on how to manually troubleshoot the PowerShellGet installation." -ErrorAction Stop
-            }             
-            
-            Write-Verbose -Message "Installed latest version of PowerShellGet module."
-            Write-Error -Message "PowerShellGet was successfully installed, however you must close all open PowerShell sessions to use the new version. The next import of this module will be able to use PowerShellGet." -ErrorAction Stop
-        }
-    }
-
-    Remove-Module -Name PowerShellGet -ErrorAction SilentlyContinue
-    Remove-Module -Name PackageManagement -ErrorAction SilentlyContinue
-}
-
-function Request-MSGraphModule {
-    [CmdletBinding(SupportsShouldProcess, ConfirmImpact="High")]
-    param(
-        [Parameter(Mandatory=$true)]
-        [string[]]$RequiredModules
-    )
-
-    $missingModules = @()
-
-    foreach ($module in $RequiredModules) {
-        $installedModule = Get-Module -Name $module -ListAvailable
-        if ($null -eq $installedModule) {
-            Write-Host "Missing module: $module"
-            $missingModules += $module
-        }
-    }
-
-    if ($missingModules.Count -gt 0) {
-        $caption = "Install missing Microsoft.Graph PowerShell modules"
-        $verboseConfirmMessage = "This cmdlet requires the Microsoft.Graph PowerShell modules. The missing ones can be automatically installed now if you are running in an elevated sessions."
-        
-        if ($PSCmdlet.ShouldProcess($verboseConfirmMessage, $verboseConfirmMessage, $caption)) {
-            if (!(Get-IsElevatedSession)) {
-                Write-Error `
-                        -Message "To install the missing Microsoft.Graph modules, you must run this cmdlet as an administrator. This cmdlet may not generally require administrator privileges." `
-                        -ErrorAction Stop
-            }
-            
-            Write-Host "Installing missing modules: $($missingModules -join ', ')"
-            Install-Module `
-                -Name $missingModules `
-                -Repository PSGallery `
-                -AllowClobber `
-                -Force `
-                -ErrorAction Stop
-        }
-    }
-
-    Remove-Module -Name PowerShellGet -ErrorAction SilentlyContinue
-    Remove-Module -Name PackageManagement -ErrorAction SilentlyContinue
-}
-
-function Request-MSGraphModuleVersion {
-    [CmdletBinding(SupportsShouldProcess, ConfirmImpact="High")]
-    param(
-        [Parameter(Mandatory=$true)]
-        [Version]$MinimumVersion
-    )
-
-    $availableModules = Get-Module Microsoft.Graph -ListAvailable
-    $usableModules = $availableModules | Where-Object { $_.Version -ge $MinimumVersion }
-
-    # Install if needed
-    if ($null -eq $usableModules) {
-        # Print why we could not find a usable module:
-        if ($null -eq $availableModules) {
-            Write-Error "The Microsoft.Graph module is not installed."
-        } else {
-            $maxAvailableVersion = ($availableModules.Version | Measure-Object -Maximum).Maximum
-            Write-Error "The Microsoft.Graph module is installed with version $maxAvailableVersion, but $MinimumVersion is required."
-        }
-        
-        # Request to install with the adequate min version
-        $caption = "Install missing Microsoft.Graph PowerShell module"
-        $verboseConfirmMessage = "This cmdlet requires the Microsoft.Graph PowerShell module. It can be automatically installed now if you are running in an elevated sessions."
-        if ($PSCmdlet.ShouldProcess($verboseConfirmMessage, $verboseConfirmMessage, $caption)) {
-            if (!(Get-IsElevatedSession)) {
-                Write-Error `
-                        -Message "To install the missing Microsoft.Graph module, you must run this cmdlet as an administrator. This cmdlet may not generally require administrator privileges." `
-                        -ErrorAction Stop
-            }
-            
-            Write-Host "Installing missing module Microsoft.Graph"
-            Install-Module `
-                -Name Microsoft.Graph `
-                -MinimumVersion $MinimumVersion `
-                -Repository PSGallery `
-                -AllowClobber `
-                -Force `
-                -ErrorAction Stop
-        }
-
-        Remove-Module -Name PowerShellGet -ErrorAction SilentlyContinue
-        Remove-Module -Name PackageManagement -ErrorAction SilentlyContinue
-    }
-    
-    Remove-Module -Name Microsoft.Graph* -ErrorAction SilentlyContinue
-    Import-Module Microsoft.Graph -MinimumVersion $MinimumVersion -ErrorAction Continue
-}
-
-function Request-AzPowerShellModule {
-    [CmdletBinding(SupportsShouldProcess, ConfirmImpact="High")]
-    param()
-
-    # There is an known issue where versions less than PS 6.2 don't have the Az rollup module installed:
-    # https://github.com/Azure/azure-powershell/issues/9835 
-    if ($PSVersionTable.PSVersion -gt [Version]::new(6,2)) {
-        $azModule = Get-Module -Name Az -ListAvailable
-    } else {
-        $azModule = Get-Module -Name Az.* -ListAvailable
-    }
-
-    $storageModule = Get-Module -Name Az.Storage -ListAvailable | `
-        Where-Object { 
-            $_.Version -ge [Version]::new(4,3,0) 
-        }
-
-    # Do should process if modules must be installed
-    if ($null -eq $azModule -or $null -eq $storageModule) {
-        $caption = "Install Azure PowerShell modules"
-        $verboseConfirmMessage = "This module requires Azure PowerShell (`"Az`" module) 2.8.0+ and Az.Storage 4.3.0+. This can be installed now if you are running as an administrator."
-        
-        if ($PSCmdlet.ShouldProcess($verboseConfirmMessage, $verboseConfirmMessage, $caption)) {
-            if (!(Get-IsElevatedSession)) {
-                Write-Error `
-                        -Message "To install the required Azure PowerShell modules, you must run this module as an administrator. This module does not generally require administrator privileges." `
-                        -ErrorAction Stop
-            }
-
-            if ($null -eq $azModule) {
-                Get-Module -Name Az.* | Remove-Module
-                Install-Module -Name Az -Repository PSGallery -AllowClobber -Force -ErrorAction Stop
-                Write-Verbose -Message "Installed latest version of Az module."
-            }
-
-            if ($null -eq $storageModule) {
-                Remove-Module `
-                        -Name Az.Storage `
-                        -Force `
-                        -ErrorAction SilentlyContinue
-                
-                try {
-                    Uninstall-Module `
-                            -Name Az.Storage `
-                            -Force `
-                            -ErrorAction SilentlyContinue
-                } catch {
-                    Write-Error `
-                            -Message "Unable to uninstall the existing Az.Storage module which has a version lower than 2.0.0." `
-                            -ErrorAction Stop
-                }
-
-                Install-Module `
-                        -Name Az.Storage `
-                        -Repository PSGallery `
-                        -AllowClobber `
-                        -Force `
-                        -MinimumVersion "4.3.0" `
-                        -SkipPublisherCheck `
-                        -ErrorAction Stop
-            }       
-        }
-    }
-    
-    Remove-Module -Name PowerShellGet -ErrorAction SilentlyContinue
-    Remove-Module -Name PackageManagement -ErrorAction SilentlyContinue
-    Remove-Module -Name Az.Storage -Force -ErrorAction SilentlyContinue
-    Remove-Module -Name Az.Accounts -Force -ErrorAction SilentlyContinue
-    Remove-Module -Name Az.Network -Force -ErrorAction SilentlyContinue
-
-    $storageModule = ,(Get-Module -Name Az.Storage -ListAvailable | `
-        Where-Object { 
-            $_.Version -ge [Version]::new(4,3,0) 
-        } | `
-        Sort-Object -Property Version -Descending)
-
-    Import-Module -ModuleInfo $storageModule[0] -Global -ErrorAction Stop
-    Import-Module -Name Az.Network -Global -ErrorAction Stop
-}
-
 function Assert-DotNetFrameworkVersion {
     <#
     .SYNOPSIS
@@ -3336,9 +3127,7 @@ function Get-AadUserForSid {
         [string]$sid
     )
 
-    Request-ConnectMsGraph `
-        -Scopes "User.Read.All" `
-        -RequiredModules @("Microsoft.Graph.Users", "Microsoft.Graph.Groups", "Microsoft.Graph.Identity.DirectoryManagement")
+    Request-ConnectMsGraph -Scopes "User.Read.All"
 
     $aadUser = Get-MgUser -Filter "OnPremisesSecurityIdentifier eq '$sid'"
 
@@ -3913,7 +3702,6 @@ function Debug-AzStorageAccountEntraKerbAuth {
 
                 Request-ConnectMsGraph `
                     -Scopes "Application.Read.All" `
-                    -RequiredModules @("Microsoft.Graph.Applications") `
                     -TenantId $TenantId
                 
                 Import-Module Microsoft.Graph.Applications
@@ -4301,11 +4089,7 @@ function Debug-RBACCheck {
     )
     process {
         try {
-            $context = Get-AzContext
-            Request-ConnectMsGraph `
-                    -Scopes "User.Read.All", "GroupMember.Read.All" `
-                    -RequiredModules @("Microsoft.Graph.Users", "Microsoft.Graph.Groups", "Microsoft.Graph.Identity.DirectoryManagement") `
-                    -TenantId $context.Tenant
+            Request-ConnectMsGraph -Scopes "User.Read.All", "GroupMember.Read.All"
                     
             $user = Get-MgUser -Filter "UserPrincipalName eq '$UserPrincipalName'" -Property Id,OnPremisesSecurityIdentifier
             
@@ -4447,14 +4231,9 @@ function Debug-EntraKerbAdminConsent {
         try {
             $Context = Get-AzContext
             $TenantId = $Context.Tenant
-
-            # Detect if the Microsoft.Graph.Applications module is installed and at least version 2.2.0.
-            # Get-MgServicePrincipalByAppId was added in Microsoft.Graph.Applications v2.2.0.
-            Request-MSGraphModuleVersion -MinimumVersion 2.2.0
             
             Request-ConnectMsGraph `
                 -Scopes "DelegatedPermissionGrant.Read.All" `
-                -RequiredModules @("Microsoft.Graph.Applications", "Microsoft.Graph.Identity.SignIns") `
                 -TenantId $TenantId
 
             Import-Module Microsoft.Graph.Applications -MinimumVersion 2.2.0 -ErrorAction SilentlyContinue
@@ -4867,9 +4646,7 @@ function Debug-AzStorageAccountADDSAuth {
                 $checksExecuted += 1
                 Write-Verbose "CheckUserRbacAssignment - START"
 
-                Request-ConnectMsGraph `
-                    -Scopes "User.Read.All", "GroupMember.Read.All" `
-                    -RequiredModules @("Microsoft.Graph.Users", "Microsoft.Graph.Groups", "Microsoft.Graph.Identity.DirectoryManagement")
+                Request-ConnectMsGraph -Scopes "User.Read.All", "GroupMember.Read.All"
 
                 $sidNames = @{}
                 $user = Get-OnPremAdUser -Identity $UserName -Domain $Domain -ErrorAction Stop
@@ -6137,9 +5914,7 @@ function Request-ConnectMsGraph {
     .DESCRIPTION
     Correctly import the MsGraph module for your PowerShell version and then sign in using the same tenant is the currently signed in Az user.
     .EXAMPLE
-    Request-ConnectMsGraph `
-        -Scopes "Domain.Read.All" `
-        -RequiredModules @("Microsoft.Graph.Users", "Microsoft.Graph.Groups", "Microsoft.Graph.Identity.DirectoryManagement")
+    Request-ConnectMsGraph -Scopes "Domain.Read.All"
     #>
 
     [CmdletBinding()]
@@ -6147,15 +5922,12 @@ function Request-ConnectMsGraph {
         [Parameter(Mandatory=$true)]
         [string[]]$Scopes,
 
-        [Parameter(Mandatory=$true)]
-        [string[]]$RequiredModules,
-
         [Parameter(Mandatory=$false)]
         [string]$TenantId
     )
 
-    Assert-IsWindows
-    Request-MSGraphModule -RequiredModules $RequiredModules
+    Import-Module Microsoft.Graph
+    Import-Module Az
 
     if ([string]::IsNullOrEmpty($TenantId)) {
         $context = Get-AzContext
@@ -6184,9 +5956,7 @@ function Get-AzCurrentAzureADUser {
     $friendlyLogin = $context.Account.Id
     $friendlyLoginSplit = $friendlyLogin.Split("@")
 
-    Request-ConnectMsGraph `
-        -Scopes "Domain.Read.All" `
-        -RequiredModules @("Microsoft.Graph.Users", "Microsoft.Graph.Groups", "Microsoft.Graph.Identity.DirectoryManagement")
+    Request-ConnectMsGraph -Scopes "Domain.Read.All"
 
     $domains = Get-MgDomain
     $domainNames = $domains | Select-Object -ExpandProperty Id
@@ -7510,8 +7280,8 @@ function New-AzDnsForwarder {
                         -Credential $Credential `
                         -InstallViaCopy `
                         -OverrideModuleConfig @{ 
-                            SkipPowerShellGetCheck = $true;
-                            SkipAzPowerShellCheck = $true;
+                            SkipPowerShellGetCheck = $true; # required for backwards-compatibility
+                            SkipAzPowerShellCheck = $true; # required for backwards-compatibility
                             SkipDotNetFrameworkCheck = $true
                         }
             } else {
@@ -7519,8 +7289,8 @@ function New-AzDnsForwarder {
                         -ComputerName $server `
                         -InstallViaCopy `
                         -OverrideModuleConfig @{ 
-                            SkipPowerShellGetCheck = $true;
-                            SkipAzPowerShellCheck = $true;
+                            SkipPowerShellGetCheck = $true; # required for backwards-compatibility
+                            SkipAzPowerShellCheck = $true; # required for backwards-compatibility
                             SkipDotNetFrameworkCheck = $true
                         }
             }            
@@ -7681,9 +7451,7 @@ function Move-OnPremSharePermissionsToAzureFileShare
         #Geting the OID of domain user/group using its SID
         try
         {
-            Request-ConnectMsGraph `
-                -Scopes "User.Read.All" `
-                -RequiredModules @("Microsoft.Graph.Users", "Microsoft.Graph.Groups", "Microsoft.Graph.Identity.DirectoryManagement")
+            Request-ConnectMsGraph -Scopes "User.Read.All"
             
             $aadUser = Get-MgUser -Filter "OnPremisesSecurityIdentifier eq '$strSID'"
         }
@@ -7844,8 +7612,6 @@ function Move-OnPremSharePermissionsToAzureFileShare
 $AzurePrivateDnsIp = [string]$null
 $DnsForwarderTemplateVersion = [Version]$null
 $DnsForwarderTemplate = [string]$null
-$SkipPowerShellGetCheck = $false
-$SkipAzPowerShellCheck = $false
 $SkipDotNetFrameworkCheck = $false
 
 function Invoke-ModuleConfigPopulate {
@@ -7905,18 +7671,6 @@ function Invoke-ModuleConfigPopulate {
         $script:DnsForwarderTemplate = $DefaultModuleConfig["DnsForwarderTemplate"]
     }
 
-    if ($OverrideModuleConfig.ContainsKey("SkipPowerShellGetCheck")) {
-        $script:SkipPowerShellGetCheck = $OverrideModuleConfig["SkipPowerShellGetCheck"]
-    } else {
-        $script:SkipPowerShellGetCheck = $DefaultModuleConfig["SkipPowerShellGetCheck"]
-    }
-
-    if ($OverrideModuleConfig.ContainsKey("SkipAzPowerShellCheck")) {
-        $script:SkipAzPowerShellCheck = $OverrideModuleConfig["SkipAzPowerShellCheck"]
-    } else {
-        $script:SkipAzPowerShellCheck = $DefaultModuleConfig["SkipAzPowerShellCheck"]
-    }
-
     if ($OverrideModuleConfig.ContainsKey("SkipDotNetFrameworkCheck")) {
         $script:SkipDotNetFrameworkCheck = $OverrideModuleConfig["SkipDotNetFrameworkCheck"]
     } else {
@@ -7939,11 +7693,4 @@ if ((Get-OSPlatform) -eq "Windows") {
         [Net.SecurityProtocolType]::Tls13)
 }
 
-if (!$SkipPowerShellGetCheck) {
-    Request-PowerShellGetModule
-}
-
-if (!$SkipAzPowerShellCheck) {
-    Request-AzPowerShellModule
-}
 #endregion
