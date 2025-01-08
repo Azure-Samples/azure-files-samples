@@ -9,7 +9,7 @@
 @{
 
     # Script module or binary module file associated with this manifest.
-    RootModule = 'AzFilesHybrid.psm1'
+    RootModule = 'AzFilesHybridTest.psm1'
     
     # Version number of this module.
     ModuleVersion = '0.3.3.1'
