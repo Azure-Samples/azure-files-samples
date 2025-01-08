@@ -1,5 +1,5 @@
 function Test-Manifest {
-    Test-ModuleManifest -Path $PSScriptRoot\AzFilesHybrid\AzFilesHybrid.psd1
+    Test-ModuleManifest -Path $PSScriptRoot\AzFilesHybridTest\AzFilesHybridTest.psd1
 }
 
 function Publish-PSGallery {
