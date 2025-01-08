@@ -19,12 +19,9 @@ jobs:
         shell: pwsh
     steps:
       - uses: actions/checkout@v4
-      - name: Install dependencies
-        run: |
-          Install-Module Az
-          Install-Module Microsoft.Graph
-        
       - name: Check .psd1 file with Test-ModuleManifest
         run: |
           . .\init.ps1
+          Install-Module Az
+          Install-Module Microsoft.Graph
           Test-Manifest
