@@ -4421,7 +4421,7 @@ function Debug-EntraKerbAdminConsent {
             $Consent = Get-MgOauth2PermissionGrant -Filter "ClientId eq '$($ServicePrincipal.Id)' and ResourceId eq '$($MSGraphSp.Id)' and consentType eq 'AllPrincipals'"
             if($null -eq $Consent -or $null -eq $Consent.Scope)
             {
-                Write-TestingFailed -Message "Please grant admin consent using $($PSStyle.Foreground.BrightCyan)'https://aka.ms/azfiles/entra-adminconsent'$($PSStyle.Reset)"
+                Write-TestingFailed -Message "Please grant admin consent using '$($PSStyle.Foreground.BrightCyan)https://aka.ms/azfiles/entra-adminconsent$($PSStyle.Reset)'"
                 $checkResult.Result = "Failed"
                 $checkResult.Issue = "Admin Consent is not granted"
                 return
@@ -4439,7 +4439,7 @@ function Debug-EntraKerbAdminConsent {
             } 
             else
             {
-                Write-TestingFailed -Message "Please grant admin consent using $($PSStyle.Foreground.BrightCyan)'https://aka.ms/azfiles/entra-adminconsent'$($PSStyle.Reset)"
+                Write-TestingFailed -Message "Please grant admin consent using '$($PSStyle.Foreground.BrightCyan)https://aka.ms/azfiles/entra-adminconsent$($PSStyle.Reset)'"
                 $checkResult.Result = "Failed"
                 $checkResult.Issue = "Admin Consent is not granted"
             }
