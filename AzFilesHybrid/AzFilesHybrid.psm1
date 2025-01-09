@@ -3368,12 +3368,9 @@ function Test-Port445Connectivity
         #
         # Test-NetConnection -ComputerName <storageAccount>.file.core.windows.net -Port 445
         #
-        $endpoint = $StorageAccountFileEndPoint -replace 'https://', ''
-        $endpoint = $endpoint -replace '/', ''
+        Write-Verbose "Executing 'Test-NetConnection -ComputerName $StorageAccountFileEndPoint -Port 445'"
 
-        Write-Verbose "Executing 'Test-NetConnection -ComputerName $endpoint -Port 445'"
-
-        $result = Test-NetConnection -ComputerName $endpoint -Port 445
+        $result = Test-NetConnection -ComputerName $StorageAccountFileEndPoint -Port 445
 
         if ($result.TcpTestSucceeded -eq $False)
         {
@@ -3826,6 +3823,8 @@ function Debug-AzStorageAccountEntraKerbAuth {
             $accountRestEndpoint = (New-AzStorageContext -StorageAccountName $StorageAccountName -Environment $environment).FileEndPoint
             $entraEndpoint = $context.Environment.ActiveDirectoryAuthority
             $contextUriObject = [System.Uri]::new($entraEndpoint)
+            $accountUriObject = [System.Uri]::new($accountRestEndpoint)
+            $accountEndpointSafeHost = $accountUriObject.DnsSafeHost
             $contextDnsSafeHost = $contextUriObject.DnsSafeHost
         }
         if(![string]::IsNullOrEmpty($Domain))
@@ -3861,7 +3860,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
             Write-Host "Checking Port 445 Connectivity"
             try {
                 $checksExecuted += 1;
-                Test-Port445Connectivity -StorageAccountFileEndPoint $accountRestEndpoint -ErrorAction Stop
+                Test-Port445Connectivity -StorageAccountFileEndPoint $accountUriObject.DnsSafeHost -ErrorAction Stop
                 $checks["CheckPort445Connectivity"].Result = "Passed"
                 Write-TestingPassed
             } catch {
@@ -3913,21 +3912,21 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 Import-Module Microsoft.Graph.Applications
 
                 $Application = Get-MgApplication `
-                    -Filter "identifierUris/any (uri:uri eq 'api://${TenantId}/CIFS/$($contextUriObject.DnsSafeHost)')" `
+                    -Filter "identifierUris/any (uri:uri eq 'api://${TenantId}/CIFS/$($accountUriObject.DnsSafeHost)')" `
                     -ConsistencyLevel eventual
                 if($null -eq $Application)
                 {
-                    Write-TestingFailed -Message "Could not find the application with SPN '$($PSStyle.Foreground.BrightCyan)api://${TenantId}/CIFS/$($contextUriObject.DnsSafeHost)$($PSStyle.Reset)'"
+                    Write-TestingFailed -Message "Could not find the application with SPN '$($PSStyle.Foreground.BrightCyan)api://${TenantId}/CIFS/$($accountUriObject.DnsSafeHost)$($PSStyle.Reset)'"
                     $checks["CheckEntraObject"].Result = "Failed"
-                    $checks["CheckEntraObject"].Issue = "Could not find the application with SPN ' api://${TenantId}/CIFS/$($contextUriObject.DnsSafeHost)'."
+                    $checks["CheckEntraObject"].Issue = "Could not find the application with SPN ' api://${TenantId}/CIFS/$($accountUriObject.DnsSafeHost)'."
                 }
-                $ServicePrincipal = Get-MgServicePrincipal -Filter "servicePrincipalNames/any (name:name eq 'api://$TenantId/CIFS/$($contextUriObject.DnsSafeHost)')" -ConsistencyLevel eventual
-                [string]$aadServicePrincipalError = "SPN Value is not set correctly, It should be '$($PSStyle.Foreground.BrightCyan)CIFS/$($contextUriObject.DnsSafeHost)$($PSStyle.Reset)'"
+                $ServicePrincipal = Get-MgServicePrincipal -Filter "servicePrincipalNames/any (name:name eq 'api://$TenantId/CIFS/$($accountUriObject.DnsSafeHost)')" -ConsistencyLevel eventual
+                [string]$aadServicePrincipalError = "SPN Value is not set correctly, It should be '$($PSStyle.Foreground.BrightCyan)CIFS/$($accountUriObject.DnsSafeHost)$($PSStyle.Reset)'"
                 if($null -eq $ServicePrincipal)
                 {
                     Write-TestingFailed -Message $aadServicePrincipalError
                     $checks["CheckEntraObject"].Result = "Failed"
-                    $checks["CheckEntraObject"].Issue = "Service Principal is missing SPN 'CIFS/$($contextUriObject.DnsSafeHost)'."
+                    $checks["CheckEntraObject"].Issue = "Service Principal is missing SPN 'CIFS/$($accountUriObject.DnsSafeHost)'."
                 }
                 if(-not $ServicePrincipal.AccountEnabled)
                 {
@@ -3935,16 +3934,16 @@ function Debug-AzStorageAccountEntraKerbAuth {
                     $checks["CheckEntraObject"].Result = "Failed"
                     $checks["CheckEntraObject"].Issue = "Expected AccountEnabled set to true"
                 }
-                elseif(-not $ServicePrincipal.ServicePrincipalNames.Contains("CIFS/$($contextUriObject.DnsSafeHost)"))
+                elseif(-not $ServicePrincipal.ServicePrincipalNames.Contains("CIFS/$($accountUriObject.DnsSafeHost)"))
                 {
                     Write-TestingFailed -Message $aadServicePrincipalError
                     $checks["CheckEntraObject"].Result = "Failed"
-                    $checks["CheckEntraObject"].Issue = "Service Principal is missing SPN ' CIFS/$($contextUriObject.DnsSafeHost)'."
+                    $checks["CheckEntraObject"].Issue = "Service Principal is missing SPN ' CIFS/$($accountUriObject.DnsSafeHost)'."
                 }
                 
-                elseif (-not $ServicePrincipal.ServicePrincipalNames.Contains("api://${TenantId}/CIFS/$($contextUriObject.DnsSafeHost)"))
+                elseif (-not $ServicePrincipal.ServicePrincipalNames.Contains("api://${TenantId}/CIFS/$($accountUriObject.DnsSafeHost)"))
                 {
-                    Write-TestingWarning -Message "Service Principal is missing SPN '$($PSStyle.Foreground.BrightCyan)api://${TenantId}/CIFS/$($contextUriObject.DnsSafeHost)$($PSStyle.Reset)'."
+                    Write-TestingWarning -Message "Service Principal is missing SPN '$($PSStyle.Foreground.BrightCyan)api://${TenantId}/CIFS/$($accountUriObject.DnsSafeHost)$($PSStyle.Reset)'."
                     Write-Host "`tIt is okay to not have this value for now, but it is good to have this configured in future if you want to continue getting kerberos tickets."
                     $checks["CheckEntraObject"].Result = "Partial"
                 }
