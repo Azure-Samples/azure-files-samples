@@ -4520,7 +4520,6 @@ function Debug-AzStorageAccountADDSAuth {
         #
         # Port 445 check 
         #
-        
         if (!$filterIsPresent -or $Filter -match "CheckPort445Connectivity")
         {
             try {
@@ -4543,7 +4542,6 @@ function Debug-AzStorageAccountADDSAuth {
         #
         # Domain-Joined Check
         #
-
         if (!$filterIsPresent -or $Filter -match "CheckDomainJoined")
         {
             try {
@@ -5070,8 +5068,6 @@ function Debug-AzStorageAccountADDSAuth {
     }
 
 }
-
-
 
 function Set-StorageAccountDomainProperties {
     <#
