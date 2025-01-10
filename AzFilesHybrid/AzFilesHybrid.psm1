@@ -4041,7 +4041,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
         {
             Write-Host "Checking Admin Consent"
             $checksExecuted += 1;
-            Debug-EntraKerbAdminConsent -StorageAccountName $StorageAccountName -checkResult $checks["CheckAdminConsent"]
+            Debug-EntraKerbAdminConsent -AccountEndpointSafeHost $accountEndpointSafeHost -checkResult $checks["CheckAdminConsent"]
         }
         #
         #Check Default share and RBAC permissions
@@ -4080,7 +4080,6 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 $checks["CheckRBAC"].Issue = $_
             }
         }
-
         #
         # Check if WinHttpAutoProxySvc service is running
         #
@@ -4186,7 +4185,6 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 $checks["CheckFiddlerProxy"].Issue = $_
              }
         }
-
         #
         #Check if the machine is HAADJ or AADJ
         #
@@ -4384,8 +4382,8 @@ function Test-IsCloudKerberosTicketRetrievalEnabled {
 function Debug-EntraKerbAdminConsent {
     [CmdletBinding()]
     param (
-        [Parameter(Mandatory=$True, Position=0, HelpMessage="Storage account name")]
-        [string]$StorageAccountName,
+        [Parameter(Mandatory=$True, Position=0, HelpMessage="Safehost Endpoint for User Account")]
+        [string]$AccountEndpointSafeHost,
         [Parameter(Mandatory=$True, Position=1, HelpMessage="Check result object")]
         [CheckResult]$checkResult
     )
@@ -4398,7 +4396,7 @@ function Debug-EntraKerbAdminConsent {
             # Detect if the Microsoft.Graph.Applications module is installed and at least version 2.2.0.
             # Get-MgServicePrincipalByAppId was added in Microsoft.Graph.Applications v2.2.0.
             Request-MSGraphModuleVersion -MinimumVersion 2.2.0
-            
+
             Request-ConnectMsGraph `
                 -Scopes "DelegatedPermissionGrant.Read.All" `
                 -RequiredModules @("Microsoft.Graph.Applications", "Microsoft.Graph.Identity.SignIns") `
@@ -4407,9 +4405,9 @@ function Debug-EntraKerbAdminConsent {
             Import-Module Microsoft.Graph.Applications -MinimumVersion 2.2.0 -ErrorAction SilentlyContinue
             Import-Module Microsoft.Graph.Identity.SignIns
 
-            $MsGraphSp = Get-MgServicePrincipalByAppId -AppId 00000003-0000-0000-c000-000000000000 
-            
-            $spn = "api://$TenantId/CIFS/$StorageAccountName.file.core.windows.net"
+            $MsGraphSp = Get-MgServicePrincipalByAppId -AppId 00000003-0000-0000-c000-000000000000
+
+            $spn = "api://$TenantId/CIFS/$AccountEndpointSafeHost"
             $ServicePrincipal = Get-MgServicePrincipal -Filter "servicePrincipalNames/any (name:name eq '$spn')" -ConsistencyLevel eventual
             if($null -eq $ServicePrincipal -or $null -eq $ServicePrincipal.Id)
             {
@@ -4436,7 +4434,7 @@ function Debug-EntraKerbAdminConsent {
             {
                 Write-TestingPassed
                 $checkResult.Result = "Passed"
-            } 
+            }
             else
             {
                 Write-TestingFailed -Message "Please grant admin consent using '$($PSStyle.Foreground.BrightCyan)https://aka.ms/azfiles/entra-adminconsent$($PSStyle.Reset)'"
