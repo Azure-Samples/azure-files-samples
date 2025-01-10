@@ -4,16 +4,54 @@
 > These instructions are only meant for contributors to this project.
 > If you want to use the script, refer to the README.
 
+## Editor configuration
+
+### VS Code
+
+This module has PR validations that enforce formatting rules, so it's recommended to configure VS Code to format on save, to ensure that your changes are always formatted correctly.
+
 ## Installing development dependencies
 
 ```powershell
 .\init.ps1
 ```
 
-## Running unit tests
+## Testing
+
+### Run unit tests
 
 ```powershell
-.\test.ps1
+Test
+```
+
+### Test formatting
+
+```powershell
+Test-Format
+```
+
+### Test module manifest
+
+```powershell
+Test-Manifest
+```
+
+### Test all the above
+
+```powershell
+Test-All
+```
+
+## Format files
+
+```powershell
+Format
+```
+
+## Lint
+
+```powershell
+Lint
 ```
 
 ## Publishing the module locally
@@ -21,12 +59,14 @@
 This is a useful test before publishing to the PSGallery.
 
 ```powershell
-.\publish-local.ps1
+Import-Module .\publish-tools.psm1
+
+Publish-Local
 
 Install-Module RestSetAcls -Repository LocalRepo
 Uninstall-Module RestSetAcls
 
-.\unpublish-local.ps1
+Unpublish-Local
 ```
 
 ## Publishing the module to the PSGallery
@@ -36,7 +76,9 @@ Uninstall-Module RestSetAcls
 1. Run the following command:
 
     ```powershell
-    .\publish-psgallery.ps1 -apiKey "<api-key>"
+    Import-Module .\publish-tools.psm1
+
+    Publish-PSGallery -apiKey "<api-key>"
     ```
 
 ## Setting up an E2E test run
