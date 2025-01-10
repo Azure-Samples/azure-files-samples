@@ -3821,11 +3821,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
         {
             $environment = $context.Environment.Name
             $accountRestEndpoint = (New-AzStorageContext -StorageAccountName $StorageAccountName -Environment $environment).FileEndPoint
-            $entraEndpoint = $context.Environment.ActiveDirectoryAuthority
-            $contextUriObject = [System.Uri]::new($entraEndpoint)
             $accountUriObject = [System.Uri]::new($accountRestEndpoint)
-            $accountEndpointSafeHost = $accountUriObject.DnsSafeHost
-            $contextDnsSafeHost = $contextUriObject.DnsSafeHost
         }
         if(![string]::IsNullOrEmpty($Domain))
         {
@@ -4041,7 +4037,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
         {
             Write-Host "Checking Admin Consent"
             $checksExecuted += 1;
-            Debug-EntraKerbAdminConsent -AccountEndpointSafeHost $accountEndpointSafeHost -checkResult $checks["CheckAdminConsent"]
+            Debug-EntraKerbAdminConsent -AccountEndpointSafeHost $accountUriObject.DnsSafeHost -checkResult $checks["CheckAdminConsent"]
         }
         #
         #Check Default share and RBAC permissions
