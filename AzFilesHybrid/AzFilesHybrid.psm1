@@ -4574,8 +4574,7 @@ function Debug-AzStorageAccountADDSAuth {
                 $checksExecuted += 1;
                 Write-Verbose "CheckPort445Connectivity - START"
 
-                Test-Port445Connectivity -StorageAccountName $StorageAccountName `
-                    -ResourceGroupName $ResourceGroupName -ErrorAction Stop
+                Test-Port445Connectivity -StorageAccountFileEndPoint $accountUriObject.DnsSafeHost -ErrorAction Stop
 
                 $checks["CheckPort445Connectivity"].Result = "Passed"
                 Write-Verbose "CheckPort445Connectivity - SUCCESS"
