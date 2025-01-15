@@ -3824,6 +3824,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
         {
             Write-TestingFailed `
                 -Message "You should run $($PSStyle.Foreground.BrightBlue)Connect-AzAccount$($PSStyle.Reset) first, then try again."
+                return
         } 
         else 
         {
