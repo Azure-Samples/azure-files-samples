@@ -3354,12 +3354,12 @@ function Get-AadUserForSid {
 }
 
 
-function Test-Port445Connectivity
-{
+function Test-Port445Connectivity {
+    <# .SYNOPSIS #>
     [CmdletBinding()]
 
     param (
-        [Parameter(Mandatory=$True, Position=0, HelpMessage="Account FileEndPoint")]
+        [Parameter(Mandatory=$True, Position=0, HelpMessage="The DNS name of the storage account's File endpoint, e.g. 'myAccount.file.core.windows.net'")]
         [string]$StorageAccountFileEndPoint
     )
 
