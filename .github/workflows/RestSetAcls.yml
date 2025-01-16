@@ -74,7 +74,7 @@ jobs:
           Test-Manifest
 
   lint-with-PSScriptAnalyzer:
-    name: Install and run PSScriptAnalyzer
+    name: Lint with PSScriptAnalyzer
     runs-on: windows-latest
     defaults:
       run:
