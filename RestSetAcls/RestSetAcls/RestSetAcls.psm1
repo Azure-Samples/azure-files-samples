@@ -198,7 +198,7 @@ function Get-AzureFilesRecursive {
             # Calling Get-AzStorageFile with this parameter set returns an Object[],
             # where items are either AzureStorageFile or AzureStorageFileDirectory.
             # Therefore, when recursing, we can cast Object[] to AzureStorageBase[].
-            $subdirectoryContents = Get-AzStorageFile -Directory $file.CloudFileDirectory
+            $subdirectoryContents = Get-AzStorageFile -Context $Context -ShareDirectoryClient $file.ShareDirectoryClient
 
             if ($null -ne $subdirectoryContents) {
                 Get-AzureFilesRecursive `
@@ -238,7 +238,7 @@ function New-AzureFilePermission {
     )
 
     $share = Get-AzStorageShare -Name $FileShareName -Context $Context
-    $permissionInfo = $share.ShareClient.CreatePermission($Sddl)
+    $permissionInfo = $share.ShareClient.CreatePermission($Sddl, [System.Threading.CancellationToken]::None)
     return $permissionInfo.Value.FilePermissionKey
 }
 
@@ -255,33 +255,6 @@ function Get-AzureFilePermission {
     $Share.ShareClient.GetPermission($PermissionKey).Value
 }
 
-function Set-AzureFilePermission {
-    param (
-        [Parameter(Mandatory = $true, ValueFromPipeline = $true, ValueFromPipelineByPropertyName = $true)]
-        [Microsoft.WindowsAzure.Commands.Common.Storage.ResourceModel.AzureStorageBase]$File,
-
-        [Parameter(Mandatory = $true)]
-        [string]$SddlPermission
-    )
-    
-    if ($File.GetType().Name -eq "AzureStorageFileDirectory") {
-        $directory = [Microsoft.WindowsAzure.Commands.Common.Storage.ResourceModel.AzureStorageFileDirectory]$File
-        $directory.ShareDirectoryClient.SetHttpHeaders(
-            $null, # SmbProperties
-            $SddlPermission # filePermission
-        ) | Out-Null
-    }
-    else {
-        $file = [Microsoft.WindowsAzure.Commands.Common.Storage.ResourceModel.AzureStorageFile]$File
-        $file.ShareFileClient.SetHttpHeaders(
-            $null, # newSize
-            $null, # httpHeaders
-            $null, # smbProperties
-            $SddlPermission # filePermission
-        )  | Out-Null
-    }
-}
-
 function Set-AzureFilePermissionKey {
     param (
         [Parameter(Mandatory = $true, ValueFromPipeline = $true, ValueFromPipelineByPropertyName = $true)]
@@ -291,20 +264,22 @@ function Set-AzureFilePermissionKey {
         [string]$FilePermissionKey
     )
 
-    $smbProperties = New-Object Azure.Storage.Files.Shares.Models.FileSmbProperties
+    $smbProperties = [Azure.Storage.Files.Shares.Models.FileSmbProperties]::new()
     $smbProperties.FilePermissionKey = $FilePermissionKey
 
     if ($File.GetType().Name -eq "AzureStorageFileDirectory") {
+        $options = [Azure.Storage.Files.Shares.Models.ShareDirectorySetHttpHeadersOptions]::new()
+        $options.SmbProperties = $smbProperties
+
         $directory = [Microsoft.WindowsAzure.Commands.Common.Storage.ResourceModel.AzureStorageFileDirectory]$File
-        $directory.ShareDirectoryClient.SetHttpHeaders($smbProperties) | Out-Null
+        $directory.ShareDirectoryClient.SetHttpHeaders($options) | Out-Null
     }
     else {
+        $options = [Azure.Storage.Files.Shares.Models.ShareFileSetHttpHeadersOptions]::new()
+        $options.SmbProperties = $smbProperties
+
         $file = [Microsoft.WindowsAzure.Commands.Common.Storage.ResourceModel.AzureStorageFile]$File
-        $file.ShareFileClient.SetHttpHeaders(
-            $null, # newSize
-            $null, # httpHeaders
-            $smbProperties
-        ) | Out-Null
+        $file.ShareFileClient.SetHttpHeaders($options) | Out-Null
     }
 }
 
