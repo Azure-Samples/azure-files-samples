@@ -4046,7 +4046,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
         {
             Write-Host "Checking Admin Consent"
             $checksExecuted += 1;
-            Debug-EntraKerbAdminConsent -AccountEndpointSafeHost $fileEndpoint -checkResult $checks["CheckAdminConsent"]
+            Debug-EntraKerbAdminConsent -AccountFileEndpoint $fileEndpoint -checkResult $checks["CheckAdminConsent"]
         }
         #
         #Check Default share and RBAC permissions
@@ -4434,7 +4434,7 @@ function Debug-EntraKerbAdminConsent {
     [CmdletBinding()]
     param (
         [Parameter(Mandatory=$True, Position=0, HelpMessage="Safehost Endpoint for User Account")]
-        [string]$AccountEndpointSafeHost,
+        [string]$AccountFileEndpoint,
         [Parameter(Mandatory=$True, Position=1, HelpMessage="Check result object")]
         [CheckResult]$checkResult
     )
@@ -4458,7 +4458,7 @@ function Debug-EntraKerbAdminConsent {
 
             $MsGraphSp = Get-MgServicePrincipalByAppId -AppId 00000003-0000-0000-c000-000000000000
 
-            $spn = "api://$TenantId/CIFS/$AccountEndpointSafeHost"
+            $spn = "api://$TenantId/CIFS/$AccountFileEndpoint"
             $ServicePrincipal = Get-MgServicePrincipal -Filter "servicePrincipalNames/any (name:name eq '$spn')" -ConsistencyLevel eventual
             if($null -eq $ServicePrincipal -or $null -eq $ServicePrincipal.Id)
             {
