@@ -9,5 +9,5 @@
 
     Pester           = 'latest'
     PSScriptAnalyzer = 'latest'
-    'Az.Storage'     = '6.0.0'
+    'Az.Storage'     = '8.1.0'
 }
