@@ -3831,6 +3831,8 @@ function Debug-AzStorageAccountEntraKerbAuth {
             $environment = $context.Environment.Name
             $accountRestEndpoint = (New-AzStorageContext -StorageAccountName $StorageAccountName -Environment $environment).FileEndPoint
             $accountUriObject = [System.Uri]::new($accountRestEndpoint)
+            $fileEndpoint = $accountUriObject.DnsSafeHost
+            $TenantId = $context.Tenant
         }
         if(![string]::IsNullOrEmpty($Domain))
         {
@@ -3865,7 +3867,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
             Write-Host "Checking Port 445 Connectivity"
             try {
                 $checksExecuted += 1;
-                Test-Port445Connectivity -StorageAccountFileEndPoint $accountUriObject.DnsSafeHost -ErrorAction Stop
+                Test-Port445Connectivity -StorageAccountFileEndPoint $fileEndpoint -ErrorAction Stop
                 $checks["CheckPort445Connectivity"].Result = "Passed"
                 Write-TestingPassed
             } catch {
@@ -3882,7 +3884,6 @@ function Debug-AzStorageAccountEntraKerbAuth {
             Write-Host "Checking AAD Connectivity"
             try {
                 $checksExecuted += 1;
-                $TenantId = $context.Tenant
                 $Response = Invoke-WebRequest -Method POST https://login.microsoftonline.com/$TenantId/kerberos
                 if ($Response.StatusCode -eq 200)
                 {
@@ -3909,7 +3910,6 @@ function Debug-AzStorageAccountEntraKerbAuth {
             Write-Host "Checking Entra Object"
             try {
                 $checksExecuted += 1;
-                $TenantId = $context.Tenant
                 Request-ConnectMsGraph `
                     -Scopes "Application.Read.All" `
                     -RequiredModules @("Microsoft.Graph.Applications") `
@@ -3917,21 +3917,21 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 Import-Module Microsoft.Graph.Applications
 
                 $Application = Get-MgApplication `
-                    -Filter "identifierUris/any (uri:uri eq 'api://${TenantId}/CIFS/$($accountUriObject.DnsSafeHost)')" `
+                    -Filter "identifierUris/any (uri:uri eq 'api://${TenantId}/CIFS/$($fileEndpoint)')" `
                     -ConsistencyLevel eventual
                 if($null -eq $Application)
                 {
-                    Write-TestingFailed -Message "Could not find the application with SPN '$($PSStyle.Foreground.BrightCyan)api://${TenantId}/CIFS/$($accountUriObject.DnsSafeHost)$($PSStyle.Reset)'"
+                    Write-TestingFailed -Message "Could not find the application with SPN '$($PSStyle.Foreground.BrightCyan)api://${TenantId}/CIFS/$($fileEndpoint)$($PSStyle.Reset)'"
                     $checks["CheckEntraObject"].Result = "Failed"
-                    $checks["CheckEntraObject"].Issue = "Could not find the application with SPN ' api://${TenantId}/CIFS/$($accountUriObject.DnsSafeHost)'."
+                    $checks["CheckEntraObject"].Issue = "Could not find the application with SPN ' api://${TenantId}/CIFS/$($fileEndpoint)'."
                 }
-                $ServicePrincipal = Get-MgServicePrincipal -Filter "servicePrincipalNames/any (name:name eq 'api://$TenantId/CIFS/$($accountUriObject.DnsSafeHost)')" -ConsistencyLevel eventual
-                [string]$aadServicePrincipalError = "SPN Value is not set correctly, It should be '$($PSStyle.Foreground.BrightCyan)CIFS/$($accountUriObject.DnsSafeHost)$($PSStyle.Reset)'"
+                $ServicePrincipal = Get-MgServicePrincipal -Filter "servicePrincipalNames/any (name:name eq 'api://$TenantId/CIFS/$($fileEndpoint)')" -ConsistencyLevel eventual
+                [string]$aadServicePrincipalError = "SPN Value is not set correctly, It should be '$($PSStyle.Foreground.BrightCyan)CIFS/$($fileEndpoint)$($PSStyle.Reset)'"
                 if($null -eq $ServicePrincipal)
                 {
                     Write-TestingFailed -Message $aadServicePrincipalError
                     $checks["CheckEntraObject"].Result = "Failed"
-                    $checks["CheckEntraObject"].Issue = "Service Principal is missing SPN 'CIFS/$($accountUriObject.DnsSafeHost)'."
+                    $checks["CheckEntraObject"].Issue = "Service Principal is missing SPN 'CIFS/$($fileEndpoint)'."
                 }
                 if(-not $ServicePrincipal.AccountEnabled)
                 {
@@ -3939,16 +3939,16 @@ function Debug-AzStorageAccountEntraKerbAuth {
                     $checks["CheckEntraObject"].Result = "Failed"
                     $checks["CheckEntraObject"].Issue = "Expected AccountEnabled set to true"
                 }
-                elseif(-not $ServicePrincipal.ServicePrincipalNames.Contains("CIFS/$($accountUriObject.DnsSafeHost)"))
+                elseif(-not $ServicePrincipal.ServicePrincipalNames.Contains("CIFS/$($fileEndpoint)"))
                 {
                     Write-TestingFailed -Message $aadServicePrincipalError
                     $checks["CheckEntraObject"].Result = "Failed"
-                    $checks["CheckEntraObject"].Issue = "Service Principal is missing SPN ' CIFS/$($accountUriObject.DnsSafeHost)'."
+                    $checks["CheckEntraObject"].Issue = "Service Principal is missing SPN ' CIFS/$($fileEndpoint)'."
                 }
                 
-                elseif (-not $ServicePrincipal.ServicePrincipalNames.Contains("api://${TenantId}/CIFS/$($accountUriObject.DnsSafeHost)"))
+                elseif (-not $ServicePrincipal.ServicePrincipalNames.Contains("api://${TenantId}/CIFS/$($fileEndpoint)"))
                 {
-                    Write-TestingWarning -Message "Service Principal is missing SPN '$($PSStyle.Foreground.BrightCyan)api://${TenantId}/CIFS/$($accountUriObject.DnsSafeHost)$($PSStyle.Reset)'."
+                    Write-TestingWarning -Message "Service Principal is missing SPN '$($PSStyle.Foreground.BrightCyan)api://${TenantId}/CIFS/$($fileEndpoint)$($PSStyle.Reset)'."
                     Write-Host "`tIt is okay to not have this value for now, but it is good to have this configured in future if you want to continue getting kerberos tickets."
                     $checks["CheckEntraObject"].Result = "Partial"
                 }
@@ -4046,7 +4046,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
         {
             Write-Host "Checking Admin Consent"
             $checksExecuted += 1;
-            Debug-EntraKerbAdminConsent -AccountEndpointSafeHost $accountUriObject.DnsSafeHost -checkResult $checks["CheckAdminConsent"]
+            Debug-EntraKerbAdminConsent -AccountEndpointSafeHost $fileEndpoint -checkResult $checks["CheckAdminConsent"]
         }
         #
         #Check Default share and RBAC permissions
@@ -4565,6 +4565,20 @@ function Debug-AzStorageAccountADDSAuth {
             "CheckAadKerberosRegistryKeyIsOff" = [CheckResult]::new("CheckAadKerberosRegistryKeyIsOff");
         }
         
+        $context = Get-AzContext
+        if($null -eq $context)
+        {
+            Write-TestingFailed `
+                -Message "You should run $($PSStyle.Foreground.BrightBlue)Connect-AzAccount$($PSStyle.Reset) first, then try again."
+                return
+        }
+        else
+        {
+            $environment = $context.Environment.Name
+            $accountRestEndpoint = (New-AzStorageContext -StorageAccountName $StorageAccountName -Environment $environment).FileEndPoint
+            $accountUriObject = [System.Uri]::new($accountRestEndpoint)
+            $fileEndpoint = $accountUriObject.DnsSafeHost
+        }
         
         #
         # Port 445 check 
@@ -4575,7 +4589,7 @@ function Debug-AzStorageAccountADDSAuth {
                 $checksExecuted += 1;
                 Write-Verbose "CheckPort445Connectivity - START"
 
-                Test-Port445Connectivity -StorageAccountFileEndPoint $accountUriObject.DnsSafeHost -ErrorAction Stop
+                Test-Port445Connectivity -StorageAccountFileEndPoint $fileEndpoint -ErrorAction Stop
 
                 $checks["CheckPort445Connectivity"].Result = "Passed"
                 Write-Verbose "CheckPort445Connectivity - SUCCESS"
