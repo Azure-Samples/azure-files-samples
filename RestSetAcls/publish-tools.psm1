@@ -49,7 +49,7 @@ function Publish-Local {
     Write-Host "Done" -ForegroundColor Gray
 
     Write-Host "`nInstalling $moduleName from $repoName" -ForegroundColor White
-    Install-Module -Name $moduleName -Repository $repoName -Force
+    Install-Module -Name $moduleName -Repository $repoName -AllowClobber -Force
     Write-Host "Done" -ForegroundColor Gray
 }
 
