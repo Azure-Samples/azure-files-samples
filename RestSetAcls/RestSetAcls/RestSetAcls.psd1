@@ -12,7 +12,7 @@
     RootModule        = 'RestSetAcls.psm1'
 
     # Version number of this module.
-    ModuleVersion     = '0.1.2'
+    ModuleVersion     = '0.1.3'
 
     # Supported PSEditions
     # CompatiblePSEditions = @()
@@ -55,7 +55,7 @@
         @{
             ModuleName    = "Az.Storage"
             GUID          = "dfa9e4ea-1407-446d-9111-79122977ab20"
-            ModuleVersion = "6.0.0"
+            ModuleVersion = "8.1.0"
         }
     )
 
