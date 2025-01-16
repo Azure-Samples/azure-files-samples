@@ -11,7 +11,7 @@ on:
 
 jobs:
   pester-test:
-    name: Pester test
+    name: Pester test on PowerShell 7
     runs-on: windows-latest
     defaults:
       run:
@@ -20,9 +20,10 @@ jobs:
     steps:
       - name: Check out repository code
         uses: actions/checkout@v4
+      - name: Print PowerShell version
+        run: $PSVersionTable
       - name: Run all Pester tests
         run: |
-          $PSVersionTable
           .\init.ps1
           Test
 
@@ -36,14 +37,15 @@ jobs:
     steps:
       - name: Check out repository code
         uses: actions/checkout@v4
+      - name: Print PowerShell version
+        run: $PSVersionTable
       - name: Run all Pester tests
         run: |
-          $PSVersionTable
           .\init.ps1
           Test
 
   test-format:
-    name: Test PowerShell formatting
+    name: Check PowerShell formatting
     runs-on: windows-latest
     defaults:
       run:
