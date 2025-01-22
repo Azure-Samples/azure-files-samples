@@ -39,8 +39,8 @@ function Get-AllAceFlagsMatch {
     )
 
     foreach ($ace in $SecurityDescriptor.DiscretionaryAcl) {
-        $hasAllBitsFromEnabledFlags = ($ace.AceFlags -band $EnabledFlags) -eq $EnabledFlags
-        $hasNoBitsFromDisabledFlags = ($ace.AceFlags -band $DisabledFlags) -eq 0
+        $hasAllBitsFromEnabledFlags = ([int]$ace.AceFlags -band [int]$EnabledFlags) -eq [int]$EnabledFlags
+        $hasNoBitsFromDisabledFlags = ([int]$ace.AceFlags -band [int]$DisabledFlags) -eq 0
         if (-not ($hasAllBitsFromEnabledFlags -and $hasNoBitsFromDisabledFlags)) {
             return $false
         }
@@ -61,13 +61,13 @@ function Set-AceFlags {
         [System.Security.AccessControl.AceFlags]$DisableFlags
     )
 
-    if ($EnableFlags -band $DisableFlags) {
+    if ([int]$EnableFlags -band [int]$DisableFlags) {
         throw "Enable and disable flags cannot overlap"
     }
 
     # Create new ACEs with updated flags
     $newAces = $SecurityDescriptor.DiscretionaryAcl | ForEach-Object {
-        $aceFlags = ($_.AceFlags -bor $EnableFlags) -band (-bnot $DisableFlags)
+        $aceFlags = ([int]$_.AceFlags -bor [int]$EnableFlags) -band (-bnot [int]$DisableFlags)
 
         if ($_.GetType().Name -eq "CommonAce") {
             [System.Security.AccessControl.CommonAce]::new(

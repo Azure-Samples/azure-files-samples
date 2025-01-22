@@ -11,7 +11,7 @@ on:
 
 jobs:
   pester-test:
-    name: Pester test
+    name: Pester test on PowerShell 7
     runs-on: windows-latest
     defaults:
       run:
@@ -20,13 +20,32 @@ jobs:
     steps:
       - name: Check out repository code
         uses: actions/checkout@v4
+      - name: Print PowerShell version
+        run: $PSVersionTable
+      - name: Run all Pester tests
+        run: |
+          .\init.ps1
+          Test
+
+  pester-test-powershell-5:
+    name: Pester test on PowerShell 5.1
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: .\RestSetAcls
+        shell: powershell
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v4
+      - name: Print PowerShell version
+        run: $PSVersionTable
       - name: Run all Pester tests
         run: |
           .\init.ps1
           Test
 
   test-format:
-    name: Test PowerShell formatting
+    name: Check PowerShell formatting
     runs-on: windows-latest
     defaults:
       run:
@@ -55,7 +74,7 @@ jobs:
           Test-Manifest
 
   lint-with-PSScriptAnalyzer:
-    name: Install and run PSScriptAnalyzer
+    name: Lint with PSScriptAnalyzer
     runs-on: windows-latest
     defaults:
       run:
