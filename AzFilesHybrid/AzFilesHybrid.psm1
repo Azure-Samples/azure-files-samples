@@ -4433,7 +4433,7 @@ function Test-IsCloudKerberosTicketRetrievalEnabled {
 function Debug-EntraKerbAdminConsent {
     [CmdletBinding()]
     param (
-        [Parameter(Mandatory=$True, Position=0, HelpMessage="Safehost Endpoint for User Account")]
+        [Parameter(Mandatory=$True, Position=0, HelpMessage="Endpoint for Files service on a storage account")]
         [string]$AccountFileEndpoint,
         [Parameter(Mandatory=$True, Position=1, HelpMessage="Check result object")]
         [CheckResult]$checkResult
