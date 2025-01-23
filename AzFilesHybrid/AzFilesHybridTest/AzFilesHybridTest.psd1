@@ -63,8 +63,33 @@
             ModuleVersion = "4.3.0"
         },
         @{
-            ModuleName = "Microsoft.Graph"
-            GUID = "fceec1eb-c2e8-4b2b-a120-0fab3f0d7b47"
+            ModuleName = "Microsoft.Graph.Applications"
+            GUID = "467f54f2-44a8-4993-8e75-b96c3e443098"
+            ModuleVersion = "2.2.0"
+        },
+        @{
+            ModuleName = "Microsoft.Graph.Authentication"
+            GUID = "883916f2-9184-46ee-b1f8-b6a2fb784cee"
+            ModuleVersion = "2.2.0"
+        },
+        @{
+            ModuleName = "Microsoft.Graph.Groups"
+            GUID = "50bc9e18-e281-4208-8913-c9e1bef6083d"
+            ModuleVersion = "2.2.0"
+        },
+        @{
+            ModuleName = "Microsoft.Graph.Identity.DirectoryManagement"
+            GUID = "c767240d-585c-42cb-bb2f-6e76e6d639d4"
+            ModuleVersion = "2.2.0"
+        },
+        @{
+            ModuleName = "Microsoft.Graph.Identity.SignIns"
+            GUID = "60f889fa-f873-43ad-b7d3-b7fc1273a44f"
+            ModuleVersion = "2.2.0"
+        },
+        @{
+            ModuleName = "Microsoft.Graph.Users"
+            GUID = "71150504-37a3-48c6-82c7-7a00a12168db"
             ModuleVersion = "2.2.0"
         },
         @{

@@ -3129,6 +3129,7 @@ function Get-AadUserForSid {
 
     Request-ConnectMsGraph -Scopes "User.Read.All"
 
+    # Requires Microsoft.Graph.Users
     $aadUser = Get-MgUser -Filter "OnPremisesSecurityIdentifier eq '$sid'"
 
     if ($null -eq $aadUser)
@@ -3704,18 +3705,21 @@ function Debug-AzStorageAccountEntraKerbAuth {
                     -Scopes "Application.Read.All" `
                     -TenantId $TenantId
                 
-                Import-Module Microsoft.Graph.Applications
-
+                # Requires Microsoft.Graph.Applications
                 $Application = Get-MgApplication `
                     -Filter "identifierUris/any (uri:uri eq 'api://${TenantId}/CIFS/${StorageAccountName}.file.core.windows.net')" `
                     -ConsistencyLevel eventual
+                
                 if($null -eq $Application)
                 {
                     Write-TestingFailed -Message "Could not find the application with SPN '$($PSStyle.Foreground.BrightCyan)api://${TenantId}/CIFS/${StorageAccountName}.file.core.windows.net$($PSStyle.Reset)'"
                     $checks["CheckEntraObject"].Result = "Failed"
                     $checks["CheckEntraObject"].Issue = "Could not find the application with SPN ' api://${TenantId}/CIFS/${StorageAccountName}.file.core.windows.net'."
                 }
+                
+                # Requires Microsoft.Graph.Applications
                 $ServicePrincipal = Get-MgServicePrincipal -Filter "servicePrincipalNames/any (name:name eq 'api://$TenantId/CIFS/$StorageAccountName.file.core.windows.net')" -ConsistencyLevel eventual
+                
                 [string]$aadServicePrincipalError = "SPN Value is not set correctly, It should be '$($PSStyle.Foreground.BrightCyan)CIFS/${Storageaccountname}.file.core.windows.net$($PSStyle.Reset)'"
                 if($null -eq $ServicePrincipal)
                 {
@@ -4090,7 +4094,8 @@ function Debug-RBACCheck {
     process {
         try {
             Request-ConnectMsGraph -Scopes "User.Read.All", "GroupMember.Read.All"
-                    
+            
+            # Requires Microsoft.Graph.Users
             $user = Get-MgUser -Filter "UserPrincipalName eq '$UserPrincipalName'" -Property Id,OnPremisesSecurityIdentifier
             
             if ($null -eq $user) {
@@ -4107,6 +4112,7 @@ function Debug-RBACCheck {
                 return
             }
             
+            # Requires Microsoft.Graph.Users
             $groups = Get-MgUserMemberOfAsGroup -UserId $user.Id -Property DisplayName,Id,OnPremisesSecurityIdentifier
             
             $hybridGroups = $groups | Where-Object { $_.OnPremisesSecurityIdentifier }
@@ -4236,13 +4242,13 @@ function Debug-EntraKerbAdminConsent {
                 -Scopes "DelegatedPermissionGrant.Read.All" `
                 -TenantId $TenantId
 
-            Import-Module Microsoft.Graph.Applications -MinimumVersion 2.2.0 -ErrorAction SilentlyContinue
-            Import-Module Microsoft.Graph.Identity.SignIns
-
+            # Requires Microsoft.Graph.Applications v2.2.0+
             $MsGraphSp = Get-MgServicePrincipalByAppId -AppId 00000003-0000-0000-c000-000000000000 
             
+            # Requires Microsoft.Graph.Applications
             $spn = "api://$TenantId/CIFS/$StorageAccountName.file.core.windows.net"
             $ServicePrincipal = Get-MgServicePrincipal -Filter "servicePrincipalNames/any (name:name eq '$spn')" -ConsistencyLevel eventual
+
             if($null -eq $ServicePrincipal -or $null -eq $ServicePrincipal.Id)
             {
                 Write-TestingFailed -Message "Could not find the application with SPN $($PSStyle.Foreground.BrightCyan)'$spn'$($PSStyle.Reset)"
@@ -4250,7 +4256,10 @@ function Debug-EntraKerbAdminConsent {
                 $checkResult.Issue = "Could not find the application with SPN '$spn'. "
                 return
             }
+            
+            # Requires Microsoft.Graph.Identity.SignIns
             $Consent = Get-MgOauth2PermissionGrant -Filter "ClientId eq '$($ServicePrincipal.Id)' and ResourceId eq '$($MSGraphSp.Id)' and consentType eq 'AllPrincipals'"
+            
             if($null -eq $Consent -or $null -eq $Consent.Scope)
             {
                 Write-TestingFailed -Message "Please grant admin consent using $($PSStyle.Foreground.BrightCyan)'https://aka.ms/azfiles/entra-adminconsent'$($PSStyle.Reset)"
@@ -4258,6 +4267,7 @@ function Debug-EntraKerbAdminConsent {
                 $checkResult.Issue = "Admin Consent is not granted"
                 return
             }
+            
             $permissions = New-Object System.Collections.Generic.HashSet[string]
             foreach ($permission in $Consent.Scope.Split(" ")) {
                 $permissions.Add($permission) | Out-Null
@@ -4583,6 +4593,7 @@ function Debug-AzStorageAccountADDSAuth {
 
                     Write-Verbose "CheckAadUserHasSid for object ID $ObjectId in domain $Domain"
 
+                    # Requires Microsoft.Graph.Users
                     $aadUser = Get-MgUser -Filter "Id eq '$ObjectId'" -Property OnPremisesSecurityIdentifier
 
                     if ($null -eq $aadUser) {
@@ -4679,9 +4690,11 @@ function Debug-AzStorageAccountADDSAuth {
                     # https://learn.microsoft.com/en-us/graph/api/directoryobject-getbyids?view=graph-rest-1.0&tabs=http#:~:text=This%20API%20has%20a%20known%20issue.%20Not%20all%20directory%20objects%20returned%20are%20the%20full%20objects%20containing%20all%20their%20properties.
                     # so we use Get-MgUser and Get-MgGroup
                     if ($assignment.ObjectType -eq 'User') {
+                        # Requires Microsoft.Graph.Users
                         $aadObject = Get-MgUser -UserId $assignment.ObjectId -Property OnPremisesSecurityIdentifier
                     }
                     if ($assignment.ObjectType -eq 'Group') {
+                        # Requires Microsoft.Graph.Groups
                         $aadObject = Get-MgGroup -GroupId $assignment.ObjectId -Property OnPremisesSecurityIdentifier
                     }
 
@@ -5926,7 +5939,6 @@ function Request-ConnectMsGraph {
         [string]$TenantId
     )
 
-    Import-Module Microsoft.Graph
     Import-Module Az
 
     if ([string]::IsNullOrEmpty($TenantId)) {
@@ -5934,6 +5946,7 @@ function Request-ConnectMsGraph {
         $TenantId = $context.Tenant.Id
     }
 
+    # Requires Microsoft.Graph.Authentication
     Connect-MgGraph -Scopes $Scopes -TenantId $TenantId | Out-Null
 }
 
@@ -5958,6 +5971,7 @@ function Get-AzCurrentAzureADUser {
 
     Request-ConnectMsGraph -Scopes "Domain.Read.All"
 
+    # requires Microsoft.Graph.Identity.DirectoryManagement
     $domains = Get-MgDomain
     $domainNames = $domains | Select-Object -ExpandProperty Id
 
@@ -7453,6 +7467,7 @@ function Move-OnPremSharePermissionsToAzureFileShare
         {
             Request-ConnectMsGraph -Scopes "User.Read.All"
             
+            # Requires Microsoft.Graph.Users
             $aadUser = Get-MgUser -Filter "OnPremisesSecurityIdentifier eq '$strSID'"
         }
         catch
