@@ -53,14 +53,29 @@
     # Modules that must be imported into the global environment prior to importing this module
     RequiredModules = @(
         @{
-            ModuleName = "Az"
-            GUID = "d48d710e-85cb-46a1-990f-22dae76f6b5f"
-            ModuleVersion = "2.8.0"
+            ModuleName = "Az.Accounts"
+            GUID = "17a2feff-488b-47f9-8729-e2cec094624c"
+            ModuleVersion = "4.0.1"
+        },
+        @{
+            ModuleName = "Az.Compute"
+            GUID = "d4cb9989-9ed1-49c2-bacd-0f8daf758671"
+            ModuleVersion = "9.0.1"
+        },
+        @{
+            ModuleName = "Az.Network"
+            GUID = "f554cfcd-9cbb-4021-b158-fe20f0497f82"
+            ModuleVersion = "7.12.0"
+        },
+        @{
+            ModuleName = "Az.Resources"
+            GUID = "48bb344d-4c24-441e-8ea0-589947784700"
+            ModuleVersion = "7.8.0"
         },
         @{
             ModuleName = "Az.Storage"
             GUID = "dfa9e4ea-1407-446d-9111-79122977ab20"
-            ModuleVersion = "4.3.0"
+            ModuleVersion = "8.1.0"
         },
         @{
             ModuleName = "Microsoft.Graph.Applications"

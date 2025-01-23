@@ -2089,6 +2089,7 @@ function Validate-StorageAccount {
 
     process
     {
+        # Requires Az.Resources
         $resourceGroupObject = Get-AzResourceGroup -Name $ResourceGroupName
 
         if ($null -eq $resourceGroupObject)
@@ -2101,6 +2102,7 @@ function Validate-StorageAccount {
             Write-Error -Message $message -ErrorAction Stop
         }
 
+        # Requires Az.Storage
         $storageAccountObject = Get-AzStorageAccount -ResourceGroup $ResourceGroupName -Name $StorageAccountName
 
         if ($null -eq $storageAccountObject)
@@ -2149,6 +2151,7 @@ function Ensure-KerbKeyExists {
         Write-Verbose "Ensure-KerbKeyExists - Checking for kerberos keys for account:$storageAccountName in resource group:$ResourceGroupName"
 
         try {
+            # Requires Az.Storage
             $storageAccount = Get-AzStorageAccount -ResourceGroupName $ResourceGroupName -Name $StorageAccountName -ErrorAction Stop
         }
         catch {
@@ -2170,6 +2173,7 @@ function Ensure-KerbKeyExists {
             #
 
             try {
+                # Requires Az.Storage
                 $keys = New-AzStorageAccountKey -ResourceGroupName $ResourceGroupName -Name $StorageAccountName -KeyName kerb1 -ErrorAction Stop
             }
             catch {
@@ -2189,6 +2193,7 @@ function Ensure-KerbKeyExists {
             # The storage account doesn't have kerb keys yet.  Generate them now.
             #
 
+            # Requires Az.Storage
             $keys = New-AzStorageAccountKey -ResourceGroupName $ResourceGroupName -Name $StorageAccountName -KeyName kerb2 -ErrorAction Stop
 
             $kerb2Key = Get-AzStorageAccountKerbKeys -ResourceGroupName $ResourceGroupName -StorageAccountName $StorageAccountName `
@@ -2315,6 +2320,7 @@ function Get-AzStorageAccountKerbKeys {
 
     Validate-StorageAccount -ResourceGroupName $ResourceGroupName -StorageAccountName $StorageAccountName -ErrorAction Stop
     
+    # Requires Az.Storage
     $keys = Get-AzStorageAccountKey -ResourceGroupName $ResourceGroupName -Name $StorageAccountName -ListKerbKey `
             | Where-Object { $_.KeyName -like "kerb*" }
 
@@ -3408,6 +3414,7 @@ function Debug-DomainLineOfSight
 
     process
     {
+        # Requires Azure.Storage
         $storageAccount = Get-AzStorageAccount -ResourceGroupName $ResourceGroupName -Name $StorageAccountName
         $fullyQualifiedDomainName = $storageAccount.AzureFilesIdentityBasedAuth.ActiveDirectoryProperties.DomainName
         Write-Host "Fully Qualified Domain Name: $fullyQualifiedDomainName"
@@ -3545,6 +3552,7 @@ function Debug-AzStorageAccountAuth {
 
     process
     {
+        # Requires Az.Storage
         $storageAccount = Get-AzStorageAccount -ResourceGroupName $ResourceGroupName -StorageAccountName $StorageAccountName -ErrorAction Stop
         $directoryServiceOptions = $storageAccount.AzureFilesIdentityBasedAuth.DirectoryServiceOptions 
 
@@ -3669,6 +3677,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
         {
             Write-Host "Checking AAD Connectivity"
             try {
+                # Requires Az.Accounts
                 $checksExecuted += 1;
                 $Context = Get-AzContext
                 $TenantId = $Context.Tenant
@@ -3697,6 +3706,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
         {
             Write-Host "Checking Entra Object"
             try {
+                # Requires Az.Accounts
                 $checksExecuted += 1;
                 $Context = Get-AzContext
                 $TenantId = $Context.Tenant
@@ -4136,6 +4146,7 @@ function Debug-RBACCheck {
             
             foreach ($roleName in $roleNames)
             {
+                # Requires Az.Resources
                 $assignments = Get-AzRoleAssignment -RoleDefinitionName $roleName -Scope $scope
                 
                 foreach ($assignment in $assignments) 
@@ -4235,6 +4246,7 @@ function Debug-EntraKerbAdminConsent {
 
     process {
         try {
+            # Requires Az.Accounts
             $Context = Get-AzContext
             $TenantId = $Context.Tenant
             
@@ -4674,9 +4686,12 @@ function Debug-AzStorageAccountADDSAuth {
                 # Storage File Data SMB Share Elevated Contributor
                 $smbRoleNamePrefix = "Storage File Data SMB Share"
                 $smbRoleDefinitions = @{}
+                
+                # Requires Az.Resources
                 Get-AzRoleDefinition | Where-Object { $_.Name.StartsWith($smbRoleNamePrefix) } `
                     | ForEach-Object { $smbRoleDefinitions[$_.Id] = $_ }
                 
+                # Requires Az.Resources
                 $roleAssignments = Get-AzRoleAssignment -ResourceGroupName $ResourceGroupName `
                     -ResourceName $StorageAccountName -ResourceType Microsoft.Storage/storageAccounts `
                     | Where-Object { $smbRoleDefinitions.ContainsKey($_.RoleDefinitionId) }
@@ -4969,10 +4984,12 @@ function Set-StorageAccountDomainProperties {
         Write-Verbose "Setting AD properties on $StorageAccountName in $ResourceGroupName : `
             EnableActiveDirectoryDomainServicesForFile=$false"
 
+        # Requires Az.Storage
         Set-AzStorageAccount -ResourceGroupName $ResourceGroupName -AccountName $StorageAccountName `
             -EnableActiveDirectoryDomainServicesForFile $false
     } else {
 
+        # Requires Az.Storage
         $storageAccount = Get-AzStorageAccount -ResourceGroupName $ResourceGroupName -AccountName $StorageAccountName
 
         if (($null -ne $storageAccount.AzureFilesIdentityBasedAuth.ActiveDirectoryProperties) -and (-not $Force)) {
@@ -5037,6 +5054,7 @@ function Set-StorageAccountDomainProperties {
             ActiveDirectorySamAccountName=$samAccountName, `
             ActiveDirectoryAccountType=$accountType"
 
+        # Requires Az.Storage
         Set-AzStorageAccount -ResourceGroupName $ResourceGroupName -AccountName $StorageAccountName `
              -EnableActiveDirectoryDomainServicesForFile $true -ActiveDirectoryDomainName $domainName `
              -ActiveDirectoryNetBiosDomainName $netBiosDomainName -ActiveDirectoryForestName $forestName `
@@ -5269,6 +5287,7 @@ function Update-AzStorageAccountADObjectPassword {
 
     process {
         if ($PSCmdlet.ParameterSetName -eq "StorageAccountName") {
+            # Requires Az.Storage
             Write-Verbose -Message "Get storage account object for StorageAccountName=$StorageAccountName."
             $StorageAccount = Get-AzStorageAccount `
                 -ResourceGroupName $ResourceGroupName `
@@ -5312,6 +5331,7 @@ function Update-AzStorageAccountADObjectPassword {
             
             Write-Verbose -Message ("Regenerate $RotateToKerbKey on " + $StorageAccount.StorageAccountName)
             if (!$SkipKeyRegeneration.ToBool()) {
+                # Requires Az.Storage
                 $kerbKeys = New-AzStorageAccountKey `
                     -ResourceGroupName $StorageAccount.ResourceGroupName `
                     -Name $StorageAccount.StorageAccountName `
@@ -5319,6 +5339,7 @@ function Update-AzStorageAccountADObjectPassword {
                     -ErrorAction Stop | `
                 Select-Object -ExpandProperty Keys
             } else {
+                # Requires Az.Storage
                 $kerbKeys = Get-AzStorageAccountKerbKeys `
                     -ResourceGroupName $StorageAccount.ResourceGroupName `
                     -StorageAccountName $StorageAccount.StorageAccountName `
@@ -5939,9 +5960,8 @@ function Request-ConnectMsGraph {
         [string]$TenantId
     )
 
-    Import-Module Az
-
     if ([string]::IsNullOrEmpty($TenantId)) {
+        # Requires Az.Accounts
         $context = Get-AzContext
         $TenantId = $context.Tenant.Id
     }
@@ -5965,6 +5985,7 @@ function Get-AzCurrentAzureADUser {
     [CmdletBinding()]
     param()
 
+    # Requires Az.Accounts
     $context = Get-AzContext
     $friendlyLogin = $context.Account.Id
     $friendlyLoginSplit = $friendlyLogin.Split("@")
@@ -5982,6 +6003,7 @@ function Get-AzCurrentAzureADUser {
 
         foreach($domain in $domains) {
             $possibleName = ($username + "@" + $domain.Id)
+            # Requires Az.Resources
             $foundUser = Get-AzADUser -UserPrincipalName $possibleName
             if ($null -ne $foundUser) {
                 return $possibleName
@@ -6043,6 +6065,8 @@ function Test-AzPermission {
 
             $ResourceIdComponents = $Scope | Expand-AzResourceId
             $subscription = $ResourceIdComponents.subscriptions
+
+            # Requires Az.Resources
             $roleAssignments = Get-AzRoleAssignment `
                     -Scope "/subscriptions/$subscription" `
                     -IncludeClassicAdministrators | `
@@ -6061,8 +6085,8 @@ function Test-AzPermission {
 
         # Normalize operations to $Operation
         if ($PSCmdlet.ParameterSetName -eq "OperationsName") {
-            $Operation = $OperationName | `
-                Get-AzProviderOperation
+            # Requires Az.Resources
+            $Operation = $OperationName | Get-AzProviderOperation
         }
 
         # If a specific user isn't given, use the current PowerShell logged in user.
@@ -6094,6 +6118,7 @@ function Test-AzPermission {
             return $userHasOperation
         }
 
+        # Requires Az.Resources
         $roleAssignments = Get-AzRoleAssignment -Scope $Scope -SignInName $SignInName
 
         if ($RefreshCache) {
@@ -6103,6 +6128,7 @@ function Test-AzPermission {
         foreach($roleAssignment in $roleAssignments) {
             $operationsInRole = [string[]]$null
             if (!$OperationCache.TryGetValue($roleAssignment.RoleDefinitionId, [ref]$operationsInRole)) {
+                # Requires Az.Resources
                 $operationsInRole = Get-AzRoleDefinition -Id $roleAssignment.RoleDefinitionId
                 $OperationCache.Add($roleAssignment.RoleDefinitionId, $operationsInRole)
             }
@@ -6148,6 +6174,7 @@ function Test-AzPermission {
             }
         }
 
+        # Requires Az.Resources
         $denyAssignments = Get-AzDenyAssignment -Scope $Scope -SignInName $SignInName
         foreach($denyAssignment in $denyAssignments) {
             foreach($op in $Operation) {
@@ -6454,10 +6481,13 @@ function Add-AzDnsForwardingRule {
         $forwardingRules = $DnsForwardingRuleSet.DnsForwardingRules
 
         if ($PSCmdlet.ParameterSetName -eq "AzureEndpointParameterSet") {
+            # Requires Az.Accounts
             $subscriptionContext = Get-AzContext
             if ($null -eq $subscriptionContext) {
                 throw [AzureLoginRequiredException]::new()
             }
+
+            # Requires Az.Accounts
             $environmentEndpoints = Get-AzEnvironment -Name $subscriptionContext.Environment
 
             switch($AzureEndpoint) {
@@ -6749,6 +6779,7 @@ function Confirm-AzDnsForwarderPreReqs {
     switch($PSCmdlet.ParameterSetName) {
         "NameParameterSet" {
             # Get/verify virtual network is there.
+            # Requires Az.Network
             $VirtualNetwork = Get-AzVirtualNetwork `
                 -ResourceGroupName $VirtualNetworkResourceGroupName `
                 -Name $VirtualNetworkName `
@@ -6778,6 +6809,7 @@ function Confirm-AzDnsForwarderPreReqs {
             $VirtualNetworkResourceGroupName = $VirtualNetwork.ResourceGroupName
 
             # Verify/update virtual network object
+            # Requires Az.Network
             $VirtualNetwork = $VirtualNetwork | `
                 Get-AzVirtualNetwork -ErrorAction SilentlyContinue
             
@@ -6807,6 +6839,7 @@ function Confirm-AzDnsForwarderPreReqs {
             $VirtualNetworkSubnetName = $virtualNetworkSubnetId["subnets"]
 
             # Get/verify virtual network object
+            # Requires Az.Network
             $VirtualNetwork = Get-AzVirtualNetwork `
                 -ResourceGroupName $VirtualNetworkResourceGroupName `
                 -Name $VirtualNetworkName `
@@ -7046,6 +7079,7 @@ function Invoke-AzDnsForwarderDeployment {
 
     if ($PSCmdlet.ShouldProcess($verboseConfirmMessage, $verboseConfirmMessage, $caption)) {
         try {
+            # Requires Az.Resources
             $templateResult = New-AzResourceGroupDeployment `
                 -ResourceGroupName $DnsServerResourceGroupName `
                 -TemplateUri $DnsForwarderTemplate `
@@ -7080,6 +7114,7 @@ function Get-AzDnsForwarderIpAddress {
         Select-Object @{ Name = "NIC"; Expression = { ($_ + "-NIC") } } | `
         Select-Object -ExpandProperty NIC
 
+    # Requires Az.Network
     $ipAddresses = Get-AzNetworkInterface -ResourceGroupName $DnsServerResourceGroupName | `
         Where-Object { $_.Name -in $nicNames } | `
         Select-Object -ExpandProperty IpConfigurations | `
@@ -7111,6 +7146,7 @@ function Update-AzVirtualNetworkDnsServers {
             $VirtualNetwork.DhcpOptions.DnsServers.Add($ipAddress)
         }
         
+        # Requires Az.Network
         $VirtualNetwork | Set-AzVirtualNetwork -ErrorAction Stop | Out-Null
     }
 }
@@ -7223,10 +7259,12 @@ function New-AzDnsForwarder {
         # Create resource group for the DNS forwarders, if it hasn't already
         # been created. The resource group will have the same location as the vnet.
         if ($PSBoundParameters.ContainsKey("DnsServerResourceGroupName")) {
+            # Requires Az.Resources
             $dnsServerResourceGroup = Get-AzResourceGroup | `
                 Where-Object { $_.ResourceGroupName -eq $DnsServerResourceGroupName }
 
             if ($null -eq $dnsServerResourceGroup) { 
+                # Requires Az.Resources
                 $dnsServerResourceGroup = New-AzResourceGroup `
                         -Name $DnsServerResourceGroupName `
                         -Location $VirtualNetwork.Location
@@ -7281,6 +7319,7 @@ function New-AzDnsForwarder {
                 -Confirm:$false
 
         foreach($dnsForwarder in $dnsForwarderNames) {
+            # Requires Az.Compute
             Restart-AzVM `
                     -ResourceGroupName $DnsServerResourceGroupName `
                     -Name $dnsForwarder | `
@@ -7385,6 +7424,7 @@ function Move-OnPremSharePermissionsToAzureFileShare
     # Verify the Storage account and file share exist on the cloud.
     try
     {
+        # Requires Az.Storage
         $StorageAccountObj = Get-AzStorageAccount -ResourceGroupName $ResourceGroupName -Name $StorageAccountName -ErrorAction Stop
     }
     catch
@@ -7406,7 +7446,9 @@ function Move-OnPremSharePermissionsToAzureFileShare
 
     try
     {
+        # Requires Az.Storage
         $accountKey = Get-AzStorageAccountKey -ResourceGroupName $ResourceGroupName -Name $StorageAccountName | Where-Object {$_.KeyName -like "key1"}
+        # Requires Az.Storage
         $storageAccountContext = New-AzStorageContext -StorageAccountName $StorageAccountName -StorageAccountKey $accountKey.Value
     }
     catch
@@ -7416,6 +7458,7 @@ function Move-OnPremSharePermissionsToAzureFileShare
 
     Write-Verbose -Message "Checking if the destination share exists"
 
+    # Requires Az.Storage
     $cloudShare = Get-AzStorageShare -Context $storageAccountContext -Name $DestinationShareName -Erroraction 'silentlycontinue'
 
     # If the destination share does not exist, the following will create a new share.
@@ -7424,6 +7467,7 @@ function Move-OnPremSharePermissionsToAzureFileShare
         Write-Verbose -Message  "The Destination Share doesn't exist. Creating a new share with the name provided"
         try
         {
+            # Requires Az.Storage
             $cloudShare = New-AzStorageShare -Name $DestinationShareName -Context $storageAccountContext
         }
         catch
@@ -7487,16 +7531,19 @@ function Move-OnPremSharePermissionsToAzureFileShare
                 if($strAccessRight.Contains("Read"))
                 {
                     # Storage File Data SMB Share Reader - Built in role definition has below Id.
+                    # Requires Az.Resources
                     $roleDefinition = Get-AzRoleDefinition -Id aba4ae5f-2193-4029-9191-0cb91df5e314
                 }
                 elseif($strAccessRight.Contains("Change"))
                 {
                     # Storage File Data SMB Share Elevated Contributor - Built in role has below Id.
+                    # Requires Az.Resources
                     $roleDefinition = Get-AzRoleDefinition -Id a7264617-510b-434b-a828-9731dc254ea7
                 }
                 elseif($strAccessRight.Contains("Full") -And $AutoFitSharePermissionsOnAAD -eq $true)
                 {
                     # Storage File Data SMB Share Elevated Contributor - Built in role has below Id.
+                    # Requires Az.Resources
                     $roleDefinition = Get-AzRoleDefinition -Id a7264617-510b-434b-a828-9731dc254ea7
                 }
             }
@@ -7514,6 +7561,7 @@ function Move-OnPremSharePermissionsToAzureFileShare
                 $storageAccountPath = $StorageAccountObj.Id
                 $scope = "$storageAccountPath/fileServices/default/fileshares/$DestinationShareName"
 
+                # Requires Az.Resources
                 $roleAssignments = Get-AzRoleAssignment -Scope $scope -ObjectId $aadUser.ObjectId
 
                 #Check to see if the role is already assigned to the user/group.
@@ -7537,6 +7585,7 @@ function Move-OnPremSharePermissionsToAzureFileShare
                 {
                     Write-Verbose -Message "Assigning RBAC role to the user/group : $account  with the role : $($roleDefinition.Name)"
                     #Assign the custom role to the target identity with the specified scope.
+                    # Requires Az.Resources
                     $newRoleAssignment = New-AzRoleAssignment -ObjectId $aadUser.ObjectId -RoleDefinitionId $roleDefinition.Id -Scope $scope
 
                     $roleAssignmentsDoneAccounts.Add($smbShareAccessControl)
