@@ -22,6 +22,4 @@ jobs:
       - name: Check .psd1 file with Test-ModuleManifest
         run: |
           . .\init.ps1
-          Install-Module Az
-          Install-Module Microsoft.Graph
           Test-Manifest

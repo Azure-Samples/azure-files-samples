@@ -1,20 +1,24 @@
-function Test-Manifest {
-    Test-ModuleManifest -Path $PSScriptRoot\AzFilesHybridTest\AzFilesHybridTest.psd1
+function Init {
+    Write-Host "Checking if PSDepend is installed" -ForegroundColor White
+    $installed = $null -ne (Get-Module PSDepend -ListAvailable)
+
+    if ($installed) {
+        Write-Host "Already installed"
+    }
+    else {
+        Write-Host "Not installed"
+        Write-Host "`nInstalling PSDepend" -ForegroundColor White
+        Install-Module -Name PSDepend -Repository PSGallery -Force
+        Write-Host "Done"
+    }
+
+    Write-Host "`nInstalling build dependencies" -ForegroundColor White
+    Invoke-PSDepend -Path $PSScriptRoot\build.depend.psd1 -Force
+    Write-Host "Done"
+
+    Write-Host "`nImporting build tools" -ForegroundColor White
+    Import-Module $PSScriptRoot\build-tools.psm1 -Force
+    Write-Host "Done"
 }
 
-function Publish-PSGallery {
-    [CmdletBinding(SupportsShouldProcess)]
-    param (
-        [Parameter(Mandatory = $true, HelpMessage = "PowerShell Gallery API Key")]
-        [string]$apiKey
-    )
-
-    Write-Host "Testing manifest" -ForegroundColor White -NoNewline
-    Test-Manifest
-    Write-Host
-
-    # This will also run Test-ModuleManifest
-    Write-Host "Publishing" -ForegroundColor White
-    Publish-Module -Path $PSScriptRoot\AzFilesHybridTest -NuGetApiKey $apiKey -WhatIf:$WhatIfPreference
-    Write-Host "Done" -ForegroundColor Green
-}
+Init
