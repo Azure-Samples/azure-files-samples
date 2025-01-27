@@ -3467,7 +3467,7 @@ function Debug-KerberosTicketEncryption
         if(
             $null -eq $kerberosTicketEncryptionClient -or `
             0 -eq $kerberosTicketEncryptionClient.Count -or `
-            'None' -eq $kerberosTicketEncryptionClient.Value.ToString()
+            ($kerberosTicketEncryptionClient.Value -and 'None' -eq $kerberosTicketEncryptionClient.Value.ToString())
             )
         {
             # Now try to look for the supported kerberos ticket encryption using klist
@@ -4880,10 +4880,10 @@ function Debug-AzStorageAccountADDSAuth {
 
                 $sidNames = @{}
                 $user = Get-OnPremAdUser -Identity $UserName -Domain $Domain -ErrorAction Stop
-                $sidNames[$user.SID.Value] = $user.DistinguishedName
+                $sidNames[$user.SID] = $user.DistinguishedName
 
                 $groups = Get-OnPremAdUserGroups -Identity $user.SID -Domain $Domain -ErrorAction Stop
-                $groups | ForEach-Object { $sidNames[$_.SID.Value] = $_.DistinguishedName }
+                $groups | ForEach-Object { $sidNames[$_.SID] = $_.DistinguishedName }
 
                 # The user needs following role assignments to have the share-level access.
                 # Currently only three roles are defined, but new ones may be added in future,
@@ -5221,11 +5221,11 @@ function Set-StorageAccountDomainProperties {
             -SPNValue $spnValue `
             -Domain $Domain `
             -ErrorAction Stop
-        $azureStorageSid = $azureStorageIdentity.SID.Value
+        $azureStorageSid = $azureStorageIdentity.SID
         $samAccountName = $azureStorageIdentity.SamAccountName.TrimEnd("$")
         $domainGuid = $domainInformation.ObjectGUID.ToString()
         $domainName = $domainInformation.DnsRoot
-        $domainSid = $domainInformation.DomainSID.Value
+        $domainSid = $domainInformation.DomainSID
         $forestName = $domainInformation.Forest
         $netBiosDomainName = $domainInformation.DnsRoot
         $accountType = ""
@@ -5554,7 +5554,7 @@ function Update-AzStorageAccountADObjectPassword {
             # if ($Force.ToBool()) {
                 Write-Verbose -Message ("Attempt reset on " + $adObj.SamAccountName + " to $RotateToKerbKey")
                 Set-ADAccountPassword `
-                    -Identity $adObj `
+                    -Identity $adObj.DistinguishedName `
                     -Reset `
                     -NewPassword $newPassword `
                     -Server $domain `
