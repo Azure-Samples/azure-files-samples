@@ -3374,13 +3374,11 @@ function Test-Port445Connectivity {
 
         if ($result.TcpTestSucceeded -eq $False)
         {
-            $message = "Unable to reach the storage account file endpoint." `
-                + "`n`tTo debug connectivity problems, please refer to the troubleshooting tool for Azure" `
-                + " Files mounting errors on Windows, " `
-                + " `n`t'AzFileDiagnostics.ps1'($($PSStyle.Foreground.BrightCyan)https://gallery.technet.microsoft.com/Troubleshooting-tool-for-a9fa1fe5$($PSStyle.Reset))." `
-                + " `n`tFor possible solutions please refer to" `
-                + " '$($PSStyle.Foreground.BrightCyan)https://aka.ms/azfiles/entra-port445$($PSStyle.Reset)'"
-            Write-Error -Message $message -ErrorAction Stop
+            $errMsg = "Unable to reach the storage account file endpoint." `
+            + "`n`tTo debug connectivity problems, please refer to the following," `
+            + "`n`t'AzFileDiagnostics.ps1'($($PSStyle.Foreground.BrightCyan)https://github.com/Azure-Samples/azure-files-samples/tree/master/AzFileDiagnostics/Windows$($PSStyle.Reset))'." `
+            + "`n`tFor possible solutions please refer to '$($PSStyle.Foreground.BrightCyan)https://aka.ms/azfiles/entra-port445$($PSStyle.Reset)'"
+            Write-TestingFailed -Message $errMsg -ErrorAction Stop
         }
     }
 }
@@ -3789,7 +3787,7 @@ function Debug-AzStorageAccountAuth {
     }
 }
 
-function Debug-AzStorageAccountEntraKerbAuth {
+function  Debug-AzStorageAccountEntraKerbAuth {
     [CmdletBinding()]
     param (
         [Parameter(Mandatory=$True, HelpMessage="Storage account name")]
@@ -3872,7 +3870,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 Write-TestingPassed
             } catch {
                 Write-TestingFailed -Message $_ -IsUnexpected $true
-                $checks["CheckPort445Connectivity"].Result = "Failed"
+                $checks["CheckPort445Connectivity"].Result = "Unexpected"
                 $checks["CheckPort445Connectivity"].Issue = $_
             }
         }
