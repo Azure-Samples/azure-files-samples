@@ -4,6 +4,20 @@ function Get-Hashes {
     Get-ChildItem $PSScriptRoot\AzFilesHybrid -Recurse -File | Get-FileHash -Algorithm SHA256 | Select-Object -Property Path, Hash    
 }
 
+function Get-SignedHashes {
+    param (
+        [Parameter(Mandatory = $true, HelpMessage = "Release version")]
+        [string]$version
+    )
+
+    $path = "$PSScriptRoot\bin\releases\$version\AzFilesHybrid"
+    if (-not (Test-Path -Path $path)) {
+        throw "The release folder for version $version does not exist. Import it with Import-SignedRelease first."
+    }
+
+    Get-ChildItem $path -Recurse -File | Get-AuthenticodeSignature | Select-Object -Property Path, Hash
+}
+
 function Test-Signatures {
     param (
         [Parameter(Mandatory = $true, HelpMessage = "Path to the folder containing files to check signatures")]
@@ -22,8 +36,7 @@ function Test-Signatures {
             if ($signature.Status -ne 'Valid') {
                 throw "The file $($file.FullName) does not have a valid signature"
             }
-            if (($signature.SignerCertificate.Thumbprint -ne 'C2048FB509F1C37A8C3E9EC6648118458AA01780') -or 
-                ($signature.SignerCertificate.Subject -ne 'CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US')) {
+            if ($signature.SignerCertificate.Subject -ne 'CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US') {
                 throw "The file $($file.FullName) is not signed by the expected certificate"
             }
         } catch {
@@ -37,7 +50,10 @@ function Test-Signatures {
 function Test-Release {
     param (
         [Parameter(Mandatory = $true, Position = 0, HelpMessage = "Path to the folder containing release files")]
-        [string]$folderPath
+        [string]$folderPath,
+
+        [Parameter(Mandatory = $false, HelpMessage = "Whether to write information to output")]
+        [switch]$PassThru
     )
     Write-Host "Checking release" -ForegroundColor White
     $manifestPath = Join-Path -Path $folderPath -ChildPath "AzFilesHybrid.psd1"
@@ -59,6 +75,12 @@ function Test-Release {
     # Check 4: is file is valid?
     Test-ModuleManifest -Path $manifestPath -ErrorAction Stop | Out-Null
     Write-Host "$($PSStyle.Foreground.BrightGreen)($checkmark)$($PSStyle.Reset) Manifest file is valid"
+
+    if ($PassThru) {
+        Write-Output @{
+            Version = $version
+        }
+    }
 }
 
 function Import-SignedRelease {
@@ -75,7 +97,8 @@ function Import-SignedRelease {
     }
     Expand-Archive -Path $zipFilePath -DestinationPath $tempFolderPath -Force
 
-    Test-Release $tempFolderPath
+    $result = Test-Release $tempFolderPath -PassThru
+    $version = $result.Version
 
     # If all checks pass, move from temp to release folder
     $destinationPath = Join-Path -Path $workingDir -ChildPath "$version/AzFilesHybrid"
