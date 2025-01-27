@@ -3895,8 +3895,8 @@ function  Debug-AzStorageAccountEntraKerbAuth {
                 }
                 
             } catch {
-                Write-TestingFailed -Message $_
-                $checks["CheckAADConnectivity"].Result = "Failed"
+                Write-TestingFailed -Message $_ -IsUnexpected $true
+                $checks["CheckAADConnectivity"].Result = "Unexpected"
                 $checks["CheckAADConnectivity"].Issue = $_
             }
         }
