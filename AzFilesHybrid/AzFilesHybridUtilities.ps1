@@ -19,7 +19,6 @@ function Write-TestingFailed(
     Write-Host "`t$($PSStyle.Foreground.BrightRed)ERROR$($PSStyle.Reset): $Message"
 }
 
-
 function Write-TestingWarning(
     [Parameter(Mandatory=$true, Position=0)]
     [string]$Message
