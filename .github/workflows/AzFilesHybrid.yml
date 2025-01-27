@@ -1,0 +1,25 @@
+name: Test AzFilesHybrid
+on:
+  push:
+    paths:
+      - ".github/workflows/AzFilesHybrid.yml"
+      - "AzFilesHybrid/**"
+  pull_request:
+    paths:
+      - ".github/workflows/AzFilesHybrid.yml"
+      - "AzFilesHybrid/**"
+
+jobs:
+  Check-manifest:
+    name: Check .psd1 manifest file
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: .\AzFilesHybrid
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check .psd1 file with Test-ModuleManifest
+        run: |
+          .\init.ps1
+          Test-Manifest
