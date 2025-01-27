@@ -3871,7 +3871,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 $checks["CheckPort445Connectivity"].Result = "Passed"
                 Write-TestingPassed
             } catch {
-                Write-TestingFailed -Message $_
+                Write-TestingFailed -Message $_ -IsUnexpected $true
                 $checks["CheckPort445Connectivity"].Result = "Failed"
                 $checks["CheckPort445Connectivity"].Issue = $_
             }
