@@ -12,7 +12,7 @@
     RootModule = 'AzFilesHybrid.psm1'
     
     # Version number of this module.
-    ModuleVersion = '0.3.3.2'
+    ModuleVersion = '0.3.3.0'
     
     # Supported PSEditions
     CompatiblePSEditions = "Core", "Desktop"
