@@ -17,7 +17,11 @@ function Init {
     Write-Host "Done"
 
     Write-Host "`nImporting build tools" -ForegroundColor White
-    Import-Module $PSScriptRoot\build-tools.psm1 -Force
+    Import-Module $PSScriptRoot\tools.build.psm1 -Force
+    Write-Host "Done"
+
+    Write-Host "`nImporting publish tools" -ForegroundColor White
+    Import-Module $PSScriptRoot\tools.publish.psm1 -Force
     Write-Host "Done"
 }
 
