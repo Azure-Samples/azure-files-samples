@@ -126,9 +126,12 @@ function Publish-PSGallery {
         throw "The release folder $releasePath does not exist."
     }
 
-    Test-Release $releasePath
+    $result = Test-Release $releasePath -PassThru
+    if ($result.Version -ne $version) {
+        throw "The version in the release folder $($result.Version) does not match the expected version $version"
+    }
 
     Write-Host "`nPublishing" -ForegroundColor White
-    Publish-Module -Path $PSScriptRoot\release\$version\AzFilesHybrid -NuGetApiKey $apiKey -WhatIf:$WhatIfPreference
+    Publish-Module -Path $releasePath -NuGetApiKey $apiKey -WhatIf:$WhatIfPreference
     Write-Host "Done" -ForegroundColor Green
 }
