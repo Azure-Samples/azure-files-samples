@@ -1,5 +1,5 @@
 function Test-Manifest {
-    Test-ModuleManifest -Path $PSScriptRoot\AzFilesHybridTest\AzFilesHybridTest.psd1
+    Test-ModuleManifest -Path $PSScriptRoot\AzFilesHybrid\AzFilesHybrid.psd1
 }
 
 function Publish-PSGallery {
@@ -15,6 +15,6 @@ function Publish-PSGallery {
 
     # This will also run Test-ModuleManifest
     Write-Host "Publishing" -ForegroundColor White
-    Publish-Module -Path $PSScriptRoot\AzFilesHybridTest -NuGetApiKey $apiKey -WhatIf:$WhatIfPreference
+    Publish-Module -Path $PSScriptRoot\AzFilesHybrid -NuGetApiKey $apiKey -WhatIf:$WhatIfPreference
     Write-Host "Done" -ForegroundColor Green
 }
