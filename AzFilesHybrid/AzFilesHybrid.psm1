@@ -4153,8 +4153,8 @@ function  Debug-AzStorageAccountEntraKerbAuth {
             }
             catch 
             {
-                Write-TestingFailed -Message $_
-                $checks["CheckIpHlpScv"].Result = "Failed"
+                Write-TestingFailed -Message $_ -IsUnexpected $true
+                $checks["CheckIpHlpScv"].Result = "Unexpected"
                 $checks["CheckIpHlpScv"].Issue = $_
             }
 
