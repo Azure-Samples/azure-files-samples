@@ -4385,9 +4385,9 @@ function Debug-RBACCheck {
         } 
         catch
         {
-            $checkResult.Result = "Failed"
+            $checkResult.Result = "Unexpected"
             $checkResult.Issue = $_
-            Write-TestingFailed -Message $_
+            Write-TestingFailed -Message $_ -IsUnexpected $true
         }
     } 
 }
