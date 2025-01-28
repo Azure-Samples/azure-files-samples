@@ -3955,8 +3955,8 @@ function  Debug-AzStorageAccountEntraKerbAuth {
                     $checks["CheckEntraObject"].Result = "Passed"
                 }
             } catch {
-                Write-TestingFailed -Message $_
-                $checks["CheckEntraObject"].Result = "Failed"
+                Write-TestingFailed -Message $_ -IsUnexpected $true
+                $checks["CheckEntraObject"].Result = "Unexpected"
                 $checks["CheckEntraObject"].Issue = $_
             }
         }
