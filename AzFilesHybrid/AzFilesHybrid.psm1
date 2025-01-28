@@ -4491,8 +4491,8 @@ function Debug-EntraKerbAdminConsent {
                 $checkResult.Issue = "Admin Consent is not granted"
             }
         } catch {
-            Write-TestingFailed -Message $_
-            $checkResult.Result = "Failed"
+            Write-TestingFailed -Message $_ -IsUnexpected $true
+            $checkResult.Result = "Unexpected"
             $checkResult.Issue = $_
         }
     }
