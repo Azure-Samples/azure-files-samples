@@ -4201,8 +4201,8 @@ function  Debug-AzStorageAccountEntraKerbAuth {
              }
              catch 
              {
-                Write-TestingFailed -Message $_
-                $checks["CheckFiddlerProxy"].Result = "Failed"
+                Write-TestingFailed -Message $_ -IsUnexpected $true
+                $checks["CheckFiddlerProxy"].Result = "Unexpected"
                 $checks["CheckFiddlerProxy"].Issue = $_
              }
         }
