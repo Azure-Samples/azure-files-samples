@@ -4237,8 +4237,8 @@ function  Debug-AzStorageAccountEntraKerbAuth {
             }
             catch 
             {
-                Write-TestingFailed -Message $_
-                $checks["CheckEntraJoinType"].Result = "Failed"
+                Write-TestingFailed -Message $_ -IsUnexpected $true
+                $checks["CheckEntraJoinType"].Result = "Unexpected"
                 $checks["CheckEntraJoinType"].Issue = $_
             }
         }
