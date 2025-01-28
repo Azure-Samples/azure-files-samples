@@ -3980,8 +3980,8 @@ function  Debug-AzStorageAccountEntraKerbAuth {
                     $checks["CheckRegKey"].Issue = "The CloudKerberosTicketRetrievalEnabled need to be enabled to get kerberos ticket"
                 }               
             } catch {
-                Write-TestingFailed -Message $_
-                $checks["CheckRegKey"].Result = "Failed"
+                Write-TestingFailed -Message $_ -IsUnexpected $true
+                $checks["CheckRegKey"].Result = "Unexpected"
                 $checks["CheckRegKey"].Issue = $_
             }
         }
