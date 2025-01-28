@@ -4032,8 +4032,8 @@ function  Debug-AzStorageAccountEntraKerbAuth {
                     }
                 }
             } catch {
-                Write-TestingFailed -Message $_
-                $checks["CheckKerbRealmMapping"].Result = "Failed"
+                Write-TestingFailed -Message $_ -IsUnexpected $true
+                $checks["CheckKerbRealmMapping"].Result = "Unexpected"
                 $checks["CheckKerbRealmMapping"].Issue = $_
             }
         }
