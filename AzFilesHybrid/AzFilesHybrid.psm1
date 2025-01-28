@@ -4124,8 +4124,8 @@ function  Debug-AzStorageAccountEntraKerbAuth {
             }
             catch 
             {
-                Write-TestingFailed -Message $_
-                $checks["CheckWinHttpAutoProxySvc"].Result = "Failed"
+                Write-TestingFailed -Message $_ -IsUnexpected $true
+                $checks["CheckWinHttpAutoProxySvc"].Result = "Unexpected"
                 $checks["CheckWinHttpAutoProxySvc"].Issue = $_ 
             }
         }
