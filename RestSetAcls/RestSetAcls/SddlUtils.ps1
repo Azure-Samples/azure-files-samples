@@ -1,37 +1,74 @@
-function ConvertTo-RawSecurityDescriptor {
-    param (
-        [Parameter(Mandatory = $true, ValueFromPipeline = $true)]
-        [string]$sddl
-    )
-    
-    # There are multiple ways to parse SDDL, but RawSecurityDescriptor is the most complete.
-    # 
-    # ConvertFrom-SddlString builds a SecurityDescriptorInfo, where the raw view is a CommonSecurityDescriptor (which is a subclass of RawSecurityDescriptor).
-    # However, CommonSecurityDescriptor drops the inheritance and propagation flags, which are important for our use case.
-    # (see https://github.com/PowerShell/PowerShell/blob/master/src/Microsoft.PowerShell.Commands.Utility/commands/utility/ConvertFrom-SddlString.cs)
-    #
-    # The .NET SDK has System.Security.AccessControl.DirectorySecurity and System.Security.AccessControl.FileSecurity. On both of these,
-    # we can parse SDDL with the SetSecurityDescriptorSddlForm method. DirectorySecurity keeps the inheritance and propagation flags, and FileSecurity does not.
-    # This seems like a good candidate but there is a bug on PowerShell 7 where this method doesn't work.
-    # (see https://github.com/PowerShell/PowerShell/issues/19094)
-
-    return [System.Security.AccessControl.RawSecurityDescriptor]::new($sddl)
+enum SecurityDescriptorFormat {
+    Sddl
+    Binary
+    Base64
 }
 
-function ConvertFrom-Base64SecurityDescriptor {
+function ConvertTo-SecurityDescriptor {
+    [CmdletBinding(DefaultParameterSetName = "Sddl")]
     param (
-        [Parameter(Mandatory = $true, ValueFromPipeline = $true)]
-        [string]$base64
+        [Parameter(Mandatory = $true, ValueFromPipeline = $true, ParameterSetName = "Sddl")]
+        [string]$Sddl,
+
+        [Parameter(Mandatory = $true, ValueFromPipeline = $true, ParameterSetName = "Base64")]
+        [string]$Base64,
+
+        [Parameter(Mandatory = $true, ValueFromPipeline = $true, ParameterSetName = "Binary")]
+        [string]$Binary
     )
-    return [System.Security.AccessControl.RawSecurityDescriptor]::new([System.Convert]::FromBase64String($base64), 0)
+
+    process {
+        switch ($PSCmdlet.ParameterSetName) {
+            "Sddl" {
+                # There are multiple ways to parse SDDL, but RawSecurityDescriptor is the most complete.
+                # 
+                # ConvertFrom-SddlString builds a SecurityDescriptorInfo, where the raw view is a CommonSecurityDescriptor (which is a subclass of RawSecurityDescriptor).
+                # However, CommonSecurityDescriptor drops the inheritance and propagation flags, which are important for our use case.
+                # (see https://github.com/PowerShell/PowerShell/blob/master/src/Microsoft.PowerShell.Commands.Utility/commands/utility/ConvertFrom-SddlString.cs)
+                #
+                # The .NET SDK has System.Security.AccessControl.DirectorySecurity and System.Security.AccessControl.FileSecurity. On both of these,
+                # we can parse SDDL with the SetSecurityDescriptorSddlForm method. DirectorySecurity keeps the inheritance and propagation flags, and FileSecurity does not.
+                # This seems like a good candidate but there is a bug on PowerShell 7 where this method doesn't work.
+                # (see https://github.com/PowerShell/PowerShell/issues/19094)
+                return [System.Security.AccessControl.RawSecurityDescriptor]::new($sddl)
+            }
+            "Base64" {
+                return [System.Security.AccessControl.RawSecurityDescriptor]::new([System.Convert]::FromBase64String($Base64), 0)
+            }
+            "Binary" {
+                return [System.Security.AccessControl.RawSecurityDescriptor]::new($Binary, 0)
+            }
+        }
+    }
 }
 
-function ConvertFrom-RawSecurityDescriptor {
+function ConvertFrom-SecurityDescriptor {
+    [CmdletBinding()]
     param (
-        [Parameter(Mandatory = $true, ValueFromPipeline = $true)]
-        [System.Security.AccessControl.RawSecurityDescriptor]$descriptor
+        [Parameter(Mandatory = $true, Position = 0, ValueFromPipeline = $true)]
+        [System.Security.AccessControl.RawSecurityDescriptor]$SecurityDescriptor,
+
+        [Parameter(Mandatory = $false)]
+        [SecurityDescriptorFormat]$OutputFormat = [SecurityDescriptorFormat]::Sddl
     )
-    return $descriptor.GetSddlForm([System.Security.AccessControl.AccessControlSections]::All)
+
+    process {
+        switch ($OutputFormat) {
+            "Sddl" {
+                return $descriptor.GetSddlForm([System.Security.AccessControl.AccessControlSections]::All)
+            }
+            "Binary" {
+                $binary = New-Object byte[] $descriptor.BinaryLength
+                $descriptor.GetBinaryForm($binary, 0)
+                return $binary
+            }
+            "Base64" {
+                $binary = New-Object byte[] $descriptor.BinaryLength
+                $descriptor.GetBinaryForm($binary, 0)
+                return [System.Convert]::ToBase64String($binary)
+            }
+        }
+    }
 }
 
 function Get-AllAceFlagsMatch {
