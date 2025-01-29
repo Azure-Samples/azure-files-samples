@@ -341,7 +341,8 @@ function Write-AccessMask {
         $value = $key.value__
         if ($mask.Has($value)) {
             Write-Host "${spaces}    $($PSStyle.Foreground.Green)$checkmark$($PSStyle.Reset) $key"
-        } else {
+        }
+        else {
             Write-Host "${spaces}    $($PSStyle.Foreground.Red)$cross$($PSStyle.Reset) $key"
         }
     }
