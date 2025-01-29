@@ -8,6 +8,15 @@ Describe "ConvertTo-SecurityDescriptor" {
             $descriptor = ConvertTo-SecurityDescriptor -Sddl "O:SYG:SYD:AI(A;;0x1301bf;;;WD)(A;ID;0x1201bf;;;WD)(A;;0x1301ff;;;AU)"
             $descriptor.DiscretionaryAcl.Count | Should -Be 3
         }
+
+        It "Should be able to parse complex but valid SDDL" {
+            $sddl = "O:BAG:BAD:(A;;RPWPCCDCLCRCWOWDSDSW;;;SY)(A;;RPWPCCDCLCRCWOWDSDSW;;;BA)(OA;;CCDC;bf967aba-0de6-11d0-a285-00aa003049e2;;AO)(OA;;CCDC;bf967a9c-0de6-11d0-a285-00aa003049e2;;AO)(OA;;CCDC;6da8a4ff-0e52-11d0-a286-00aa003049e2;;AO)(OA;;CCDC;bf967aa8-0de6-11d0-a285-00aa003049e2;;PO)(A;;RPLCRC;;;AU)S:(AU;SAFA;WDWOSDWPCCDCSW;;;WD)"
+            $descriptor = ConvertTo-SecurityDescriptor -Sddl $sddl
+            $descriptor.Owner | Should -Be "S-1-5-32-544"
+            $descriptor.Group | Should -Be "S-1-5-32-544"
+            $descriptor.DiscretionaryAcl.Count | Should -Be 7
+            $descriptor.SystemAcl.Count | Should -Be 1
+        }
     
         It "Should parse inheritance and propagation flags" {
             $descriptor = ConvertTo-SecurityDescriptor -Sddl "O:SYG:SYD:AI(A;OICI;0x1301bf;;;WD)(A;NPIO;0x1201bf;;;WD)"
@@ -28,6 +37,10 @@ Describe "ConvertTo-SecurityDescriptor" {
             $descriptor.DiscretionaryAcl.Count | Should -Be 0
         }
         
+        It "Should throw an error when the SDDL contains domain-relative SIDs" {
+            { ConvertTo-SecurityDescriptor -Sddl "O:DAB:SYD:NO_ACCESS_CONTROL" } | Should -Throw
+        }
+
         It "Should throw an error when parsing invalid SDDL" {
             { ConvertTo-SecurityDescriptor -Sddl "not valid SDDL :)" } | Should -Throw
         }

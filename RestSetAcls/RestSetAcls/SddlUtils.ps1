@@ -30,7 +30,23 @@ function ConvertTo-SecurityDescriptor {
                 # we can parse SDDL with the SetSecurityDescriptorSddlForm method. DirectorySecurity keeps the inheritance and propagation flags, and FileSecurity does not.
                 # This seems like a good candidate but there is a bug on PowerShell 7 where this method doesn't work.
                 # (see https://github.com/PowerShell/PowerShell/issues/19094)
-                return [System.Security.AccessControl.RawSecurityDescriptor]::new($sddl)
+
+                try {
+                    return [System.Security.AccessControl.RawSecurityDescriptor]::new($sddl)
+                }
+                catch {
+                    if ($_ -match "The SDDL string contains an invalid sid or a sid that cannot be translated") {
+                        throw (
+                            "Failed to convert SDDL to RawSecurityDescriptor.`n" +
+                            "This may be due to the presence of domain-relative SIDs, such as " + 
+                            "'LA', 'LG', 'CA', 'DA', 'DD', 'DU', 'DG', 'DC', 'SA', 'EA', 'PA', 'RS', 'ED' or 'RO'.`n" +
+                            "Original error: $_"
+                        )
+                    }
+                    else {
+                        throw $_
+                    }
+                }
             }
             "Base64" {
                 return [System.Security.AccessControl.RawSecurityDescriptor]::new([System.Convert]::FromBase64String($Base64), 0)
