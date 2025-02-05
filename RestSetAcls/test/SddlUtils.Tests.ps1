@@ -37,6 +37,91 @@ Describe "ConvertTo-SecurityDescriptor" {
             $descriptor.DiscretionaryAcl.Count | Should -Be 0
         }
 
+        It "Should throw an error for SDDL containing domain-relative SID <Sid>" -ForEach @(
+            @{ Sid = "CA" }, # CERT_PUBLISHERS, S-1-5-21-<domain>-517
+            @{ Sid = "CN" }, # CLONEABLE_CONTROLLERS, S-1-5-21-<domain>-522
+            @{ Sid = "DA" }, # DOMAIN_ADMINS, S-1-5-21-<domain>-512
+            @{ Sid = "DC" }, # DOMAIN_COMPUTERS, S-1-5-21-<domain>-515
+            @{ Sid = "DD" }, # DOMAIN_DOMAIN_CONTROLLERS, S-1-5-21-<domain>-516
+            @{ Sid = "DG" }, # DOMAIN_GUESTS, S-1-5-21-<domain>-514
+            @{ Sid = "DU" }, # DOMAIN_USERS, S-1-5-21-<domain>-513
+            @{ Sid = "EA" }, # ENTERPRISE_ADMINS, S-1-5-21-<domain>-519
+            @{ Sid = "PA" }, # GROUP_POLICY_CREATOR_OWNERS, S-1-5-21-<domain>-520
+            @{ Sid = "RO" }, # ENTERPRISE_READONLY_DOMAIN_CONTROLLERS, S-1-5-21-<root domain>-498
+            @{ Sid = "RS" }, # RAS_SERVERS, S-1-5-21-<domain>-553
+            @{ Sid = "SA" } # SCHEMA_ADMINISTRATORS, S-1-5-21-<domain>-518
+        ) {
+            $sddl = "O:${Sid}G:BAD:NO_ACCESS_CONTROL"
+            { ConvertTo-SecurityDescriptor -Sddl $sddl } | Should -Throw
+        }
+
+        It "Should be able to parse SDDL with well-known machine-relative SID <Sid>" -ForEach @(
+            # See https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-dtyp/f4296d69-1c0f-491f-9587-a960b292d070
+            # See https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-dtyp/81d92bba-d22b-4a8c-908a-554ab29148ab
+            @{ Sid = "LA"; SidMatches = "S-1-5-21-.*-500" }, # ADMINISTRATOR
+            @{ Sid = "LG"; SidMatches = "S-1-5-21-.*-501" } # GUEST
+        ) {
+            $sddl = "O:${Sid}G:BAD:NO_ACCESS_CONTROL"
+            $descriptor = ConvertTo-SecurityDescriptor -Sddl $sddl
+            $descriptor.Owner | Should -Match $SidMatches
+        }
+
+        It "Should be able to parse SDDL with well-known SID <Sid>" -ForEach @(
+            # See https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-dtyp/f4296d69-1c0f-491f-9587-a960b292d070
+            # See https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-dtyp/81d92bba-d22b-4a8c-908a-554ab29148ab
+            @{ Sid = "AA"; SidValue = "S-1-5-32-579" }, # ACCESS_CONTROL_ASSISTANCE_OPS
+            @{ Sid = "AC"; SidValue = "S-1-15-2-1" }, # ALL_APP_PACKAGES
+            @{ Sid = "AN"; SidValue = "S-1-5-7" }, # ANONYMOUS
+            @{ Sid = "AO"; SidValue = "S-1-5-32-548" }, # ACCOUNT_OPERATORS
+            @{ Sid = "AU"; SidValue = "S-1-5-11" }, # AUTHENTICATED_USERS
+            @{ Sid = "BA"; SidValue = "S-1-5-32-544" }, # BUILTIN_ADMINISTRATORS
+            @{ Sid = "BG"; SidValue = "S-1-5-32-546" }, # BUILTIN_GUESTS
+            @{ Sid = "BO"; SidValue = "S-1-5-32-551" }, # BACKUP_OPERATORS
+            @{ Sid = "BU"; SidValue = "S-1-5-32-545" }, # BUILTIN_USERS
+            @{ Sid = "CD"; SidValue = "S-1-5-32-574" }, # CERTSVC_DCOM_ACCESS, or CERTIFICATE_SERVICE_DCOM_ACCESS
+            @{ Sid = "CG"; SidValue = "S-1-3-1" }, # CREATOR_GROUP
+            @{ Sid = "CO"; SidValue = "S-1-3-0" }, # CREATOR_OWNER
+            @{ Sid = "CY"; SidValue = "S-1-5-32-569" }, # CRYPTO_OPERATORS, or CRYPTOGRAPHIC_OPERATORS
+            @{ Sid = "ED"; SidValue = "S-1-5-9" }, # ENTERPRISE_DOMAIN_CONTROLLERS
+            @{ Sid = "ER"; SidValue = "S-1-5-32-573" }, # EVENT_LOG_READERS
+            @{ Sid = "ES"; SidValue = "S-1-5-32-576" }, # RDS_ENDPOINT_SERVERS
+            @{ Sid = "HA"; SidValue = "S-1-5-32-578" }, # HYPER_V_ADMINS
+            @{ Sid = "HI"; SidValue = "S-1-16-12288" }, # ML_HIGH
+            @{ Sid = "IS"; SidValue = "S-1-5-32-568" }, # IIS_USERS, or IIS_IUSRS
+            @{ Sid = "IU"; SidValue = "S-1-5-4" }, # INTERACTIVE
+            @{ Sid = "LS"; SidValue = "S-1-5-19" }, # LOCAL_SERVICE
+            @{ Sid = "LU"; SidValue = "S-1-5-32-559" }, # PERFLOG_USERS
+            @{ Sid = "LW"; SidValue = "S-1-16-4096" }, # ML_LOW
+            @{ Sid = "ME"; SidValue = "S-1-16-8192" }, # ML_MEDIUM
+            @{ Sid = "MP"; SidValue = "S-1-16-8448" }, # ML MEDIUM PLUS
+            @{ Sid = "MS"; SidValue = "S-1-5-32-577" }, # RDS_MANAGEMENT_SERVERS
+            @{ Sid = "MU"; SidValue = "S-1-5-32-558" }, # PERFMON_USERS
+            @{ Sid = "NO"; SidValue = "S-1-5-32-556" }, # NETWORK_CONFIGURATION_OPS
+            @{ Sid = "NS"; SidValue = "S-1-5-20" }, # NETWORK_SERVICE
+            @{ Sid = "NU"; SidValue = "S-1-5-2" }, # NETWORK
+            @{ Sid = "OW"; SidValue = "S-1-3-4" }, # OWNER_RIGHTS
+            @{ Sid = "PO"; SidValue = "S-1-5-32-550" }, # PRINTER_OPERATORS
+            @{ Sid = "PS"; SidValue = "S-1-5-10" }, # PRINCIPAL_SELF
+            @{ Sid = "PU"; SidValue = "S-1-5-32-547" }, # POWER_USERS
+            @{ Sid = "RA"; SidValue = "S-1-5-32-575" }, # RDS_REMOTE_ACCESS_SERVERS
+            @{ Sid = "RC"; SidValue = "S-1-5-12" }, # RESTRICTED_CODE
+            @{ Sid = "RD"; SidValue = "S-1-5-32-555" }, # REMOTE_DESKTOP
+            @{ Sid = "RE"; SidValue = "S-1-5-32-552" }, # REPLICATOR
+            @{ Sid = "RM"; SidValue = "S-1-5-32-580" }, # REMOTE_MANAGEMENT_USERS
+            @{ Sid = "RU"; SidValue = "S-1-5-32-554" }, # ALIAS_PREW2KCOMPACC
+            @{ Sid = "SI"; SidValue = "S-1-16-16384" }, # ML_SYSTEM
+            @{ Sid = "SO"; SidValue = "S-1-5-32-549" }, # SERVER_OPERATORS
+            @{ Sid = "SU"; SidValue = "S-1-5-6" }, # SERVICE
+            @{ Sid = "SY"; SidValue = "S-1-5-18" }, # LOCAL_SYSTEM
+            @{ Sid = "UD"; SidValue = "S-1-5-84-0-0-0-0-0" }, # USER_MODE_DRIVERS
+            @{ Sid = "WD"; SidValue = "S-1-1-0" }, # EVERYONE
+            @{ Sid = "WR"; SidValue = "S-1-5-33" } # WRITE_RESTRICTED_CODE
+        ) {
+            $sddl = "O:${Sid}G:BAD:NO_ACCESS_CONTROL"
+            $descriptor = ConvertTo-SecurityDescriptor -Sddl $sddl
+            [string]$descriptor.Owner | Should -Be $SidValue
+        }
+
         It "Should be able to parse SDDL with access mask <AccessRight>" -ForEach @(
             # Specific rights for "Directory Objects" (Active Directory objects)
             @{ AccessRight = "CC"; Expected = 0x001 },
