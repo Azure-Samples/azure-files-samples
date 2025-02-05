@@ -214,6 +214,64 @@ Describe "ConvertTo-SecurityDescriptor" {
             $descriptor.SystemAcl | Should -BeNullOrEmpty
         }
 
+        It "Should be able to parse valid binary with a DACL containing multiple Allow ACEs" {
+            $binary = @(
+                # HEADER #
+                0x01, # Revision
+                0x00, # Sbz1
+                0x04, 0xa0, # Control flags (SE_SELF_RELATIVE | SE_SACL_PROTECTED | SE_DACL_PRESENT)
+                0x14, 0x00, 0x00, 0x00, # OffsetOwner (20)
+                0x24, 0x00, 0x00, 0x00, # OffsetGroup (36)
+                0x00, 0x00, 0x00, 0x00, # OffsetSacl (0, no SACL)
+                0x34, 0x00, 0x00, 0x00, # OffsetDacl (52)
+
+                # OWNER #
+                0x01, # Revision (1)
+                0x02, # SubAuthorityCount
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x05, # IdentifierAuthority (5)
+                0x20, 0x00, 0x00, 0x00, # SubAuthority 0 (32)
+                0x20, 0x02, 0x00, 0x00, # SubAuthority 1 (544)
+
+                # GROUP #
+                0x01, # Revision (1)
+                0x02, # SubAuthorityCount
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x05, # IdentifierAuthority (5)
+                0x20, 0x00, 0x00, 0x00, # SubAuthority 0 (32)
+                0x20, 0x02, 0x00, 0x00, # SubAuthority 1 (544)
+
+                # DACL #
+                0x02, # Revision
+                0x00, # Sbz1
+                0x38, 0x00, # AclSize (56)
+                0x02, 0x00, # AclCount (2)
+                0x00, 0x00, # Sbz2
+
+                0x00, # ACE 0 type (ACCESS_ALLOWED_ACE_TYPE)
+                0x00, # ACE 0 flags
+                0x18, 0x00, # ACE 0 size (24)
+                0x16, 0x01, 0x12, 0x00, # ACE 0 mask (0x00120116 aka SDDL "FW")
+                0x01, # ACE 0 SID revision (1)
+                0x02, # ACE 0 SubAuthorityCount
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x05, # ACE 0 SID IdentifierAuthority (5)
+                0x20, 0x00, 0x00, 0x00, # ACE 0 SID SubAuthority 0 (32)
+                0x20, 0x02, 0x00, 0x00, # ACE 0 SID SubAuthority 1 (544)
+
+                0x00, # ACE 1 type (ACCESS_ALLOWED_ACE_TYPE)
+                0x00, # ACE 1 flags
+                0x18, 0x00, # ACE 1 size (24)
+                0x89, 0x00, 0x12, 0x00, # ACE 1 mask (0x00120089 aka SDDL "FR")
+                0x01, # ACE 1 SID revision (1)
+                0x02, # ACE 1 SubAuthorityCount
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x05, # ACE 1 SID IdentifierAuthority (5)
+                0x20, 0x00, 0x00, 0x00, # ACE 1 SID SubAuthority 0 (32)
+                0x20, 0x02, 0x00, 0x00 #  ACE 1 SID SubAuthority 1 (544)
+            )
+
+            ConvertTo-SecurityDescriptor -Binary $binary `
+                | ConvertFrom-SecurityDescriptor -OutputFormat Sddl `
+                | Should -Be "O:BAG:BAD:(A;;FW;;;BA)(A;;FR;;;BA)"
+        }
+
         It "Should throw an error when parsing binary with invalid revision" {
             $binary = @(
                 0xFF, # Revision -- this is invalid, revision should be 1
