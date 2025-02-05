@@ -37,7 +37,7 @@ Describe "ConvertTo-SecurityDescriptor" {
             $descriptor.DiscretionaryAcl.Count | Should -Be 0
         }
 
-        It "Should be able to parse SDDL using every known access mask shorthand" -ForEach @(
+        It "Should be able to parse SDDL with access mask <AccessRight>" -ForEach @(
             # Specific rights for "Directory Objects" (Active Directory objects)
             @{ AccessRight = "CC"; Expected = 0x001 },
             @{ AccessRight = "DC"; Expected = 0x002 },
@@ -57,7 +57,14 @@ Describe "ConvertTo-SecurityDescriptor" {
             @{ AccessRight = "FA"; Expected = 0x001F01FF },
             @{ AccessRight = "FX"; Expected = 0x001200A0 },
             @{ AccessRight = "FW"; Expected = 0x00120116 },
-            @{ AccessRight = "FR"; Expected = 0x00120089 }
+            @{ AccessRight = "FR"; Expected = 0x00120089 },
+            # A few examples of literal access mask values
+            @{ AccessRight = "0x1"; Expected = 0x1 },
+            @{ AccessRight = "0x00000001"; Expected = 0x1 },
+            @{ AccessRight = "0x2a"; Expected = 0x2A },
+            @{ AccessRight = "0xAbCd"; Expected = 0xABCD },
+            @{ AccessRight = "0x1F01FF"; Expected = 0x1F01FF },
+            @{ AccessRight = "0x12345678"; Expected = 0x12345678 }
         ) {
             #
             # The [MS-DTYP][1] doc says that e.g. CC means "Create Child", and is applicable to *directory objects*.
@@ -71,21 +78,6 @@ Describe "ConvertTo-SecurityDescriptor" {
             # [2]: https://learn.microsoft.com/en-us/windows/win32/api/sddl/nf-sddl-convertstringsecuritydescriptortosecuritydescriptora
             # [3]: https://github.com/dotnet/runtime/blob/main/src/libraries/System.Security.AccessControl/src/System/Security/AccessControl/SecurityDescriptor.cs
             #
-            $sddl = "O:SYG:SYD:(A;;${AccessRight};;;WD)"
-            $descriptor = ConvertTo-SecurityDescriptor -Sddl $sddl
-            
-            $descriptor.DiscretionaryAcl.Count | Should -Be 1
-            $mask = [int]$descriptor.DiscretionaryAcl[0].AccessMask
-            $mask | Should -Be $Expected -Because "Expected access mask for $sddl to be $expected, but got $mask"
-        }
-
-        It "Should be able to parse SDDL using literal access mask hex values" -ForEach @(
-            @{ AccessRight = "0x1"; Expected = 0x1 },
-            @{ AccessRight = "0x2a"; Expected = 0x2A },
-            @{ AccessRight = "0xAbCd"; Expected = 0xABCD },
-            @{ AccessRight = "0x1F01FF"; Expected = 0x1F01FF },
-            @{ AccessRight = "0x12345678"; Expected = 0x12345678 }
-        ) {
             $sddl = "O:SYG:SYD:(A;;${AccessRight};;;WD)"
             $descriptor = ConvertTo-SecurityDescriptor -Sddl $sddl
             
