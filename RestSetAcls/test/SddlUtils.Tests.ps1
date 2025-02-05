@@ -345,8 +345,8 @@ Describe "ConvertTo-SecurityDescriptor" {
             )
 
             ConvertTo-SecurityDescriptor -Binary $binary `
-                | ConvertFrom-SecurityDescriptor -OutputFormat Sddl `
-                | Should -Be "O:BAG:BAD:(A;;FW;;;BA)(A;;FR;;;BA)"
+            | ConvertFrom-SecurityDescriptor -OutputFormat Sddl `
+            | Should -Be "O:BAG:BAD:(A;;FW;;;BA)(A;;FR;;;BA)"
         }
 
         It "Should throw an error when parsing binary with invalid revision" {
