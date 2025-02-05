@@ -36,6 +36,63 @@ Describe "ConvertTo-SecurityDescriptor" {
             $descriptor = ConvertTo-SecurityDescriptor -Sddl "O:SYG:SY"
             $descriptor.DiscretionaryAcl.Count | Should -Be 0
         }
+
+        It "Should be able to parse SDDL using every known access mask shorthand" -ForEach @(
+            # Specific rights for "Directory Objects" (Active Directory objects)
+            @{ AccessRight = "CC"; Expected = 0x001 },
+            @{ AccessRight = "DC"; Expected = 0x002 },
+            @{ AccessRight = "LC"; Expected = 0x004 },
+            @{ AccessRight = "SW"; Expected = 0x008 },
+            @{ AccessRight = "RP"; Expected = 0x010 },
+            @{ AccessRight = "WP"; Expected = 0x020 },
+            @{ AccessRight = "DT"; Expected = 0x040 },
+            @{ AccessRight = "LO"; Expected = 0x080 },
+            @{ AccessRight = "CR"; Expected = 0x100 }
+            # Specific rights for Registry Keys
+            @{ AccessRight = "KA"; Expected = 0x000F003F },
+            @{ AccessRight = "KR"; Expected = 0x00020019 },
+            @{ AccessRight = "KX"; Expected = 0x00020019 },
+            @{ AccessRight = "KW"; Expected = 0x00020006 },
+            # Specific rights for File System Objects (files/directories)
+            @{ AccessRight = "FA"; Expected = 0x001F01FF },
+            @{ AccessRight = "FX"; Expected = 0x001200A0 },
+            @{ AccessRight = "FW"; Expected = 0x00120116 },
+            @{ AccessRight = "FR"; Expected = 0x00120089 }
+        ) {
+            #
+            # The [MS-DTYP][1] doc says that e.g. CC means "Create Child", and is applicable to *directory objects*.
+            # Note that here, "directory object" means *Active Directory objects*, not file system objects.
+            # It also says that e.g. KR means "Key Read", and is applicable to *registry keys*.
+            #
+            # Therefore, in theory, we should not apply CC or KR to file system objects. But Windows does not enforce this.
+            # See e.g. [C++ API][2] (which doesn't have a param for object type), or see [.NET SDK implementation][3].
+            # 
+            # [1]: https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-dtyp/f4296d69-1c0f-491f-9587-a960b292d070
+            # [2]: https://learn.microsoft.com/en-us/windows/win32/api/sddl/nf-sddl-convertstringsecuritydescriptortosecuritydescriptora
+            # [3]: https://github.com/dotnet/runtime/blob/main/src/libraries/System.Security.AccessControl/src/System/Security/AccessControl/SecurityDescriptor.cs
+            #
+            $sddl = "O:SYG:SYD:(A;;${AccessRight};;;WD)"
+            $descriptor = ConvertTo-SecurityDescriptor -Sddl $sddl
+            
+            $descriptor.DiscretionaryAcl.Count | Should -Be 1
+            $mask = [int]$descriptor.DiscretionaryAcl[0].AccessMask
+            $mask | Should -Be $Expected -Because "Expected access mask for $sddl to be $expected, but got $mask"
+        }
+
+        It "Should be able to parse SDDL using literal access mask hex values" -ForEach @(
+            @{ AccessRight = "0x1"; Expected = 0x1 },
+            @{ AccessRight = "0x2a"; Expected = 0x2A },
+            @{ AccessRight = "0xAbCd"; Expected = 0xABCD },
+            @{ AccessRight = "0x1F01FF"; Expected = 0x1F01FF },
+            @{ AccessRight = "0x12345678"; Expected = 0x12345678 }
+        ) {
+            $sddl = "O:SYG:SYD:(A;;${AccessRight};;;WD)"
+            $descriptor = ConvertTo-SecurityDescriptor -Sddl $sddl
+            
+            $descriptor.DiscretionaryAcl.Count | Should -Be 1
+            $mask = [int]$descriptor.DiscretionaryAcl[0].AccessMask
+            $mask | Should -Be $Expected -Because "Expected access mask for $sddl to be $expected, but got $mask"
+        }
         
         It "Should throw an error when the SDDL contains domain-relative SIDs" {
             { ConvertTo-SecurityDescriptor -Sddl "O:DAB:SYD:NO_ACCESS_CONTROL" } | Should -Throw
