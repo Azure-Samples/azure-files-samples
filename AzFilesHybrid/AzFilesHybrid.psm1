@@ -4583,6 +4583,7 @@ function Debug-AzStorageAccountADDSAuth {
         #
         if (!$filterIsPresent -or $Filter -match "CheckPort445Connectivity")
         {
+            Write-Host "Checking Port 445"
             try {
                 $checksExecuted += 1;
                 Write-Verbose "CheckPort445Connectivity - START"
