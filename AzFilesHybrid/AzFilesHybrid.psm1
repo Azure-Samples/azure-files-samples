@@ -4632,6 +4632,7 @@ function Debug-AzStorageAccountADDSAuth {
 
         if (!$filterIsPresent -or $Filter -match "CheckADObject")
         {
+            Write-Host "Checking AD Object"
             try {
                 $checksExecuted += 1;
                 Write-Verbose "CheckADObject - START"
