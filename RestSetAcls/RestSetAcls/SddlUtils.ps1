@@ -14,7 +14,7 @@ function ConvertTo-SecurityDescriptor {
         [string]$Base64,
 
         [Parameter(Mandatory = $true, ValueFromPipeline = $true, ParameterSetName = "Binary")]
-        [string]$Binary
+        [byte[]]$Binary
     )
 
     process {
@@ -71,16 +71,16 @@ function ConvertFrom-SecurityDescriptor {
     process {
         switch ($OutputFormat) {
             "Sddl" {
-                return $descriptor.GetSddlForm([System.Security.AccessControl.AccessControlSections]::All)
+                return $SecurityDescriptor.GetSddlForm([System.Security.AccessControl.AccessControlSections]::All)
             }
             "Binary" {
-                $binary = New-Object byte[] $descriptor.BinaryLength
-                $descriptor.GetBinaryForm($binary, 0)
+                $binary = [byte[]]::new($SecurityDescriptor.BinaryLength)
+                $SecurityDescriptor.GetBinaryForm($binary, 0)
                 return $binary
             }
             "Base64" {
-                $binary = New-Object byte[] $descriptor.BinaryLength
-                $descriptor.GetBinaryForm($binary, 0)
+                $binary = [byte[]]::new($SecurityDescriptor.BinaryLength)
+                $SecurityDescriptor.GetBinaryForm($binary, 0)
                 return [System.Convert]::ToBase64String($binary)
             }
         }
