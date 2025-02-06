@@ -4621,6 +4621,7 @@ function Debug-AzStorageAccountADDSAuth {
                 }
 
                 $checks["CheckDomainJoined"].Result = "Passed"
+                Write-TestingPassed
                 Write-Verbose "CheckDomainJoined - SUCCESS"
             } catch {
                 $checks["CheckDomainJoined"].Result = "Failed"
