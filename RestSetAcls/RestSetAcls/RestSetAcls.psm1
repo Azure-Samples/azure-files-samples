@@ -344,7 +344,7 @@ function Set-AzureFilesAclRecursive {
 
     # Try to parse SDDL permission, check for common issues
     try {
-        $securityDescriptor = ConvertTo-RawSecurityDescriptor -Sddl $SddlPermission
+        $securityDescriptor = ConvertTo-SecurityDescriptor -Sddl $SddlPermission
     }
     catch {
         Write-Failure "SDDL permission is invalid"
@@ -366,7 +366,7 @@ function Set-AzureFilesAclRecursive {
             -EnableFlags $shouldBeEnabled `
             -DisableFlags $shouldBeDisabled
 
-        $newSddl = ConvertFrom-RawSecurityDescriptor $securityDescriptor
+        $newSddl = ConvertFrom-SecurityDescriptor $securityDescriptor -OutputFormat Sddl
 
         $continue = Write-SddlWarning -Sddl $SddlPermission -NewSddl $newSddl
         if (-not $continue) {
