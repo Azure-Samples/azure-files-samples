@@ -5102,6 +5102,7 @@ function Debug-AzStorageAccountADDSAuth {
         #
         if (!$filterIsPresent -or $Filter -match "CheckAadKerberosRegistryKeyIsOff")
         {
+            Write-Host "Checking AAD Kerberos Registry Key"
             try {
                 $checksExecuted += 1;
                 Write-Verbose "CheckAadKerberosRegistryKeyIsOff - START"
