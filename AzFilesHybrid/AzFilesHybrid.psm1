@@ -4962,8 +4962,8 @@ function Debug-AzStorageAccountADDSAuth {
                     $message = "User '$($user.UserPrincipalName)' is not assigned any SMB share-level permission to" `
                         + " storage account '$StorageAccountName' in resource group '$ResourceGroupName'. Please" `
                         + " configure proper share-level permission following the guidance at" `
-                        + " https://docs.microsoft.com/en-us/azure/storage/files/storage-files-identity-ad-ds-assign-permissions"
-                    Write-Error -Message $message -ErrorAction Stop
+                        + " $($PSStyle.Foreground.BrightCyan)https://aka.ms/azfiles/adds-assignpermissions$($PSStyle.Reset)"
+                    Write-TestingFailed -Message $message -ErrorAction Stop
                 }
 
                 Write-Host "------------------------------------------"
@@ -4981,6 +4981,7 @@ function Debug-AzStorageAccountADDSAuth {
 
                 $checks["CheckUserRbacAssignment"].Result = "Passed"
                 Write-Verbose "CheckUserRbacAssignment - SUCCESS"
+                Write-TestingPassed
             } catch {
                 $checks["CheckUserRbacAssignment"].Result = "Failed"
                 $checks["CheckUserRbacAssignment"].Issue = $_
