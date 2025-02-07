@@ -3686,7 +3686,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 $checksExecuted += 1;
                 $Context = Get-AzContext
                 $TenantId = $Context.Tenant
-                $Response = Invoke-WebRequest -Method POST https://login.microsoftonline.com/$TenantId/kerberos
+                $Response = Invoke-WebRequest -Method POST -Uri https://login.microsoftonline.com/$TenantId/kerberos -UseBasicParsing
                 if ($Response.StatusCode -eq 200)
                 {
                     $checks["CheckAADConnectivity"].Result = "Passed"
