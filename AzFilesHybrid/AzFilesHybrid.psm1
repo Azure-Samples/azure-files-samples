@@ -5012,7 +5012,7 @@ function Debug-AzStorageAccountADDSAuth {
                     if ($fileAccessRules.Count -eq 0) {
                         $message = "There is no access rule granted to '$FilePath'. Please consider setting up proper access rules" `
                             + " for the file (for example, using https://docs.microsoft.com/en-us/windows-server/administration/windows-commands/icacls)"
-                        Write-Error -Message $message -ErrorAction Stop
+                        Write-TestingFailed -Message $message -ErrorAction Stop
                     }
                 
                     $user = Get-OnPremAdUser -Identity $UserName -Domain $Domain -ErrorAction Stop
@@ -5034,7 +5034,6 @@ function Debug-AzStorageAccountADDSAuth {
                                     if (-not $sidRules.ContainsKey($accessRule.IdentityReference)) {
                                         $sidRules[$accessRule.IdentityReference] = @()
                                     }
-        
                                     $sidRules[$accessRule.IdentityReference] += $accessRule                
                                 }
                             }
@@ -5045,7 +5044,7 @@ function Debug-AzStorageAccountADDSAuth {
                         $message = "User '$($user.UserPrincipalName)' is not assigned any permission to '$FilePath'." `
                             + " Please configure proper permission for the user to access the file (for example," `
                             + " using https://docs.microsoft.com/en-us/windows-server/administration/windows-commands/icacls)"
-                        Write-Error -Message $message -ErrorAction Stop
+                        Write-TestingFailed -Message $message -ErrorAction Stop
                     }
     
                     Write-Host "------------------------------------------"
