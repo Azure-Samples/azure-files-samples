@@ -4985,8 +4985,7 @@ function Debug-AzStorageAccountADDSAuth {
             } catch {
                 $checks["CheckUserRbacAssignment"].Result = "Failed"
                 $checks["CheckUserRbacAssignment"].Issue = $_
-                Write-Error "CheckUserRbacAssignment - FAILED"
-                Write-Error $_
+                Write-TestingFailed -Message $_ -IsUnexpected $true
             }
         }
 
