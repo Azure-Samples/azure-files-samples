@@ -895,215 +895,6 @@ function Request-ADFeature {
     }
 }
 
-function Request-PowerShellGetModule {
-    [CmdletBinding(SupportsShouldProcess, ConfirmImpact="High")]
-    param()
-
-    $psGetModule = Get-Module -Name PowerShellGet -ListAvailable | `
-        Sort-Object -Property Version -Descending
-
-    if ($null -eq $psGetModule -or $psGetModule[0].Version -lt [Version]::new(1,6,0)) {
-        $caption = "Install updated version of PowerShellGet"
-        $verboseConfirmMessage = "This module requires PowerShellGet 1.6.0+. This can be installed now if you are running as an administrator. At the end of the installation, importing this module will fail as you must close all open instances of PowerShell for the updated version of PowerShellGet to be available."
-        
-        if ($PSCmdlet.ShouldProcess($verboseConfirmMessage, $verboseConfirmMessage, $caption)) {
-            if (!(Get-IsElevatedSession)) {
-                Write-Error -Message "To install PowerShellGet, you must import this module as an administrator. This module package does not generally require administrator privileges, so successive imports of this module can be from a non-elevated session." -ErrorAction Stop
-            }
-
-            try {
-                Remove-Module -Name PowerShellGet, PackageManagement -Force -ErrorAction SilentlyContinue
-                Install-PackageProvider -Name NuGet -Force | Out-Null
-    
-                Install-Module `
-                        -Name PowerShellGet `
-                        -Repository PSGallery `
-                        -Force `
-                        -ErrorAction Stop `
-                        -SkipPublisherCheck
-            } catch {
-                Write-Error -Message "PowerShellGet was not successfully installed, and is a requirement of this module. See https://docs.microsoft.com/powershell/scripting/gallery/installing-psget for information on how to manually troubleshoot the PowerShellGet installation." -ErrorAction Stop
-            }             
-            
-            Write-Verbose -Message "Installed latest version of PowerShellGet module."
-            Write-Error -Message "PowerShellGet was successfully installed, however you must close all open PowerShell sessions to use the new version. The next import of this module will be able to use PowerShellGet." -ErrorAction Stop
-        }
-    }
-
-    Remove-Module -Name PowerShellGet -ErrorAction SilentlyContinue
-    Remove-Module -Name PackageManagement -ErrorAction SilentlyContinue
-}
-
-function Request-MSGraphModule {
-    [CmdletBinding(SupportsShouldProcess, ConfirmImpact="High")]
-    param(
-        [Parameter(Mandatory=$true)]
-        [string[]]$RequiredModules
-    )
-
-    $missingModules = @()
-
-    foreach ($module in $RequiredModules) {
-        $installedModule = Get-Module -Name $module -ListAvailable
-        if ($null -eq $installedModule) {
-            Write-Host "Missing module: $module"
-            $missingModules += $module
-        }
-    }
-
-    if ($missingModules.Count -gt 0) {
-        $caption = "Install missing Microsoft.Graph PowerShell modules"
-        $verboseConfirmMessage = "This cmdlet requires the Microsoft.Graph PowerShell modules. The missing ones can be automatically installed now if you are running in an elevated sessions."
-        
-        if ($PSCmdlet.ShouldProcess($verboseConfirmMessage, $verboseConfirmMessage, $caption)) {
-            if (!(Get-IsElevatedSession)) {
-                Write-Error `
-                        -Message "To install the missing Microsoft.Graph modules, you must run this cmdlet as an administrator. This cmdlet may not generally require administrator privileges." `
-                        -ErrorAction Stop
-            }
-            
-            Write-Host "Installing missing modules: $($missingModules -join ', ')"
-            Install-Module `
-                -Name $missingModules `
-                -Repository PSGallery `
-                -AllowClobber `
-                -Force `
-                -ErrorAction Stop
-        }
-    }
-
-    Remove-Module -Name PowerShellGet -ErrorAction SilentlyContinue
-    Remove-Module -Name PackageManagement -ErrorAction SilentlyContinue
-}
-
-function Request-MSGraphModuleVersion {
-    [CmdletBinding(SupportsShouldProcess, ConfirmImpact="High")]
-    param(
-        [Parameter(Mandatory=$true)]
-        [Version]$MinimumVersion
-    )
-
-    $availableModules = Get-Module Microsoft.Graph -ListAvailable
-    $usableModules = $availableModules | Where-Object { $_.Version -ge $MinimumVersion }
-
-    # Install if needed
-    if ($null -eq $usableModules) {
-        # Print why we could not find a usable module:
-        if ($null -eq $availableModules) {
-            Write-Error "The Microsoft.Graph module is not installed."
-        } else {
-            $maxAvailableVersion = ($availableModules.Version | Measure-Object -Maximum).Maximum
-            Write-Error "The Microsoft.Graph module is installed with version $maxAvailableVersion, but $MinimumVersion is required."
-        }
-        
-        # Request to install with the adequate min version
-        $caption = "Install missing Microsoft.Graph PowerShell module"
-        $verboseConfirmMessage = "This cmdlet requires the Microsoft.Graph PowerShell module. It can be automatically installed now if you are running in an elevated sessions."
-        if ($PSCmdlet.ShouldProcess($verboseConfirmMessage, $verboseConfirmMessage, $caption)) {
-            if (!(Get-IsElevatedSession)) {
-                Write-Error `
-                        -Message "To install the missing Microsoft.Graph module, you must run this cmdlet as an administrator. This cmdlet may not generally require administrator privileges." `
-                        -ErrorAction Stop
-            }
-            
-            Write-Host "Installing missing module Microsoft.Graph"
-            Install-Module `
-                -Name Microsoft.Graph `
-                -MinimumVersion $MinimumVersion `
-                -Repository PSGallery `
-                -AllowClobber `
-                -Force `
-                -ErrorAction Stop
-        }
-
-        Remove-Module -Name PowerShellGet -ErrorAction SilentlyContinue
-        Remove-Module -Name PackageManagement -ErrorAction SilentlyContinue
-    }
-    
-    Remove-Module -Name Microsoft.Graph* -ErrorAction SilentlyContinue
-    Import-Module Microsoft.Graph -MinimumVersion $MinimumVersion -ErrorAction Continue
-}
-
-function Request-AzPowerShellModule {
-    [CmdletBinding(SupportsShouldProcess, ConfirmImpact="High")]
-    param()
-
-    # There is an known issue where versions less than PS 6.2 don't have the Az rollup module installed:
-    # https://github.com/Azure/azure-powershell/issues/9835 
-    if ($PSVersionTable.PSVersion -gt [Version]::new(6,2)) {
-        $azModule = Get-Module -Name Az -ListAvailable
-    } else {
-        $azModule = Get-Module -Name Az.* -ListAvailable
-    }
-
-    $storageModule = Get-Module -Name Az.Storage -ListAvailable | `
-        Where-Object { 
-            $_.Version -ge [Version]::new(4,3,0) 
-        }
-
-    # Do should process if modules must be installed
-    if ($null -eq $azModule -or $null -eq $storageModule) {
-        $caption = "Install Azure PowerShell modules"
-        $verboseConfirmMessage = "This module requires Azure PowerShell (`"Az`" module) 2.8.0+ and Az.Storage 4.3.0+. This can be installed now if you are running as an administrator."
-        
-        if ($PSCmdlet.ShouldProcess($verboseConfirmMessage, $verboseConfirmMessage, $caption)) {
-            if (!(Get-IsElevatedSession)) {
-                Write-Error `
-                        -Message "To install the required Azure PowerShell modules, you must run this module as an administrator. This module does not generally require administrator privileges." `
-                        -ErrorAction Stop
-            }
-
-            if ($null -eq $azModule) {
-                Get-Module -Name Az.* | Remove-Module
-                Install-Module -Name Az -Repository PSGallery -AllowClobber -Force -ErrorAction Stop
-                Write-Verbose -Message "Installed latest version of Az module."
-            }
-
-            if ($null -eq $storageModule) {
-                Remove-Module `
-                        -Name Az.Storage `
-                        -Force `
-                        -ErrorAction SilentlyContinue
-                
-                try {
-                    Uninstall-Module `
-                            -Name Az.Storage `
-                            -Force `
-                            -ErrorAction SilentlyContinue
-                } catch {
-                    Write-Error `
-                            -Message "Unable to uninstall the existing Az.Storage module which has a version lower than 2.0.0." `
-                            -ErrorAction Stop
-                }
-
-                Install-Module `
-                        -Name Az.Storage `
-                        -Repository PSGallery `
-                        -AllowClobber `
-                        -Force `
-                        -MinimumVersion "4.3.0" `
-                        -SkipPublisherCheck `
-                        -ErrorAction Stop
-            }       
-        }
-    }
-    
-    Remove-Module -Name PowerShellGet -ErrorAction SilentlyContinue
-    Remove-Module -Name PackageManagement -ErrorAction SilentlyContinue
-    Remove-Module -Name Az.Storage -Force -ErrorAction SilentlyContinue
-    Remove-Module -Name Az.Accounts -Force -ErrorAction SilentlyContinue
-    Remove-Module -Name Az.Network -Force -ErrorAction SilentlyContinue
-
-    $storageModule = ,(Get-Module -Name Az.Storage -ListAvailable | `
-        Where-Object { 
-            $_.Version -ge [Version]::new(4,3,0) 
-        } | `
-        Sort-Object -Property Version -Descending)
-
-    Import-Module -ModuleInfo $storageModule[0] -Global -ErrorAction Stop
-    Import-Module -Name Az.Network -Global -ErrorAction Stop
-}
-
 function Assert-DotNetFrameworkVersion {
     <#
     .SYNOPSIS
@@ -2298,6 +2089,7 @@ function Validate-StorageAccount {
 
     process
     {
+        # Requires Az.Resources
         $resourceGroupObject = Get-AzResourceGroup -Name $ResourceGroupName
 
         if ($null -eq $resourceGroupObject)
@@ -2310,6 +2102,7 @@ function Validate-StorageAccount {
             Write-Error -Message $message -ErrorAction Stop
         }
 
+        # Requires Az.Storage
         $storageAccountObject = Get-AzStorageAccount -ResourceGroup $ResourceGroupName -Name $StorageAccountName
 
         if ($null -eq $storageAccountObject)
@@ -2358,6 +2151,7 @@ function Ensure-KerbKeyExists {
         Write-Verbose "Ensure-KerbKeyExists - Checking for kerberos keys for account:$storageAccountName in resource group:$ResourceGroupName"
 
         try {
+            # Requires Az.Storage
             $storageAccount = Get-AzStorageAccount -ResourceGroupName $ResourceGroupName -Name $StorageAccountName -ErrorAction Stop
         }
         catch {
@@ -2379,6 +2173,7 @@ function Ensure-KerbKeyExists {
             #
 
             try {
+                # Requires Az.Storage
                 $keys = New-AzStorageAccountKey -ResourceGroupName $ResourceGroupName -Name $StorageAccountName -KeyName kerb1 -ErrorAction Stop
             }
             catch {
@@ -2398,6 +2193,7 @@ function Ensure-KerbKeyExists {
             # The storage account doesn't have kerb keys yet.  Generate them now.
             #
 
+            # Requires Az.Storage
             $keys = New-AzStorageAccountKey -ResourceGroupName $ResourceGroupName -Name $StorageAccountName -KeyName kerb2 -ErrorAction Stop
 
             $kerb2Key = Get-AzStorageAccountKerbKeys -ResourceGroupName $ResourceGroupName -StorageAccountName $StorageAccountName `
@@ -2524,6 +2320,7 @@ function Get-AzStorageAccountKerbKeys {
 
     Validate-StorageAccount -ResourceGroupName $ResourceGroupName -StorageAccountName $StorageAccountName -ErrorAction Stop
     
+    # Requires Az.Storage
     $keys = Get-AzStorageAccountKey -ResourceGroupName $ResourceGroupName -Name $StorageAccountName -ListKerbKey `
             | Where-Object { $_.KeyName -like "kerb*" }
 
@@ -3336,10 +3133,9 @@ function Get-AadUserForSid {
         [string]$sid
     )
 
-    Request-ConnectMsGraph `
-        -Scopes "User.Read.All" `
-        -RequiredModules @("Microsoft.Graph.Users", "Microsoft.Graph.Groups", "Microsoft.Graph.Identity.DirectoryManagement")
+    Request-ConnectMsGraph -Scopes "User.Read.All"
 
+    # Requires Microsoft.Graph.Users
     $aadUser = Get-MgUser -Filter "OnPremisesSecurityIdentifier eq '$sid'"
 
     if ($null -eq $aadUser)
@@ -3354,8 +3150,8 @@ function Get-AadUserForSid {
 }
 
 
-function Test-Port445Connectivity {
-    <# .SYNOPSIS #>
+function Test-Port445Connectivity
+{
     [CmdletBinding()]
 
     param (
@@ -3608,6 +3404,7 @@ function Debug-DomainLineOfSight
 
     process
     {
+        # Requires Azure.Storage
         $storageAccount = Get-AzStorageAccount -ResourceGroupName $ResourceGroupName -Name $StorageAccountName
         $fullyQualifiedDomainName = $storageAccount.AzureFilesIdentityBasedAuth.ActiveDirectoryProperties.DomainName
         Write-Host "Fully Qualified Domain Name: $fullyQualifiedDomainName"
@@ -3745,6 +3542,7 @@ function Debug-AzStorageAccountAuth {
 
     process
     {
+        # Requires Az.Storage
         $storageAccount = Get-AzStorageAccount -ResourceGroupName $ResourceGroupName -StorageAccountName $StorageAccountName -ErrorAction Stop
         $directoryServiceOptions = $storageAccount.AzureFilesIdentityBasedAuth.DirectoryServiceOptions 
 
@@ -3834,6 +3632,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
             $fileEndpoint = $accountUriObject.DnsSafeHost
             $TenantId = $context.Tenant
         }
+        
         if(![string]::IsNullOrEmpty($Domain))
         {
             Write-TestingWarning `
@@ -3883,7 +3682,10 @@ function Debug-AzStorageAccountEntraKerbAuth {
         {
             Write-Host "Checking AAD Connectivity"
             try {
+                # Requires Az.Accounts
                 $checksExecuted += 1;
+                $Context = Get-AzContext
+                $TenantId = $Context.Tenant
                 $Response = Invoke-WebRequest -Method POST https://login.microsoftonline.com/$TenantId/kerberos
                 if ($Response.StatusCode -eq 200)
                 {
@@ -3909,29 +3711,36 @@ function Debug-AzStorageAccountEntraKerbAuth {
         {
             Write-Host "Checking Entra Object"
             try {
+                # Requires Az.Accounts
                 $checksExecuted += 1;
+                $Context = Get-AzContext
+                $TenantId = $Context.Tenant
+
                 Request-ConnectMsGraph `
                     -Scopes "Application.Read.All" `
-                    -RequiredModules @("Microsoft.Graph.Applications") `
                     -TenantId $TenantId
-                Import-Module Microsoft.Graph.Applications
-
+                
+                # Requires Microsoft.Graph.Applications
                 $Application = Get-MgApplication `
-                    -Filter "identifierUris/any (uri:uri eq 'api://${TenantId}/CIFS/$($fileEndpoint)')" `
+                    -Filter "identifierUris/any (uri:uri eq 'api://${TenantId}/CIFS/${fileEndpoint}')" `
                     -ConsistencyLevel eventual
+                
                 if($null -eq $Application)
                 {
-                    Write-TestingFailed -Message "Could not find the application with SPN '$($PSStyle.Foreground.BrightCyan)api://${TenantId}/CIFS/$($fileEndpoint)$($PSStyle.Reset)'"
+                    Write-TestingFailed -Message "Could not find the application with SPN '$($PSStyle.Foreground.BrightCyan)api://${TenantId}/CIFS/${fileEndpoint}$($PSStyle.Reset)'"
                     $checks["CheckEntraObject"].Result = "Failed"
-                    $checks["CheckEntraObject"].Issue = "Could not find the application with SPN ' api://${TenantId}/CIFS/$($fileEndpoint)'."
+                    $checks["CheckEntraObject"].Issue = "Could not find the application with SPN ' api://${TenantId}/CIFS/${fileEndpoint}'."
                 }
-                $ServicePrincipal = Get-MgServicePrincipal -Filter "servicePrincipalNames/any (name:name eq 'api://$TenantId/CIFS/$($fileEndpoint)')" -ConsistencyLevel eventual
-                [string]$aadServicePrincipalError = "SPN Value is not set correctly, It should be '$($PSStyle.Foreground.BrightCyan)CIFS/$($fileEndpoint)$($PSStyle.Reset)'"
+                
+                # Requires Microsoft.Graph.Applications
+                $ServicePrincipal = Get-MgServicePrincipal -Filter "servicePrincipalNames/any (name:name eq 'api://$TenantId/CIFS/${fileEndpoint}')" -ConsistencyLevel eventual
+                
+                [string]$aadServicePrincipalError = "SPN Value is not set correctly, It should be '$($PSStyle.Foreground.BrightCyan)CIFS/${fileEndpoint}$($PSStyle.Reset)'"
                 if($null -eq $ServicePrincipal)
                 {
                     Write-TestingFailed -Message $aadServicePrincipalError
                     $checks["CheckEntraObject"].Result = "Failed"
-                    $checks["CheckEntraObject"].Issue = "Service Principal is missing SPN 'CIFS/$($fileEndpoint)'."
+                    $checks["CheckEntraObject"].Issue = "Service Principal is missing SPN 'CIFS/${fileEndpoint}'."
                 }
                 if(-not $ServicePrincipal.AccountEnabled)
                 {
@@ -3939,16 +3748,16 @@ function Debug-AzStorageAccountEntraKerbAuth {
                     $checks["CheckEntraObject"].Result = "Failed"
                     $checks["CheckEntraObject"].Issue = "Expected AccountEnabled set to true"
                 }
-                elseif(-not $ServicePrincipal.ServicePrincipalNames.Contains("CIFS/$($fileEndpoint)"))
+                elseif(-not $ServicePrincipal.ServicePrincipalNames.Contains("CIFS/${fileEndpoint}"))
                 {
                     Write-TestingFailed -Message $aadServicePrincipalError
                     $checks["CheckEntraObject"].Result = "Failed"
-                    $checks["CheckEntraObject"].Issue = "Service Principal is missing SPN ' CIFS/$($fileEndpoint)'."
+                    $checks["CheckEntraObject"].Issue = "Service Principal is missing SPN ' CIFS/${fileEndpoint}'."
                 }
                 
-                elseif (-not $ServicePrincipal.ServicePrincipalNames.Contains("api://${TenantId}/CIFS/$($fileEndpoint)"))
+                elseif (-not $ServicePrincipal.ServicePrincipalNames.Contains("api://${TenantId}/CIFS/${fileEndpoint}"))
                 {
-                    Write-TestingWarning -Message "Service Principal is missing SPN '$($PSStyle.Foreground.BrightCyan)api://${TenantId}/CIFS/$($fileEndpoint)$($PSStyle.Reset)'."
+                    Write-TestingWarning -Message "Service Principal is missing SPN '$($PSStyle.Foreground.BrightCyan)api://${TenantId}/CIFS/${fileEndpoint}$($PSStyle.Reset)'."
                     Write-Host "`tIt is okay to not have this value for now, but it is good to have this configured in future if you want to continue getting kerberos tickets."
                     $checks["CheckEntraObject"].Result = "Partial"
                 }
@@ -4046,7 +3855,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
         {
             Write-Host "Checking Admin Consent"
             $checksExecuted += 1;
-            Debug-EntraKerbAdminConsent -AccountFileEndpoint $fileEndpoint -checkResult $checks["CheckAdminConsent"]
+            Debug-EntraKerbAdminConsent -AccountFileEndpoint $fileEndpoint $checks["CheckAdminConsent"]
         }
         #
         #Check Default share and RBAC permissions
@@ -4103,6 +3912,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 $checks["CheckRBAC"].Issue = $_
             }
         }
+
         #
         # Check if WinHttpAutoProxySvc service is running
         #
@@ -4208,6 +4018,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 $checks["CheckFiddlerProxy"].Issue = $_
              }
         }
+
         #
         #Check if the machine is HAADJ or AADJ
         #
@@ -4297,12 +4108,9 @@ function Debug-RBACCheck {
     )
     process {
         try {
-            $context = Get-AzContext
-            Request-ConnectMsGraph `
-                    -Scopes "User.Read.All", "GroupMember.Read.All" `
-                    -RequiredModules @("Microsoft.Graph.Users", "Microsoft.Graph.Groups", "Microsoft.Graph.Identity.DirectoryManagement") `
-                    -TenantId $context.Tenant
-                    
+            Request-ConnectMsGraph -Scopes "User.Read.All", "GroupMember.Read.All"
+            
+            # Requires Microsoft.Graph.Users
             $user = Get-MgUser -Filter "UserPrincipalName eq '$UserPrincipalName'" -Property Id,OnPremisesSecurityIdentifier
             
             if ($null -eq $user) {
@@ -4319,6 +4127,7 @@ function Debug-RBACCheck {
                 return
             }
             
+            # Requires Microsoft.Graph.Users
             $groups = Get-MgUserMemberOfAsGroup -UserId $user.Id -Property DisplayName,Id,OnPremisesSecurityIdentifier
             
             $hybridGroups = $groups | Where-Object { $_.OnPremisesSecurityIdentifier }
@@ -4342,6 +4151,7 @@ function Debug-RBACCheck {
             
             foreach ($roleName in $roleNames)
             {
+                # Requires Az.Resources
                 $assignments = Get-AzRoleAssignment -RoleDefinitionName $roleName -Scope $scope
                 
                 foreach ($assignment in $assignments) 
@@ -4435,31 +4245,28 @@ function Debug-EntraKerbAdminConsent {
     param (
         [Parameter(Mandatory=$True, Position=0, HelpMessage="Endpoint for Files service on a storage account")]
         [string]$AccountFileEndpoint,
+
         [Parameter(Mandatory=$True, Position=1, HelpMessage="Check result object")]
         [CheckResult]$checkResult
     )
 
     process {
         try {
+            # Requires Az.Accounts
             $Context = Get-AzContext
             $TenantId = $Context.Tenant
-
-            # Detect if the Microsoft.Graph.Applications module is installed and at least version 2.2.0.
-            # Get-MgServicePrincipalByAppId was added in Microsoft.Graph.Applications v2.2.0.
-            Request-MSGraphModuleVersion -MinimumVersion 2.2.0
-
+            
             Request-ConnectMsGraph `
                 -Scopes "DelegatedPermissionGrant.Read.All" `
-                -RequiredModules @("Microsoft.Graph.Applications", "Microsoft.Graph.Identity.SignIns") `
                 -TenantId $TenantId
 
-            Import-Module Microsoft.Graph.Applications -MinimumVersion 2.2.0 -ErrorAction SilentlyContinue
-            Import-Module Microsoft.Graph.Identity.SignIns
-
+            # Requires Microsoft.Graph.Applications v2.2.0+
             $MsGraphSp = Get-MgServicePrincipalByAppId -AppId 00000003-0000-0000-c000-000000000000
-
+            
+            # Requires Microsoft.Graph.Applications
             $spn = "api://$TenantId/CIFS/$AccountFileEndpoint"
             $ServicePrincipal = Get-MgServicePrincipal -Filter "servicePrincipalNames/any (name:name eq '$spn')" -ConsistencyLevel eventual
+
             if($null -eq $ServicePrincipal -or $null -eq $ServicePrincipal.Id)
             {
                 Write-TestingFailed -Message "Could not find the application with SPN $($PSStyle.Foreground.BrightCyan)'$spn'$($PSStyle.Reset)"
@@ -4467,7 +4274,10 @@ function Debug-EntraKerbAdminConsent {
                 $checkResult.Issue = "Could not find the application with SPN '$spn'. "
                 return
             }
+            
+            # Requires Microsoft.Graph.Identity.SignIns
             $Consent = Get-MgOauth2PermissionGrant -Filter "ClientId eq '$($ServicePrincipal.Id)' and ResourceId eq '$($MSGraphSp.Id)' and consentType eq 'AllPrincipals'"
+            
             if($null -eq $Consent -or $null -eq $Consent.Scope)
             {
                 Write-TestingFailed -Message "Please grant admin consent using '$($PSStyle.Foreground.BrightCyan)https://aka.ms/azfiles/entra-adminconsent$($PSStyle.Reset)'"
@@ -4475,6 +4285,7 @@ function Debug-EntraKerbAdminConsent {
                 $checkResult.Issue = "Admin Consent is not granted"
                 return
             }
+            
             $permissions = New-Object System.Collections.Generic.HashSet[string]
             foreach ($permission in $Consent.Scope.Split(" ")) {
                 $permissions.Add($permission) | Out-Null
@@ -4564,7 +4375,7 @@ function Debug-AzStorageAccountADDSAuth {
             "CheckDefaultSharePermission" = [CheckResult]::new("CheckDefaultSharePermission");
             "CheckAadKerberosRegistryKeyIsOff" = [CheckResult]::new("CheckAadKerberosRegistryKeyIsOff");
         }
-        
+
         $context = Get-AzContext
         if($null -eq $context)
         {
@@ -4580,9 +4391,11 @@ function Debug-AzStorageAccountADDSAuth {
             $fileEndpoint = $accountUriObject.DnsSafeHost
         }
         
+        
         #
         # Port 445 check 
         #
+        
         if (!$filterIsPresent -or $Filter -match "CheckPort445Connectivity")
         {
             try {
@@ -4604,6 +4417,7 @@ function Debug-AzStorageAccountADDSAuth {
         #
         # Domain-Joined Check
         #
+
         if (!$filterIsPresent -or $Filter -match "CheckDomainJoined")
         {
             try {
@@ -4811,6 +4625,7 @@ function Debug-AzStorageAccountADDSAuth {
 
                     Write-Verbose "CheckAadUserHasSid for object ID $ObjectId in domain $Domain"
 
+                    # Requires Microsoft.Graph.Users
                     $aadUser = Get-MgUser -Filter "Id eq '$ObjectId'" -Property OnPremisesSecurityIdentifier
 
                     if ($null -eq $aadUser) {
@@ -4874,9 +4689,7 @@ function Debug-AzStorageAccountADDSAuth {
                 $checksExecuted += 1
                 Write-Verbose "CheckUserRbacAssignment - START"
 
-                Request-ConnectMsGraph `
-                    -Scopes "User.Read.All", "GroupMember.Read.All" `
-                    -RequiredModules @("Microsoft.Graph.Users", "Microsoft.Graph.Groups", "Microsoft.Graph.Identity.DirectoryManagement")
+                Request-ConnectMsGraph -Scopes "User.Read.All", "GroupMember.Read.All"
 
                 $sidNames = @{}
                 $user = Get-OnPremAdUser -Identity $UserName -Domain $Domain -ErrorAction Stop
@@ -4893,9 +4706,12 @@ function Debug-AzStorageAccountADDSAuth {
                 # Storage File Data SMB Share Elevated Contributor
                 $smbRoleNamePrefix = "Storage File Data SMB Share"
                 $smbRoleDefinitions = @{}
+                
+                # Requires Az.Resources
                 Get-AzRoleDefinition | Where-Object { $_.Name.StartsWith($smbRoleNamePrefix) } `
                     | ForEach-Object { $smbRoleDefinitions[$_.Id] = $_ }
                 
+                # Requires Az.Resources
                 $roleAssignments = Get-AzRoleAssignment -ResourceGroupName $ResourceGroupName `
                     -ResourceName $StorageAccountName -ResourceType Microsoft.Storage/storageAccounts `
                     | Where-Object { $smbRoleDefinitions.ContainsKey($_.RoleDefinitionId) }
@@ -4909,9 +4725,11 @@ function Debug-AzStorageAccountADDSAuth {
                     # https://learn.microsoft.com/en-us/graph/api/directoryobject-getbyids?view=graph-rest-1.0&tabs=http#:~:text=This%20API%20has%20a%20known%20issue.%20Not%20all%20directory%20objects%20returned%20are%20the%20full%20objects%20containing%20all%20their%20properties.
                     # so we use Get-MgUser and Get-MgGroup
                     if ($assignment.ObjectType -eq 'User') {
+                        # Requires Microsoft.Graph.Users
                         $aadObject = Get-MgUser -UserId $assignment.ObjectId -Property OnPremisesSecurityIdentifier
                     }
                     if ($assignment.ObjectType -eq 'Group') {
+                        # Requires Microsoft.Graph.Groups
                         $aadObject = Get-MgGroup -GroupId $assignment.ObjectId -Property OnPremisesSecurityIdentifier
                     }
 
@@ -5184,10 +5002,12 @@ function Set-StorageAccountDomainProperties {
         Write-Verbose "Setting AD properties on $StorageAccountName in $ResourceGroupName : `
             EnableActiveDirectoryDomainServicesForFile=$false"
 
+        # Requires Az.Storage
         Set-AzStorageAccount -ResourceGroupName $ResourceGroupName -AccountName $StorageAccountName `
             -EnableActiveDirectoryDomainServicesForFile $false
     } else {
 
+        # Requires Az.Storage
         $storageAccount = Get-AzStorageAccount -ResourceGroupName $ResourceGroupName -AccountName $StorageAccountName
 
         if (($null -ne $storageAccount.AzureFilesIdentityBasedAuth.ActiveDirectoryProperties) -and (-not $Force)) {
@@ -5252,6 +5072,7 @@ function Set-StorageAccountDomainProperties {
             ActiveDirectorySamAccountName=$samAccountName, `
             ActiveDirectoryAccountType=$accountType"
 
+        # Requires Az.Storage
         Set-AzStorageAccount -ResourceGroupName $ResourceGroupName -AccountName $StorageAccountName `
              -EnableActiveDirectoryDomainServicesForFile $true -ActiveDirectoryDomainName $domainName `
              -ActiveDirectoryNetBiosDomainName $netBiosDomainName -ActiveDirectoryForestName $forestName `
@@ -5484,6 +5305,7 @@ function Update-AzStorageAccountADObjectPassword {
 
     process {
         if ($PSCmdlet.ParameterSetName -eq "StorageAccountName") {
+            # Requires Az.Storage
             Write-Verbose -Message "Get storage account object for StorageAccountName=$StorageAccountName."
             $StorageAccount = Get-AzStorageAccount `
                 -ResourceGroupName $ResourceGroupName `
@@ -5527,6 +5349,7 @@ function Update-AzStorageAccountADObjectPassword {
             
             Write-Verbose -Message ("Regenerate $RotateToKerbKey on " + $StorageAccount.StorageAccountName)
             if (!$SkipKeyRegeneration.ToBool()) {
+                # Requires Az.Storage
                 $kerbKeys = New-AzStorageAccountKey `
                     -ResourceGroupName $StorageAccount.ResourceGroupName `
                     -Name $StorageAccount.StorageAccountName `
@@ -5534,6 +5357,7 @@ function Update-AzStorageAccountADObjectPassword {
                     -ErrorAction Stop | `
                 Select-Object -ExpandProperty Keys
             } else {
+                # Requires Az.Storage
                 $kerbKeys = Get-AzStorageAccountKerbKeys `
                     -ResourceGroupName $StorageAccount.ResourceGroupName `
                     -StorageAccountName $StorageAccount.StorageAccountName `
@@ -6142,9 +5966,7 @@ function Request-ConnectMsGraph {
     .DESCRIPTION
     Correctly import the MsGraph module for your PowerShell version and then sign in using the same tenant is the currently signed in Az user.
     .EXAMPLE
-    Request-ConnectMsGraph `
-        -Scopes "Domain.Read.All" `
-        -RequiredModules @("Microsoft.Graph.Users", "Microsoft.Graph.Groups", "Microsoft.Graph.Identity.DirectoryManagement")
+    Request-ConnectMsGraph -Scopes "Domain.Read.All"
     #>
 
     [CmdletBinding()]
@@ -6152,21 +5974,17 @@ function Request-ConnectMsGraph {
         [Parameter(Mandatory=$true)]
         [string[]]$Scopes,
 
-        [Parameter(Mandatory=$true)]
-        [string[]]$RequiredModules,
-
         [Parameter(Mandatory=$false)]
         [string]$TenantId
     )
 
-    Assert-IsWindows
-    Request-MSGraphModule -RequiredModules $RequiredModules
-
     if ([string]::IsNullOrEmpty($TenantId)) {
+        # Requires Az.Accounts
         $context = Get-AzContext
         $TenantId = $context.Tenant.Id
     }
 
+    # Requires Microsoft.Graph.Authentication
     Connect-MgGraph -Scopes $Scopes -TenantId $TenantId | Out-Null
 }
 
@@ -6185,14 +6003,14 @@ function Get-AzCurrentAzureADUser {
     [CmdletBinding()]
     param()
 
+    # Requires Az.Accounts
     $context = Get-AzContext
     $friendlyLogin = $context.Account.Id
     $friendlyLoginSplit = $friendlyLogin.Split("@")
 
-    Request-ConnectMsGraph `
-        -Scopes "Domain.Read.All" `
-        -RequiredModules @("Microsoft.Graph.Users", "Microsoft.Graph.Groups", "Microsoft.Graph.Identity.DirectoryManagement")
+    Request-ConnectMsGraph -Scopes "Domain.Read.All"
 
+    # requires Microsoft.Graph.Identity.DirectoryManagement
     $domains = Get-MgDomain
     $domainNames = $domains | Select-Object -ExpandProperty Id
 
@@ -6203,6 +6021,7 @@ function Get-AzCurrentAzureADUser {
 
         foreach($domain in $domains) {
             $possibleName = ($username + "@" + $domain.Id)
+            # Requires Az.Resources
             $foundUser = Get-AzADUser -UserPrincipalName $possibleName
             if ($null -ne $foundUser) {
                 return $possibleName
@@ -6264,6 +6083,8 @@ function Test-AzPermission {
 
             $ResourceIdComponents = $Scope | Expand-AzResourceId
             $subscription = $ResourceIdComponents.subscriptions
+
+            # Requires Az.Resources
             $roleAssignments = Get-AzRoleAssignment `
                     -Scope "/subscriptions/$subscription" `
                     -IncludeClassicAdministrators | `
@@ -6282,8 +6103,8 @@ function Test-AzPermission {
 
         # Normalize operations to $Operation
         if ($PSCmdlet.ParameterSetName -eq "OperationsName") {
-            $Operation = $OperationName | `
-                Get-AzProviderOperation
+            # Requires Az.Resources
+            $Operation = $OperationName | Get-AzProviderOperation
         }
 
         # If a specific user isn't given, use the current PowerShell logged in user.
@@ -6315,6 +6136,7 @@ function Test-AzPermission {
             return $userHasOperation
         }
 
+        # Requires Az.Resources
         $roleAssignments = Get-AzRoleAssignment -Scope $Scope -SignInName $SignInName
 
         if ($RefreshCache) {
@@ -6324,6 +6146,7 @@ function Test-AzPermission {
         foreach($roleAssignment in $roleAssignments) {
             $operationsInRole = [string[]]$null
             if (!$OperationCache.TryGetValue($roleAssignment.RoleDefinitionId, [ref]$operationsInRole)) {
+                # Requires Az.Resources
                 $operationsInRole = Get-AzRoleDefinition -Id $roleAssignment.RoleDefinitionId
                 $OperationCache.Add($roleAssignment.RoleDefinitionId, $operationsInRole)
             }
@@ -6369,6 +6192,7 @@ function Test-AzPermission {
             }
         }
 
+        # Requires Az.Resources
         $denyAssignments = Get-AzDenyAssignment -Scope $Scope -SignInName $SignInName
         foreach($denyAssignment in $denyAssignments) {
             foreach($op in $Operation) {
@@ -6675,10 +6499,13 @@ function Add-AzDnsForwardingRule {
         $forwardingRules = $DnsForwardingRuleSet.DnsForwardingRules
 
         if ($PSCmdlet.ParameterSetName -eq "AzureEndpointParameterSet") {
+            # Requires Az.Accounts
             $subscriptionContext = Get-AzContext
             if ($null -eq $subscriptionContext) {
                 throw [AzureLoginRequiredException]::new()
             }
+
+            # Requires Az.Accounts
             $environmentEndpoints = Get-AzEnvironment -Name $subscriptionContext.Environment
 
             switch($AzureEndpoint) {
@@ -6970,6 +6797,7 @@ function Confirm-AzDnsForwarderPreReqs {
     switch($PSCmdlet.ParameterSetName) {
         "NameParameterSet" {
             # Get/verify virtual network is there.
+            # Requires Az.Network
             $VirtualNetwork = Get-AzVirtualNetwork `
                 -ResourceGroupName $VirtualNetworkResourceGroupName `
                 -Name $VirtualNetworkName `
@@ -6999,6 +6827,7 @@ function Confirm-AzDnsForwarderPreReqs {
             $VirtualNetworkResourceGroupName = $VirtualNetwork.ResourceGroupName
 
             # Verify/update virtual network object
+            # Requires Az.Network
             $VirtualNetwork = $VirtualNetwork | `
                 Get-AzVirtualNetwork -ErrorAction SilentlyContinue
             
@@ -7028,6 +6857,7 @@ function Confirm-AzDnsForwarderPreReqs {
             $VirtualNetworkSubnetName = $virtualNetworkSubnetId["subnets"]
 
             # Get/verify virtual network object
+            # Requires Az.Network
             $VirtualNetwork = Get-AzVirtualNetwork `
                 -ResourceGroupName $VirtualNetworkResourceGroupName `
                 -Name $VirtualNetworkName `
@@ -7267,6 +7097,7 @@ function Invoke-AzDnsForwarderDeployment {
 
     if ($PSCmdlet.ShouldProcess($verboseConfirmMessage, $verboseConfirmMessage, $caption)) {
         try {
+            # Requires Az.Resources
             $templateResult = New-AzResourceGroupDeployment `
                 -ResourceGroupName $DnsServerResourceGroupName `
                 -TemplateUri $DnsForwarderTemplate `
@@ -7301,6 +7132,7 @@ function Get-AzDnsForwarderIpAddress {
         Select-Object @{ Name = "NIC"; Expression = { ($_ + "-NIC") } } | `
         Select-Object -ExpandProperty NIC
 
+    # Requires Az.Network
     $ipAddresses = Get-AzNetworkInterface -ResourceGroupName $DnsServerResourceGroupName | `
         Where-Object { $_.Name -in $nicNames } | `
         Select-Object -ExpandProperty IpConfigurations | `
@@ -7332,6 +7164,7 @@ function Update-AzVirtualNetworkDnsServers {
             $VirtualNetwork.DhcpOptions.DnsServers.Add($ipAddress)
         }
         
+        # Requires Az.Network
         $VirtualNetwork | Set-AzVirtualNetwork -ErrorAction Stop | Out-Null
     }
 }
@@ -7444,10 +7277,12 @@ function New-AzDnsForwarder {
         # Create resource group for the DNS forwarders, if it hasn't already
         # been created. The resource group will have the same location as the vnet.
         if ($PSBoundParameters.ContainsKey("DnsServerResourceGroupName")) {
+            # Requires Az.Resources
             $dnsServerResourceGroup = Get-AzResourceGroup | `
                 Where-Object { $_.ResourceGroupName -eq $DnsServerResourceGroupName }
 
             if ($null -eq $dnsServerResourceGroup) { 
+                # Requires Az.Resources
                 $dnsServerResourceGroup = New-AzResourceGroup `
                         -Name $DnsServerResourceGroupName `
                         -Location $VirtualNetwork.Location
@@ -7502,6 +7337,7 @@ function New-AzDnsForwarder {
                 -Confirm:$false
 
         foreach($dnsForwarder in $dnsForwarderNames) {
+            # Requires Az.Compute
             Restart-AzVM `
                     -ResourceGroupName $DnsServerResourceGroupName `
                     -Name $dnsForwarder | `
@@ -7515,8 +7351,8 @@ function New-AzDnsForwarder {
                         -Credential $Credential `
                         -InstallViaCopy `
                         -OverrideModuleConfig @{ 
-                            SkipPowerShellGetCheck = $true;
-                            SkipAzPowerShellCheck = $true;
+                            SkipPowerShellGetCheck = $true; # required for backwards-compatibility
+                            SkipAzPowerShellCheck = $true; # required for backwards-compatibility
                             SkipDotNetFrameworkCheck = $true
                         }
             } else {
@@ -7524,8 +7360,8 @@ function New-AzDnsForwarder {
                         -ComputerName $server `
                         -InstallViaCopy `
                         -OverrideModuleConfig @{ 
-                            SkipPowerShellGetCheck = $true;
-                            SkipAzPowerShellCheck = $true;
+                            SkipPowerShellGetCheck = $true; # required for backwards-compatibility
+                            SkipAzPowerShellCheck = $true; # required for backwards-compatibility
                             SkipDotNetFrameworkCheck = $true
                         }
             }            
@@ -7606,6 +7442,7 @@ function Move-OnPremSharePermissionsToAzureFileShare
     # Verify the Storage account and file share exist on the cloud.
     try
     {
+        # Requires Az.Storage
         $StorageAccountObj = Get-AzStorageAccount -ResourceGroupName $ResourceGroupName -Name $StorageAccountName -ErrorAction Stop
     }
     catch
@@ -7627,7 +7464,9 @@ function Move-OnPremSharePermissionsToAzureFileShare
 
     try
     {
+        # Requires Az.Storage
         $accountKey = Get-AzStorageAccountKey -ResourceGroupName $ResourceGroupName -Name $StorageAccountName | Where-Object {$_.KeyName -like "key1"}
+        # Requires Az.Storage
         $storageAccountContext = New-AzStorageContext -StorageAccountName $StorageAccountName -StorageAccountKey $accountKey.Value
     }
     catch
@@ -7637,6 +7476,7 @@ function Move-OnPremSharePermissionsToAzureFileShare
 
     Write-Verbose -Message "Checking if the destination share exists"
 
+    # Requires Az.Storage
     $cloudShare = Get-AzStorageShare -Context $storageAccountContext -Name $DestinationShareName -Erroraction 'silentlycontinue'
 
     # If the destination share does not exist, the following will create a new share.
@@ -7645,6 +7485,7 @@ function Move-OnPremSharePermissionsToAzureFileShare
         Write-Verbose -Message  "The Destination Share doesn't exist. Creating a new share with the name provided"
         try
         {
+            # Requires Az.Storage
             $cloudShare = New-AzStorageShare -Name $DestinationShareName -Context $storageAccountContext
         }
         catch
@@ -7686,10 +7527,9 @@ function Move-OnPremSharePermissionsToAzureFileShare
         #Geting the OID of domain user/group using its SID
         try
         {
-            Request-ConnectMsGraph `
-                -Scopes "User.Read.All" `
-                -RequiredModules @("Microsoft.Graph.Users", "Microsoft.Graph.Groups", "Microsoft.Graph.Identity.DirectoryManagement")
+            Request-ConnectMsGraph -Scopes "User.Read.All"
             
+            # Requires Microsoft.Graph.Users
             $aadUser = Get-MgUser -Filter "OnPremisesSecurityIdentifier eq '$strSID'"
         }
         catch
@@ -7709,16 +7549,19 @@ function Move-OnPremSharePermissionsToAzureFileShare
                 if($strAccessRight.Contains("Read"))
                 {
                     # Storage File Data SMB Share Reader - Built in role definition has below Id.
+                    # Requires Az.Resources
                     $roleDefinition = Get-AzRoleDefinition -Id aba4ae5f-2193-4029-9191-0cb91df5e314
                 }
                 elseif($strAccessRight.Contains("Change"))
                 {
                     # Storage File Data SMB Share Elevated Contributor - Built in role has below Id.
+                    # Requires Az.Resources
                     $roleDefinition = Get-AzRoleDefinition -Id a7264617-510b-434b-a828-9731dc254ea7
                 }
                 elseif($strAccessRight.Contains("Full") -And $AutoFitSharePermissionsOnAAD -eq $true)
                 {
                     # Storage File Data SMB Share Elevated Contributor - Built in role has below Id.
+                    # Requires Az.Resources
                     $roleDefinition = Get-AzRoleDefinition -Id a7264617-510b-434b-a828-9731dc254ea7
                 }
             }
@@ -7736,6 +7579,7 @@ function Move-OnPremSharePermissionsToAzureFileShare
                 $storageAccountPath = $StorageAccountObj.Id
                 $scope = "$storageAccountPath/fileServices/default/fileshares/$DestinationShareName"
 
+                # Requires Az.Resources
                 $roleAssignments = Get-AzRoleAssignment -Scope $scope -ObjectId $aadUser.ObjectId
 
                 #Check to see if the role is already assigned to the user/group.
@@ -7759,6 +7603,7 @@ function Move-OnPremSharePermissionsToAzureFileShare
                 {
                     Write-Verbose -Message "Assigning RBAC role to the user/group : $account  with the role : $($roleDefinition.Name)"
                     #Assign the custom role to the target identity with the specified scope.
+                    # Requires Az.Resources
                     $newRoleAssignment = New-AzRoleAssignment -ObjectId $aadUser.ObjectId -RoleDefinitionId $roleDefinition.Id -Scope $scope
 
                     $roleAssignmentsDoneAccounts.Add($smbShareAccessControl)
@@ -7849,8 +7694,6 @@ function Move-OnPremSharePermissionsToAzureFileShare
 $AzurePrivateDnsIp = [string]$null
 $DnsForwarderTemplateVersion = [Version]$null
 $DnsForwarderTemplate = [string]$null
-$SkipPowerShellGetCheck = $false
-$SkipAzPowerShellCheck = $false
 $SkipDotNetFrameworkCheck = $false
 
 function Invoke-ModuleConfigPopulate {
@@ -7910,18 +7753,6 @@ function Invoke-ModuleConfigPopulate {
         $script:DnsForwarderTemplate = $DefaultModuleConfig["DnsForwarderTemplate"]
     }
 
-    if ($OverrideModuleConfig.ContainsKey("SkipPowerShellGetCheck")) {
-        $script:SkipPowerShellGetCheck = $OverrideModuleConfig["SkipPowerShellGetCheck"]
-    } else {
-        $script:SkipPowerShellGetCheck = $DefaultModuleConfig["SkipPowerShellGetCheck"]
-    }
-
-    if ($OverrideModuleConfig.ContainsKey("SkipAzPowerShellCheck")) {
-        $script:SkipAzPowerShellCheck = $OverrideModuleConfig["SkipAzPowerShellCheck"]
-    } else {
-        $script:SkipAzPowerShellCheck = $DefaultModuleConfig["SkipAzPowerShellCheck"]
-    }
-
     if ($OverrideModuleConfig.ContainsKey("SkipDotNetFrameworkCheck")) {
         $script:SkipDotNetFrameworkCheck = $OverrideModuleConfig["SkipDotNetFrameworkCheck"]
     } else {
@@ -7944,11 +7775,4 @@ if ((Get-OSPlatform) -eq "Windows") {
         [Net.SecurityProtocolType]::Tls13)
 }
 
-if (!$SkipPowerShellGetCheck) {
-    Request-PowerShellGetModule
-}
-
-if (!$SkipAzPowerShellCheck) {
-    Request-AzPowerShellModule
-}
 #endregion
