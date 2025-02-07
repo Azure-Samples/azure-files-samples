@@ -4714,7 +4714,7 @@ function Debug-AzStorageAccountADDSAuth {
 
                 if(!((Get-SmbServerConfiguration).PSobject.Properties.Name -contains "EncryptionCiphers"))
                 {
-                    Write-Verbose -Message "Your operating system does not support the property 'EncryptionCiphers' of the cmdlet 'Get-SmbServerConfiguration'. Please refer to 'https://docs.microsoft.com/en-us/powershell/module/smbshare/set-smbserverconfiguration?view=windowsserver2022-ps'"
+                    Write-TestingWarning -Message "Your operating system does not support the property 'EncryptionCiphers' of the cmdlet 'Get-SmbServerConfiguration'. Please refer to '$($PSStyle.Foreground.BrightCyan)https://aka.ms/azfiles/adds-encryptionciphers$($PSStyle.Reset)'"
                     $checks["CheckChannelEncryption"].Result = "Skipped"
                 }
                 else 
