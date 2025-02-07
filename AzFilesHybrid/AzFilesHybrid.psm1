@@ -4649,9 +4649,12 @@ function Debug-AzStorageAccountADDSAuth {
                 Write-TestingFailed -Message $_ -IsUnexpected $true
             }
         }
-
+        #
+        # Kerberos Ticket Check
+        #
         if (!$filterIsPresent -or $Filter -match "CheckGetKerberosTicket")
         {
+            Write-Host "Checking Kerberos Ticket"
             try {
                 $checksExecuted += 1;
                 Write-Verbose "CheckGetKerberosTicket - START"
