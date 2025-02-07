@@ -4614,10 +4614,10 @@ function Debug-AzStorageAccountADDSAuth {
                 {
                     $message = "Machine is not domain-joined." `
                         + " Being domain-joined to an AD DS domain is a prerequisite for mounting" `
-                        + " Azure file shares without having to explicitly provide user credentials at every mount.See https://docs.microsoft.com/en-us/azure/storage/files/storage-files-identity-auth-active-directory-enable#prerequisites.\n\n" `
+                        + " Azure file shares without having to explicitly provide user credentials at every mount.See '$($PSStyle.Foreground.BrightCyan)https://aka.ms/azfiles/adds-domainjoin$($PSStyle.Reset)'\n\n" `
                         + " Mounting through a machine that isn't domain-joined is also supported," `
-                        + " but you must (1) have unimpeded network connectivity to the domain controller, and (2) explicitly provide AD DS user credentials when mounting. See https://learn.microsoft.com/en-us/azure/storage/files/storage-files-identity-ad-ds-mount-file-share#mount-the-file-share-from-a-non-domain-joined-vm-or-a-vm-joined-to-a-different-ad-domain "
-                    Write-Error -Message $message -ErrorAction Stop
+                        + " but you must (1) have unimpeded network connectivity to the domain controller, and (2) explicitly provide AD DS user credentials when mounting. See '$($PSStyle.Foreground.BrightCyan)https://aka.ms/azfiles/adds-mountfileshare$($PSStyle.Reset)'"
+                    Write-TestingFailed -Message $message -ErrorAction Stop
                 }
 
                 $checks["CheckDomainJoined"].Result = "Passed"
