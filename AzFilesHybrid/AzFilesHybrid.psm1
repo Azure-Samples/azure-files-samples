@@ -4609,7 +4609,6 @@ function Debug-AzStorageAccountADDSAuth {
             try {
                 $checksExecuted += 1;
                 Write-Verbose "CheckDomainJoined - START"
-        
                 if (!(Get-IsDomainJoined))
                 {
                     $message = "Machine is not domain-joined." `
@@ -4626,8 +4625,7 @@ function Debug-AzStorageAccountADDSAuth {
             } catch {
                 $checks["CheckDomainJoined"].Result = "Failed"
                 $checks["CheckDomainJoined"].Issue = $_
-                Write-Error "CheckDomainJoined - FAILED"
-                Write-Error $_
+                Write-TestingFailed -Message $_ -IsUnexpected $true
             }
         }
 
