@@ -4686,6 +4686,7 @@ function Debug-AzStorageAccountADDSAuth {
 
                 $checks["CheckKerberosTicketEncryption"].Result = "Passed"
                 Write-Verbose "CheckKerberosTicketEncryption - SUCCESS"
+                Write-TestingPassed
             } catch {
                 $checks["CheckKerberosTicketEncryption"].Result = "Failed"
                 $checks["CheckKerberosTicketEncryption"].Issue = $_
