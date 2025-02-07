@@ -4723,6 +4723,7 @@ function Debug-AzStorageAccountADDSAuth {
                     -ResourceGroupName $ResourceGroupName -ErrorAction Stop
 
                     $checks["CheckChannelEncryption"].Result = "Passed"
+                    Write-TestingPassed
                     Write-Verbose "CheckChannelEncryption - SUCCESS"
                 }
             } catch {
