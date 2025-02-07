@@ -5004,8 +5004,7 @@ function Debug-AzStorageAccountADDSAuth {
                 } else {
                     $fileAcl = Get-Acl -Path $FilePath
                     if ($null -eq $fileAcl) {
-                        $message = "Unable to get the ACL of '$FilePath'. Please check if the provided file path is correct."
-                        Write-Error -Message $message -ErrorAction Stop
+                        Write-TestingFailed -Message "Unable to get the ACL of '$FilePath'. Please check if the provided file path is correct." -ErrorAction Stop
                     }
 
                     # Get the access rules explicitly assigned to and inherited by the file
