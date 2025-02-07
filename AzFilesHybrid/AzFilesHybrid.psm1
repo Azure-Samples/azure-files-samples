@@ -4729,8 +4729,7 @@ function Debug-AzStorageAccountADDSAuth {
             } catch {
                 $checks["CheckChannelEncryption"].Result = "Failed"
                 $checks["CheckChannelEncryption"].Issue = $_
-                Write-Error "CheckChannelEncryption - FAILED"
-                Write-Error $_
+                Write-TestingFailed -Message $_ -IsUnexpected $true
             }
         }
 
