@@ -4754,9 +4754,12 @@ function Debug-AzStorageAccountADDSAuth {
                 Write-TestingFailed -Message $_ -IsUnexpected $true
             }
         }
-
+        #
+        # AD Object Password Check
+        #
         if (!$filterIsPresent -or $Filter -match "CheckADObjectPasswordIsCorrect")
         {
+            Write-Host "Checking Ad Object Password"
             try {
                 $checksExecuted += 1;
                 Write-Verbose "CheckADObjectPasswordIsCorrect - START"
