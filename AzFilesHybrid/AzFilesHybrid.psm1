@@ -4869,9 +4869,12 @@ function Debug-AzStorageAccountADDSAuth {
                 Write-TestingFailed -Message $_ -IsUnexpected $true
             }
         }
-
+        #
+        # AAD User has SID Check
+        #
         if (!$filterIsPresent -or ($Filter -match "CheckStorageAccountDomainJoined"))
         {
+            Write-Host "Checking AAD User has SID"
             try {
                 $checksExecuted += 1
                 Write-Verbose "CheckStorageAccountDomainJoined - START"
@@ -4883,11 +4886,11 @@ function Debug-AzStorageAccountADDSAuth {
                 
                 $checks["CheckStorageAccountDomainJoined"].Result = "Passed"
                 Write-Verbose "CheckStorageAccountDomainJoined - SUCCESS"
+                Write-TestingPassed
             } catch {
                 $checks["CheckStorageAccountDomainJoined"].Result = "Failed"
                 $checks["CheckStorageAccountDomainJoined"].Issue = $_
-                Write-Error "CheckStorageAccountDomainJoined - FAILED"
-                Write-Error $_
+                Write-TestingFailed -Message $_ -IsUnexpected $true
             }
         }
 
