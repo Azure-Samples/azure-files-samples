@@ -5063,8 +5063,7 @@ function Debug-AzStorageAccountADDSAuth {
             } catch {
                 $checks["CheckUserFileAccess"].Result = "Failed"
                 $checks["CheckUserFileAccess"].Issue = $_
-                Write-Error "CheckUserFileAccess - FAILED"
-                Write-Error $_
+                Write-TestingFailed -Messages $_ -IsUnexpected $true
             }
         }
 
