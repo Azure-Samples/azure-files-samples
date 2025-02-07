@@ -4668,8 +4668,7 @@ function Debug-AzStorageAccountADDSAuth {
             } catch {
                 $checks["CheckGetKerberosTicket"].Result = "Failed"
                 $checks["CheckGetKerberosTicket"].Issue = $_
-                Write-Error "CheckGetKerberosTicket - FAILED"
-                Write-Error $_
+                Write-TestingFailed -Message $_ -IsUnexpected $true
             }
         }
 
