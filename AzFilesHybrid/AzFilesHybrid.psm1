@@ -4769,6 +4769,7 @@ function Debug-AzStorageAccountADDSAuth {
 
                 $checks["CheckADObjectPasswordIsCorrect"].Result = "Passed"
                 Write-Verbose "CheckADObjectPasswordIsCorrect - SUCCESS"
+                Write-TestingPassed
             } catch {
                 $checks["CheckADObjectPasswordIsCorrect"].Result = "Failed"
                 $checks["CheckADObjectPasswordIsCorrect"].Issue = $_
