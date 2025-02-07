@@ -3155,11 +3155,8 @@ function Test-Port445Connectivity
     [CmdletBinding()]
 
     param (
-        [Parameter(Mandatory=$True, Position=0, HelpMessage="Storage account name")]
-        [string]$StorageAccountName,
-
-        [Parameter(Mandatory=$True, Position=1, HelpMessage="Resource group name")]
-        [string]$ResourceGroupName
+        [Parameter(Mandatory=$True, Position=0, HelpMessage="The DNS name of the storage account's File endpoint, e.g. 'myAccount.file.core.windows.net'")]
+        [string]$StorageAccountFileEndPoint
     )
 
     process
@@ -3167,16 +3164,9 @@ function Test-Port445Connectivity
         #
         # Test-NetConnection -ComputerName <storageAccount>.file.core.windows.net -Port 445
         #
+        Write-Verbose "Executing 'Test-NetConnection -ComputerName $StorageAccountFileEndPoint -Port 445'"
 
-        $fileEndpoint = Get-AzStorageAccountFileEndpoint -ResourceGroupName $ResourceGroupName `
-            -StorageAccountName $StorageAccountName -ErrorAction Stop
-
-        $endpoint = $fileEndpoint -replace 'https://', ''
-        $endpoint = $endpoint -replace '/', ''
-
-        Write-Verbose "Executing 'Test-NetConnection -ComputerName $endpoint -Port 445'"
-
-        $result = Test-NetConnection -ComputerName $endpoint -Port 445
+        $result = Test-NetConnection -ComputerName $StorageAccountFileEndPoint -Port 445
 
         if ($result.TcpTestSucceeded -eq $False)
         {
@@ -3627,6 +3617,21 @@ function Debug-AzStorageAccountEntraKerbAuth {
 
     process
     {
+        $context = Get-AzContext
+        if($null -eq $context)
+        {
+            Write-TestingFailed `
+                -Message "You should run $($PSStyle.Foreground.BrightBlue)Connect-AzAccount$($PSStyle.Reset) first, then try again."
+                return
+        } 
+        else 
+        {
+            $environment = $context.Environment.Name
+            $accountRestEndpoint = (New-AzStorageContext -StorageAccountName $StorageAccountName -Environment $environment).FileEndPoint
+            $accountUriObject = [System.Uri]::new($accountRestEndpoint)
+            $fileEndpoint = $accountUriObject.DnsSafeHost
+            $TenantId = $context.Tenant
+        }
         
         if(![string]::IsNullOrEmpty($Domain))
         {
@@ -3661,7 +3666,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
             Write-Host "Checking Port 445 Connectivity"
             try {
                 $checksExecuted += 1;
-                Test-Port445Connectivity -StorageAccountName $StorageAccountName -ResourceGroupName $ResourceGroupName -ErrorAction Stop
+                Test-Port445Connectivity -StorageAccountFileEndPoint $fileEndpoint -ErrorAction Stop
                 $checks["CheckPort445Connectivity"].Result = "Passed"
                 Write-TestingPassed
             } catch {
@@ -3717,25 +3722,25 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 
                 # Requires Microsoft.Graph.Applications
                 $Application = Get-MgApplication `
-                    -Filter "identifierUris/any (uri:uri eq 'api://${TenantId}/CIFS/${StorageAccountName}.file.core.windows.net')" `
+                    -Filter "identifierUris/any (uri:uri eq 'api://${TenantId}/CIFS/${fileEndpoint}')" `
                     -ConsistencyLevel eventual
                 
                 if($null -eq $Application)
                 {
-                    Write-TestingFailed -Message "Could not find the application with SPN '$($PSStyle.Foreground.BrightCyan)api://${TenantId}/CIFS/${StorageAccountName}.file.core.windows.net$($PSStyle.Reset)'"
+                    Write-TestingFailed -Message "Could not find the application with SPN '$($PSStyle.Foreground.BrightCyan)api://${TenantId}/CIFS/${fileEndpoint}$($PSStyle.Reset)'"
                     $checks["CheckEntraObject"].Result = "Failed"
-                    $checks["CheckEntraObject"].Issue = "Could not find the application with SPN ' api://${TenantId}/CIFS/${StorageAccountName}.file.core.windows.net'."
+                    $checks["CheckEntraObject"].Issue = "Could not find the application with SPN ' api://${TenantId}/CIFS/${fileEndpoint}'."
                 }
                 
                 # Requires Microsoft.Graph.Applications
-                $ServicePrincipal = Get-MgServicePrincipal -Filter "servicePrincipalNames/any (name:name eq 'api://$TenantId/CIFS/$StorageAccountName.file.core.windows.net')" -ConsistencyLevel eventual
+                $ServicePrincipal = Get-MgServicePrincipal -Filter "servicePrincipalNames/any (name:name eq 'api://$TenantId/CIFS/${fileEndpoint}')" -ConsistencyLevel eventual
                 
-                [string]$aadServicePrincipalError = "SPN Value is not set correctly, It should be '$($PSStyle.Foreground.BrightCyan)CIFS/${Storageaccountname}.file.core.windows.net$($PSStyle.Reset)'"
+                [string]$aadServicePrincipalError = "SPN Value is not set correctly, It should be '$($PSStyle.Foreground.BrightCyan)CIFS/${fileEndpoint}$($PSStyle.Reset)'"
                 if($null -eq $ServicePrincipal)
                 {
                     Write-TestingFailed -Message $aadServicePrincipalError
                     $checks["CheckEntraObject"].Result = "Failed"
-                    $checks["CheckEntraObject"].Issue = "Service Principal is missing SPN 'CIFS/${StorageAccountName}.file.core.windows.net'."
+                    $checks["CheckEntraObject"].Issue = "Service Principal is missing SPN 'CIFS/${fileEndpoint}'."
                 }
                 if(-not $ServicePrincipal.AccountEnabled)
                 {
@@ -3743,16 +3748,16 @@ function Debug-AzStorageAccountEntraKerbAuth {
                     $checks["CheckEntraObject"].Result = "Failed"
                     $checks["CheckEntraObject"].Issue = "Expected AccountEnabled set to true"
                 }
-                elseif(-not $ServicePrincipal.ServicePrincipalNames.Contains("CIFS/${StorageAccountName}.file.core.windows.net"))
+                elseif(-not $ServicePrincipal.ServicePrincipalNames.Contains("CIFS/${fileEndpoint}"))
                 {
                     Write-TestingFailed -Message $aadServicePrincipalError
                     $checks["CheckEntraObject"].Result = "Failed"
-                    $checks["CheckEntraObject"].Issue = "Service Principal is missing SPN ' CIFS/${StorageAccountName}.file.core.windows.net'."
+                    $checks["CheckEntraObject"].Issue = "Service Principal is missing SPN ' CIFS/${fileEndpoint}'."
                 }
                 
-                elseif (-not $ServicePrincipal.ServicePrincipalNames.Contains("api://${TenantId}/CIFS/${StorageAccountName}.file.core.windows.net"))
+                elseif (-not $ServicePrincipal.ServicePrincipalNames.Contains("api://${TenantId}/CIFS/${fileEndpoint}"))
                 {
-                    Write-TestingWarning -Message "Service Principal is missing SPN '$($PSStyle.Foreground.BrightCyan)api://${TenantId}/CIFS/${StorageAccountName}.file.core.windows.net$($PSStyle.Reset)'."
+                    Write-TestingWarning -Message "Service Principal is missing SPN '$($PSStyle.Foreground.BrightCyan)api://${TenantId}/CIFS/${fileEndpoint}$($PSStyle.Reset)'."
                     Write-Host "`tIt is okay to not have this value for now, but it is good to have this configured in future if you want to continue getting kerberos tickets."
                     $checks["CheckEntraObject"].Result = "Partial"
                 }
@@ -3812,7 +3817,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
                     $realmName = $properties.PSChildName
                     $spnMappings = $($domainKey | Get-ItemProperty).SpnMappings
                     foreach ($hostName in $spnMappings) {
-                        if ($hostName -eq "${StorageAccountName}.file.core.windows.net" -or
+                        if ($hostName -eq $fileEndpoint -or
                             $hostName -eq ".file.core.windows.net" -or
                             $hostName -eq ".core.windows.net" -or
                             $hostName -eq ".windows.net" -or
@@ -3850,7 +3855,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
         {
             Write-Host "Checking Admin Consent"
             $checksExecuted += 1;
-            Debug-EntraKerbAdminConsent -StorageAccountName $StorageAccountName -checkResult $checks["CheckAdminConsent"]
+            Debug-EntraKerbAdminConsent -AccountFileEndpoint $fileEndpoint $checks["CheckAdminConsent"]
         }
         #
         #Check Default share and RBAC permissions
@@ -4238,8 +4243,9 @@ function Test-IsCloudKerberosTicketRetrievalEnabled {
 function Debug-EntraKerbAdminConsent {
     [CmdletBinding()]
     param (
-        [Parameter(Mandatory=$True, Position=0, HelpMessage="Storage account name")]
-        [string]$StorageAccountName,
+        [Parameter(Mandatory=$True, Position=0, HelpMessage="Endpoint for Files service on a storage account")]
+        [string]$AccountFileEndpoint,
+
         [Parameter(Mandatory=$True, Position=1, HelpMessage="Check result object")]
         [CheckResult]$checkResult
     )
@@ -4255,10 +4261,10 @@ function Debug-EntraKerbAdminConsent {
                 -TenantId $TenantId
 
             # Requires Microsoft.Graph.Applications v2.2.0+
-            $MsGraphSp = Get-MgServicePrincipalByAppId -AppId 00000003-0000-0000-c000-000000000000 
+            $MsGraphSp = Get-MgServicePrincipalByAppId -AppId 00000003-0000-0000-c000-000000000000
             
             # Requires Microsoft.Graph.Applications
-            $spn = "api://$TenantId/CIFS/$StorageAccountName.file.core.windows.net"
+            $spn = "api://$TenantId/CIFS/$AccountFileEndpoint"
             $ServicePrincipal = Get-MgServicePrincipal -Filter "servicePrincipalNames/any (name:name eq '$spn')" -ConsistencyLevel eventual
 
             if($null -eq $ServicePrincipal -or $null -eq $ServicePrincipal.Id)
@@ -4274,7 +4280,7 @@ function Debug-EntraKerbAdminConsent {
             
             if($null -eq $Consent -or $null -eq $Consent.Scope)
             {
-                Write-TestingFailed -Message "Please grant admin consent using $($PSStyle.Foreground.BrightCyan)'https://aka.ms/azfiles/entra-adminconsent'$($PSStyle.Reset)"
+                Write-TestingFailed -Message "Please grant admin consent using '$($PSStyle.Foreground.BrightCyan)https://aka.ms/azfiles/entra-adminconsent$($PSStyle.Reset)'"
                 $checkResult.Result = "Failed"
                 $checkResult.Issue = "Admin Consent is not granted"
                 return
@@ -4290,10 +4296,10 @@ function Debug-EntraKerbAdminConsent {
             {
                 Write-TestingPassed
                 $checkResult.Result = "Passed"
-            } 
+            }
             else
             {
-                Write-TestingFailed -Message "Please grant admin consent using $($PSStyle.Foreground.BrightCyan)'https://aka.ms/azfiles/entra-adminconsent'$($PSStyle.Reset)"
+                Write-TestingFailed -Message "Please grant admin consent using '$($PSStyle.Foreground.BrightCyan)https://aka.ms/azfiles/entra-adminconsent$($PSStyle.Reset)'"
                 $checkResult.Result = "Failed"
                 $checkResult.Issue = "Admin Consent is not granted"
             }
@@ -4369,6 +4375,21 @@ function Debug-AzStorageAccountADDSAuth {
             "CheckDefaultSharePermission" = [CheckResult]::new("CheckDefaultSharePermission");
             "CheckAadKerberosRegistryKeyIsOff" = [CheckResult]::new("CheckAadKerberosRegistryKeyIsOff");
         }
+
+        $context = Get-AzContext
+        if($null -eq $context)
+        {
+            Write-TestingFailed `
+                -Message "You should run $($PSStyle.Foreground.BrightBlue)Connect-AzAccount$($PSStyle.Reset) first, then try again."
+                return
+        }
+        else
+        {
+            $environment = $context.Environment.Name
+            $accountRestEndpoint = (New-AzStorageContext -StorageAccountName $StorageAccountName -Environment $environment).FileEndPoint
+            $accountUriObject = [System.Uri]::new($accountRestEndpoint)
+            $fileEndpoint = $accountUriObject.DnsSafeHost
+        }
         
         
         #
@@ -4381,8 +4402,7 @@ function Debug-AzStorageAccountADDSAuth {
                 $checksExecuted += 1;
                 Write-Verbose "CheckPort445Connectivity - START"
 
-                Test-Port445Connectivity -StorageAccountName $StorageAccountName `
-                    -ResourceGroupName $ResourceGroupName -ErrorAction Stop
+                Test-Port445Connectivity -StorageAccountFileEndPoint $fileEndpoint -ErrorAction Stop
 
                 $checks["CheckPort445Connectivity"].Result = "Passed"
                 Write-Verbose "CheckPort445Connectivity - SUCCESS"
@@ -4928,8 +4948,6 @@ function Debug-AzStorageAccountADDSAuth {
     }
 
 }
-
-
 
 function Set-StorageAccountDomainProperties {
     <#
