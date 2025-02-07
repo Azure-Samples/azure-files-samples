@@ -5066,9 +5066,12 @@ function Debug-AzStorageAccountADDSAuth {
                 Write-TestingFailed -Messages $_ -IsUnexpected $true
             }
         }
-
+        #
+        # Default Share Permissions Check
+        #
         if (!$filterIsPresent -or $Filter -match "CheckDefaultSharePermission")
         {
+            Write-Host "Checking Default Share Permission"
             try {
                 $checksExecuted += 1
                 Write-Verbose "CheckDefaultSharePermission - START"
@@ -5087,11 +5090,11 @@ function Debug-AzStorageAccountADDSAuth {
                 Write-Verbose "DefaultSharePermission: $DefaultSharePermission"
                 Write-Verbose "CheckDefaultSharePermission - SUCCESS"
                 $checks["CheckDefaultSharePermission"].Result = "Passed"
+                Write-TestingPassed
             } catch {
                 $checks["CheckDefaultSharePermission"].Result = "Failed"
                 $checks["CheckDefaultSharePermission"].Issue = $_
-                Write-Error "CheckDefaultSharePermission - FAILED"
-                Write-Error $_
+                Write-TestingFailed -Message $_ -IsUnexpected $true
             }
         }
         #
