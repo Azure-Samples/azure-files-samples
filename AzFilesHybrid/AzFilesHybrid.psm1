@@ -4693,9 +4693,12 @@ function Debug-AzStorageAccountADDSAuth {
                 Write-TestingFailed -Message $_ -IsUnexpected $true
             }
         }
-
+        #
+        # Channel Encryption Check
+        #
         if (!$filterIsPresent -or $Filter -match "CheckChannelEncryption")
         {
+            Write-Host "Checking Channel Encryption"
             try {
                 $checksExecuted += 1;
                 Write-Verbose "CheckChannelEncryption - START"
