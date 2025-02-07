@@ -4731,10 +4731,13 @@ function Debug-AzStorageAccountADDSAuth {
                 $checks["CheckChannelEncryption"].Issue = $_
                 Write-TestingFailed -Message $_ -IsUnexpected $true
             }
-        }
-
+        }   
+        #
+        # Domain Line of Sight Check
+        #
         if (!$filterIsPresent -or $Filter -match "CheckDomainLineOfSight")
         {
+            Write-Host "Checking Domain Line of Sight"
             try {
                 $checksExecuted += 1;
                 Write-Verbose "CheckDomainLineOfSight - START"
@@ -4744,11 +4747,11 @@ function Debug-AzStorageAccountADDSAuth {
 
                 $checks["CheckDomainLineOfSight"].Result = "Passed"
                 Write-Verbose "CheckDomainLineOfSight - SUCCESS"
+                Write-TestingPassed
             } catch {
                 $checks["CheckDomainLineOfSight"].Result = "Failed"
                 $checks["CheckDomainLineOfSight"].Issue = $_
-                Write-Error "CheckDomainLineOfSight - FAILED"
-                Write-Error $_
+                Write-TestingFailed -Message $_ -IsUnexpected $true
             }
         }
 
