@@ -4776,9 +4776,12 @@ function Debug-AzStorageAccountADDSAuth {
                 Write-TestingFailed -Mesage $_ -IsUnexpected $true
             }
         }
-
+        #
+        # SID for AAD User Check
+        #   
         if (!$filterIsPresent -or $Filter -match "CheckSidHasAadUser")
         {
+            Write-Host "Checking SID for AAD User"
             try {
                 $checksExecuted += 1;
                 Write-Verbose "CheckSidHasAadUser - START"
@@ -4794,18 +4797,18 @@ function Debug-AzStorageAccountADDSAuth {
                         + " user $UserName' in domain '$Domain'. Please ensure the domain '$Domain' is" `
                         + " synced to Azure Active Directory using Azure AD Connect" `
                         + " (https://docs.microsoft.com/en-us/azure/active-directory/hybrid/how-to-connect-install-roadmap)"
-                    Write-Error -Message $message -ErrorAction Stop
+                    Write-TestingFailed -Message $message -ErrorAction Stop
                 }
 
                 Write-Verbose "Found AAD user '$($aadUser.UserPrincipalName)' for SID $($currentUser.Sid)"
 
                 $checks["CheckSidHasAadUser"].Result = "Passed"
                 Write-Verbose "CheckSidHasAadUser - SUCCESS"
+                Write-TestingPassed
             } catch {
                 $checks["CheckSidHasAadUser"].Result = "Failed"
                 $checks["CheckSidHasAadUser"].Issue = $_
-                Write-Error "CheckSidHasAadUser - FAILED"
-                Write-Error $_
+                Write-TestingFailed -Message $_ -IsUnexpected $true
             }
         }
 
