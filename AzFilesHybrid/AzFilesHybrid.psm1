@@ -4618,7 +4618,6 @@ function Debug-AzStorageAccountADDSAuth {
                         + " but you must (1) have unimpeded network connectivity to the domain controller, and (2) explicitly provide AD DS user credentials when mounting. See '$($PSStyle.Foreground.BrightCyan)https://aka.ms/azfiles/adds-mountfileshare$($PSStyle.Reset)'"
                     Write-TestingFailed -Message $message -ErrorAction Stop
                 }
-
                 $checks["CheckDomainJoined"].Result = "Passed"
                 Write-TestingPassed
                 Write-Verbose "CheckDomainJoined - SUCCESS"
@@ -4628,7 +4627,9 @@ function Debug-AzStorageAccountADDSAuth {
                 Write-TestingFailed -Message $_ -IsUnexpected $true
             }
         }
-
+        #
+        # AD Object Check
+        #
         if (!$filterIsPresent -or $Filter -match "CheckADObject")
         {
             Write-Host "Checking AD Object"
@@ -4641,11 +4642,11 @@ function Debug-AzStorageAccountADDSAuth {
 
                 $checks["CheckADObject"].Result = "Passed"
                 Write-Verbose "CheckADObject - SUCCESS"
+                Write-TestingPassed
             } catch {
                 $checks["CheckADObject"].Result = "Failed"
                 $checks["CheckADObject"].Issue = $_
-                Write-Error "CheckADObject - FAILED"
-                Write-Error $_
+                Write-TestingFailed -Message $_ -IsUnexpected $true
             }
         }
 
