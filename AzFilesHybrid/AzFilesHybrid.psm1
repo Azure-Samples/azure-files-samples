@@ -4811,15 +4811,18 @@ function Debug-AzStorageAccountADDSAuth {
                 Write-TestingFailed -Message $_ -IsUnexpected $true
             }
         }
-
+        #
+        # AAD User has SID Check
+        #
         if (!$filterIsPresent -or $Filter -match "CheckAadUserHasSid")
         {
+            Write-Host "Checking AAD User has SID"
             try {
                 $checksExecuted += 1;
                 Write-Verbose "CheckAadUserHasSid - START"
 
                 if ([string]::IsNullOrEmpty($ObjectId)) {
-                    Write-Verbose -Message "Missing required parameter ObjectId for CheckAadUserHasSid requires ObjectId parameter to be present, skipping CheckAadUserHasSid"
+                    Write-Warning -Message "Missing required parameter ObjectId for CheckAadUserHasSid requires ObjectId parameter to be present, skipping CheckAadUserHasSid"
                     $checks["CheckAadUserHasSid"].Result = "Skipped"
                 }
                 else {
@@ -4835,14 +4838,14 @@ function Debug-AzStorageAccountADDSAuth {
                     if ($null -eq $aadUser) {
                         $message = "Cannot find an Azure AD user with ObjectId $ObjectId. Please check" `
                             + " whether the provided ObjecId is correct or not."
-                        Write-Error -Message $message -ErrorAction Stop
+                        Write-TestingFailed -Message $message -ErrorAction Stop
                     }
 
                     if ([string]::IsNullOrEmpty($aadUser.OnPremisesSecurityIdentifier)) {
                         $message = "Azure AD user $ObjectId has no OnPremisesSecurityIdentifier. Please" `
                             + " ensure the domain '$Domain' is synced to Azure Active Directory using Azure AD Connect" `
-                            + " (https://docs.microsoft.com/en-us/azure/active-directory/hybrid/how-to-connect-install-roadmap)"
-                        Write-Error -Message $message -ErrorAction Stop
+                            + " '$($PSStyle.Foreground.BrightCyan)https://aka.ms/azfiles/adds-activedirectory-roadmap$($PSStyle.Reset)'"
+                        Write-TestingFailed -Message $message -ErrorAction Stop
                     }
 
                     $user = Get-ADUser -Identity $aadUser.OnPremisesSecurityIdentifier -Server $Domain
@@ -4850,20 +4853,20 @@ function Debug-AzStorageAccountADDSAuth {
                     if ($null -eq $user) {
                         $message = "Azure AD user $ObjectId's SID $($aadUser.OnPremisesSecurityIdentifier)" `
                             + " is not found in domain $Domain. Please check whether the provided SID is correct."
-                        Write-Error -Message $message -ErrorAction Stop
+                        Write-TestingFailed -Message $message -ErrorAction Stop
                     }
 
                     Write-Verbose "Azure AD user $ObjectId has SID $($aadUser.OnPremisesSecurityIdentifier) in domain $Domain"
 
                     $checks["CheckAadUserHasSid"].Result = "Passed"
                     Write-Verbose "CheckAadUserHasSid - SUCCESS"
+                    Write-TestingPassed
                 }
 
             } catch {
                 $checks["CheckAadUserHasSid"].Result = "Failed"
                 $checks["CheckAadUserHasSid"].Issue = $_
-                Write-Error "CheckAadUserHasSid - FAILED"
-                Write-Error $_
+                Write-TestingFailed -Message $_ -IsUnexpected $true
             }
         }
 
