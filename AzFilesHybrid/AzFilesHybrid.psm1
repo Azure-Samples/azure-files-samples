@@ -4708,7 +4708,7 @@ function Debug-AzStorageAccountADDSAuth {
                 $cmdletNeeded = "Get-SmbServerConfiguration"
                 if(!(Get-Command $cmdletNeeded -ErrorAction SilentlyContinue))
                 {
-                    Write-Verbose -Message "Your system does not have or support the command needed for the check '$cmdletNeeded'." -ErrorAction Stop
+                    Write-TestingWarning -Message "Your system does not have or support the command needed for the check '$cmdletNeeded'." -ErrorAction Stop
                     $checks["CheckChannelEncryption"].Result = "Skipped"
                 }
 
