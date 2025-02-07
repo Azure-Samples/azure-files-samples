@@ -4988,9 +4988,12 @@ function Debug-AzStorageAccountADDSAuth {
                 Write-TestingFailed -Message $_ -IsUnexpected $true
             }
         }
-
+        #
+        # User RBAC Assignment Check
+        #
         if (!$filterIsPresent -or $Filter -match "CheckUserFileAccess")
         {
+            Write-Host "Checking User RBAC Assignment"
             try {
                 $checksExecuted += 1;
                 Write-Verbose "CheckUserFileAccess - START"
