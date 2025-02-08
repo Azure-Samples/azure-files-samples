@@ -5127,26 +5127,7 @@ function Debug-AzStorageAccountADDSAuth {
             }
         }
 
-
-        if ($filterIsPresent -and $checksExecuted -eq 0)
-        {
-            $message = "Filter '$Filter' provided does not match any options. No checks were executed." `
-                + " Available filters are {$($checks.Keys -join ', ')}"
-            Write-Error -Message $message -ErrorAction Stop
-        }
-        else
-        {
-            Write-Host "Summary of checks:"
-            $checks.Values | Format-Table -Property Name,Result
-            
-            $issues = $checks.Values | Where-Object { $_.Result -ieq "Failed" }
-
-            if ($issues.Length -gt 0) {
-                Write-Host "Issues found:"
-                $issues | ForEach-Object { Write-Host -ForegroundColor Red "---- $($_.Name) ----`n$($_.Issue)" }
-            }
-        }
-
+        SummaryOfChecks -checks $checks -filterIsPresent $filterIsPresent -checksExecuted $checksExecuted
         $message = "********************`r`n" `
                 + "If above checks are not helpful and further investigation/debugging is needed from the Azure Files team.`r`n" `
                 + "Please prepare the full console log from the cmdlet and Wireshark traces for any mount or access errors to`r`n" `
@@ -5156,7 +5137,6 @@ function Debug-AzStorageAccountADDSAuth {
                 + "********************`r`n" 
 
         Write-Host $message
-
     }
 
 }
