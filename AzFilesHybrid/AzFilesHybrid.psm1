@@ -4960,9 +4960,9 @@ function Debug-AzStorageAccountADDSAuth {
 
                 if ($roleDefinitions.Count -eq 0) {
                     $message = "User '$($user.UserPrincipalName)' is not assigned any SMB share-level permission to" `
-                        + " storage account '$StorageAccountName' in resource group '$ResourceGroupName'. Please" `
+                        + " storage account '$StorageAccountName' in resource group '$ResourceGroupName'.`n`tPlease" `
                         + " configure proper share-level permission following the guidance at" `
-                        + " $($PSStyle.Foreground.BrightCyan)https://aka.ms/azfiles/adds-assignpermissions$($PSStyle.Reset)"
+                        + " '$($PSStyle.Foreground.BrightCyan)`n`thttps://aka.ms/azfiles/adds-assignpermissions$($PSStyle.Reset)'"
                     Write-TestingFailed -Message $message -ErrorAction Stop
                 }
 
