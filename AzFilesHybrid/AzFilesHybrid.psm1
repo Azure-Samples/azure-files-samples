@@ -5123,8 +5123,7 @@ function Debug-AzStorageAccountADDSAuth {
             } catch {
                 $checks["CheckAadKerberosRegistryKeyIsOff"].Result = "Failed"
                 $checks["CheckAadKerberosRegistryKeyIsOff"].Issue = $_
-                Write-Error "CheckAadKerberosRegistryKeyIsOff - FAILED"
-                Write-Error $_
+                Write-TestingFailed -Message $_ -IsUnexpected $true
             }
         }
 
