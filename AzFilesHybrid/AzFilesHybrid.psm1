@@ -4822,7 +4822,7 @@ function Debug-AzStorageAccountADDSAuth {
                 Write-Verbose "CheckAadUserHasSid - START"
 
                 if ([string]::IsNullOrEmpty($ObjectId)) {
-                    Write-Warning -Message "Missing required parameter ObjectId for CheckAadUserHasSid requires ObjectId parameter to be present, skipping CheckAadUserHasSid"
+                    Write-TestingWarning -Message "Missing required parameter ObjectId for CheckAadUserHasSid requires ObjectId parameter to be present, skipping CheckAadUserHasSid"
                     $checks["CheckAadUserHasSid"].Result = "Skipped"
                 }
                 else {
