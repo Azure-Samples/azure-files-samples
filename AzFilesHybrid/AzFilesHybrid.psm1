@@ -5117,8 +5117,7 @@ function Debug-AzStorageAccountADDSAuth {
                     $checks["CheckAadKerberosRegistryKeyIsOff"].Result = "Failed"
                     $checks["CheckAadKerberosRegistryKeyIsOff"].Issue = "CloudKerberosTicketRetrievalEnabled registry key is enabled. Disable it to retrieve Kerberos tickets from AD DS."
 
-                    Write-Error "CheckAadKerberosRegistryKeyIsOff - FAILED"
-                    Write-Error "For AD DS authentication, you must disable the registry key for retrieving Kerberos tickets from AAD. See https://learn.microsoft.com/en-us/azure/storage/files/storage-files-identity-auth-hybrid-identities-enable?tabs=azure-portal#undo-the-client-configuration-to-retrieve-kerberos-tickets"
+                    Write-TestingFailed -Message "For AD DS authentication, you must disable the registry key for retrieving Kerberos tickets from AAD.`n`tSee '$($PSStyle.Foreground.BrightCyan)https://aka.ms/azfiles/adds-disableregkey$($PSStyle.Reset)'"
                 }
                 
             } catch {
