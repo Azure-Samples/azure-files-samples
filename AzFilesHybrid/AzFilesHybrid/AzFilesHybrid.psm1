@@ -3585,7 +3585,7 @@ function Debug-AzStorageAccountAuth {
     }
 }
 
-function  Debug-AzStorageAccountEntraKerbAuth {
+function Debug-AzStorageAccountEntraKerbAuth {
     [CmdletBinding()]
     param (
         [Parameter(Mandatory=$True, HelpMessage="Storage account name")]
