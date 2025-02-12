@@ -27,7 +27,7 @@ function Test-Format {
 
     foreach ($file in Get-PowerShellFiles) {
         $content = Get-Content -Path $file -Raw
-        $formatted = Invoke-Formatter -ScriptDefinition $content
+        $formatted = Invoke-Formatter -ScriptDefinition $content -Settings $PSScriptRoot\PSScriptAnalyzerSettings.ps1
         
         if ($content -ne $formatted) {
             Write-Host "File $($file.FullName) is not formatted correctly." -ForegroundColor Red
@@ -46,7 +46,7 @@ function Test-Format {
 function Format {
     foreach ($file in Get-PowerShellFiles) {
         $content = Get-Content -Path $file -Raw
-        $formatted = Invoke-Formatter -ScriptDefinition $content
+        $formatted = Invoke-Formatter -ScriptDefinition $content -Settings $PSScriptRoot\PSScriptAnalyzerSettings.ps1
         
         if ($content -ne $formatted) {
             Write-Host "Reformatting $file" -ForegroundColor Blue

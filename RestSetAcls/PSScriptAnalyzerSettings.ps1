@@ -6,6 +6,11 @@
     )
 
     Rules = @{
+        # Don't make the formatter align assignment statements.
+        PSAlignAssignmentStatement = @{
+            Enable = $false
+        }
+
         # Ensure we are using PowerShell syntax that is compatible
         # across multiple versions of PowerShell.
         PSUseCompatibleSyntax = @{
@@ -18,6 +23,8 @@
             )
         }
 
+        # Ensure we are using PowerShell commands that are compatible
+        # across multiple versions of PowerShell.
         PSUseCompatibleCommands = @{
             Enable = $true
 
@@ -28,6 +35,8 @@
             )
         }
 
+        # Ensure we are using PowerShell types that are compatible
+        # across multiple versions of PowerShell.
         PSUseCompatibleTypes = @{
             Enable = $true
              # Lists the PowerShell platforms we want to check compatibility with
