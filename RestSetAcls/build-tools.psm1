@@ -12,11 +12,13 @@ function Lint {
     Invoke-ScriptAnalyzer -Path $Path -Settings $PSScriptRoot\PSScriptAnalyzerSettings.ps1 -Recurse -Outvariable issues
     $errors = $issues.Where({ $_.Severity -eq 'Error' })
     $warnings = $issues.Where({ $_.Severity -eq 'Warning' })
-    if ($errors) {
-        Write-Error "There were $($errors.Count) errors and $($warnings.Count) warnings total." -ErrorAction Stop
+    $infos = $issues.Where({ $_.Severity -eq 'Information' })
+
+    if ($errors.Count -gt 0 -or $warnings.Count -gt 0) {
+        Write-Error "There were $($errors.Count) errors, $($warnings.Count) warnings and $($infos.Count) infos total." -ErrorAction Stop
     }
     else {
-        Write-Output "There were $($errors.Count) errors and $($warnings.Count) warnings total."
+        Write-Output "There were $($errors.Count) errors, $($warnings.Count) warnings and $($infos.Count) infos total."
     }
 }
 
