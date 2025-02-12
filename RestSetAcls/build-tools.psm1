@@ -9,7 +9,7 @@ function Lint {
         [string]$Path = "$PSScriptRoot\RestSetAcls"
     )
 
-    Invoke-ScriptAnalyzer -Path $Path -ExcludeRule PSAvoidUsingWriteHost -Recurse -Outvariable issues
+    Invoke-ScriptAnalyzer -Path $Path -Settings $PSScriptRoot\PSScriptAnalyzerSettings.ps1 -Recurse -Outvariable issues
     $errors = $issues.Where({ $_.Severity -eq 'Error' })
     $warnings = $issues.Where({ $_.Severity -eq 'Warning' })
     if ($errors) {
