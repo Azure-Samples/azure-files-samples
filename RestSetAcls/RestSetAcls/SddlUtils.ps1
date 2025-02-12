@@ -61,7 +61,7 @@ function ConvertTo-SecurityDescriptor {
 
 function ConvertFrom-SecurityDescriptor {
     [CmdletBinding()]
-    [OutputType([string],[byte[]])]
+    [OutputType([string], [byte[]])]
     param (
         [Parameter(Mandatory = $true, Position = 0, ValueFromPipeline = $true)]
         [System.Security.AccessControl.RawSecurityDescriptor]$SecurityDescriptor,
@@ -115,11 +115,11 @@ function Get-AllAceFlagsMatch {
 }
 
 function Set-AceFlags {
-    [Diagnostics.CodeAnalysis.SuppressMessageAttribute("PSUseSingularNouns", "", Justification="We are setting the AceFlags property.")]
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute("PSUseSingularNouns", "", Justification = "We are setting the AceFlags property.")]
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute(
         "PSUseShouldProcessForStateChangingFunctions",
         "",
-        Justification="No external side effects, just changes the security descriptor object in-place. So no real value to supporting -WhatIf.")]
+        Justification = "No external side effects, just changes the security descriptor object in-place. So no real value to supporting -WhatIf.")]
     param (
         [Parameter(Mandatory = $true, ValueFromPipeline = $true)]
         [System.Security.AccessControl.RawSecurityDescriptor]$SecurityDescriptor,

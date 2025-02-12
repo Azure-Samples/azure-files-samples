@@ -5,7 +5,7 @@ function Write-LiveFilesAndFoldersProcessingStatus {
     [OutputType([int])]
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute("PSReviewUnusedParameter",
         "FileOrFolder",
-        Justification="We don't print `$FileOrFolder but we do want to iterate over it")]
+        Justification = "We don't print `$FileOrFolder but we do want to iterate over it")]
     param (
         [Parameter(Mandatory = $true, ValueFromPipeline = $true)]
         [Object[]]$FileOrFolder,
@@ -499,7 +499,7 @@ function Set-AzureFilesAclRecursive {
                     Time         = (Get-Date).ToString("o")
                     FullPath     = $fullPath
                     Permission   = $SddlPermission
-                    Success      =  $success
+                    Success      = $success
                     ErrorMessage = $errorMessage
                 }
             }
