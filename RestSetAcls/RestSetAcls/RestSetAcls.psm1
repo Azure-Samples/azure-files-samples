@@ -3,6 +3,8 @@
 
 function Write-LiveFilesAndFoldersProcessingStatus {
     [OutputType([int])]
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute("PSReviewUnusedParameter", "",
+        Justification="We don't print `$FileOrFolder but we do want to iterate over it")]
     param (
         [Parameter(Mandatory = $true, ValueFromPipeline = $true)]
         [Object[]]$FileOrFolder,
