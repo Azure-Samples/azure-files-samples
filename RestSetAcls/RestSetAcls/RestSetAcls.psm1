@@ -4,7 +4,7 @@
 function Write-LiveFilesAndFoldersProcessingStatus {
     [OutputType([int])]
     param (
-        [Parameter(Mandatory = $true, ValueFromPipeline = $true, ValueFromPipelineByPropertyName = $true)]
+        [Parameter(Mandatory = $true, ValueFromPipeline = $true)]
         [Object[]]$FileOrFolder,
 
         [Parameter(Mandatory = $true)]
@@ -169,7 +169,7 @@ function Write-SddlWarning {
 
 function Get-AzureFilesRecursive {
     param (
-        [Parameter(Mandatory = $true, ValueFromPipeline = $true, ValueFromPipelineByPropertyName = $true)]
+        [Parameter(Mandatory = $true)]
         [Microsoft.WindowsAzure.Commands.Common.Storage.ResourceModel.AzureStorageBase[]]$DirectoryContents,
 
         [Parameter(Mandatory = $true)]
@@ -261,7 +261,7 @@ function Get-AzureFilePermission {
 function Set-AzureFilePermissionKey {
     [CmdletBinding(SupportsShouldProcess = $true)]
     param (
-        [Parameter(Mandatory = $true, ValueFromPipeline = $true, ValueFromPipelineByPropertyName = $true)]
+        [Parameter(Mandatory = $true, ValueFromPipeline = $true)]
         [Microsoft.WindowsAzure.Commands.Common.Storage.ResourceModel.AzureStorageBase]$File,
 
         [Parameter(Mandatory = $true)]

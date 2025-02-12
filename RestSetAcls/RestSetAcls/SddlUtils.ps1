@@ -99,15 +99,17 @@ function Get-AllAceFlagsMatch {
         [System.Security.AccessControl.AceFlags]$DisabledFlags
     )
 
-    foreach ($ace in $SecurityDescriptor.DiscretionaryAcl) {
-        $hasAllBitsFromEnabledFlags = ([int]$ace.AceFlags -band [int]$EnabledFlags) -eq [int]$EnabledFlags
-        $hasNoBitsFromDisabledFlags = ([int]$ace.AceFlags -band [int]$DisabledFlags) -eq 0
-        if (-not ($hasAllBitsFromEnabledFlags -and $hasNoBitsFromDisabledFlags)) {
-            return $false
+    process {
+        foreach ($ace in $SecurityDescriptor.DiscretionaryAcl) {
+            $hasAllBitsFromEnabledFlags = ([int]$ace.AceFlags -band [int]$EnabledFlags) -eq [int]$EnabledFlags
+            $hasNoBitsFromDisabledFlags = ([int]$ace.AceFlags -band [int]$DisabledFlags) -eq 0
+            if (-not ($hasAllBitsFromEnabledFlags -and $hasNoBitsFromDisabledFlags)) {
+                return $false
+            }
         }
-    }
 
-    return $true
+        return $true
+    }
 }
 
 function Set-AceFlags {
@@ -122,36 +124,40 @@ function Set-AceFlags {
         [System.Security.AccessControl.AceFlags]$DisableFlags
     )
 
-    if ([int]$EnableFlags -band [int]$DisableFlags) {
-        throw "Enable and disable flags cannot overlap"
-    }
-
-    # Create new ACEs with updated flags
-    $newAces = $SecurityDescriptor.DiscretionaryAcl | ForEach-Object {
-        $aceFlags = ([int]$_.AceFlags -bor [int]$EnableFlags) -band (-bnot [int]$DisableFlags)
-
-        if ($_.GetType().Name -eq "CommonAce") {
-            [System.Security.AccessControl.CommonAce]::new(
-                $aceFlags,
-                $_.AceQualifier,
-                $_.AccessMask,
-                $_.SecurityIdentifier,
-                $_.IsCallback,
-                $_.GetOpaque())
-        }
-        else {
-            throw "Unsupported ACE type: $($_.GetType().Name)"
+    begin {
+        if ([int]$EnableFlags -band [int]$DisableFlags) {
+            throw "Enable and disable flags cannot overlap"
         }
     }
-    
-    # Remove all old ACEs
-    for ($i = $SecurityDescriptor.DiscretionaryAcl.Count - 1; $i -ge 0; $i--) {
-        $SecurityDescriptor.DiscretionaryAcl.RemoveAce($i) | Out-Null
-    }
-    
-    # Add all new ACEs
-    for ($i = 0; $i -lt $newAces.Count; $i++) {
-        $SecurityDescriptor.DiscretionaryAcl.InsertAce($i, $newAces[$i]) | Out-Null
+
+    process {
+        # Create new ACEs with updated flags
+        $newAces = $SecurityDescriptor.DiscretionaryAcl | ForEach-Object {
+            $aceFlags = ([int]$_.AceFlags -bor [int]$EnableFlags) -band (-bnot [int]$DisableFlags)
+
+            if ($_.GetType().Name -eq "CommonAce") {
+                [System.Security.AccessControl.CommonAce]::new(
+                    $aceFlags,
+                    $_.AceQualifier,
+                    $_.AccessMask,
+                    $_.SecurityIdentifier,
+                    $_.IsCallback,
+                    $_.GetOpaque())
+            }
+            else {
+                throw "Unsupported ACE type: $($_.GetType().Name)"
+            }
+        }
+        
+        # Remove all old ACEs
+        for ($i = $SecurityDescriptor.DiscretionaryAcl.Count - 1; $i -ge 0; $i--) {
+            $SecurityDescriptor.DiscretionaryAcl.RemoveAce($i) | Out-Null
+        }
+        
+        # Add all new ACEs
+        for ($i = 0; $i -lt $newAces.Count; $i++) {
+            $SecurityDescriptor.DiscretionaryAcl.InsertAce($i, $newAces[$i]) | Out-Null
+        }
     }
 }
 
@@ -257,15 +263,17 @@ function Write-SecurityDescriptor {
         [System.Security.AccessControl.RawSecurityDescriptor]$descriptor
     )
 
-    $controlFlagsHex = "0x{0:X}" -f [int]$descriptor.ControlFlags
-    
-    Write-Host "Owner: $($PSStyle.Foreground.Cyan)$($descriptor.Owner)$($PSStyle.Reset)"
-    Write-Host "Group: $($PSStyle.Foreground.Cyan)$($descriptor.Group)$($PSStyle.Reset)"
-    Write-Host "ControlFlags: $($PSStyle.Foreground.Cyan)$controlFlagsHex$($PSStyle.Reset) ($($descriptor.ControlFlags))"
-    Write-Host "DiscretionaryAcl:"
-    Write-Acl $descriptor.DiscretionaryAcl -indent 4
-    Write-Host "SystemAcl:"
-    Write-Acl $descriptor.SystemAcl -indent 4
+    process {
+        $controlFlagsHex = "0x{0:X}" -f [int]$descriptor.ControlFlags
+        
+        Write-Host "Owner: $($PSStyle.Foreground.Cyan)$($descriptor.Owner)$($PSStyle.Reset)"
+        Write-Host "Group: $($PSStyle.Foreground.Cyan)$($descriptor.Group)$($PSStyle.Reset)"
+        Write-Host "ControlFlags: $($PSStyle.Foreground.Cyan)$controlFlagsHex$($PSStyle.Reset) ($($descriptor.ControlFlags))"
+        Write-Host "DiscretionaryAcl:"
+        Write-Acl $descriptor.DiscretionaryAcl -indent 4
+        Write-Host "SystemAcl:"
+        Write-Acl $descriptor.SystemAcl -indent 4
+    }
 }
 
 function Write-Acl {
@@ -277,21 +285,25 @@ function Write-Acl {
         [int]$indent = 0
     )
 
-    $spaces = " " * $indent
-
-    if ($acl -eq $null) {
-        Write-Host "${spaces}Not present"
-        return
+    begin {
+        $spaces = " " * $indent
     }
 
-    Write-Host "${spaces}Revision:     $($($PSStyle.Foreground.Cyan))$($acl.Revision)$($PSStyle.Reset)"
-    Write-Host "${spaces}BinaryLength: $($($PSStyle.Foreground.Cyan))$($acl.BinaryLength)$($PSStyle.Reset)"
-    Write-Host "${spaces}AceCount:     $($($PSStyle.Foreground.Cyan))$($acl.Count)$($PSStyle.Reset)"
-    $i = 0
-    foreach ($ace in $acl) {
-        Write-Host "${spaces}Ace $($PSStyle.Foreground.Green)${i}$($PSStyle.Reset):"
-        Write-Ace $ace -indent ($indent + 4)
-        $i++
+    process {
+        if ($acl -eq $null) {
+            Write-Host "${spaces}Not present"
+            return
+        }
+
+        Write-Host "${spaces}Revision:     $($($PSStyle.Foreground.Cyan))$($acl.Revision)$($PSStyle.Reset)"
+        Write-Host "${spaces}BinaryLength: $($($PSStyle.Foreground.Cyan))$($acl.BinaryLength)$($PSStyle.Reset)"
+        Write-Host "${spaces}AceCount:     $($($PSStyle.Foreground.Cyan))$($acl.Count)$($PSStyle.Reset)"
+        $i = 0
+        foreach ($ace in $acl) {
+            Write-Host "${spaces}Ace $($PSStyle.Foreground.Green)${i}$($PSStyle.Reset):"
+            Write-Ace $ace -indent ($indent + 4)
+            $i++
+        }
     }
 }
 
@@ -304,21 +316,25 @@ function Write-Ace {
         [int]$indent = 0
     )
 
-    $spaces = " " * $indent
+    begin {
+        $spaces = " " * $indent
+    }
 
-    $aceTypeHex = "0x{0:X}" -f [int]$ace.AceType
-    $aceSizeHex = "0x{0:X}" -f [int]$ace.BinaryLength
-    $inheritFlagsHex = "0x{0:X}" -f [int]$ace.InheritanceFlags
-    $propagationFlagsHex = "0x{0:X}" -f [int]$ace.PropagationFlags
-    $accessMaskHex = "0x{0:X}" -f [int]$ace.AccessMask
+    process {
+        $aceTypeHex = "0x{0:X}" -f [int]$ace.AceType
+        $aceSizeHex = "0x{0:X}" -f [int]$ace.BinaryLength
+        $inheritFlagsHex = "0x{0:X}" -f [int]$ace.InheritanceFlags
+        $propagationFlagsHex = "0x{0:X}" -f [int]$ace.PropagationFlags
+        $accessMaskHex = "0x{0:X}" -f [int]$ace.AccessMask
 
-    Write-Host "${spaces}Ace Sid:          $($PSStyle.Foreground.Cyan)$($ace.SecurityIdentifier)$($PSStyle.Reset)"
-    Write-Host "${spaces}AceType:          $($PSStyle.Foreground.Cyan)$aceTypeHex$($PSStyle.Reset) ($($ace.AceType))"
-    Write-Host "${spaces}AceSize:          $($PSStyle.Foreground.Cyan)$aceSizeHex$($PSStyle.Reset) ($($ace.BinaryLength))"
-    Write-Host "${spaces}InheritFlags:     $($PSStyle.Foreground.Cyan)$inheritFlagsHex$($PSStyle.Reset) ($($ace.InheritanceFlags))"
-    Write-Host "${spaces}PropagationFlags: $($PSStyle.Foreground.Cyan)$propagationFlagsHex$($PSStyle.Reset) ($($ace.PropagationFlags))"
-    Write-Host "${spaces}Access Mask:      $($PSStyle.Foreground.Cyan)$accessMaskHex$($PSStyle.Reset) ($($ace.AccessMask))"
-    Write-AccessMask $ace.AccessMask -indent ($indent + 4)
+        Write-Host "${spaces}Ace Sid:          $($PSStyle.Foreground.Cyan)$($ace.SecurityIdentifier)$($PSStyle.Reset)"
+        Write-Host "${spaces}AceType:          $($PSStyle.Foreground.Cyan)$aceTypeHex$($PSStyle.Reset) ($($ace.AceType))"
+        Write-Host "${spaces}AceSize:          $($PSStyle.Foreground.Cyan)$aceSizeHex$($PSStyle.Reset) ($($ace.BinaryLength))"
+        Write-Host "${spaces}InheritFlags:     $($PSStyle.Foreground.Cyan)$inheritFlagsHex$($PSStyle.Reset) ($($ace.InheritanceFlags))"
+        Write-Host "${spaces}PropagationFlags: $($PSStyle.Foreground.Cyan)$propagationFlagsHex$($PSStyle.Reset) ($($ace.PropagationFlags))"
+        Write-Host "${spaces}Access Mask:      $($PSStyle.Foreground.Cyan)$accessMaskHex$($PSStyle.Reset) ($($ace.AccessMask))"
+        Write-AccessMask $ace.AccessMask -indent ($indent + 4)
+    }
 }
 
 function Write-AccessMask {
