@@ -10,8 +10,8 @@ function Write-TestingPassed(
 function Write-TestingFailed(
     [Parameter(Mandatory=$true, Position=0)]
     [string]$Message,
-    [Parameter(Mandatory=$false, Position=1)]
-    [bool]$IsUnexpected = 0
+    [Parameter(Mandatory=$false)]
+    [switch]$Unexpected
 ) {
     [string] $eType = $IsUnexpected ? "Unexpected" : "Failed";
     $cross = [System.Char]::ConvertFromUtf32([System.Convert]::ToInt32("2715", 16))
