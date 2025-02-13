@@ -3171,8 +3171,6 @@ function Test-Port445Connectivity
         if ($result.TcpTestSucceeded -eq $False)
         {
             $errMsg = "Unable to reach the storage account file endpoint." `
-            + "`n`tTo debug connectivity problems, please refer to the following," `
-            + "`n`t'AzFileDiagnostics.ps1'($($PSStyle.Foreground.BrightCyan)https://github.com/Azure-Samples/azure-files-samples/tree/master/AzFileDiagnostics/Windows$($PSStyle.Reset))'." `
             + "`n`tFor possible solutions please refer to '$($PSStyle.Foreground.BrightCyan)https://aka.ms/azfiles/entra-port445$($PSStyle.Reset)'"
             Write-TestingFailed -Message $errMsg -ErrorAction Stop
         }
