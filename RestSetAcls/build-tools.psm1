@@ -9,14 +9,16 @@ function Lint {
         [string]$Path = "$PSScriptRoot\RestSetAcls"
     )
 
-    Invoke-ScriptAnalyzer -Path $Path -ExcludeRule PSAvoidUsingWriteHost -Recurse -Outvariable issues
+    Invoke-ScriptAnalyzer -Path $Path -Settings $PSScriptRoot\PSScriptAnalyzerSettings.ps1 -Recurse -Outvariable issues
     $errors = $issues.Where({ $_.Severity -eq 'Error' })
     $warnings = $issues.Where({ $_.Severity -eq 'Warning' })
-    if ($errors) {
-        Write-Error "There were $($errors.Count) errors and $($warnings.Count) warnings total." -ErrorAction Stop
+    $infos = $issues.Where({ $_.Severity -eq 'Information' })
+
+    if ($errors.Count -gt 0 -or $warnings.Count -gt 0) {
+        Write-Error "There were $($errors.Count) errors, $($warnings.Count) warnings and $($infos.Count) infos total." -ErrorAction Stop
     }
     else {
-        Write-Output "There were $($errors.Count) errors and $($warnings.Count) warnings total."
+        Write-Output "There were $($errors.Count) errors, $($warnings.Count) warnings and $($infos.Count) infos total."
     }
 }
 
@@ -25,7 +27,7 @@ function Test-Format {
 
     foreach ($file in Get-PowerShellFiles) {
         $content = Get-Content -Path $file -Raw
-        $formatted = Invoke-Formatter -ScriptDefinition $content
+        $formatted = Invoke-Formatter -ScriptDefinition $content -Settings $PSScriptRoot\PSScriptAnalyzerSettings.ps1
         
         if ($content -ne $formatted) {
             Write-Host "File $($file.FullName) is not formatted correctly." -ForegroundColor Red
@@ -44,7 +46,7 @@ function Test-Format {
 function Format {
     foreach ($file in Get-PowerShellFiles) {
         $content = Get-Content -Path $file -Raw
-        $formatted = Invoke-Formatter -ScriptDefinition $content
+        $formatted = Invoke-Formatter -ScriptDefinition $content -Settings $PSScriptRoot\PSScriptAnalyzerSettings.ps1
         
         if ($content -ne $formatted) {
             Write-Host "Reformatting $file" -ForegroundColor Blue

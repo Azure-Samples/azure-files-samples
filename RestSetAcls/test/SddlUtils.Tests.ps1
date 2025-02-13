@@ -472,6 +472,16 @@ Describe "Get-AllAceFlagsMatch" {
         $result | Should -Be $true
     }
 
+    It "Should be able to process multiple inputs from pipeline" {
+        $descriptor1 = ConvertTo-SecurityDescriptor -Sddl "O:SYG:SYD:AI(A;OICINP;0x1301bf;;;WD)(A;OICIID;0x1201bf;;;WD)"
+        $descriptor2 = ConvertTo-SecurityDescriptor -Sddl "O:SYG:SYD:AI(D;OICINP;0x1301bf;;;WD)(D;OICIID;0x1201bf;;;WD)"
+        $descriptors = @($descriptor1, $descriptor2)
+        
+        $results = $descriptors | Get-AllAceFlagsMatch -EnabledFlags "ContainerInherit, ObjectInherit" -DisabledFlags "None"
+
+        $results | Should -Be @($true, $true)        
+    }
+
     It "Should return false when some -EnabledFlags are missing" {
         $descriptor = ConvertTo-SecurityDescriptor -Sddl "O:SYG:SYD:AI(A;OICI;0x1301bf;;;WD)(A;OI;0x1201bf;;;WD)"
         $result = Get-AllAceFlagsMatch -SecurityDescriptor $descriptor -EnabledFlags "ContainerInherit, ObjectInherit" -DisabledFlags "None"
@@ -526,5 +536,28 @@ Describe "Set-AceFlags" {
         Set-AceFlags -SecurityDescriptor $descriptor -EnableFlags "None" -DisableFlags "ContainerInherit, ObjectInherit"
         $newSddl = ConvertFrom-SecurityDescriptor $descriptor -OutputFormat Sddl
         $newSddl | Should -Be "O:SYG:SYD:AI(A;NPIO;0x1301bf;;;WD)(A;NPIO;0x1201bf;;;WD)"
+    }
+
+    It "Should process multiple items from input pipeline" {
+        $descriptor1 = ConvertTo-SecurityDescriptor -Sddl "O:SYG:SYD:AI(A;NPIO;0x1301bf;;;WD)(A;NPIO;0x1201bf;;;WD)"
+        $descriptor2 = ConvertTo-SecurityDescriptor -Sddl "O:SYG:SYD:AI(A;;0x1301bf;;;WD)(A;IO;0x1201bf;;;WD)"
+        
+        $descriptors = @($descriptor1, $descriptor2)
+        $descriptors | Set-AceFlags -EnableFlags "ContainerInherit, ObjectInherit" -DisableFlags "NoPropagateInherit" `
+        
+        $results = $descriptors | ConvertFrom-SecurityDescriptor -OutputFormat Sddl
+        $results | Should -Be $( "O:SYG:SYD:AI(A;OICIIO;0x1301bf;;;WD)(A;OICIIO;0x1201bf;;;WD)", "O:SYG:SYD:AI(A;OICI;0x1301bf;;;WD)(A;OICIIO;0x1201bf;;;WD)" )
+    }
+
+    It "Should throw an error if EnableFlags and DisableFlags overlap" {
+        $descriptor = ConvertTo-SecurityDescriptor -Sddl "O:SYG:SYD:AI(A;NPIO;0x1301bf;;;WD)(A;NPIO;0x1201bf;;;WD)"
+        { Set-AceFlags -SecurityDescriptor $descriptor -EnableFlags "ContainerInherit, ObjectInherit" -DisableFlags "NoPropagateInherit, ContainerInherit" } | Should -Throw
+    }
+
+    It "Should throw an error if EnableFlags and DisableFlags overlap, when getting input from pipeline" {
+        $descriptor1 = ConvertTo-SecurityDescriptor -Sddl "O:SYG:SYD:AI(A;NPIO;0x1301bf;;;WD)(A;NPIO;0x1201bf;;;WD)"
+        $descriptor2 = ConvertTo-SecurityDescriptor -Sddl "O:SYG:SYD:AI(A;;0x1301bf;;;WD)(A;IO;0x1201bf;;;WD)"
+        $descriptors = @($descriptor1, $descriptor2)
+        { $descriptors | Set-AceFlags -EnableFlags "ContainerInherit, ObjectInherit" -DisableFlags "NoPropagateInherit, ContainerInherit" } | Should -Throw
     }
 }
