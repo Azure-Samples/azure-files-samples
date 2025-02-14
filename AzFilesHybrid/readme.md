@@ -7,13 +7,17 @@ The AzFilesHybrid PowerShell module provides cmdlets for deploying and configuri
 - [.NET Framework 4.7.2+](https://dotnet.microsoft.com/en-us/download/dotnet-framework/net472)
 ### Install From PSGallery (recommended)
 Run the following in a PowerShell window
-    
 ```powershell
 Install-Module -Name AzFilesHybrid
 ```
 ### Install From Zip File (legacy)
-[Download latest release from our Releases Page](https://github.com/Azure-Samples/azure-files-samples/releases) \
-Extract the zip folder in desired directory
+1. [Download latest release from our Releases Page](https://github.com/Azure-Samples/azure-files-samples/releases) \
+2. Extract the zip folder in desired directory
+3. Open a PowerShell terminal, navigate to the directory of the extracted files
+4. Run the following command
+   ```powershell
+   .\CopyToPath.ps1
+   ```
 ## Uninstall
 ### If Installed From PSGallery
 1. Open a PowerShell terminal 
