@@ -5,6 +5,8 @@ The AzFilesHybrid PowerShell module provides cmdlets for deploying and configuri
 ### Prerequisites
 - [PowerShell 5.1+](https://learn.microsoft.com/en-us/powershell/scripting/install/installing-powershell-on-windows?view=powershell-5.1) or [PowerShell 7+](https://learn.microsoft.com/en-us/powershell/scripting/install/installing-powershell-on-windows?view=powershell-7.5#install-powershell-using-winget-recommended)
 - [.NET Framework 4.7.2+](https://dotnet.microsoft.com/en-us/download/dotnet-framework/net472)
+- A PowerShell Execution Policy of -RemoteSigned \
+  [Instructions on changing Execution Policy](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.security/set-executionpolicy?view=powershell-7.5)
 ### Install From PSGallery (recommended)
 Run the following in a PowerShell window
 ```powershell
