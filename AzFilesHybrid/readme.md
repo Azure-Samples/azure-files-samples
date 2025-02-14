@@ -20,9 +20,11 @@ Install-Module -Name AzFilesHybrid
    ```
 ## Uninstall
 ### If Installed From PSGallery
-1. Open a PowerShell terminal 
-2. Paste the following code snippet below and run \
-`Uninstall-Module AzFilesHybrid`
+Run the following command in a PowerShell terminal:
+
+```powershell
+Uninstall-Module AzFilesHybrid
+```
 ### If Installed From Zip File
 1. Find the directory where the zip file was extracted
 2. Delete the extracted folder and its contents
