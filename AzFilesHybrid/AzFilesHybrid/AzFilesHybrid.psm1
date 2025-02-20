@@ -4441,13 +4441,10 @@ function Debug-AzStorageAccountADDSAuth {
             Write-Host "Checking AD Object"
             try {
                 $checksExecuted += 1;
-                Write-Verbose "CheckADObject - START"
-
                 Debug-AzStorageAccountADObject -StorageAccountName $StorageAccountName `
                     -ResourceGroupName $ResourceGroupName -ErrorAction Stop
 
-                $checks["CheckADObject"].Result = "Passed"
-                Write-Verbose "CheckADObject - SUCCESS"
+                $checks["CheckADObject"].Result = "Passed"                Write-Verbose "CheckADObject - SUCCESS"
                 Write-TestingPassed
             } catch {
                 $checks["CheckADObject"].Result = "Failed"
