@@ -3914,9 +3914,9 @@ function Debug-AzStorageAccountEntraKerbAuth {
         #
         if (!$filterIsPresent -or $Filter -match "CheckWinHttpAutoProxySvc")
         {  
-           Write-Host "Checking WinHttpAutoProxySvc"
-           try 
-           {
+            Write-Host "Checking WinHttpAutoProxySvc"
+            try 
+            {
                 $checksExecuted += 1;
                 $service = Get-Service WinHttpAutoProxySvc
                 if (($service -eq $null) -or ($service.Status -ne "Running"))
@@ -3942,9 +3942,9 @@ function Debug-AzStorageAccountEntraKerbAuth {
         #
         if (!$filterIsPresent -or $Filter -match "CheckIpHlpScv")
         {
-           Write-Host "Checking Iphplpsvc Service"
-           try
-           {
+            Write-Host "Checking Iphplpsvc Service"
+            try
+            {
                 $checksExecuted += 1;
                 $services = Get-Service iphlpsvc
                 if (($services -eq $null) -or ($services.Status -ne "Running"))
@@ -3972,9 +3972,9 @@ function Debug-AzStorageAccountEntraKerbAuth {
         #
         if (!$filterIsPresent -or $Filter -match "CheckFiddlerProxy")
         {
-           Write-Host "Checking Fiddler Proxy"
-           try
-           {
+            Write-Host "Checking Fiddler Proxy"
+            try
+            {
                 $checksExecuted += 1;
                 $ProxysubFolder = Get-ChildItem `
                     -Path Registry::HKLM\SYSTEM\CurrentControlSet\Services\iphlpsvc\Parameters\ProxyMgr `
