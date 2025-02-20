@@ -4532,13 +4532,10 @@ function Debug-AzStorageAccountADDSAuth {
             Write-Host "Checking Domain Line of Sight"
             try {
                 $checksExecuted += 1;
-                Write-Verbose "CheckDomainLineOfSight - START"
-
                 Debug-DomainLineOfSight -StorageAccountName $StorageAccountName `
                     -ResourceGroupName $ResourceGroupName -ErrorAction Stop
 
                 $checks["CheckDomainLineOfSight"].Result = "Passed"
-                Write-Verbose "CheckDomainLineOfSight - SUCCESS"
                 Write-TestingPassed
             } catch {
                 $checks["CheckDomainLineOfSight"].Result = "Failed"
