@@ -4411,7 +4411,6 @@ function Debug-AzStorageAccountADDSAuth {
         #
         # Domain-Joined Check
         #
-
         if (!$filterIsPresent -or $Filter -match "CheckDomainJoined")
         {
             Write-Host "Checking Domain Join"
