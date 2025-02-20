@@ -4678,8 +4678,6 @@ function Debug-AzStorageAccountADDSAuth {
             Write-Host "Checking User RBAC Assignment"
             try {
                 $checksExecuted += 1
-                Write-Verbose "CheckUserRbacAssignment - START"
-
                 Request-ConnectMsGraph -Scopes "User.Read.All", "GroupMember.Read.All"
 
                 $sidNames = @{}
@@ -4761,7 +4759,6 @@ function Debug-AzStorageAccountADDSAuth {
                 Write-Host "------------------------------------------"
 
                 $checks["CheckUserRbacAssignment"].Result = "Passed"
-                Write-Verbose "CheckUserRbacAssignment - SUCCESS"
                 Write-TestingPassed
             } catch {
                 $checks["CheckUserRbacAssignment"].Result = "Failed"
