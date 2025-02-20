@@ -4498,17 +4498,13 @@ function Debug-AzStorageAccountADDSAuth {
             Write-Host "Checking Channel Encryption"
             try {
                 $checksExecuted += 1;
-                Write-Verbose "CheckChannelEncryption - START"
-
                 Assert-IsElevatedSession
-
                 $cmdletNeeded = "Get-SmbServerConfiguration"
                 if(!(Get-Command $cmdletNeeded -ErrorAction SilentlyContinue))
                 {
                     Write-TestingWarning -Message "Your system does not have or support the command needed for the check '$cmdletNeeded'." -ErrorAction Stop
                     $checks["CheckChannelEncryption"].Result = "Skipped"
                 }
-
                 if(!((Get-SmbServerConfiguration).PSobject.Properties.Name -contains "EncryptionCiphers"))
                 {
                     Write-TestingWarning -Message "Your operating system does not support the property 'EncryptionCiphers' of the cmdlet 'Get-SmbServerConfiguration'. Please refer to '$($PSStyle.Foreground.BrightCyan)https://aka.ms/azfiles/adds-encryptionciphers$($PSStyle.Reset)'"
@@ -4521,7 +4517,6 @@ function Debug-AzStorageAccountADDSAuth {
 
                     $checks["CheckChannelEncryption"].Result = "Passed"
                     Write-TestingPassed
-                    Write-Verbose "CheckChannelEncryption - SUCCESS"
                 }
             } catch {
                 $checks["CheckChannelEncryption"].Result = "Failed"
