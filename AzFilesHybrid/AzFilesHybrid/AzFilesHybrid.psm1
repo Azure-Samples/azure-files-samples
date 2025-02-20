@@ -4404,7 +4404,7 @@ function Debug-AzStorageAccountADDSAuth {
             } catch {
                 $checks["CheckPort445Connectivity"].Result = "Failed"
                 $checks["CheckPort445Connectivity"].Issue = $_
-                Write-TestingFailed -Message $_ -IsUnexpected $true
+                Write-TestingFailed -Message $_ 
             }
         }
 
