@@ -4570,8 +4570,6 @@ function Debug-AzStorageAccountADDSAuth {
             Write-Host "Checking SID for AAD User"
             try {
                 $checksExecuted += 1;
-                Write-Verbose "CheckSidHasAadUser - START"
-
                 $currentUser = Get-OnPremAdUser -Identity $UserName -Domain $Domain -ErrorAction Stop
 
                 Write-Verbose "User $UserName in domain $Domain has SID = $($currentUser.Sid)"
@@ -4589,7 +4587,6 @@ function Debug-AzStorageAccountADDSAuth {
                 Write-Verbose "Found AAD user '$($aadUser.UserPrincipalName)' for SID $($currentUser.Sid)"
 
                 $checks["CheckSidHasAadUser"].Result = "Passed"
-                Write-Verbose "CheckSidHasAadUser - SUCCESS"
                 Write-TestingPassed
             } catch {
                 $checks["CheckSidHasAadUser"].Result = "Failed"
