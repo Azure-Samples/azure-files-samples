@@ -4850,8 +4850,6 @@ function Debug-AzStorageAccountADDSAuth {
             Write-Host "Checking Default Share Permission"
             try {
                 $checksExecuted += 1
-                Write-Verbose "CheckDefaultSharePermission - START"
-
                 $StorageAccountObject = Validate-StorageAccount `
                     -ResourceGroupName $ResourceGroupName `
                     -StorageAccountName $StorageAccountName `
@@ -4864,7 +4862,6 @@ function Debug-AzStorageAccountADDSAuth {
                     $DefaultSharePermission = "Not Configured. Please visit https://docs.microsoft.com/en-us/azure/storage/files/storage-files-identity-ad-ds-assign-permissions?tabs=azure-portal for more information if needed."
                 }
                 Write-Verbose "DefaultSharePermission: $DefaultSharePermission"
-                Write-Verbose "CheckDefaultSharePermission - SUCCESS"
                 $checks["CheckDefaultSharePermission"].Result = "Passed"
                 Write-TestingPassed
             } catch {
