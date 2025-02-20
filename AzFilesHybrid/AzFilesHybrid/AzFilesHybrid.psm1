@@ -4551,13 +4551,10 @@ function Debug-AzStorageAccountADDSAuth {
             Write-Host "Checking Ad Object Password"
             try {
                 $checksExecuted += 1;
-                Write-Verbose "CheckADObjectPasswordIsCorrect - START"
-
                 Test-AzStorageAccountADObjectPasswordIsKerbKey -StorageAccountName $StorageAccountName `
                     -ResourceGroupName $ResourceGroupName -ErrorIfNoMatch -ErrorAction Stop
 
                 $checks["CheckADObjectPasswordIsCorrect"].Result = "Passed"
-                Write-Verbose "CheckADObjectPasswordIsCorrect - SUCCESS"
                 Write-TestingPassed
             } catch {
                 $checks["CheckADObjectPasswordIsCorrect"].Result = "Failed"
