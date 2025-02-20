@@ -4774,8 +4774,6 @@ function Debug-AzStorageAccountADDSAuth {
             Write-Host "Checking User RBAC Assignment"
             try {
                 $checksExecuted += 1;
-                Write-Verbose "CheckUserFileAccess - START"
-
                 if ([string]::IsNullOrEmpty($FilePath)) {
                     Write-Verbose -Message "Missing required parameter FilePath for CheckUserFileAccess, skipping CheckUserFileAccess"
                     $checks["CheckUserFileAccess"].Result = "Skipped"
@@ -4835,7 +4833,7 @@ function Debug-AzStorageAccountADDSAuth {
                     Write-Host "------------------------------------------"
 
                     $checks["CheckUserFileAccess"].Result = "Passed"
-                    Write-Verbose "CheckUserFileAccess - SUCCESS"
+                    Write-TestingPassed
                 }
 
             } catch {
