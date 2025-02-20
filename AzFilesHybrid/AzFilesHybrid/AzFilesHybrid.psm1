@@ -4460,13 +4460,10 @@ function Debug-AzStorageAccountADDSAuth {
             Write-Host "Checking Kerberos Ticket"
             try {
                 $checksExecuted += 1;
-                Write-Verbose "CheckGetKerberosTicket - START"
-
                 Get-AzStorageKerberosTicketStatus -StorageaccountName $StorageAccountName `
                     -ResourceGroupName $ResourceGroupName -ErrorAction Stop
 
                 $checks["CheckGetKerberosTicket"].Result = "Passed"
-                Write-Verbose "CheckGetKerberosTicket - SUCCESS"
                 Write-TestingPassed
             } catch {
                 $checks["CheckGetKerberosTicket"].Result = "Failed"
