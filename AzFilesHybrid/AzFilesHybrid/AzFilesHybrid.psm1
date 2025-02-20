@@ -4397,13 +4397,10 @@ function Debug-AzStorageAccountADDSAuth {
             Write-Host "Checking Port 445"
             try {
                 $checksExecuted += 1;
-                Write-Verbose "CheckPort445Connectivity - START"
-
                 Test-Port445Connectivity -StorageAccountFileEndPoint $fileEndpoint -ErrorAction Stop
 
                 $checks["CheckPort445Connectivity"].Result = "Passed"
                 Write-TestingPassed
-                Write-Verbose "CheckPort445Connectivity - SUCCESS"
             } catch {
                 $checks["CheckPort445Connectivity"].Result = "Failed"
                 $checks["CheckPort445Connectivity"].Issue = $_
