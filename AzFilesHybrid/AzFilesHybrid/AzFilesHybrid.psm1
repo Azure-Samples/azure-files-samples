@@ -4602,8 +4602,6 @@ function Debug-AzStorageAccountADDSAuth {
             Write-Host "Checking AAD User has SID"
             try {
                 $checksExecuted += 1;
-                Write-Verbose "CheckAadUserHasSid - START"
-
                 if ([string]::IsNullOrEmpty($ObjectId)) {
                     Write-TestingWarning -Message "Missing required parameter ObjectId for CheckAadUserHasSid requires ObjectId parameter to be present, skipping CheckAadUserHasSid"
                     $checks["CheckAadUserHasSid"].Result = "Skipped"
@@ -4643,7 +4641,6 @@ function Debug-AzStorageAccountADDSAuth {
                     Write-Verbose "Azure AD user $ObjectId has SID $($aadUser.OnPremisesSecurityIdentifier) in domain $Domain"
 
                     $checks["CheckAadUserHasSid"].Result = "Passed"
-                    Write-Verbose "CheckAadUserHasSid - SUCCESS"
                     Write-TestingPassed
                 }
 
