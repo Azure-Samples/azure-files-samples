@@ -4658,15 +4658,12 @@ function Debug-AzStorageAccountADDSAuth {
             Write-Host "Checking AAD User has SID"
             try {
                 $checksExecuted += 1
-                Write-Verbose "CheckStorageAccountDomainJoined - START"
-
                 $activeDirectoryProperties = Get-AzStorageAccountActiveDirectoryProperties `
                     -ResourceGroupName $ResourceGroupName -StorageAccountName $StorageAccountName -ErrorAction Stop
 
                 Write-Verbose -Message "Storage account $StorageAccountName is already joined in domain $($activeDirectoryProperties.DomainName)."
                 
                 $checks["CheckStorageAccountDomainJoined"].Result = "Passed"
-                Write-Verbose "CheckStorageAccountDomainJoined - SUCCESS"
                 Write-TestingPassed
             } catch {
                 $checks["CheckStorageAccountDomainJoined"].Result = "Failed"
