@@ -4878,12 +4878,10 @@ function Debug-AzStorageAccountADDSAuth {
             Write-Host "Checking AAD Kerberos Registry Key"
             try {
                 $checksExecuted += 1;
-                Write-Verbose "CheckAadKerberosRegistryKeyIsOff - START"
-
                 if (-not (Test-IsCloudKerberosTicketRetrievalEnabled))
                 {
                     $checks["CheckAadKerberosRegistryKeyIsOff"].Result = "Passed"
-                    Write-Verbose "CheckAadKerberosRegistryKeyIsOff - SUCCESS"
+                    Write-TestingPassed
                 }
                 else 
                 {
