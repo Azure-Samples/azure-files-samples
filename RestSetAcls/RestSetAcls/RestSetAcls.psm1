@@ -305,17 +305,32 @@ function Get-AzureFilePermission {
 
 function Set-AzureFilePermissionKey {
     [CmdletBinding(SupportsShouldProcess = $true)]
+    [OutputType([void])]
     param (
-        [Parameter(Mandatory = $true, ValueFromPipeline = $true)]
+        [Parameter(Mandatory = $true, ParameterSetName = "File")]
         [Microsoft.WindowsAzure.Commands.Common.Storage.ResourceModel.AzureStorageBase]$File,
 
-        [Parameter(Mandatory = $true)]
-        [string]$FilePermissionKey
+        [Parameter(Mandatory = $true, ParameterSetName = "FilePath", HelpMessage = "Azure storage context")]
+        [Microsoft.Azure.Commands.Common.Authentication.Abstractions.IStorageContext]$Context,
+        
+        [Parameter(Mandatory = $true, ParameterSetName = "FilePath", HelpMessage = "Name of the file share")]
+        [string]$FileShareName,
+
+        [Parameter(Mandatory = $true, ParameterSetName = "FilePath", HelpMessage = "Path to the file or directory on which to set the permission key")]
+        [string]$FilePath,
+
+        [Parameter(Mandatory = $true, ValueFromPipeline = $true)]
+        [string]$Key
     )
 
     process {
+        if ($PSCmdlet.ParameterSetName -eq "FilePath") {
+            $file = Get-AzStorageFile -Context $Context -ShareName $FileShareName -Path $FilePath
+            $File = [Microsoft.WindowsAzure.Commands.Common.Storage.ResourceModel.AzureStorageBase]$file
+        }
+
         $smbProperties = [Azure.Storage.Files.Shares.Models.FileSmbProperties]::new()
-        $smbProperties.FilePermissionKey = $FilePermissionKey
+        $smbProperties.FilePermissionKey = $Key
 
         if ($File.GetType().Name -eq "AzureStorageFileDirectory") {
             $options = [Azure.Storage.Files.Shares.Models.ShareDirectorySetHttpHeadersOptions]::new()
@@ -323,7 +338,7 @@ function Set-AzureFilePermissionKey {
 
             $directory = [Microsoft.WindowsAzure.Commands.Common.Storage.ResourceModel.AzureStorageFileDirectory]$File
 
-            if ($PSCmdlet.ShouldProcess("Directory '$($directory.Name)'", "Set permission key '$FilePermissionKey'")) {
+            if ($PSCmdlet.ShouldProcess("Directory '$($directory.Name)'", "Set permission key '$Key'")) {
                 $directory.ShareDirectoryClient.SetHttpHeaders($options) | Out-Null
             }
         }
@@ -333,7 +348,7 @@ function Set-AzureFilePermissionKey {
 
             $file = [Microsoft.WindowsAzure.Commands.Common.Storage.ResourceModel.AzureStorageFile]$File
 
-            if ($PSCmdlet.ShouldProcess("File '$($file.Name)'", "Set permission key '$FilePermissionKey'")) {
+            if ($PSCmdlet.ShouldProcess("File '$($file.Name)'", "Set permission key '$Key'")) {
                 $file.ShareFileClient.SetHttpHeaders($options) | Out-Null
             }
         }
@@ -482,7 +497,7 @@ function Set-AzureFilesAclRecursive {
             $success = $true
             $errorMessage = ""            
             try {
-                Set-AzureFilePermissionKey -File $_.File -FilePermissionKey $using:filePermissionKey -WhatIf:$using:WhatIfPreference
+                Set-AzureFilePermissionKey -File $_.File -Key $using:filePermissionKey -WhatIf:$using:WhatIfPreference
             }
             catch {
                 $success = $false
@@ -531,7 +546,7 @@ function Set-AzureFilesAclRecursive {
             
             # Set the ACL
             try {
-                Set-AzureFilePermissionKey -File $_.File -FilePermissionKey $filePermissionKey -WhatIf:$WhatIfPreference
+                Set-AzureFilePermissionKey -File $_.File -Key $filePermissionKey -WhatIf:$WhatIfPreference
             }
             catch {
                 $success = $false
