@@ -330,15 +330,13 @@ function Write-Ace {
     process {
         $aceTypeHex = "0x{0:X}" -f [int]$ace.AceType
         $aceSizeHex = "0x{0:X}" -f [int]$ace.BinaryLength
-        $inheritFlagsHex = "0x{0:X}" -f [int]$ace.InheritanceFlags
-        $propagationFlagsHex = "0x{0:X}" -f [int]$ace.PropagationFlags
+        $aceFlagsHex = "0x{0:X}" -f [int]$ace.AceFlags
         $accessMaskHex = "0x{0:X}" -f [int]$ace.AccessMask
 
         Write-Host "${spaces}Ace Sid:          $($PSStyle.Foreground.Cyan)$($ace.SecurityIdentifier)$($PSStyle.Reset)"
         Write-Host "${spaces}AceType:          $($PSStyle.Foreground.Cyan)$aceTypeHex$($PSStyle.Reset) ($($ace.AceType))"
         Write-Host "${spaces}AceSize:          $($PSStyle.Foreground.Cyan)$aceSizeHex$($PSStyle.Reset) ($($ace.BinaryLength))"
-        Write-Host "${spaces}InheritFlags:     $($PSStyle.Foreground.Cyan)$inheritFlagsHex$($PSStyle.Reset) ($($ace.InheritanceFlags))"
-        Write-Host "${spaces}PropagationFlags: $($PSStyle.Foreground.Cyan)$propagationFlagsHex$($PSStyle.Reset) ($($ace.PropagationFlags))"
+        Write-Host "${spaces}AceFlags:         $($PSStyle.Foreground.Cyan)$aceFlagsHex$($PSStyle.Reset) ($($ace.AceFlags))"
         Write-Host "${spaces}Access Mask:      $($PSStyle.Foreground.Cyan)$accessMaskHex$($PSStyle.Reset) ($($ace.AccessMask))"
         Write-AccessMask $ace.AccessMask -indent ($indent + 4)
     }
