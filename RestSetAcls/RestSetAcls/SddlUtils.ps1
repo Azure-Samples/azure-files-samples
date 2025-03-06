@@ -243,6 +243,17 @@ enum BasicPermissions {
     FULL_CONTROL = 2032127
 }
 
+<#
+.SYNOPSIS
+Standard rights for any type of securable object (including files and folders).
+#>
+enum GenericRights {
+    GENERIC_READ = 0x80000000
+    GENERIC_WRITE = 0x40000000
+    GENERIC_EXECUTE = 0x20000000
+    GENERIC_ALL = 0x10000000
+}
+
 class AccessMask {
     [int]$Value
 
@@ -373,7 +384,7 @@ function Write-AccessMask {
     }
 
     Write-Host "${spaces}full list:"
-    foreach ($key in [Enum]::GetValues([SpecificRights]) + [Enum]::GetValues([StandardRights])) {
+    foreach ($key in [Enum]::GetValues([SpecificRights]) + [Enum]::GetValues([StandardRights]) + [Enum]::GetValues([GenericRights])) {
         $value = $key.value__
         if ($mask.Has($value)) {
             Write-Host "${spaces}    ${key}"
