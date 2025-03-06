@@ -2,6 +2,7 @@ enum SecurityDescriptorFormat {
     Sddl
     Binary
     Base64
+    Raw
 }
 
 function ConvertTo-SecurityDescriptor {
@@ -61,7 +62,7 @@ function ConvertTo-SecurityDescriptor {
 
 function ConvertFrom-SecurityDescriptor {
     [CmdletBinding()]
-    [OutputType([string], [byte[]])]
+    [OutputType([string], [byte[]], [System.Security.AccessControl.RawSecurityDescriptor])]
     param (
         [Parameter(Mandatory = $true, Position = 0, ValueFromPipeline = $true)]
         [System.Security.AccessControl.RawSecurityDescriptor]$SecurityDescriptor,
@@ -84,6 +85,9 @@ function ConvertFrom-SecurityDescriptor {
                 $binary = [byte[]]::new($SecurityDescriptor.BinaryLength)
                 $SecurityDescriptor.GetBinaryForm($binary, 0)
                 return [System.Convert]::ToBase64String($binary)
+            }
+            "Raw" {
+                return $SecurityDescriptor
             }
         }
     }

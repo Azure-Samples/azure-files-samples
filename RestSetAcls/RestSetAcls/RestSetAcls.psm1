@@ -400,23 +400,32 @@ function Get-AzureFilePermission {
     }
 
     process {
-
         if ($PSCmdlet.ShouldProcess("File share '$($Share.Name)'", "Get permission key '$Key'")) {
-
             if ($OutputFormat -eq [SecurityDescriptorFormat]::Sddl) {
                 $format = [Azure.Storage.Files.Shares.Models.FilePermissionFormat]::Sddl
+                $permissionInfo = $Share.ShareClient.GetPermission($Key, $format, [System.Threading.CancellationToken]::None)
+                $sddl = $permissionInfo.Value.Permission 
+                return $sddl
             }
             else {
                 $format = [Azure.Storage.Files.Shares.Models.FilePermissionFormat]::Binary
-            }
+                $permissionInfo = $Share.ShareClient.GetPermission($Key, $format, [System.Threading.CancellationToken]::None)
+                $base64 = $permissionInfo.Value.Permission
 
-            $permissionInfo = $Share.ShareClient.GetPermission($Key, $format, [System.Threading.CancellationToken]::None)
-
-            if ($OutputFormat -eq [SecurityDescriptorFormat]::Binary) {
-                return [System.Convert]::FromBase64String($permissionInfo.Value.Permission)
-            }
-            else {
-                return $permissionInfo.Value.Permission
+                switch ($OutputFormat) {
+                    "Binary" {
+                        return [System.Convert]::FromBase64String($base64)
+                    }
+                    "Base64" {
+                        return $base64
+                    }
+                    "Raw" {
+                        return ConvertTo-SecurityDescriptor -Base64 $base64
+                    }
+                    Default {
+                        throw "Invalid output format '$OutputFormat'."
+                    }
+                }   
             }
         }
     }
