@@ -290,19 +290,6 @@ function New-AzureFilePermission {
     }    
 }
 
-function Get-AzureFilePermission {
-    [OutputType([string])]
-    param (
-        [Parameter(Mandatory = $true)]
-        [string]$PermissionKey,
-
-        [Parameter(Mandatory = $true)]
-        [Microsoft.WindowsAzure.Commands.Common.Storage.ResourceModel.AzureStorageFileShare]$Share
-    )
-
-    $Share.ShareClient.GetPermission($PermissionKey).Value
-}
-
 function Set-AzureFilePermissionKey {
     [CmdletBinding(SupportsShouldProcess = $true)]
     [OutputType([void])]
@@ -356,19 +343,82 @@ function Set-AzureFilePermissionKey {
 }
 
 function Get-AzureFilePermissionKey {
+    [CmdletBinding()]
     [OutputType([string])]
     param (
-        [Parameter(Mandatory = $true)]
-        [Microsoft.WindowsAzure.Commands.Common.Storage.ResourceModel.AzureStorageBase]$FileOrDirectory
+        [Parameter(Mandatory = $true, ParameterSetName = "File", HelpMessage = "Azure storage file or directory")]
+        [Microsoft.WindowsAzure.Commands.Common.Storage.ResourceModel.AzureStorageBase]$File,
+
+        [Parameter(Mandatory = $true, ParameterSetName = "FilePath", HelpMessage = "Azure storage context")]
+        [Microsoft.Azure.Commands.Common.Authentication.Abstractions.IStorageContext]$Context,
+        
+        [Parameter(Mandatory = $true, ParameterSetName = "FilePath", HelpMessage = "Name of the file share")]
+        [string]$FileShareName,
+
+        [Parameter(Mandatory = $true, ParameterSetName = "FilePath", HelpMessage = "Path to the file or directory on which to set the permission key")]
+        [string]$FilePath
     )
 
-    if ($FileOrDirectory.GetType().Name -eq "AzureStorageFileDirectory") {
-        $directory = [Microsoft.WindowsAzure.Commands.Common.Storage.ResourceModel.AzureStorageFileDirectory]$FileOrDirectory
+    if ($PSCmdlet.ParameterSetName -eq "FilePath") {
+        $file = Get-AzStorageFile -Context $Context -ShareName $FileShareName -Path $FilePath
+        $File = [Microsoft.WindowsAzure.Commands.Common.Storage.ResourceModel.AzureStorageBase]$file
+    }
+
+    if ($File.GetType().Name -eq "AzureStorageFileDirectory") {
+        $directory = [Microsoft.WindowsAzure.Commands.Common.Storage.ResourceModel.AzureStorageFileDirectory]$File
         return $directory.ShareDirectoryProperties.SmbProperties.FilePermissionKey
     }
     else {
-        $file = [Microsoft.WindowsAzure.Commands.Common.Storage.ResourceModel.AzureStorageFile]$FileOrDirectory
+        $file = [Microsoft.WindowsAzure.Commands.Common.Storage.ResourceModel.AzureStorageFile]$File
         return $file.FileProperties.SmbProperties.FilePermissionKey
+    }
+}
+
+function Get-AzureFilePermission {
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    [OutputType([string], [byte[]])]
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipeline = $true)]
+        [string]$Key,
+
+        [Parameter(Mandatory = $true, ParameterSetName = "Share")]
+        [Microsoft.WindowsAzure.Commands.Common.Storage.ResourceModel.AzureStorageFileShare]$Share,
+
+        [Parameter(Mandatory = $true, ParameterSetName = "FileShareName", HelpMessage = "Azure storage context")]
+        [Microsoft.Azure.Commands.Common.Authentication.Abstractions.IStorageContext]$Context,
+
+        [Parameter(Mandatory = $true, ParameterSetName = "FileShareName", HelpMessage = "Name of the file share")]
+        [string]$FileShareName,
+
+        [Parameter(Mandatory = $false, HelpMessage = "Output format of the security descriptor")]
+        [SecurityDescriptorFormat]$OutputFormat = [SecurityDescriptorFormat]::Sddl
+    )
+    begin {
+        if ($PSCmdlet.ParameterSetName -eq "FileShareName") {
+            $Share = Get-AzStorageShare -Name $FileShareName -Context $Context
+        }
+    }
+
+    process {
+
+        if ($PSCmdlet.ShouldProcess("File share '$($Share.Name)'", "Get permission key '$Key'")) {
+
+            if ($OutputFormat -eq [SecurityDescriptorFormat]::Sddl) {
+                $format = [Azure.Storage.Files.Shares.Models.FilePermissionFormat]::Sddl
+            }
+            else {
+                $format = [Azure.Storage.Files.Shares.Models.FilePermissionFormat]::Binary
+            }
+
+            $permissionInfo = $Share.ShareClient.GetPermission($Key, $format, [System.Threading.CancellationToken]::None)
+
+            if ($OutputFormat -eq [SecurityDescriptorFormat]::Binary) {
+                return [System.Convert]::FromBase64String($permissionInfo.Value.Permission)
+            }
+            else {
+                return $permissionInfo.Value.Permission
+            }
+        }
     }
 }
 
