@@ -59,7 +59,28 @@ function Format {
 }
 
 function Test {
-    Invoke-Pester -Path $PSScriptRoot\test -Output Detailed
+    Invoke-Pester -Path $PSScriptRoot\test\unit -Output Detailed
+}
+
+function Test-Integration {
+    param (
+        [Parameter(Mandatory = $true)]
+        [string]$ResourceGroupName,
+
+        [Parameter(Mandatory = $true)]
+        [string]$StorageAccountName,
+
+        [Parameter(Mandatory = $true)]
+        [string]$StorageAccountKey
+    )
+    
+    $container = New-PesterContainer -Path $PSScriptRoot\test\integration -Data @{
+        ResourceGroupName = $ResourceGroupName
+        StorageAccountName = $StorageAccountName
+        StorageAccountKey = $StorageAccountKey
+    }
+
+    Invoke-Pester -Container $container -Output Detailed
 }
 
 function Test-Manifest {

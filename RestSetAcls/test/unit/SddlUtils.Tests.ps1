@@ -1,6 +1,6 @@
 BeforeAll {
-    . $PSScriptRoot/../RestSetAcls/Enumerations.ps1
-    . $PSScriptRoot/../RestSetAcls/SddlUtils.ps1
+    . $PSScriptRoot/../../RestSetAcls/Enumerations.ps1
+    . $PSScriptRoot/../../RestSetAcls/SddlUtils.ps1
 }
 
 Describe "ConvertTo-SecurityDescriptor" {
