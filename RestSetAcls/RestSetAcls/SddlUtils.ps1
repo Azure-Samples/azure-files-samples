@@ -1,10 +1,3 @@
-enum SecurityDescriptorFormat {
-    Sddl
-    Binary
-    Base64
-    Raw
-}
-
 function ConvertTo-SecurityDescriptor {
     [CmdletBinding(DefaultParameterSetName = "Sddl")]
     [OutputType([System.Security.AccessControl.RawSecurityDescriptor])]
