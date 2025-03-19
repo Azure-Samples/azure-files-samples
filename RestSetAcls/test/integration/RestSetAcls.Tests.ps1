@@ -9,6 +9,10 @@ param (
     [string]$StorageAccountKey
 )
 
+BeforeDiscovery {
+    . $PSScriptRoot/../../RestSetAcls/SddlUtils.ps1
+}
+
 BeforeAll {
     Import-Module $PSScriptRoot/../../RestSetAcls/RestSetAcls.psd1 -Force
 
@@ -238,75 +242,75 @@ Describe "RestSetAcls" {
     }
 
     Describe "Set-AzFileAcl" {
+        BeforeDiscovery {
+            function Get-LargeSddl {
+                $sddl = "O:SYG:SYD:P"
+                $i = 0
+                while ($sddl.Length -lt 8500) {
+                    $sddl += "(A;;FA;;;S-1-5-21-1001-1001-1001-$i)"
+                    $i++
+                }
+                return $sddl
+            }
+
+            $largeSddl = Get-LargeSddl
+            $smallSddl = "O:SYG:SYD:P(A;;FA;;;AU)"
+        }
+
         Context "-Sddl" {
-            It "Should set a small permission on a file" {
-                $fileName = "$(New-RandomString -length 8).txt"
-                New-File $fileName                
-                $file = Get-File $fileName
+            It "Should set a <size > permission on a <type>" -ForEach @(
+                @{ Type = "file"; Size = "small"; Sddl = $smallSddl },
+                @{ Type = "file"; Size = "large"; Sddl = $largeSddl },
+                @{ Type = "directory"; Size = "small"; Sddl = $smallSddl },
+                @{ Type = "directory"; Size = "large"; Sddl = $largeSddl }
+            ) {
+                param ($Type, $Size, $Sddl)
 
-                $sddl = "O:SYG:SYD:P(A;;FA;;;AU)"
-                $returnedKey = Set-AzFileAcl -File $file -Sddl $sddl
-               
-                $sddlAfter = Get-AzFileAcl -Key $returnedKey -Share $global:share
-                $sddlAfter | Should -Be "O:SYG:SYD:P(A;;FA;;;AU)S:NO_ACCESS_CONTROL"
-            }
-
-            It "Should set a large permission on a file" {
-                $fileName = "$(New-RandomString -length 8).txt"
-                New-File $fileName                
-                $file = Get-File $fileName
-
-                # Build SDDL string >= 8KiB (8192 characters of UTF-8)
-                $sddl = "O:SYG:SYD:P"
-                $i = 0
-                while ($sddl.Length -lt 8500) {
-                    $sddl += "(A;;FA;;;S-1-5-21-1001-1001-1001-$i)"
-                    $i++
+                $name = "$(New-RandomString -length 8).txt"
+                if ($Type -eq "file") {
+                    New-File $name
+                } else {
+                    New-Directory $name
                 }
+                $file = Get-File $name
 
-                $returnedKey = Set-AzFileAcl -File $file -Sddl $sddl
+                $returnedKey = Set-AzFileAcl -File $file -Sddl $Sddl
                 
                 $returnedKey | Should -Not -BeNullOrEmpty
                 $returnedKey | Should -BeOfType [string]
                 $returnedKey | Should -Match "^[0-9]+\*[0-9]+$"
 
                 $sddlAfter = Get-AzFileAcl -Key $returnedKey -Share $global:share
-                $sddlAfter | Should -Be "${sddl}S:NO_ACCESS_CONTROL"
+                $sddlAfter | Should -Be "${Sddl}S:NO_ACCESS_CONTROL"
             }
+        }
 
-            It "Should set a small permission on a directory" {
-                $dirName = "$(New-RandomString -length 8).txt"
-                New-Directory $dirName                
-                $dir = Get-File $dirName
+        Context "-Base64" {
+            It "Should set a <size > permission on a <type>" -ForEach @(
+                @{ Type = "file"; Size = "small"; Sddl = $smallSddl },
+                @{ Type = "file"; Size = "large"; Sddl = $largeSddl },
+                @{ Type = "directory"; Size = "small"; Sddl = $smallSddl },
+                @{ Type = "directory"; Size = "large"; Sddl = $largeSddl }
+            ) {
+                param ($Type, $Size, $Sddl)
 
-                $sddl = "O:SYG:SYD:P(A;;FA;;;AU)"
-                $returnedKey = Set-AzFileAcl -File $dir -Sddl $sddl
-               
-                $sddlAfter = Get-AzFileAcl -Key $returnedKey -Share $global:share
-                $sddlAfter | Should -Be "O:SYG:SYD:P(A;;FA;;;AU)S:NO_ACCESS_CONTROL"
-            }
-
-            It "Should set a large permission on a directory" {
-                $dirName = "$(New-RandomString -length 8).txt"
-                New-Directory $dirName                
-                $dir = Get-File $dirName
-
-                # Build SDDL string >= 8KiB (8192 characters of UTF-8)
-                $sddl = "O:SYG:SYD:P"
-                $i = 0
-                while ($sddl.Length -lt 8500) {
-                    $sddl += "(A;;FA;;;S-1-5-21-1001-1001-1001-$i)"
-                    $i++
+                $name = "$(New-RandomString -length 8).txt"
+                if ($Type -eq "file") {
+                    New-File $name
+                } else {
+                    New-Directory $name
                 }
+                $file = Get-File $name
 
-                $returnedKey = Set-AzFileAcl -File $dir -Sddl $sddl
+                $base64 = ConvertTo-SecurityDescriptor -Sddl $sddl | ConvertFrom-SecurityDescriptor -OutputFormat Base64
+                $returnedKey = Set-AzFileAcl -File $file -Base64 $base64
                 
                 $returnedKey | Should -Not -BeNullOrEmpty
                 $returnedKey | Should -BeOfType [string]
                 $returnedKey | Should -Match "^[0-9]+\*[0-9]+$"
 
                 $sddlAfter = Get-AzFileAcl -Key $returnedKey -Share $global:share
-                $sddlAfter | Should -Be "${sddl}S:NO_ACCESS_CONTROL"
+                $sddlAfter | Should -Be "${Sddl}S:NO_ACCESS_CONTROL"
             }
         }
     }

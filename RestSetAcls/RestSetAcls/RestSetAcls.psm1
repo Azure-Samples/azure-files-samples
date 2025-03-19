@@ -405,7 +405,7 @@ function Set-AzFileAcl {
                 $permission.PermissionFormat = [Azure.Storage.Files.Shares.Models.FilePermissionFormat]::Binary
             }
             "Base64" {
-                $permission.Permission = [Convert]::ToBase64String($Base64)
+                $permission.Permission = $Base64
                 $permission.PermissionFormat = [Azure.Storage.Files.Shares.Models.FilePermissionFormat]::Binary
             }
             "RawSecurityDescriptor" {
@@ -444,13 +444,26 @@ function Set-AzFileAcl {
         }
         else {
             # Create a new permission key
+            $context = $File.Context
             $shareName = Get-ShareName -File $File
-            $filePermissionKey = New-AzFileAcl -Context $File.Context -FileShareName $shareName -Sddl $Sddl -WhatIf:$WhatIfPreference
-            if ([string]::IsNullOrEmpty($filePermissionKey)) {
+
+            switch ($permission.PermissionFormat) {
+                "Sddl" {
+                    $key = New-AzFileAcl -Context $context -FileShareName $shareName -Sddl $permission.Permission -WhatIf:$WhatIfPreference
+                }
+                "Binary" {
+                    $key = New-AzFileAcl -Context $context -FileShareName $shareName -Base64 $permission.Permission -WhatIf:$WhatIfPreference
+                }
+                default {
+                    throw "Invalid permission format '$($permission.PermissionFormat)'."
+                }
+            }
+
+            if ([string]::IsNullOrEmpty($key)) {
                 Write-Error "Failed to create file permission" -ErrorAction Stop
             }
 
-            return Set-AzFileAclKey -File $File -Key $filePermissionKey -WhatIf:$WhatIfPreference
+            return Set-AzFileAclKey -File $File -Key $key -WhatIf:$WhatIfPreference
         }
     }
 }
