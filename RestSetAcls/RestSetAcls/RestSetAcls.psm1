@@ -246,58 +246,37 @@ function New-AzFileAcl {
 
         [Parameter(Mandatory = $true, HelpMessage = "Name of the file share")]
         [string]$FileShareName,
-        
-        [Parameter(
-            Mandatory = $true,
-            ParameterSetName = "Sddl",
-            HelpMessage = "File permission in the Security Descriptor Definition Language (SDDL). " +
-            "SDDL must have an owner, group, and discretionary access control list (DACL). " +
-            "The provided SDDL string format of the security descriptor should not have " +
-            "domain relative identifier (like 'DU', 'DA', 'DD' etc) in it.")]
-        [string]$Sddl,
 
-        [Parameter(
-            Mandatory = $true,
-            ParameterSetName = "Binary",
-            HelpMessage = "Security descriptor in self-relative binary format.")]
-        [byte[]]$Binary,
+        [Parameter(Mandatory = $true)]
+        [object]$Acl,
 
-        [Parameter(
-            Mandatory = $true,
-            ParameterSetName = "Base64",
-            HelpMessage = "Security descriptor in base64-encoded self-relative binary format.")]
-        [string]$Base64,
-
-        [Parameter(
-            Mandatory = $true,
-            ParameterSetName = "RawSecurityDescriptor",
-            HelpMessage = "Security descriptor")]
-        [System.Security.AccessControl.RawSecurityDescriptor]$SecurityDescriptor
+        [Parameter(Mandatory = $false)]
+        [SecurityDescriptorFormat]$AclFormat
     )
 
     $share = Get-AzStorageShare -Name $FileShareName -Context $Context
+    
+    if (-not $AclFormat) {
+        $AclFormat = Get-InferredAclFormat $Acl
+        Write-Verbose "Inferred ACL format: $AclFormat. To override, use -AclFormat."
+    }
 
     # If it's SDDL, then upload the SDDL directly
-    if ($PSCmdlet.ParameterSetName -eq "Sddl") {
-        if ($PSCmdlet.ShouldProcess("File share '$FileShareName'", "Create SDDL permission '$Sddl'")) {
-            $permissionInfo = $share.ShareClient.CreatePermission($Sddl, [System.Threading.CancellationToken]::None)
+    if ($AclFormat -eq "Sddl") {
+        [string]$sddl = $Acl
+        if ($PSCmdlet.ShouldProcess("File share '$FileShareName'", "Create SDDL permission '$sddl'")) {
+            $permissionInfo = $share.ShareClient.CreatePermission($sddl, [System.Threading.CancellationToken]::None)
             return $permissionInfo.Value.FilePermissionKey
         }
+        return
     }
 
     # All other formats should use the binary API
-    switch ($PSCmdlet.ParameterSetName) {
-        "Binary" {
-            $Base64 = [Convert]::ToBase64String($Binary)
-        }
-        "RawSecurityDescriptor" {
-            $Base64 = ConvertFrom-SecurityDescriptor $SecurityDescriptor -OutputFormat Base64
-        }
-    }
+    $base64 = Convert-SecurityDescriptor $Acl -From $AclFormat -To Base64
 
-    if ($PSCmdlet.ShouldProcess("File share '$FileShareName'", "Create binary permission '$Base64'")) {
+    if ($PSCmdlet.ShouldProcess("File share '$FileShareName'", "Create binary permission '$base64'")) {
         $permission = [Azure.Storage.Files.Shares.Models.ShareFilePermission]::new()
-        $permission.Permission = $Base64
+        $permission.Permission = $base64
         $permission.PermissionFormat = [Azure.Storage.Files.Shares.Models.FilePermissionFormat]::Binary
 
         $permissionInfo = $share.ShareClient.CreatePermission($permission, [System.Threading.CancellationToken]::None)
@@ -366,53 +345,29 @@ function Set-AzFileAcl {
         [Parameter(Mandatory = $true, ValueFromPipeline = $true)]
         [Microsoft.WindowsAzure.Commands.Common.Storage.ResourceModel.AzureStorageBase]$File,
         
-        [Parameter(
-            Mandatory = $true,
-            ParameterSetName = "Sddl",
-            HelpMessage = "File permission in the Security Descriptor Definition Language (SDDL). " +
-            "SDDL must have an owner, group, and discretionary access control list (DACL). " +
-            "The provided SDDL string format of the security descriptor should not have " +
-            "domain relative identifier (like 'DU', 'DA', 'DD' etc) in it.")]
-        [string]$Sddl,
+        [Parameter(Mandatory = $true)]
+        [object]$Acl,
 
-        [Parameter(
-            Mandatory = $true,
-            ParameterSetName = "Binary",
-            HelpMessage = "Security descriptor in self-relative binary format.")]
-        [byte[]]$Binary,
-
-        [Parameter(
-            Mandatory = $true,
-            ParameterSetName = "Base64",
-            HelpMessage = "Security descriptor in base64-encoded self-relative binary format.")]
-        [string]$Base64,
-
-        [Parameter(
-            Mandatory = $true,
-            ParameterSetName = "RawSecurityDescriptor",
-            HelpMessage = "Security descriptor")]
-        [System.Security.AccessControl.RawSecurityDescriptor]$SecurityDescriptor
+        [Parameter(Mandatory = $false)]
+        [SecurityDescriptorFormat]$AclFormat
     )
 
     begin {
+        if (-not $AclFormat) {
+            $AclFormat = Get-InferredAclFormat $Acl
+            Write-Verbose "Inferred ACL format: $AclFormat. To override, use -AclFormat."
+        }
+
         $permission = [Azure.Storage.Files.Shares.Models.ShareFilePermission]::new()
-        switch ($PSCmdlet.ParameterSetName) {
-            "Sddl" {
-                $permission.Permission = $Sddl
-                $permission.PermissionFormat = [Azure.Storage.Files.Shares.Models.FilePermissionFormat]::Sddl
-            }
-            "Binary" {
-                $permission.Permission = [Convert]::ToBase64String($Binary)
-                $permission.PermissionFormat = [Azure.Storage.Files.Shares.Models.FilePermissionFormat]::Binary
-            }
-            "Base64" {
-                $permission.Permission = $Base64
-                $permission.PermissionFormat = [Azure.Storage.Files.Shares.Models.FilePermissionFormat]::Binary
-            }
-            "RawSecurityDescriptor" {
-                $permission.Permission = ConvertFrom-SecurityDescriptor $SecurityDescriptor -OutputFormat Base64
-                $permission.PermissionFormat = [Azure.Storage.Files.Shares.Models.FilePermissionFormat]::Binary
-            }
+        if ($AclFormat -eq "Sddl") {
+            $permission.Permission = $Acl
+            $permission.PermissionFormat = [Azure.Storage.Files.Shares.Models.FilePermissionFormat]::Sddl
+            $aclCreationFormat = [SecurityDescriptorFormat]::Sddl
+        }
+        else {
+            $permission.Permission = Convert-SecurityDescriptor $Acl -From $AclFormat -To Base64
+            $permission.PermissionFormat = [Azure.Storage.Files.Shares.Models.FilePermissionFormat]::Binary
+            $aclCreationFormat = [SecurityDescriptorFormat]::Base64
         }
     }
 
@@ -444,26 +399,16 @@ function Set-AzFileAcl {
             }
         }
         else {
-            # Create a new permission key
             $context = $File.Context
             $shareName = Get-ShareName -File $File
-
-            switch ($permission.PermissionFormat) {
-                "Sddl" {
-                    $key = New-AzFileAcl -Context $context -FileShareName $shareName -Sddl $permission.Permission -WhatIf:$WhatIfPreference
-                }
-                "Binary" {
-                    $key = New-AzFileAcl -Context $context -FileShareName $shareName -Base64 $permission.Permission -WhatIf:$WhatIfPreference
-                }
-                default {
-                    throw "Invalid permission format '$($permission.PermissionFormat)'."
-                }
-            }
-
+            
+            # Create a new permission key
+            $key = New-AzFileAcl -Context $context -FileShareName $shareName -Acl $permission.Permission -AclFormat $aclCreationFormat -WhatIf:$WhatIfPreference
             if ([string]::IsNullOrEmpty($key)) {
                 Write-Error "Failed to create file permission" -ErrorAction Stop
             }
 
+            # Set the permission key
             return Set-AzFileAclKey -File $File -Key $key -WhatIf:$WhatIfPreference
         }
     }
@@ -538,21 +483,7 @@ function Get-AzFileAcl {
                 $format = [Azure.Storage.Files.Shares.Models.FilePermissionFormat]::Binary
                 $permissionInfo = $Share.ShareClient.GetPermission($Key, $format, [System.Threading.CancellationToken]::None)
                 $base64 = $permissionInfo.Value.Permission
-
-                switch ($OutputFormat) {
-                    "Binary" {
-                        return [System.Convert]::FromBase64String($base64)
-                    }
-                    "Base64" {
-                        return $base64
-                    }
-                    "Raw" {
-                        return ConvertTo-SecurityDescriptor $base64 -InputFormat Base64
-                    }
-                    Default {
-                        throw "Invalid output format '$OutputFormat'."
-                    }
-                }   
+                return Convert-SecurityDescriptor $base64 -From Base64 -To $OutputFormat  
             }
         }
     }

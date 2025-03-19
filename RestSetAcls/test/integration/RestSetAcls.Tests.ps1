@@ -128,11 +128,11 @@ Describe "Get-AzFileAcl" {
 }
 
 Describe "New-AzFileAcl" {
-    Context "-Context -FileShareName -Sddl" {
+    Context "-Context -FileShareName" {
         It "Should create a new permission key" {
             $sddl = "O:SYG:SYD:P(A;;FA;;;BA)"
 
-            $key = New-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -Sddl $sddl
+            $key = New-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -Acl $sddl
             $key | Should -Not -BeNullOrEmpty
             $key | Should -BeOfType [string]
             $key | Should -Match "^[0-9]+\*[0-9]+$"
@@ -153,7 +153,7 @@ Describe "Set-AzFileAclKey" {
             $sddlBefore = Get-AzFileAcl -Key $keyBefore -Share $global:share
 
             $sddl = "O:SYG:SYD:P(A;;FA;;;AU)"
-            $key = New-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -Sddl $sddl
+            $key = New-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -Acl $sddl
             $file = Get-File $fileName
             $returnedKey = Set-AzFileAclKey -File $file -Key $key
             
@@ -176,7 +176,7 @@ Describe "Set-AzFileAclKey" {
             $sddlBefore = Get-AzFileAcl -Key $keyBefore -Share $global:share
 
             $sddl = "O:SYG:SYD:P(A;;FA;;;AU)"
-            $key = New-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -Sddl $sddl
+            $key = New-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -Acl $sddl
             $dir = Get-File $dirName
             $returnedKey = Set-AzFileAclKey -File $dir -Key $key
             
@@ -209,7 +209,7 @@ Describe "Set-AzFileAcl" {
         $smallSddl = "O:SYG:SYD:P(A;;FA;;;AU)"
     }
 
-    Context "-Sddl" {
+    Context "Sddl" {
         It "Should set a <size > permission on a <type>" -ForEach @(
             @{ Type = "file"; Size = "small"; Sddl = $smallSddl },
             @{ Type = "file"; Size = "large"; Sddl = $largeSddl },
@@ -226,7 +226,7 @@ Describe "Set-AzFileAcl" {
             }
             $file = Get-File $name
 
-            $returnedKey = Set-AzFileAcl -File $file -Sddl $Sddl
+            $returnedKey = Set-AzFileAcl -File $file -Acl $Sddl
             
             $returnedKey | Should -Not -BeNullOrEmpty
             $returnedKey | Should -BeOfType [string]
@@ -237,7 +237,7 @@ Describe "Set-AzFileAcl" {
         }
     }
 
-    Context "-Base64" {
+    Context "Base64" {
         It "Should set a <size > permission on a <type>" -ForEach @(
             @{ Type = "file"; Size = "small"; Sddl = $smallSddl },
             @{ Type = "file"; Size = "large"; Sddl = $largeSddl },
@@ -255,7 +255,7 @@ Describe "Set-AzFileAcl" {
             $file = Get-File $name
 
             $base64 = Convert-SecurityDescriptor $sddl -From Sddl -To Base64
-            $returnedKey = Set-AzFileAcl -File $file -Base64 $base64
+            $returnedKey = Set-AzFileAcl -File $file -Acl $base64 -AclFormat Base64
             
             $returnedKey | Should -Not -BeNullOrEmpty
             $returnedKey | Should -BeOfType [string]
