@@ -2,6 +2,7 @@
 # Private means functions that are not in FunctionsToExport in the module manifest.
 
 BeforeAll {
+    . $PSScriptRoot/../../RestSetAcls/Enumerations.ps1
     . $PSScriptRoot/../../RestSetAcls/Convert.ps1
     . $PSScriptRoot/../../RestSetAcls/SddlUtils.ps1
 }
