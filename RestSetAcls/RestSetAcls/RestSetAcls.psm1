@@ -222,7 +222,7 @@ function Get-AzureFilesRecursive {
     }
 }
 
-function New-AzureFilePermission {
+function New-AzFileAcl {
     [CmdletBinding(SupportsShouldProcess = $true)]
     [OutputType([string])]
     param (
@@ -290,7 +290,7 @@ function New-AzureFilePermission {
     }    
 }
 
-function Set-AzureFilePermissionKey {
+function Set-AzFileAclKey {
     [CmdletBinding(SupportsShouldProcess = $true)]
     [OutputType([string])]
     param (
@@ -344,7 +344,7 @@ function Set-AzureFilePermissionKey {
     }
 }
 
-function Set-AzureFilePermission {
+function Set-AzFileAcl {
     [CmdletBinding(SupportsShouldProcess = $true)]
     [OutputType([string])]
     param (
@@ -430,20 +430,20 @@ function Set-AzureFilePermission {
         }
         else {
             # Create a new permission key
-            $filePermissionKey = New-AzureFilePermission -Context $File.Context -FileShareName $File.ShareName -Sddl $Sddl -WhatIf:$WhatIfPreference
+            $filePermissionKey = New-AzFileAcl -Context $File.Context -FileShareName $File.ShareName -Sddl $Sddl -WhatIf:$WhatIfPreference
             if ([string]::IsNullOrEmpty($filePermissionKey)) {
                 Write-Failure "Failed to create file permission"
                 return
             }
 
             # Set the new permission key
-            Set-AzureFilePermissionKey -File $File -Key $filePermissionKey -WhatIf:$WhatIfPreference
+            Set-AzFileAclKey -File $File -Key $filePermissionKey -WhatIf:$WhatIfPreference
             return $filePermissionKey
         }
     }
 }
 
-function Get-AzureFilePermissionKey {
+function Get-AzFileAclKey {
     [CmdletBinding()]
     [OutputType([string])]
     param (
@@ -475,7 +475,7 @@ function Get-AzureFilePermissionKey {
     }
 }
 
-function Get-AzureFilePermission {
+function Get-AzFileAcl {
     [CmdletBinding(SupportsShouldProcess = $true)]
     [OutputType([string], [byte[]])]
     param (
@@ -616,7 +616,7 @@ function Set-AzureFilesAclRecursive {
     # The idea is to create the permission early. If this fails (e.g. due to invalid SDDL), we can fail early.
     # Setting permission key should in theory also be slightly faster than setting SDDL directly (though this may not be noticeable in practice).
     try {
-        $filePermissionKey = New-AzureFilePermission -Context $Context -FileShareName $FileShareName -Sddl $SddlPermission -WhatIf:$WhatIfPreference
+        $filePermissionKey = New-AzFileAcl -Context $Context -FileShareName $FileShareName -Sddl $SddlPermission -WhatIf:$WhatIfPreference
         if ([string]::IsNullOrEmpty($filePermissionKey)) {
             Write-Failure "Failed to create file permission"
             return
@@ -645,7 +645,7 @@ function Set-AzureFilesAclRecursive {
     $ProgressPreference = "SilentlyContinue"
 
     if ($Parallel) {
-        $funcDef = ${function:Set-AzureFilePermissionKey}.ToString()
+        $funcDef = ${function:Set-AzFileAclKey}.ToString()
         Get-AzureFilesRecursive `
             -Context $Context `
             -DirectoryContents @($directory) `
@@ -653,11 +653,11 @@ function Set-AzureFilesAclRecursive {
             -SkipDirectories:$SkipDirectories `
         | ForEach-Object -ThrottleLimit $ThrottleLimit -Parallel {
             # Set the ACL
-            ${function:Set-AzureFilePermissionKey} = $using:funcDef
+            ${function:Set-AzFileAclKey} = $using:funcDef
             $success = $true
             $errorMessage = ""            
             try {
-                Set-AzureFilePermissionKey -File $_.File -Key $using:filePermissionKey -WhatIf:$using:WhatIfPreference
+                Set-AzFileAclKey -File $_.File -Key $using:filePermissionKey -WhatIf:$using:WhatIfPreference
             }
             catch {
                 $success = $false
@@ -706,7 +706,7 @@ function Set-AzureFilesAclRecursive {
             
             # Set the ACL
             try {
-                Set-AzureFilePermissionKey -File $_.File -Key $filePermissionKey -WhatIf:$WhatIfPreference
+                Set-AzFileAclKey -File $_.File -Key $filePermissionKey -WhatIf:$WhatIfPreference
             }
             catch {
                 $success = $false

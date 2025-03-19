@@ -85,14 +85,14 @@ AfterAll {
 }
 
 Describe "RestSetAcls" {
-    Describe "Get-AzureFilePermissionKey" {
+    Describe "Get-AzFileAclKey" {
         Context "ParameterSet File" {
             It "Should retrieve the permission key of a file" {
                 $fileName = "$(New-RandomString -length 8).txt"
                 $fileInfo = New-File $fileName
                 
                 $file = Get-File $fileName
-                $key = Get-AzureFilePermissionKey -File $file
+                $key = Get-AzFileAclKey -File $file
 
                 $key | Should -Not -BeNullOrEmpty
                 $key | Should -BeOfType [string]
@@ -105,7 +105,7 @@ Describe "RestSetAcls" {
                 $dirInfo = New-Directory $dirName
                 
                 $file = Get-File $dirName
-                $key = Get-AzureFilePermissionKey -File $file
+                $key = Get-AzFileAclKey -File $file
 
                 $key | Should -Not -BeNullOrEmpty
                 $key | Should -BeOfType [string]
@@ -119,7 +119,7 @@ Describe "RestSetAcls" {
                 $fileName = "$(New-RandomString -length 8).txt"
                 $fileInfo = New-File $fileName
 
-                $key = Get-AzureFilePermissionKey -Context $global:context -FileShareName $global:fileShareName -FilePath $fileName
+                $key = Get-AzFileAclKey -Context $global:context -FileShareName $global:fileShareName -FilePath $fileName
 
                 $key | Should -Not -BeNullOrEmpty
                 $key | Should -BeOfType [string]
@@ -131,7 +131,7 @@ Describe "RestSetAcls" {
                 $dirName = "$(New-RandomString -length 8).txt"
                 $dirInfo = New-File $dirName
 
-                $key = Get-AzureFilePermissionKey -Context $global:context -FileShareName $global:fileShareName -FilePath $dirName
+                $key = Get-AzFileAclKey -Context $global:context -FileShareName $global:fileShareName -FilePath $dirName
 
                 $key | Should -Not -BeNullOrEmpty
                 $key | Should -BeOfType [string]
@@ -141,14 +141,14 @@ Describe "RestSetAcls" {
         }
     }
 
-    Describe "Get-AzureFilePermission" {
+    Describe "Get-AzFileAcl" {
         Context "ParameterSet Share" {
             It "Should retrieve the permission" {
                 $fileName = "$(New-RandomString -length 8).txt"
                 $fileInfo = New-File $fileName
                 
                 $key = $fileInfo.SmbProperties.FilePermissionKey
-                $permission = Get-AzureFilePermission -Key $key -Share $global:share
+                $permission = Get-AzFileAcl -Key $key -Share $global:share
                 
                 $permission | Should -Not -BeNullOrEmpty
                 $permission | Should -BeOfType [string]
@@ -162,7 +162,7 @@ Describe "RestSetAcls" {
                 $fileInfo = New-File $fileName
                 
                 $key = $fileInfo.SmbProperties.FilePermissionKey
-                $permission = Get-AzureFilePermission -Key $key -Context $global:context -FileShareName $global:fileShareName
+                $permission = Get-AzFileAcl -Key $key -Context $global:context -FileShareName $global:fileShareName
 
                 $permission | Should -Not -BeNullOrEmpty
                 $permission | Should -BeOfType [string]
@@ -171,39 +171,39 @@ Describe "RestSetAcls" {
         }
     }
 
-    Describe "New-AzureFilePermission" {
+    Describe "New-AzFileAcl" {
         Context "ParameterSet Sddl" {
             It "Should create a new permission key" {
                 $sddl = "O:SYG:SYD:P(A;;FA;;;BA)"
 
-                $key = New-AzureFilePermission -Context $global:context -FileShareName $global:fileShareName -Sddl $sddl
+                $key = New-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -Sddl $sddl
                 $key | Should -Not -BeNullOrEmpty
                 $key | Should -BeOfType [string]
                 $key | Should -Match "^[0-9]+\*[0-9]+$"
 
-                $permission = Get-AzureFilePermission -Context $global:context -FileShareName $global:fileShareName -Key $key
+                $permission = Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -Key $key
                 $permission | Should -Be "O:SYG:SYD:P(A;;FA;;;BA)S:NO_ACCESS_CONTROL"
             }
         }
     }
 
-    Describe "Set-AzureFilePermissionKey" {
+    Describe "Set-AzFileAclKey" {
         Context "ParameterSet File" {
             It "Should set the permission key on a file" {
                 $fileName = "$(New-RandomString -length 8).txt"
                 $fileInfo = New-File $fileName
                 
                 $keyBefore = $fileInfo.SmbProperties.FilePermissionKey
-                $sddlBefore = Get-AzureFilePermission -Key $keyBefore -Share $global:share
+                $sddlBefore = Get-AzFileAcl -Key $keyBefore -Share $global:share
 
                 $sddl = "O:SYG:SYD:P(A;;FA;;;AU)"
-                $key = New-AzureFilePermission -Context $global:context -FileShareName $global:fileShareName -Sddl $sddl
+                $key = New-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -Sddl $sddl
                 $file = Get-File $fileName
-                $returnedKey = Set-AzureFilePermissionKey -File $file -Key $key
+                $returnedKey = Set-AzFileAclKey -File $file -Key $key
                 
                 $file = Get-File $fileName
-                $keyAfter = Get-AzureFilePermissionKey -File $file
-                $sddlAfter = Get-AzureFilePermission -Key $keyAfter -Share $global:share
+                $keyAfter = Get-AzFileAclKey -File $file
+                $sddlAfter = Get-AzFileAcl -Key $keyAfter -Share $global:share
 
                 $sddlBefore | Should -Be "O:SYG:SYD:(A;;FA;;;BA)(A;;FA;;;SY)(A;;0x1200a9;;;BU)(A;;0x1301bf;;;AU)(A;;FA;;;SY)"
                 $sddlAfter | Should -Be "O:SYG:SYD:P(A;;FA;;;AU)S:NO_ACCESS_CONTROL"
@@ -217,16 +217,16 @@ Describe "RestSetAcls" {
                 $dirInfo = New-Directory $dirName
                 
                 $keyBefore = $dirInfo.SmbProperties.FilePermissionKey
-                $sddlBefore = Get-AzureFilePermission -Key $keyBefore -Share $global:share
+                $sddlBefore = Get-AzFileAcl -Key $keyBefore -Share $global:share
 
                 $sddl = "O:SYG:SYD:P(A;;FA;;;AU)"
-                $key = New-AzureFilePermission -Context $global:context -FileShareName $global:fileShareName -Sddl $sddl
+                $key = New-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -Sddl $sddl
                 $dir = Get-File $dirName
-                $returnedKey = Set-AzureFilePermissionKey -File $dir -Key $key
+                $returnedKey = Set-AzFileAclKey -File $dir -Key $key
                 
                 $dir = Get-File $dirName
-                $keyAfter = Get-AzureFilePermissionKey -File $dir
-                $sddlAfter = Get-AzureFilePermission -Key $keyAfter -Share $global:share
+                $keyAfter = Get-AzFileAclKey -File $dir
+                $sddlAfter = Get-AzFileAcl -Key $keyAfter -Share $global:share
 
                 $sddlBefore | Should -Be "O:SYG:SYD:(A;OICI;FA;;;BA)(A;OICI;FA;;;SY)(A;;0x1200a9;;;BU)(A;OICIIO;GXGR;;;BU)(A;OICI;0x1301bf;;;AU)(A;;FA;;;SY)(A;OICIIO;GA;;;CO)"
                 $sddlAfter | Should -Be "O:SYG:SYD:P(A;;FA;;;AU)S:NO_ACCESS_CONTROL"
@@ -237,7 +237,7 @@ Describe "RestSetAcls" {
         }
     }
 
-    Describe "Set-AzureFilePermission" {
+    Describe "Set-AzFileAcl" {
         Context "ParameterSet Sddl" {
             It "Should set a small permission on a file" {
                 $fileName = "$(New-RandomString -length 8).txt"
@@ -245,9 +245,9 @@ Describe "RestSetAcls" {
                 $file = Get-File $fileName
 
                 $sddl = "O:SYG:SYD:P(A;;FA;;;AU)"
-                $returnedKey = Set-AzureFilePermission -File $file -Sddl $sddl -Verbose
+                $returnedKey = Set-AzFileAcl -File $file -Sddl $sddl -Verbose
                
-                $sddlAfter = Get-AzureFilePermission -Key $returnedKey -Share $global:share
+                $sddlAfter = Get-AzFileAcl -Key $returnedKey -Share $global:share
                 $sddlAfter | Should -Be "O:SYG:SYD:P(A;;FA;;;AU)S:NO_ACCESS_CONTROL"
             }
         }
