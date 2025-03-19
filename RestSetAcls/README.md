@@ -54,24 +54,24 @@ Install-Module RestSetAcls
    $sddl = (Get-Acl -Path $filepath).Sddl
    ```
    
-1. Call `Set-AzureFilesAclRecursive` as follows. This will recursively find all files and folders on your file share, and set the SDDL permission on each one of them.
+1. Call `Set-AzFileAclRecursive` as follows. This will recursively find all files and folders on your file share, and set the SDDL permission on each one of them.
 
    ```powershell
    $FileShareName = "<file-share-name>" # replace with the name of your file share
    
-   Set-AzureFilesAclRecursive -Context $context -FileShareName $FileShareName -FilePath "/" -SddlPermission $sddl
+   Set-AzFileAclRecursive -Context $context -FileShareName $FileShareName -FilePath "/" -SddlPermission $sddl
    ```
 
 ## Advanced usage
 
 ### Export CSV logs of changes made
 
-You can export a CSV file that logs the changes made by `Set-AzureFilesAclRecursive`. This can be useful to keep track of the changes made, or to review them later.
+You can export a CSV file that logs the changes made by `Set-AzFileAclRecursive`. This can be useful to keep track of the changes made, or to review them later.
 
 To do this, use the `-WriteToPipeline` flag, and pass the output to `Export-Csv`:
 
 ```powershell
-Set-AzureFilesAclRecursive `
+Set-AzFileAclRecursive `
    -Context $context `
    -FileShareName $FileShareName `
    -FilePath "/" `

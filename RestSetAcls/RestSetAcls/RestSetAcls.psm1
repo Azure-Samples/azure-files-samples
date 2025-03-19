@@ -558,7 +558,7 @@ function Get-AzFileAcl {
     }
 }
 
-function Set-AzureFilesAclRecursive {
+function Set-AzFileAclRecursive {
     [CmdletBinding(SupportsShouldProcess)]
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseCompatibleCommands',
         'ForEach-Object/Parallel',
