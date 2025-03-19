@@ -9,21 +9,9 @@ param (
     [string]$StorageAccountKey
 )
 
-BeforeDiscovery {
-    . $PSScriptRoot/../../RestSetAcls/Enumerations.ps1
-    . $PSScriptRoot/../../RestSetAcls/SddlUtils.ps1
-}
-
 BeforeAll {
     Import-Module $PSScriptRoot/../../RestSetAcls/RestSetAcls.psd1 -Force
-
-    function New-RandomString {
-        param (
-            [int]$length = 8
-        )
-        $lowercase = 97..122        
-        -join ($lowercase  | Get-Random -Count $length | ForEach-Object { [char]$_ })
-    }
+    . $PSScriptRoot/utils.ps1
 
     # Build context from parameters
     $global:context = New-AzStorageContext -StorageAccountName $StorageAccountName -StorageAccountKey $StorageAccountKey
@@ -35,7 +23,7 @@ BeforeAll {
     }
 
     # Create a temporary file share in account
-    $global:fileShareName = New-RandomString -length 12    
+    $global:fileShareName = New-RandomString -Length 12    
     Write-Host "Creating a temporary file share $global:fileShareName in storage account $StorageAccountName..."
     $global:share = New-AzStorageShare -Name $global:fileShareName -Context $global:context
     if ($null -eq $global:fileShareName) {
@@ -43,42 +31,6 @@ BeforeAll {
     }
 
     $global:rootDirectoryClient = $global:share.ShareClient.GetRootDirectoryClient()
-
-    function Get-File {
-        [CmdletBinding()]
-        [OutputType([Microsoft.WindowsAzure.Commands.Common.Storage.ResourceModel.AzureStorageFile])]
-        param (
-            [Parameter(Mandatory = $true)]
-            [string]$Path
-        )
-        
-        return Get-AzStorageFile -Context $global:context -ShareDirectoryClient $global:rootDirectoryClient -Path $Path
-    }
-
-    function New-File {
-        [CmdletBinding()]
-        [OutputType([Azure.Storage.Files.Shares.Models.ShareFileInfo])]
-        param (
-            [Parameter(Mandatory = $true)]
-            [string]$Path,
-
-            [Parameter(Mandatory = $false)]
-            [int]$Size = 0
-        )
-        $file = $global:share.ShareClient.GetRootDirectoryClient().GetFileClient($Path)
-        return $file.Create($Size).Value
-    }
-
-    function New-Directory {
-        [CmdletBinding()]
-        [OutputType([Azure.Storage.Files.Shares.Models.ShareDirectoryInfo])]
-        param (
-            [Parameter(Mandatory = $true)]
-            [string]$Path
-        )
-        $directory = $global:share.ShareClient.GetRootDirectoryClient().GetSubdirectoryClient($Path)
-        return $directory.Create().Value
-    }
 }
 
 AfterAll {
@@ -93,7 +45,7 @@ Describe "RestSetAcls" {
     Describe "Get-AzFileAclKey" {
         Context "-File" {
             It "Should retrieve the permission key of a file" {
-                $fileName = "$(New-RandomString -length 8).txt"
+                $fileName = "$(New-RandomString -Length 8).txt"
                 $fileInfo = New-File $fileName
                 
                 $file = Get-File $fileName
@@ -106,7 +58,7 @@ Describe "RestSetAcls" {
             }
 
             It "Should retrieve the permission key of a directory" {
-                $dirName = "$(New-RandomString -length 8).txt"
+                $dirName = "$(New-RandomString -Length 8).txt"
                 $dirInfo = New-Directory $dirName
                 
                 $file = Get-File $dirName
@@ -121,7 +73,7 @@ Describe "RestSetAcls" {
 
         Context "-FileShareName -FilePath" {
             It "Should retrieve the permission key of a file" {
-                $fileName = "$(New-RandomString -length 8).txt"
+                $fileName = "$(New-RandomString -Length 8).txt"
                 $fileInfo = New-File $fileName
 
                 $key = Get-AzFileAclKey -Context $global:context -FileShareName $global:fileShareName -FilePath $fileName
@@ -133,7 +85,7 @@ Describe "RestSetAcls" {
             }
 
             It "Should retrieve the permission key of a directory" {
-                $dirName = "$(New-RandomString -length 8).txt"
+                $dirName = "$(New-RandomString -Length 8).txt"
                 $dirInfo = New-File $dirName
 
                 $key = Get-AzFileAclKey -Context $global:context -FileShareName $global:fileShareName -FilePath $dirName
@@ -149,7 +101,7 @@ Describe "RestSetAcls" {
     Describe "Get-AzFileAcl" {
         Context "-Share" {
             It "Should retrieve the permission" {
-                $fileName = "$(New-RandomString -length 8).txt"
+                $fileName = "$(New-RandomString -Length 8).txt"
                 $fileInfo = New-File $fileName
                 
                 $key = $fileInfo.SmbProperties.FilePermissionKey
@@ -163,7 +115,7 @@ Describe "RestSetAcls" {
 
         Context "-Context -FileShareName" {
             It "Should retrieve the permission" {
-                $fileName = "$(New-RandomString -length 8).txt"
+                $fileName = "$(New-RandomString -Length 8).txt"
                 $fileInfo = New-File $fileName
                 
                 $key = $fileInfo.SmbProperties.FilePermissionKey
@@ -195,7 +147,7 @@ Describe "RestSetAcls" {
     Describe "Set-AzFileAclKey" {
         Context "-File" {
             It "Should set the permission key on a file" {
-                $fileName = "$(New-RandomString -length 8).txt"
+                $fileName = "$(New-RandomString -Length 8).txt"
                 $fileInfo = New-File $fileName
                 
                 $keyBefore = $fileInfo.SmbProperties.FilePermissionKey
@@ -218,7 +170,7 @@ Describe "RestSetAcls" {
             }
 
             It "Should set the permission key on a directory" {
-                $dirName = "$(New-RandomString -length 8).txt"
+                $dirName = "$(New-RandomString -Length 8).txt"
                 $dirInfo = New-Directory $dirName
                 
                 $keyBefore = $dirInfo.SmbProperties.FilePermissionKey
@@ -267,7 +219,7 @@ Describe "RestSetAcls" {
             ) {
                 param ($Type, $Size, $Sddl)
 
-                $name = "$(New-RandomString -length 8).txt"
+                $name = "$(New-RandomString -Length 8).txt"
                 if ($Type -eq "file") {
                     New-File $name
                 } else {
@@ -295,7 +247,7 @@ Describe "RestSetAcls" {
             ) {
                 param ($Type, $Size, $Sddl)
 
-                $name = "$(New-RandomString -length 8).txt"
+                $name = "$(New-RandomString -Length 8).txt"
                 if ($Type -eq "file") {
                     New-File $name
                 } else {
