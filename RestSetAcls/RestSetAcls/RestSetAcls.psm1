@@ -344,6 +344,105 @@ function Set-AzureFilePermissionKey {
     }
 }
 
+function Set-AzureFilePermission {
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    [OutputType([string])]
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipeline = $true)]
+        [Microsoft.WindowsAzure.Commands.Common.Storage.ResourceModel.AzureStorageBase]$File,
+        
+        [Parameter(
+            Mandatory = $true,
+            ParameterSetName = "Sddl",
+            HelpMessage = "File permission in the Security Descriptor Definition Language (SDDL). " +
+            "SDDL must have an owner, group, and discretionary access control list (DACL). " +
+            "The provided SDDL string format of the security descriptor should not have " +
+            "domain relative identifier (like 'DU', 'DA', 'DD' etc) in it.")]
+        [string]$Sddl,
+
+        [Parameter(
+            Mandatory = $true,
+            ParameterSetName = "Binary",
+            HelpMessage = "Security descriptor in self-relative binary format.")]
+        [byte[]]$Binary,
+
+        [Parameter(
+            Mandatory = $true,
+            ParameterSetName = "Base64",
+            HelpMessage = "Security descriptor in base64-encoded self-relative binary format.")]
+        [string]$Base64,
+
+        [Parameter(
+            Mandatory = $true,
+            ParameterSetName = "RawSecurityDescriptor",
+            HelpMessage = "Security descriptor")]
+        [System.Security.AccessControl.RawSecurityDescriptor]$SecurityDescriptor
+    )
+
+    begin {
+        $permission = [Azure.Storage.Files.Shares.Models.ShareFilePermission]::new()
+        switch ($PSCmdlet.ParameterSetName) {
+            "Sddl" {
+                $permission.Permission = $Sddl
+                $permission.PermissionFormat = [Azure.Storage.Files.Shares.Models.FilePermissionFormat]::Sddl
+            }
+            "Binary" {
+                $permission.Permission = [Convert]::ToBase64String($Binary)
+                $permission.PermissionFormat = [Azure.Storage.Files.Shares.Models.FilePermissionFormat]::Binary
+            }
+            "Base64" {
+                $permission.Permission = [Convert]::ToBase64String($Base64)
+                $permission.PermissionFormat = [Azure.Storage.Files.Shares.Models.FilePermissionFormat]::Binary
+            }
+            "RawSecurityDescriptor" {
+                $permission.Permission = ConvertFrom-SecurityDescriptor $SecurityDescriptor -OutputFormat Base64
+                $permission.PermissionFormat = [Azure.Storage.Files.Shares.Models.FilePermissionFormat]::Binary
+            }
+        }
+    }
+
+    process {
+        # If it's < 8 KiB, update directly via HTTP headers in a single request
+        # If it's >= 8 KiB, create a new permission key and set it (two requests)
+        if (-not $AvoidInlineApi -and $permission.Permission.Length -lt 8192) {
+            if ($File.GetType().Name -eq "AzureStorageFileDirectory") {
+                $options = [Azure.Storage.Files.Shares.Models.ShareDirectorySetHttpHeadersOptions]::new()
+                $options.FilePermission = $permission
+                
+                $directory = [Microsoft.WindowsAzure.Commands.Common.Storage.ResourceModel.AzureStorageFileDirectory]$File
+
+                if ($PSCmdlet.ShouldProcess("Directory '$($directory.Name)'", "Set permission '$($permission.Permission)' in format '$($permission.PermissionFormat)'")) {
+                    $response = $directory.ShareDirectoryClient.SetHttpHeaders($options)
+                    return $response.Value.SmbProperties.FilePermissionKey
+                }
+            }
+            else {
+                $options = [Azure.Storage.Files.Shares.Models.ShareFileSetHttpHeadersOptions]::new()
+                $options.FilePermission = $permission
+
+                $file = [Microsoft.WindowsAzure.Commands.Common.Storage.ResourceModel.AzureStorageFile]$File
+
+                if ($PSCmdlet.ShouldProcess("File '$($file.Name)'", "Set permission '$($permission.Permission)' in format '$($permission.PermissionFormat)'")) {
+                    $response = $file.ShareFileClient.SetHttpHeaders($options)
+                    return $response.Value.SmbProperties.FilePermissionKey
+                }
+            }
+        }
+        else {
+            # Create a new permission key
+            $filePermissionKey = New-AzureFilePermission -Context $File.Context -FileShareName $File.ShareName -Sddl $Sddl -WhatIf:$WhatIfPreference
+            if ([string]::IsNullOrEmpty($filePermissionKey)) {
+                Write-Failure "Failed to create file permission"
+                return
+            }
+
+            # Set the new permission key
+            Set-AzureFilePermissionKey -File $File -Key $filePermissionKey -WhatIf:$WhatIfPreference
+            return $filePermissionKey
+        }
+    }
+}
+
 function Get-AzureFilePermissionKey {
     [CmdletBinding()]
     [OutputType([string])]

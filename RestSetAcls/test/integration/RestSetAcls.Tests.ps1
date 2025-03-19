@@ -236,4 +236,20 @@ Describe "RestSetAcls" {
             }
         }
     }
+
+    Describe "Set-AzureFilePermission" {
+        Context "ParameterSet Sddl" {
+            It "Should set a small permission on a file" {
+                $fileName = "$(New-RandomString -length 8).txt"
+                New-File $fileName                
+                $file = Get-File $fileName
+
+                $sddl = "O:SYG:SYD:P(A;;FA;;;AU)"
+                $returnedKey = Set-AzureFilePermission -File $file -Sddl $sddl -Verbose
+               
+                $sddlAfter = Get-AzureFilePermission -Key $returnedKey -Share $global:share
+                $sddlAfter | Should -Be "O:SYG:SYD:P(A;;FA;;;AU)S:NO_ACCESS_CONTROL"
+            }
+        }
+    }
 }
