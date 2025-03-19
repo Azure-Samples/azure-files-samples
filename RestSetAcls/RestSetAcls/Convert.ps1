@@ -1,3 +1,38 @@
+function Get-InferredAclFormat {
+    [CmdletBinding()]
+    [OutputType([SecurityDescriptorFormat])]
+    param (
+        [Parameter(Mandatory = $true, Position = 0, ValueFromPipeline = $true)]
+        [object]$Acl
+    )
+
+    process {
+        if ($Acl -is [string]) {
+            $Acl = $Acl.Trim()
+
+            if ($Acl -match "^[A-Za-z0-9+/=]+$") {
+                return [SecurityDescriptorFormat]::Base64
+            }
+            
+            if ($Acl.StartsWith("O:")) {
+                return [SecurityDescriptorFormat]::Sddl
+            }
+
+            throw "Invalid input format. Expected SDDL or Base64."
+        }
+
+        if ($Acl -is [array]) {
+            return [SecurityDescriptorFormat]::Binary
+        }
+
+        if ($Acl -is [System.Security.AccessControl.RawSecurityDescriptor]) {
+            return [SecurityDescriptorFormat]::Raw
+        }
+        
+        throw "Could not infer the format of the input. Expected SDDL, Base64, Binary or Raw."
+    }
+}
+
 function ConvertTo-SecurityDescriptor {
     [CmdletBinding()]
     [OutputType([System.Security.AccessControl.RawSecurityDescriptor])]

@@ -567,3 +567,35 @@ Describe "ConvertFrom-SecurityDescriptor" {
         $binary | Should -Be $binaryFromBase64
     }
 }
+
+Describe "Get-InferredAclFormat" {
+    It "Should return Sddl for valid SDDL strings" {
+        $sddl = "O:SYG:SYD:AI(A;;0x1301bf;;;WD)(A;ID;0x1201bf;;;WD)(A;;0x1301ff;;;AU)"
+        $format = Get-InferredAclFormat $sddl
+        $format | Should -Be Sddl
+    }
+
+    It "Should return Base64 for valid Base64 strings" {
+        $base64 = "AQAEhBQAAAAgAAAAAAAAACwAAAABAQAAAAAABRIAAAABAQAAAAAABRIAAAACAEQAAwAAAAAAFAC/ARMAAQEAAAAAAAEAAAAAABAUAL8BEgABAQAAAAAAAQAAAAAAABQA/wETAAEBAAAAAAAFCwAAAA=="
+        $format = Get-InferredAclFormat $base64
+        $format | Should -Be Base64
+    }
+
+    It "Should return Binary for valid binary arrays" {
+        [byte[]]$binary = @(
+            1, 0, 4, 132, 20, 0, 0, 0, 32, 0, 0, 0, 0, 0, 0, 0, 44, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 5, 18, 0, 0, 0, 1, 1,
+            0, 0, 0, 0, 0, 5, 18, 0, 0, 0, 2, 0, 68, 0, 3, 0, 0, 0, 0, 0, 20, 0, 191, 1, 19, 0, 1, 1, 0, 0, 0, 0, 0, 1,
+            0, 0, 0, 0, 0, 16, 20, 0, 191, 1, 18, 0, 1, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 20, 0, 255, 1, 19, 0, 1,
+            1, 0, 0, 0, 0, 0, 5, 11, 0, 0, 0
+        )
+        $format = Get-InferredAclFormat $binary
+        $format | Should -Be Binary
+    }
+
+    It "Should return Raw for valid RawSecurityDescriptor objects" {
+        $sddl = "O:SYG:SYD:AI(A;;0x1301bf;;;WD)(A;ID;0x1201bf;;;WD)(A;;0x1301ff;;;AU)"
+        $rawSecurityDescriptor = [System.Security.AccessControl.RawSecurityDescriptor]::new($sddl)
+        $format = Get-InferredAclFormat $rawSecurityDescriptor
+        $format | Should -Be Raw
+    }
+}
