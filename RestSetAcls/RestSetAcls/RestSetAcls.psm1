@@ -430,15 +430,12 @@ function Set-AzFileAcl {
         }
         else {
             # Create a new permission key
-            $filePermissionKey = New-AzFileAcl -Context $File.Context -FileShareName $File.ShareName -Sddl $Sddl -WhatIf:$WhatIfPreference
+            $filePermissionKey = New-AzFileAcl -Context $File.Context -FileShareName $File.ShareFileClient.ShareName -Sddl $Sddl -WhatIf:$WhatIfPreference
             if ([string]::IsNullOrEmpty($filePermissionKey)) {
-                Write-Failure "Failed to create file permission"
-                return
+                Write-Error "Failed to create file permission" -ErrorAction Stop
             }
 
-            # Set the new permission key
-            Set-AzFileAclKey -File $File -Key $filePermissionKey -WhatIf:$WhatIfPreference
-            return $filePermissionKey
+            return Set-AzFileAclKey -File $File -Key $filePermissionKey -WhatIf:$WhatIfPreference
         }
     }
 }

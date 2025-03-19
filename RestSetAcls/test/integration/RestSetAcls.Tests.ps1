@@ -245,10 +245,33 @@ Describe "RestSetAcls" {
                 $file = Get-File $fileName
 
                 $sddl = "O:SYG:SYD:P(A;;FA;;;AU)"
-                $returnedKey = Set-AzFileAcl -File $file -Sddl $sddl -Verbose
+                $returnedKey = Set-AzFileAcl -File $file -Sddl $sddl
                
                 $sddlAfter = Get-AzFileAcl -Key $returnedKey -Share $global:share
                 $sddlAfter | Should -Be "O:SYG:SYD:P(A;;FA;;;AU)S:NO_ACCESS_CONTROL"
+            }
+
+            It "Should set a large permission on a file" {
+                $fileName = "$(New-RandomString -length 8).txt"
+                New-File $fileName                
+                $file = Get-File $fileName
+
+                # Build SDDL string >= 8KiB (8192 characters of UTF-8)
+                $sddl = "O:SYG:SYD:P"
+                $i = 0
+                while ($sddl.Length -lt 8500) {
+                    $sddl += "(A;;FA;;;S-1-5-21-1001-1001-1001-$i)"
+                    $i++
+                }
+
+                $returnedKey = Set-AzFileAcl -File $file -Sddl $sddl
+                
+                $returnedKey | Should -Not -BeNullOrEmpty
+                $returnedKey | Should -BeOfType [string]
+                $returnedKey | Should -Match "^[0-9]+\*[0-9]+$"
+
+                $sddlAfter = Get-AzFileAcl -Key $returnedKey -Share $global:share
+                $sddlAfter | Should -Be "${sddl}S:NO_ACCESS_CONTROL"
             }
         }
     }
