@@ -6,7 +6,6 @@ function ConvertTo-SecurityDescriptor {
         [object]$InputDescriptor,
 
         [Parameter(Mandatory = $false)]
-        [Alias("From")]
         [SecurityDescriptorFormat]$InputFormat = [SecurityDescriptorFormat]::Sddl
     )
 
@@ -121,16 +120,16 @@ function Convert-SecurityDescriptor {
         [object]$InputDescriptor,
 
         [Parameter(Mandatory = $true)]
-        [Alias("From")]
-        [SecurityDescriptorFormat]$InputFormat,
+        [Alias("InputFormat")]
+        [SecurityDescriptorFormat]$From,
 
         [Parameter(Mandatory = $true)]
-        [Alias("To")]
-        [SecurityDescriptorFormat]$OutputFormat
+        [Alias("OutputFormat")]
+        [SecurityDescriptorFormat]$To
     )
 
     process {
-        $rawDescriptor = ConvertTo-SecurityDescriptor $InputDescriptor -InputFormat $InputFormat
-        return ConvertFrom-SecurityDescriptor $rawDescriptor -OutputFormat $OutputFormat
+        $rawDescriptor = ConvertTo-SecurityDescriptor $InputDescriptor -InputFormat $From
+        return ConvertFrom-SecurityDescriptor $rawDescriptor -OutputFormat $To
     }
 }

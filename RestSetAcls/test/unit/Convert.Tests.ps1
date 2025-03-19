@@ -66,12 +66,12 @@ Describe "Convert-SecurityDescriptor" {
         }
     }
 
-    It "Should throw an error for invalid InputFormat" {
-        { Convert-SecurityDescriptor $sddl -InputFormat "InvalidFormat" -OutputFormat Sddl } | Should -Throw
+    It "Should throw an error for invalid -From input format" {
+        { Convert-SecurityDescriptor $sddl -From "InvalidFormat" -To Sddl } | Should -Throw
     }
 
-    It "Should throw an error for invalid OutputFormat" {
-        { Convert-SecurityDescriptor $sddl -InputFormat Sddl -OutputFormat "InvalidFormat" } | Should -Throw
+    It "Should throw an error for invalid -To output format" {
+        { Convert-SecurityDescriptor $sddl -From Sddl -To "InvalidFormat" } | Should -Throw
     }
 
     It "Should process multiple inputs from pipeline" {
@@ -83,7 +83,7 @@ Describe "Convert-SecurityDescriptor" {
         $results.Count | Should -Be 2
     }
 
-    It "Should throw an error when -InputObject type doesn't match -InputFormat" {
+    It "Should throw an error when -InputDescriptor type doesn't match -From type" {
         { Convert-SecurityDescriptor $sddl -From Binary -To Raw } | Should -Throw
         { Convert-SecurityDescriptor $sddl -From Base64 -To Raw } | Should -Throw
         { Convert-SecurityDescriptor $sddl -From Raw -To Raw } | Should -Throw
@@ -310,7 +310,7 @@ Describe "ConvertTo-SecurityDescriptor" {
                 0x20, 0x02, 0x00, 0x00  # SubAuthority 1 (544)
             )
 
-            $descriptor = ConvertTo-SecurityDescriptor $binary -From Binary
+            $descriptor = ConvertTo-SecurityDescriptor $binary -InputFormat Binary
             $descriptor.Owner | Should -Be "S-1-5-32-544"
             $descriptor.Group | Should -Be "S-1-5-32-544"
             $descriptor.ControlFlags | Should -Be (
@@ -373,7 +373,7 @@ Describe "ConvertTo-SecurityDescriptor" {
                 0x12, 0x00, 0x00, 0x00 # ACE 1 SID SubAuthority 0 (18)
             )
 
-            $descriptor = ConvertTo-SecurityDescriptor $binary -From Binary
+            $descriptor = ConvertTo-SecurityDescriptor $binary -InputFormat Binary
             $descriptor.Owner | Should -Be "S-1-5-32-544"
             $descriptor.Group | Should -Be "S-1-5-32-544"
             $descriptor.ControlFlags | Should -Be (
@@ -509,7 +509,7 @@ Describe "ConvertTo-SecurityDescriptor" {
             )
 
             $base64 = [System.Convert]::ToBase64String($binary)
-            $descriptor = ConvertTo-SecurityDescriptor $base64 -From Base64
+            $descriptor = ConvertTo-SecurityDescriptor $base64 -InputFormat Base64
             $descriptor.Owner | Should -Be "S-1-5-32-544"
             $descriptor.Group | Should -Be "S-1-5-32-544"
             $descriptor.ControlFlags | Should -Be (
@@ -538,7 +538,7 @@ Describe "ConvertFrom-SecurityDescriptor" {
         $sddl = "O:SYG:SYD:AI(A;;0x1301bf;;;WD)(A;ID;0x1201bf;;;WD)(A;;0x1301ff;;;AU)"
         $base64 = ConvertTo-SecurityDescriptor $sddl | ConvertFrom-SecurityDescriptor -OutputFormat Base64
         { [System.Convert]::FromBase64String($base64) } | Should -Not -Throw
-        $newSddl = ConvertTo-SecurityDescriptor $base64 -From Base64 | ConvertFrom-SecurityDescriptor -OutputFormat Sddl
+        $newSddl = ConvertTo-SecurityDescriptor $base64 -InputFormat Base64 | ConvertFrom-SecurityDescriptor -OutputFormat Sddl
         $newSddl | Should -Be $sddl
     }
 
