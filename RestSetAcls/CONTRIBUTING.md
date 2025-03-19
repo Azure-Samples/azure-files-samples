@@ -136,8 +136,8 @@ Unpublish-Local
     icacls X:\ /t /grant "Everyone:(OI)(CI)F"
     ```
 
-1. Compare the speed of this operation to the `Set-AzureFilesAclRecursive` function
+1. Compare the speed of this operation to the `Set-AzFileAclRecursive` function
 
     ```powershell
-    Set-AzureFilesAclRecursive -Context $context -FileShareName $FileShareName -FilePath "/" -SddlPermission $sddl
+    Set-AzFileAclRecursive -Context $context -FileShareName $FileShareName -FilePath "/" -SddlPermission $sddl
     ```

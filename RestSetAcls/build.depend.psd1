@@ -9,5 +9,6 @@
 
     Pester           = 'latest'
     PSScriptAnalyzer = 'latest'
+    platyPS          = 'latest'
     'Az.Storage'     = '8.1.0'
 }
