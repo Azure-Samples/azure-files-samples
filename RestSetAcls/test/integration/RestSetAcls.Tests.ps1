@@ -86,7 +86,7 @@ AfterAll {
 
 Describe "RestSetAcls" {
     Describe "Get-AzFileAclKey" {
-        Context "ParameterSet File" {
+        Context "-File" {
             It "Should retrieve the permission key of a file" {
                 $fileName = "$(New-RandomString -length 8).txt"
                 $fileInfo = New-File $fileName
@@ -114,7 +114,7 @@ Describe "RestSetAcls" {
             }
         }
 
-        Context "ParameterSet FilePath" {
+        Context "-FileShareName -FilePath" {
             It "Should retrieve the permission key of a file" {
                 $fileName = "$(New-RandomString -length 8).txt"
                 $fileInfo = New-File $fileName
@@ -142,7 +142,7 @@ Describe "RestSetAcls" {
     }
 
     Describe "Get-AzFileAcl" {
-        Context "ParameterSet Share" {
+        Context "-Share" {
             It "Should retrieve the permission" {
                 $fileName = "$(New-RandomString -length 8).txt"
                 $fileInfo = New-File $fileName
@@ -156,7 +156,7 @@ Describe "RestSetAcls" {
             }
         }
 
-        Context "ParameterSet FileShareName" {
+        Context "-Context -FileShareName" {
             It "Should retrieve the permission" {
                 $fileName = "$(New-RandomString -length 8).txt"
                 $fileInfo = New-File $fileName
@@ -172,7 +172,7 @@ Describe "RestSetAcls" {
     }
 
     Describe "New-AzFileAcl" {
-        Context "ParameterSet Sddl" {
+        Context "-Context -FileShareName -Sddl" {
             It "Should create a new permission key" {
                 $sddl = "O:SYG:SYD:P(A;;FA;;;BA)"
 
@@ -188,7 +188,7 @@ Describe "RestSetAcls" {
     }
 
     Describe "Set-AzFileAclKey" {
-        Context "ParameterSet File" {
+        Context "-File" {
             It "Should set the permission key on a file" {
                 $fileName = "$(New-RandomString -length 8).txt"
                 $fileInfo = New-File $fileName
@@ -238,7 +238,7 @@ Describe "RestSetAcls" {
     }
 
     Describe "Set-AzFileAcl" {
-        Context "ParameterSet Sddl" {
+        Context "-Sddl" {
             It "Should set a small permission on a file" {
                 $fileName = "$(New-RandomString -length 8).txt"
                 New-File $fileName                
