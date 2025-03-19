@@ -170,6 +170,20 @@ function Write-SddlWarning {
     return Ask ""
 }
 
+function Get-ShareName {
+    param (
+        [Parameter(Mandatory = $true)]
+        [Microsoft.WindowsAzure.Commands.Common.Storage.ResourceModel.AzureStorageBase]$File
+    )
+
+    if ($File.GetType().Name -eq "AzureStorageFileDirectory") {
+        return $File.ShareDirectoryClient.ShareName
+    }
+    else {
+        return $File.ShareFileClient.ShareName
+    }
+}
+
 function Get-AzureFilesRecursive {
     param (
         [Parameter(Mandatory = $true)]
@@ -430,7 +444,8 @@ function Set-AzFileAcl {
         }
         else {
             # Create a new permission key
-            $filePermissionKey = New-AzFileAcl -Context $File.Context -FileShareName $File.ShareFileClient.ShareName -Sddl $Sddl -WhatIf:$WhatIfPreference
+            $shareName = Get-ShareName -File $File
+            $filePermissionKey = New-AzFileAcl -Context $File.Context -FileShareName $shareName -Sddl $Sddl -WhatIf:$WhatIfPreference
             if ([string]::IsNullOrEmpty($filePermissionKey)) {
                 Write-Error "Failed to create file permission" -ErrorAction Stop
             }
