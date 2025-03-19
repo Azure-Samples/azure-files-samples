@@ -96,10 +96,5 @@ function Test-All {
 
 function Build-Docs {
     Import-Module -Name $PSScriptRoot\RestSetAcls\RestSetAcls.psd1 -Force
-    New-MarkdownHelp -Module RestSetAcls -OutputFolder $PSScriptRoot\docs
-}
-
-function Update-Docs {
-    Import-Module -Name $PSScriptRoot\RestSetAcls\RestSetAcls.psd1 -Force
-    Update-MarkdownHelp $PSScriptRoot\docs
+    New-MarkdownHelp -Module RestSetAcls -OutputFolder $PSScriptRoot\docs -Force
 }
