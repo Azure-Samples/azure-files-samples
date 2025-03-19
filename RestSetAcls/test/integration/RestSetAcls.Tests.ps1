@@ -10,6 +10,7 @@ param (
 )
 
 BeforeDiscovery {
+    . $PSScriptRoot/../../RestSetAcls/Enumerations.ps1
     . $PSScriptRoot/../../RestSetAcls/SddlUtils.ps1
 }
 
@@ -302,7 +303,7 @@ Describe "RestSetAcls" {
                 }
                 $file = Get-File $name
 
-                $base64 = ConvertTo-SecurityDescriptor -Sddl $sddl | ConvertFrom-SecurityDescriptor -OutputFormat Base64
+                $base64 = Convert-SecurityDescriptor $sddl -From Sddl -To Base64
                 $returnedKey = Set-AzFileAcl -File $file -Base64 $base64
                 
                 $returnedKey | Should -Not -BeNullOrEmpty

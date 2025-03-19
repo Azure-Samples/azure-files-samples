@@ -1,3 +1,4 @@
+. $PSScriptRoot/Convert.ps1
 . $PSScriptRoot/SddlUtils.ps1
 . $PSScriptRoot/PrintUtils.ps1
 
@@ -546,7 +547,7 @@ function Get-AzFileAcl {
                         return $base64
                     }
                     "Raw" {
-                        return ConvertTo-SecurityDescriptor -Base64 $base64
+                        return ConvertTo-SecurityDescriptor $base64 -InputFormat Base64
                     }
                     Default {
                         throw "Invalid output format '$OutputFormat'."
@@ -607,7 +608,7 @@ function Set-AzureFilesAclRecursive {
 
     # Try to parse SDDL permission, check for common issues
     try {
-        $securityDescriptor = ConvertTo-SecurityDescriptor -Sddl $SddlPermission
+        $securityDescriptor = ConvertTo-SecurityDescriptor $SddlPermission -InputFormat Sddl
     }
     catch {
         Write-Failure "SDDL permission is invalid"
