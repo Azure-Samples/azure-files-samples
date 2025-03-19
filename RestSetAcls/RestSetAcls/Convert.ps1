@@ -147,6 +147,42 @@ function ConvertFrom-SecurityDescriptor {
 }
 
 function Convert-SecurityDescriptor {
+<#
+    .SYNOPSIS
+        Converts a security descriptor between different formats (Sddl, Base64, Binary, Raw).
+
+    .DESCRIPTION
+        This script provides functionality to convert a security descriptor from one format to another. 
+        Supported formats include:
+        - SDDL (Security Descriptor Definition Language)
+        - Base64
+        - Binary
+        - Raw
+
+        Security descriptors are used to define access control and permissions for resources. 
+        This script is useful for scenarios where you need to translate security descriptors 
+        into a format compatible with a specific system or API.
+
+    .PARAMETER InputDescriptor
+        The security descriptor value in the format specified by the InputFormat parameter.
+    
+
+    .PARAMETER From
+        Specifies the format of the input security descriptor. 
+        Accepted values: Sddl, Base64, Binary, Raw.
+
+    .PARAMETER To
+        Specifies the desired format for the output security descriptor. 
+        Accepted values: Sddl, Base64, Binary, Raw.
+    
+    .EXAMPLE
+        # Convert a security descriptor from SDDL to Base64
+        Convert-SecurityDescriptor "O:BAG:BAD:(A;;FA;;;SY)" -From Sddl -To Base64
+
+    .LINK
+        https://learn.microsoft.com/en-us/windows/win32/secauthz/security-descriptor-definition-language
+
+#>
     [CmdletBinding()]
     [OutputType([System.Security.AccessControl.RawSecurityDescriptor], [string], [byte[]])]
     param (
