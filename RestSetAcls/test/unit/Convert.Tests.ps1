@@ -1,4 +1,5 @@
 BeforeAll {
+    . $PSScriptRoot/../../RestSetAcls/Enumerations.ps1
     . $PSScriptRoot/../../RestSetAcls/Convert.ps1
     . $PSScriptRoot/../../RestSetAcls/SddlUtils.ps1
 }
