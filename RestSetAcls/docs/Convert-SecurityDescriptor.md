@@ -1,8 +1,7 @@
 ---
 external help file: RestSetAcls-help.xml
 Module Name: RestSetAcls
-online version: https://learn.microsoft.com/en-us/windows/win32/secauthz/security-descriptor-string-format
-https://learn.microsoft.com/en-us/powershell/scripting/overview
+online version:
 schema: 2.0.0
 ---
 
@@ -21,7 +20,7 @@ Convert-SecurityDescriptor [-InputDescriptor] <Object> -From <SecurityDescriptor
 ## DESCRIPTION
 This script provides functionality to convert a security descriptor from one format to another. 
 Supported formats include:
-- \[SDDL (Security Descriptor Definition Language)\](https://learn.microsoft.com/en-us/windows/win32/secauthz/security-descriptor-definition-language)
+- SDDL (Security Descriptor Definition Language)
 - Base64
 - Binary
 - Raw
@@ -35,19 +34,13 @@ into a format compatible with a specific system or API.
 ### EXAMPLE 1
 ```
 # Convert a security descriptor from SDDL to Base64
-Convert-SecurityDescriptor -InputFormat Sddl -OutputFormat Base64 -InputValue "O:BAG:BAD:(A;;FA;;;SY)"
-```
-
-### EXAMPLE 2
-```
-# Convert a security descriptor from Binary to SDDL and save to a file
-Convert-SecurityDescriptor -InputFormat Binary -OutputFormat Sddl -InputValue "010004..." -OutputFile "C:\Output.txt"
+Convert-SecurityDescriptor "O:BAG:BAD:(A;;FA;;;SY)" -From Sddl -To Base64
 ```
 
 ## PARAMETERS
 
 ### -InputDescriptor
-{{ Fill InputDescriptor Description }}
+The security descriptor value in the format specified by the \`From\` parameter.
 
 ```yaml
 Type: Object
@@ -62,7 +55,8 @@ Accept wildcard characters: False
 ```
 
 ### -From
-{{ Fill From Description }}
+Specifies the format of the input security descriptor. 
+Accepted values: Sddl, Base64, Binary, Raw.
 
 ```yaml
 Type: SecurityDescriptorFormat
@@ -78,7 +72,8 @@ Accept wildcard characters: False
 ```
 
 ### -To
-{{ Fill To Description }}
+Specifies the desired format for the output security descriptor. 
+Accepted values: Sddl, Base64, Binary, Raw.
 
 ```yaml
 Type: SecurityDescriptorFormat
@@ -119,22 +114,5 @@ This cmdlet supports the common parameters: -Debug, -ErrorAction, -ErrorVariable
 ### System.String
 ### System.Byte[]
 ## NOTES
-Author: \[Your Name\]
-Date: \[Date\]
-Version: 1.0
-
-This script is part of the Azure Files Samples and is located at:
-/q:/Azure/Storage/azure-files-samples/RestSetAcls/RestSetAcls/Convert.ps1
-
-Ensure you have the necessary permissions to access and modify security descriptors 
-before using this script.
 
 ## RELATED LINKS
-
-[https://learn.microsoft.com/en-us/windows/win32/secauthz/security-descriptor-string-format
-https://learn.microsoft.com/en-us/powershell/scripting/overview](https://learn.microsoft.com/en-us/windows/win32/secauthz/security-descriptor-string-format
-https://learn.microsoft.com/en-us/powershell/scripting/overview)
-
-[https://learn.microsoft.com/en-us/windows/win32/secauthz/security-descriptor-string-format
-https://learn.microsoft.com/en-us/powershell/scripting/overview]()
-

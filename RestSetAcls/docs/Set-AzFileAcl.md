@@ -1,103 +1,53 @@
 ---
 external help file: RestSetAcls-help.xml
 Module Name: RestSetAcls
-online version: https://learn.microsoft.com/en-us/windows/win32/secauthz/security-descriptor-string-format
-https://learn.microsoft.com/en-us/powershell/scripting/overview
+online version:
 schema: 2.0.0
 ---
 
 # Set-AzFileAcl
 
 ## SYNOPSIS
-{{ Fill in the Synopsis }}
+Sets the Access Control List (ACL) for a specified Azure file or directory.
 
 ## SYNTAX
 
-### Sddl
 ```
-Set-AzFileAcl -File <AzureStorageBase> -Sddl <String> [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm]
- [<CommonParameters>]
-```
-
-### Binary
-```
-Set-AzFileAcl -File <AzureStorageBase> -Binary <Byte[]> [-ProgressAction <ActionPreference>] [-WhatIf]
- [-Confirm] [<CommonParameters>]
-```
-
-### Base64
-```
-Set-AzFileAcl -File <AzureStorageBase> -Base64 <String> [-ProgressAction <ActionPreference>] [-WhatIf]
- [-Confirm] [<CommonParameters>]
-```
-
-### RawSecurityDescriptor
-```
-Set-AzFileAcl -File <AzureStorageBase> -SecurityDescriptor <RawSecurityDescriptor>
+Set-AzFileAcl [-File] <AzureStorageBase> [-Acl] <Object> [[-AclFormat] <SecurityDescriptorFormat>]
  [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
 ```
 
 ## DESCRIPTION
-{{ Fill in the Description }}
+The \`Set-AzFileAcl\` function applies an ACL to a specified Azure file or directory. 
+It supports both SDDL (Security Descriptor Definition Language) and binary ACL formats. 
+The function determines the ACL format if not explicitly provided and applies the ACL directly 
+or via a permission key, depending on the size of the ACL.
 
 ## EXAMPLES
 
-### Example 1
-```powershell
-PS C:\> {{ Add example code here }}
+### EXAMPLE 1
+```
+$context = Get-AzStorageContext -StorageAccountName "mystorageaccount" -StorageAccountKey "mykey"
+PS> $file = Get-AzStorageFile -Context $context -ShareName "myfileshare" -Path "myfolder/myfile.txt"
+PS> Set-AzFileAcl -File $file -Acl "O:BAG:SYD:(A;;FA;;;SY)" -AclFormat Sddl
 ```
 
-{{ Add example description here }}
+Sets the specified SDDL ACL on the given file.
+
+### EXAMPLE 2
+```
+$context = Get-AzStorageContext -StorageAccountName "mystorageaccount" -StorageAccountKey "mykey"
+PS> $file = Get-AzStorageFile -Context $context -ShareName "myfileshare" -Path "myfolder/myfile.txt"
+PS> $binaryAcl = [byte[]](0x01, 0x02, 0x03, 0x04, ...)
+PS> Set-AzFileAcl -File $file -Acl $binaryAcl -AclFormat Binary
+```
+
+Sets the specified binary ACL on the given file.
 
 ## PARAMETERS
 
-### -Base64
-Security descriptor in base64-encoded self-relative binary format.
-
-```yaml
-Type: String
-Parameter Sets: Base64
-Aliases:
-
-Required: True
-Position: Named
-Default value: None
-Accept pipeline input: False
-Accept wildcard characters: False
-```
-
-### -Binary
-Security descriptor in self-relative binary format.
-
-```yaml
-Type: Byte[]
-Parameter Sets: Binary
-Aliases:
-
-Required: True
-Position: Named
-Default value: None
-Accept pipeline input: False
-Accept wildcard characters: False
-```
-
-### -Confirm
-Prompts you for confirmation before running the cmdlet.
-
-```yaml
-Type: SwitchParameter
-Parameter Sets: (All)
-Aliases: cf
-
-Required: False
-Position: Named
-Default value: None
-Accept pipeline input: False
-Accept wildcard characters: False
-```
-
 ### -File
-{{ Fill File Description }}
+Specifies the Azure storage file or directory on which to set the ACL.
 
 ```yaml
 Type: AzureStorageBase
@@ -105,39 +55,41 @@ Parameter Sets: (All)
 Aliases:
 
 Required: True
-Position: Named
+Position: 1
 Default value: None
 Accept pipeline input: True (ByValue)
 Accept wildcard characters: False
 ```
 
-### -Sddl
-File permission in the Security Descriptor Definition Language (SDDL).
-SDDL must have an owner, group, and discretionary access control list (DACL).
-The provided SDDL string format of the security descriptor should not have domain relative identifier (like 'DU', 'DA', 'DD' etc) in it.
+### -Acl
+Specifies the ACL to be applied.
+This can be in SDDL format, base64-encoded binary, binary array, or RawSecurityDescriptor.
 
 ```yaml
-Type: String
-Parameter Sets: Sddl
+Type: Object
+Parameter Sets: (All)
 Aliases:
 
 Required: True
-Position: Named
+Position: 2
 Default value: None
 Accept pipeline input: False
 Accept wildcard characters: False
 ```
 
-### -SecurityDescriptor
-Security descriptor
+### -AclFormat
+Specifies the format of the ACL.
+If not provided, the function will infer the format automatically. 
+Supported formats include SDDL, Base64, and Binary.
 
 ```yaml
-Type: RawSecurityDescriptor
-Parameter Sets: RawSecurityDescriptor
+Type: SecurityDescriptorFormat
+Parameter Sets: (All)
 Aliases:
+Accepted values: Sddl, Binary, Base64, Raw
 
-Required: True
-Position: Named
+Required: False
+Position: 3
 Default value: None
 Accept pipeline input: False
 Accept wildcard characters: False
@@ -151,6 +103,21 @@ The cmdlet is not run.
 Type: SwitchParameter
 Parameter Sets: (All)
 Aliases: wi
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -Confirm
+Prompts you for confirmation before running the cmdlet.
+
+```yaml
+Type: SwitchParameter
+Parameter Sets: (All)
+Aliases: cf
 
 Required: False
 Position: Named
@@ -179,12 +146,10 @@ This cmdlet supports the common parameters: -Debug, -ErrorAction, -ErrorVariable
 
 ## INPUTS
 
-### Microsoft.WindowsAzure.Commands.Common.Storage.ResourceModel.AzureStorageBase
-
 ## OUTPUTS
 
 ### System.String
-
+### Returns the file permission key associated with the applied ACL.
 ## NOTES
 
 ## RELATED LINKS

@@ -1,15 +1,14 @@
 ---
 external help file: RestSetAcls-help.xml
 Module Name: RestSetAcls
-online version: https://learn.microsoft.com/en-us/windows/win32/secauthz/security-descriptor-string-format
-https://learn.microsoft.com/en-us/powershell/scripting/overview
+online version:
 schema: 2.0.0
 ---
 
 # Set-AzFileAclKey
 
 ## SYNOPSIS
-{{ Fill in the Synopsis }}
+Sets the Azure File ACL key on a specified file or directory.
 
 ## SYNTAX
 
@@ -26,28 +25,31 @@ Set-AzFileAclKey -Context <IStorageContext> -FileShareName <String> -FilePath <S
 ```
 
 ## DESCRIPTION
-{{ Fill in the Description }}
+The \`Set-AzFileAclKey\` takes an ACL key, and sets it on a specified file or directory in Azure Files.
 
 ## EXAMPLES
 
-### Example 1
-```powershell
-PS C:\> {{ Add example code here }}
+### EXAMPLE 1
+```
+$context = Get-AzStorageContext -StorageAccountName "mystorageaccount" -StorageAccountKey "mykey"
+PS> $key = New-AzFileAcl -Context $context -FileShareName "myfileshare" -Acl "O:BAG:SYD:(A;;FA;;;SY)" -AclFormat Sddl
+PS> $file = Get-AzStorageFile -Context $context -ShareName "myfileshare" -Path "myfolder/myfile.txt"
+PS> Set-AzFileAclKey -File $file -Key $key
 ```
 
-{{ Add example description here }}
+Sets the specified ACL key on the given file.
 
 ## PARAMETERS
 
-### -Confirm
-Prompts you for confirmation before running the cmdlet.
+### -File
+Specifies the Azure storage file or directory on which to set the ACL key.
 
 ```yaml
-Type: SwitchParameter
-Parameter Sets: (All)
-Aliases: cf
+Type: AzureStorageBase
+Parameter Sets: File
+Aliases:
 
-Required: False
+Required: True
 Position: Named
 Default value: None
 Accept pipeline input: False
@@ -55,7 +57,8 @@ Accept wildcard characters: False
 ```
 
 ### -Context
-Azure storage context
+Specifies the Azure storage context.
+This is required to authenticate and interact with the Azure storage account.
 
 ```yaml
 Type: IStorageContext
@@ -69,12 +72,12 @@ Accept pipeline input: False
 Accept wildcard characters: False
 ```
 
-### -File
-{{ Fill File Description }}
+### -FileShareName
+Specifies the name of the Azure file share where the ACL will be applied.
 
 ```yaml
-Type: AzureStorageBase
-Parameter Sets: File
+Type: String
+Parameter Sets: FilePath
 Aliases:
 
 Required: True
@@ -99,23 +102,9 @@ Accept pipeline input: False
 Accept wildcard characters: False
 ```
 
-### -FileShareName
-Name of the file share
-
-```yaml
-Type: String
-Parameter Sets: FilePath
-Aliases:
-
-Required: True
-Position: Named
-Default value: None
-Accept pipeline input: False
-Accept wildcard characters: False
-```
-
 ### -Key
-{{ Fill Key Description }}
+Specifies the ACL key to be applied.
+This is the key returned from the \`New-AzFileAcl\` function.
 
 ```yaml
 Type: String
@@ -145,6 +134,21 @@ Accept pipeline input: False
 Accept wildcard characters: False
 ```
 
+### -Confirm
+Prompts you for confirmation before running the cmdlet.
+
+```yaml
+Type: SwitchParameter
+Parameter Sets: (All)
+Aliases: cf
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
 ### -ProgressAction
 {{ Fill ProgressAction Description }}
 
@@ -165,12 +169,15 @@ This cmdlet supports the common parameters: -Debug, -ErrorAction, -ErrorVariable
 
 ## INPUTS
 
-### System.String
-
 ## OUTPUTS
 
 ### System.String
-
+### Returns the file permission key associated with the created ACL.
+### Note that this may differ from the key that was passed in, as the permission applied to the file may be different,
+### due to inheritance rules defined on the parent directory.
 ## NOTES
 
 ## RELATED LINKS
+
+[New-AzFileAcl]()
+

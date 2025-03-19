@@ -1,103 +1,53 @@
 ---
 external help file: RestSetAcls-help.xml
 Module Name: RestSetAcls
-online version: https://learn.microsoft.com/en-us/windows/win32/secauthz/security-descriptor-string-format
-https://learn.microsoft.com/en-us/powershell/scripting/overview
+online version:
 schema: 2.0.0
 ---
 
 # New-AzFileAcl
 
 ## SYNOPSIS
-{{ Fill in the Synopsis }}
+Creates a new Azure File ACL (Access Control List) for a specified file share.
 
 ## SYNTAX
 
-### Sddl
 ```
-New-AzFileAcl -Context <IStorageContext> -FileShareName <String> -Sddl <String>
- [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
-```
-
-### Binary
-```
-New-AzFileAcl -Context <IStorageContext> -FileShareName <String> -Binary <Byte[]>
- [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
-```
-
-### Base64
-```
-New-AzFileAcl -Context <IStorageContext> -FileShareName <String> -Base64 <String>
- [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
-```
-
-### RawSecurityDescriptor
-```
-New-AzFileAcl -Context <IStorageContext> -FileShareName <String> -SecurityDescriptor <RawSecurityDescriptor>
- [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
+New-AzFileAcl [-Context] <IStorageContext> [-FileShareName] <String> [-Acl] <Object>
+ [[-AclFormat] <SecurityDescriptorFormat>] [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm]
+ [<CommonParameters>]
 ```
 
 ## DESCRIPTION
-{{ Fill in the Description }}
+The \`New-AzFileAcl\` function creates a new ACL for an Azure file share.
+It supports both SDDL (Security Descriptor Definition Language) and binary ACL formats.
+The function determines the ACL format if not explicitly provided and uploads the ACL to the specified file share.
 
 ## EXAMPLES
 
-### Example 1
-```powershell
-PS C:\> {{ Add example code here }}
+### EXAMPLE 1
+```
+$context = Get-AzStorageContext -StorageAccountName "mystorageaccount" -StorageAccountKey "mykey"
+PS> $acl = "O:BAG:SYD:(A;;FA;;;SY)"
+PS> New-AzFileAcl -Context $context -FileShareName "myfileshare" -Acl $acl -AclFormat Sddl
 ```
 
-{{ Add example description here }}
+Creates a new ACL in SDDL format for the specified file share and returns the file permission key.
+
+### EXAMPLE 2
+```
+$context = Get-AzStorageContext -StorageAccountName "mystorageaccount" -StorageAccountKey "mykey"
+PS> $acl = "<base64-encoded ACL>"
+PS> New-AzFileAcl -Context $context -FileShareName "myfileshare" -Acl $acl  -AclFormat Base64
+```
+
+Creates a new ACL for the specified file share, inferring the ACL format automatically, and returns the file permission key.
 
 ## PARAMETERS
 
-### -Base64
-Security descriptor in base64-encoded self-relative binary format.
-
-```yaml
-Type: String
-Parameter Sets: Base64
-Aliases:
-
-Required: True
-Position: Named
-Default value: None
-Accept pipeline input: False
-Accept wildcard characters: False
-```
-
-### -Binary
-Security descriptor in self-relative binary format.
-
-```yaml
-Type: Byte[]
-Parameter Sets: Binary
-Aliases:
-
-Required: True
-Position: Named
-Default value: None
-Accept pipeline input: False
-Accept wildcard characters: False
-```
-
-### -Confirm
-Prompts you for confirmation before running the cmdlet.
-
-```yaml
-Type: SwitchParameter
-Parameter Sets: (All)
-Aliases: cf
-
-Required: False
-Position: Named
-Default value: None
-Accept pipeline input: False
-Accept wildcard characters: False
-```
-
 ### -Context
-Azure storage context
+Specifies the Azure storage context.
+This is required to authenticate and interact with the Azure storage account.
 
 ```yaml
 Type: IStorageContext
@@ -105,14 +55,14 @@ Parameter Sets: (All)
 Aliases:
 
 Required: True
-Position: Named
+Position: 1
 Default value: None
 Accept pipeline input: False
 Accept wildcard characters: False
 ```
 
 ### -FileShareName
-Name of the file share
+Specifies the name of the Azure file share where the ACL will be applied.
 
 ```yaml
 Type: String
@@ -120,39 +70,40 @@ Parameter Sets: (All)
 Aliases:
 
 Required: True
-Position: Named
+Position: 2
 Default value: None
 Accept pipeline input: False
 Accept wildcard characters: False
 ```
 
-### -Sddl
-File permission in the Security Descriptor Definition Language (SDDL).
-SDDL must have an owner, group, and discretionary access control list (DACL).
-The provided SDDL string format of the security descriptor should not have domain relative identifier (like 'DU', 'DA', 'DD' etc) in it.
+### -Acl
+Specifies the ACL to be applied.
+This can be in SDDL format, base64-encoded binary, binary array, or RawSecurityDescriptor.
 
 ```yaml
-Type: String
-Parameter Sets: Sddl
+Type: Object
+Parameter Sets: (All)
 Aliases:
 
 Required: True
-Position: Named
+Position: 3
 Default value: None
 Accept pipeline input: False
 Accept wildcard characters: False
 ```
 
-### -SecurityDescriptor
-Security descriptor
+### -AclFormat
+Specifies the format of the ACL.
+If not provided, the function will infer the format automatically.
 
 ```yaml
-Type: RawSecurityDescriptor
-Parameter Sets: RawSecurityDescriptor
+Type: SecurityDescriptorFormat
+Parameter Sets: (All)
 Aliases:
+Accepted values: Sddl, Binary, Base64, Raw
 
-Required: True
-Position: Named
+Required: False
+Position: 4
 Default value: None
 Accept pipeline input: False
 Accept wildcard characters: False
@@ -166,6 +117,21 @@ The cmdlet is not run.
 Type: SwitchParameter
 Parameter Sets: (All)
 Aliases: wi
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -Confirm
+Prompts you for confirmation before running the cmdlet.
+
+```yaml
+Type: SwitchParameter
+Parameter Sets: (All)
+Aliases: cf
 
 Required: False
 Position: Named
@@ -194,12 +160,13 @@ This cmdlet supports the common parameters: -Debug, -ErrorAction, -ErrorVariable
 
 ## INPUTS
 
-### None
-
 ## OUTPUTS
 
 ### System.String
-
+### Returns the file permission key associated with the created ACL.
 ## NOTES
 
 ## RELATED LINKS
+
+[Set-AzFileAclKey]()
+

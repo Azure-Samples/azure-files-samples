@@ -1,8 +1,7 @@
 ---
 external help file: RestSetAcls-help.xml
 Module Name: RestSetAcls
-online version: https://learn.microsoft.com/en-us/windows/win32/secauthz/security-descriptor-string-format
-https://learn.microsoft.com/en-us/powershell/scripting/overview
+online version:
 schema: 2.0.0
 ---
 

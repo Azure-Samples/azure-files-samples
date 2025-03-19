@@ -1,15 +1,14 @@
 ---
 external help file: RestSetAcls-help.xml
 Module Name: RestSetAcls
-online version: https://learn.microsoft.com/en-us/windows/win32/secauthz/security-descriptor-string-format
-https://learn.microsoft.com/en-us/powershell/scripting/overview
+online version:
 schema: 2.0.0
 ---
 
 # Get-AzFileAcl
 
 ## SYNOPSIS
-{{ Fill in the Synopsis }}
+Retrieves the ACL (Access Control List) for a specified file or directory in an Azure file share.
 
 ## SYNTAX
 
@@ -27,28 +26,52 @@ Get-AzFileAcl -Key <String> -Context <IStorageContext> -FileShareName <String>
 ```
 
 ## DESCRIPTION
-{{ Fill in the Description }}
+The \`Get-AzFileAcl\` function retrieves the ACL for a specified file or directory in an Azure file share.
+It supports retrieving the ACL in various formats, including SDDL (Security Descriptor Definition Language)
+or binary formats.
+The function supports retrieving the ACL from a file share specified either directly or
+by its name and context.
 
 ## EXAMPLES
 
-### Example 1
-```powershell
-PS C:\> {{ Add example code here }}
+### EXAMPLE 1
+```
+$context = Get-AzStorageContext -StorageAccountName "mystorageaccount" -StorageAccountKey "mykey"
+PS> $file = Get-AzStorageFile -Context $context -ShareName "myfileshare" -Path "myfolder/myfile.txt"
+PS> $key = Get-AzFileAclKey -File $file
+PS> Get-AzFileAcl -Key $key -Share $file.Share -OutputFormat Sddl
 ```
 
-{{ Add example description here }}
+Retrieves the SDDL ACL for the specified file using the permission key.
 
 ## PARAMETERS
 
-### -Confirm
-Prompts you for confirmation before running the cmdlet.
+### -Key
+Specifies the ACL key to be retrieved.
+This is the key returned from the \`New-AzFileAcl\`, \`Set-AzFileAclKey\`,
+or \`Get-AzFileAclKey\` functions.
 
 ```yaml
-Type: SwitchParameter
+Type: String
 Parameter Sets: (All)
-Aliases: cf
+Aliases:
 
-Required: False
+Required: True
+Position: Named
+Default value: None
+Accept pipeline input: True (ByValue)
+Accept wildcard characters: False
+```
+
+### -Share
+Specifies the Azure storage file share from which to retrieve the ACL key.
+
+```yaml
+Type: AzureStorageFileShare
+Parameter Sets: Share
+Aliases:
+
+Required: True
 Position: Named
 Default value: None
 Accept pipeline input: False
@@ -56,7 +79,8 @@ Accept wildcard characters: False
 ```
 
 ### -Context
-Azure storage context
+Specifies the Azure storage context.
+This is required to authenticate and interact with the Azure storage account.
 
 ```yaml
 Type: IStorageContext
@@ -71,7 +95,7 @@ Accept wildcard characters: False
 ```
 
 ### -FileShareName
-Name of the file share
+Specifies the name of the Azure file share from which to retrieve the ACL key.
 
 ```yaml
 Type: String
@@ -85,23 +109,9 @@ Accept pipeline input: False
 Accept wildcard characters: False
 ```
 
-### -Key
-{{ Fill Key Description }}
-
-```yaml
-Type: String
-Parameter Sets: (All)
-Aliases:
-
-Required: True
-Position: Named
-Default value: None
-Accept pipeline input: True (ByValue)
-Accept wildcard characters: False
-```
-
 ### -OutputFormat
-Output format of the security descriptor
+Specifies the output format of the security descriptor.
+Supported formats include SDDL, Base64, and Binary.
 
 ```yaml
 Type: SecurityDescriptorFormat
@@ -111,22 +121,7 @@ Accepted values: Sddl, Binary, Base64, Raw
 
 Required: False
 Position: Named
-Default value: None
-Accept pipeline input: False
-Accept wildcard characters: False
-```
-
-### -Share
-{{ Fill Share Description }}
-
-```yaml
-Type: AzureStorageFileShare
-Parameter Sets: Share
-Aliases:
-
-Required: True
-Position: Named
-Default value: None
+Default value: Sddl
 Accept pipeline input: False
 Accept wildcard characters: False
 ```
@@ -139,6 +134,21 @@ The cmdlet is not run.
 Type: SwitchParameter
 Parameter Sets: (All)
 Aliases: wi
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -Confirm
+Prompts you for confirmation before running the cmdlet.
+
+```yaml
+Type: SwitchParameter
+Parameter Sets: (All)
+Aliases: cf
 
 Required: False
 Position: Named
@@ -167,14 +177,17 @@ This cmdlet supports the common parameters: -Debug, -ErrorAction, -ErrorVariable
 
 ## INPUTS
 
-### System.String
-
 ## OUTPUTS
 
 ### System.String
-
-### System.Byte[]
-
+### Returns the ACL in the specified format. The default format is SDDL.
 ## NOTES
 
 ## RELATED LINKS
+
+[New-AzFileAcl]()
+
+[Set-AzFileAcl]()
+
+[Set-AzFileAclKey]()
+

@@ -164,8 +164,7 @@ function Convert-SecurityDescriptor {
         into a format compatible with a specific system or API.
 
     .PARAMETER InputDescriptor
-        The security descriptor value in the format specified by the InputFormat parameter.
-    
+        The security descriptor value in the format specified by the `From` parameter.
 
     .PARAMETER From
         Specifies the format of the input security descriptor. 
@@ -178,10 +177,6 @@ function Convert-SecurityDescriptor {
     .EXAMPLE
         # Convert a security descriptor from SDDL to Base64
         Convert-SecurityDescriptor "O:BAG:BAD:(A;;FA;;;SY)" -From Sddl -To Base64
-
-    .LINK
-        https://learn.microsoft.com/en-us/windows/win32/secauthz/security-descriptor-definition-language
-
 #>
     [CmdletBinding()]
     [OutputType([System.Security.AccessControl.RawSecurityDescriptor], [string], [byte[]])]

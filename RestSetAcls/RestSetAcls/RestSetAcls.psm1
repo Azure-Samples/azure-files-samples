@@ -276,6 +276,9 @@ function New-AzFileAcl {
     PS> New-AzFileAcl -Context $context -FileShareName "myfileshare" -Acl $acl  -AclFormat Base64
 
     Creates a new ACL for the specified file share, inferring the ACL format automatically, and returns the file permission key.
+
+    .LINK
+    Set-AzFileAclKey
 #>
     [CmdletBinding(SupportsShouldProcess = $true)]
     [OutputType([string])]
@@ -356,6 +359,9 @@ function Set-AzFileAclKey {
     PS> Set-AzFileAclKey -File $file -Key $key
 
     Sets the specified ACL key on the given file.
+
+    .LINK
+    New-AzFileAcl
 #>
     [CmdletBinding(SupportsShouldProcess = $true)]
     [OutputType([string])]
@@ -632,7 +638,11 @@ function Get-AzFileAcl {
 
     .LINK
     New-AzFileAcl
+
+    .LINK
     Set-AzFileAcl
+
+    .LINK
     Set-AzFileAclKey
 #>
     [CmdletBinding(SupportsShouldProcess = $true)]

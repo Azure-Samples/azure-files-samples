@@ -1,15 +1,14 @@
 ---
 external help file: RestSetAcls-help.xml
 Module Name: RestSetAcls
-online version: https://learn.microsoft.com/en-us/windows/win32/secauthz/security-descriptor-string-format
-https://learn.microsoft.com/en-us/powershell/scripting/overview
+online version:
 schema: 2.0.0
 ---
 
 # Get-AzFileAclKey
 
 ## SYNOPSIS
-{{ Fill in the Synopsis }}
+Retrieves the permission key from a file or directory in an Azure file share.
 
 ## SYNTAX
 
@@ -25,36 +24,27 @@ Get-AzFileAclKey -Context <IStorageContext> -FileShareName <String> -FilePath <S
 ```
 
 ## DESCRIPTION
-{{ Fill in the Description }}
+The \`Get-AzFileAclKey\` function retrieves the ACL key for a given file or directory in an Azure file share. 
+The ACL can be returned in various formats, including SDDL (Security Descriptor Definition Language) 
+or binary formats.
+The function supports retrieving the ACL from a file share specified either 
+directly or by its name and context.
 
 ## EXAMPLES
 
-### Example 1
-```powershell
-PS C:\> {{ Add example code here }}
+### EXAMPLE 1
+```
+$context = Get-AzStorageContext -StorageAccountName "mystorageaccount" -StorageAccountKey "mykey"
+PS> $file = Get-AzStorageFile -Context $context -ShareName "myfileshare" -Path "myfolder/myfile.txt"
+PS> Get-AzFileAclKey -File $file
 ```
 
-{{ Add example description here }}
+Retrieves the permission key for the specified file.
 
 ## PARAMETERS
 
-### -Context
-Azure storage context
-
-```yaml
-Type: IStorageContext
-Parameter Sets: FilePath
-Aliases:
-
-Required: True
-Position: Named
-Default value: None
-Accept pipeline input: False
-Accept wildcard characters: False
-```
-
 ### -File
-Azure storage file or directory
+Specifies the Azure storage file or directory from which to retrieve the ACL key.
 
 ```yaml
 Type: AzureStorageBase
@@ -68,8 +58,24 @@ Accept pipeline input: False
 Accept wildcard characters: False
 ```
 
-### -FilePath
-Path to the file or directory on which to set the permission key
+### -Context
+Specifies the Azure storage context.
+This is required to authenticate and interact with the Azure storage account.
+
+```yaml
+Type: IStorageContext
+Parameter Sets: FilePath
+Aliases:
+
+Required: True
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -FileShareName
+Specifies the name of the Azure file share from which to retrieve the ACL key.
 
 ```yaml
 Type: String
@@ -83,8 +89,8 @@ Accept pipeline input: False
 Accept wildcard characters: False
 ```
 
-### -FileShareName
-Name of the file share
+### -FilePath
+Specifies the path to the file or directory from which to retrieve the ACL key.
 
 ```yaml
 Type: String
@@ -118,12 +124,10 @@ This cmdlet supports the common parameters: -Debug, -ErrorAction, -ErrorVariable
 
 ## INPUTS
 
-### None
-
 ## OUTPUTS
 
 ### System.String
-
+### Returns the file permission key associated with the specified file or directory.
 ## NOTES
 
 ## RELATED LINKS
