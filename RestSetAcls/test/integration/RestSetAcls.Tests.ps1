@@ -87,7 +87,7 @@ AfterAll {
 Describe "RestSetAcls" {
     Describe "Get-AzureFilePermissionKey" {
         Context "ParameterSet File" {
-            It "Should retrieve the permission key" {
+            It "Should retrieve the permission key of a file" {
                 $fileName = "$(New-RandomString -length 8).txt"
                 $fileInfo = New-File $fileName
                 
@@ -99,10 +99,23 @@ Describe "RestSetAcls" {
                 $key | Should -Match "^[0-9]+\*[0-9]+$"
                 $key | Should -Be $fileInfo.SmbProperties.FilePermissionKey
             }
+
+            It "Should retrieve the permission key of a directory" {
+                $dirName = "$(New-RandomString -length 8).txt"
+                $dirInfo = New-Directory $dirName
+                
+                $file = Get-File $dirName
+                $key = Get-AzureFilePermissionKey -File $file
+
+                $key | Should -Not -BeNullOrEmpty
+                $key | Should -BeOfType [string]
+                $key | Should -Match "^[0-9]+\*[0-9]+$"
+                $key | Should -Be $dirInfo.SmbProperties.FilePermissionKey
+            }
         }
 
         Context "ParameterSet FilePath" {
-            It "Should retrieve the permission key" {
+            It "Should retrieve the permission key of a file" {
                 $fileName = "$(New-RandomString -length 8).txt"
                 $fileInfo = New-File $fileName
 
@@ -112,6 +125,18 @@ Describe "RestSetAcls" {
                 $key | Should -BeOfType [string]
                 $key | Should -Match "^[0-9]+\*[0-9]+$"
                 $key | Should -Be $fileInfo.SmbProperties.FilePermissionKey
+            }
+
+            It "Should retrieve the permission key of a directory" {
+                $dirName = "$(New-RandomString -length 8).txt"
+                $dirInfo = New-File $dirName
+
+                $key = Get-AzureFilePermissionKey -Context $global:context -FileShareName $global:fileShareName -FilePath $dirName
+
+                $key | Should -Not -BeNullOrEmpty
+                $key | Should -BeOfType [string]
+                $key | Should -Match "^[0-9]+\*[0-9]+$"
+                $key | Should -Be $dirInfo.SmbProperties.FilePermissionKey
             }
         }
     }
@@ -164,7 +189,7 @@ Describe "RestSetAcls" {
 
     Describe "Set-AzureFilePermissionKey" {
         Context "ParameterSet File" {
-            It "Should set the permission key" {
+            It "Should set the permission key on a file" {
                 $fileName = "$(New-RandomString -length 8).txt"
                 $fileInfo = New-File $fileName
                 
@@ -181,6 +206,29 @@ Describe "RestSetAcls" {
                 $sddlAfter = Get-AzureFilePermission -Key $keyAfter -Share $global:share
 
                 $sddlBefore | Should -Be "O:SYG:SYD:(A;;FA;;;BA)(A;;FA;;;SY)(A;;0x1200a9;;;BU)(A;;0x1301bf;;;AU)(A;;FA;;;SY)"
+                $sddlAfter | Should -Be "O:SYG:SYD:P(A;;FA;;;AU)S:NO_ACCESS_CONTROL"
+                $returnedKey | Should -Be $key
+                $keyAfter | Should -Be $key
+                $keyAfter | Should -Not -Be $keyBefore
+            }
+
+            It "Should set the permission key on a directory" {
+                $dirName = "$(New-RandomString -length 8).txt"
+                $dirInfo = New-Directory $dirName
+                
+                $keyBefore = $dirInfo.SmbProperties.FilePermissionKey
+                $sddlBefore = Get-AzureFilePermission -Key $keyBefore -Share $global:share
+
+                $sddl = "O:SYG:SYD:P(A;;FA;;;AU)"
+                $key = New-AzureFilePermission -Context $global:context -FileShareName $global:fileShareName -Sddl $sddl
+                $dir = Get-File $dirName
+                $returnedKey = Set-AzureFilePermissionKey -File $dir -Key $key
+                
+                $dir = Get-File $dirName
+                $keyAfter = Get-AzureFilePermissionKey -File $dir
+                $sddlAfter = Get-AzureFilePermission -Key $keyAfter -Share $global:share
+
+                $sddlBefore | Should -Be "O:SYG:SYD:(A;OICI;FA;;;BA)(A;OICI;FA;;;SY)(A;;0x1200a9;;;BU)(A;OICIIO;GXGR;;;BU)(A;OICI;0x1301bf;;;AU)(A;;FA;;;SY)(A;OICIIO;GA;;;CO)"
                 $sddlAfter | Should -Be "O:SYG:SYD:P(A;;FA;;;AU)S:NO_ACCESS_CONTROL"
                 $returnedKey | Should -Be $key
                 $keyAfter | Should -Be $key
