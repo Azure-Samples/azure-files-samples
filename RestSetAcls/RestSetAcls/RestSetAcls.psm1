@@ -645,7 +645,7 @@ function Get-AzFileAclFromKey {
     Set-AzFileAclKey
 #>
     [CmdletBinding(SupportsShouldProcess = $true)]
-    [OutputType([string], [byte[]])]
+    [OutputType([System.Security.AccessControl.RawSecurityDescriptor], [string], [byte[]])]
     param (
         [Parameter(Mandatory = $true, ValueFromPipeline = $true)]
         [string]$Key,
@@ -684,6 +684,93 @@ function Get-AzFileAclFromKey {
             }
         }
     }
+}
+
+function Get-AzFileAcl {
+<#
+    .SYNOPSIS
+    Retrieves the ACL (Access Control List) for a specified file or directory.
+
+    .DESCRIPTION
+    The `Get-AzFileAcl` function retrieves the ACL for a specified file or directory. It supports retrieving the ACL in
+    various formats, including SDDL (Security Descriptor Definition Language) or binary formats. The function supports
+    retrieving the ACL from a file share specified either directly or its name and context.
+
+    .PARAMETER File
+    Specifies the Azure storage file or directory from which to retrieve the ACL key.
+
+    .PARAMETER Context
+    Specifies the Azure storage context. This is required to authenticate and interact with the Azure storage account.
+
+    .PARAMETER FileShareName
+    Specifies the name of the Azure file share from which to retrieve the ACL key.
+
+    .PARAMETER FilePath
+    Specifies the path to the file or directory from which to retrieve the ACL key.
+
+    .PARAMETER OutputFormat
+    Specifies the output format of the security descriptor. Supported formats include SDDL, Base64, and Binary.
+
+    .OUTPUTS
+    System.String
+    Returns the ACL in the specified format. The default format is SDDL.
+
+    .EXAMPLE
+    PS> $context = Get-AzStorageContext -StorageAccountName "mystorageaccount" -StorageAccountKey "mykey"
+    PS> $file = Get-AzStorageFile -Context $context -ShareName "myfileshare" -Path "myfolder/myfile.txt"
+    PS> Get-AzFileAcl -File $file
+
+    Retrieves the SDDL ACL for the specified file using the permission key.
+
+    .LINK
+    New-AzFileAcl
+
+    .LINK
+    Set-AzFileAcl
+
+    .LINK
+    Set-AzFileAclKey
+#>
+    [CmdletBinding()]
+    [OutputType([string])]
+    param (
+        [Parameter(Mandatory = $true, ParameterSetName = "File", HelpMessage = "Azure storage file or directory")]
+        [Microsoft.WindowsAzure.Commands.Common.Storage.ResourceModel.AzureStorageBase]$File,
+
+        [Parameter(Mandatory = $true, ParameterSetName = "FilePath", HelpMessage = "Azure storage context")]
+        [Microsoft.Azure.Commands.Common.Authentication.Abstractions.IStorageContext]$Context,
+        
+        [Parameter(Mandatory = $true, ParameterSetName = "FilePath", HelpMessage = "Name of the file share")]
+        [string]$FileShareName,
+
+        [Parameter(Mandatory = $true, ParameterSetName = "FilePath", HelpMessage = "Path to the file or directory on which to set the permission key")]
+        [string]$FilePath,
+
+        [Parameter(Mandatory = $false, HelpMessage = "Output format of the security descriptor")]
+        [SecurityDescriptorFormat]$OutputFormat = [SecurityDescriptorFormat]::Sddl
+    )
+
+    # Get ACL key
+    switch ($PSCmdlet.ParameterSetName) {
+        "File" {
+            $key = Get-AzFileAclKey -File $file
+            $Context = $file.Context
+            $FileShareName = Get-ShareName $file
+        }
+        "FilePath" {
+            $key = Get-AzFileAclKey -Context $Context -FileShareName $FileShareName -FilePath $FilePath
+        }
+        default {
+            throw "Invalid parameter set '$($PSCmdlet.ParameterSetName)'."
+        }
+    }
+
+    if ([string]::IsNullOrEmpty($key)) {
+        Write-Error "Failed to get file permission key" -ErrorAction Stop
+    }
+
+    # Get ACL from key
+    Get-AzFileAclFromKey -Key $key -Context $Context -FileShareName $FileShareName -OutputFormat $OutputFormat
 }
 
 function Set-AzFileAclRecursive {

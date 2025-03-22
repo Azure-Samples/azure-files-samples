@@ -127,6 +127,84 @@ Describe "Get-AzFileAclFromKey" {
     }
 }
 
+Describe "Get-AzFileAcl" {
+    Context "-File" {
+        It "Should retrieve the ACL of a file in SDDL format" {
+            $fileName = "$(New-RandomString -Length 8).txt"
+            $fileInfo = New-File $fileName
+
+            $file = Get-File $fileName
+            $acl = Get-AzFileAcl -File $file -OutputFormat Sddl
+
+            $acl | Should -Not -BeNullOrEmpty
+            $acl | Should -BeOfType [string]
+            $acl | Should -Match "^O:.*"
+        }
+
+        It "Should retrieve the ACL of a directory in SDDL format" {
+            $dirName = "$(New-RandomString -Length 8).txt"
+            $dirInfo = New-Directory $dirName
+
+            $dir = Get-File $dirName
+            $acl = Get-AzFileAcl -File $dir -OutputFormat Sddl
+
+            $acl | Should -Not -BeNullOrEmpty
+            $acl | Should -BeOfType [string]
+            $acl | Should -Match "^O:.*"
+        }
+    }
+
+    Context "-FileShareName -FilePath" {
+        It "Should retrieve the ACL of a file in Base64 format" {
+            $fileName = "$(New-RandomString -Length 8).txt"
+            $fileInfo = New-File $fileName
+
+            $acl = Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $fileName -OutputFormat Base64
+
+            $acl | Should -Not -BeNullOrEmpty
+            $acl | Should -BeOfType [string]
+            $acl | Should -Match "^[A-Za-z0-9+/=]+$"
+        }
+
+        It "Should retrieve the ACL of a directory in Base64 format" {
+            $dirName = "$(New-RandomString -Length 8).txt"
+            $dirInfo = New-Directory $dirName
+
+            $acl = Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $dirName -OutputFormat Base64
+
+            $acl | Should -Not -BeNullOrEmpty
+            $acl | Should -BeOfType [string]
+            $acl | Should -Match "^[A-Za-z0-9+/=]+$"
+        }
+    }
+
+    Context "-File with Binary Output" {
+        It "Should retrieve the ACL of a file in Binary format" {
+            $fileName = "$(New-RandomString -Length 8).txt"
+            $fileInfo = New-File $fileName
+
+            $file = Get-File $fileName
+            $acl = Get-AzFileAcl -File $file -OutputFormat Binary
+
+            $acl | Should -Not -BeNullOrEmpty
+            Should -ActualValue $acl -BeOfType [object[]]
+            $acl | Should -BeOfType [byte]
+        }
+
+        It "Should retrieve the ACL of a directory in Binary format" {
+            $dirName = "$(New-RandomString -Length 8).txt"
+            $dirInfo = New-Directory $dirName
+
+            $dir = Get-File $dirName
+            $acl = Get-AzFileAcl -File $dir -OutputFormat Binary
+
+            $acl | Should -Not -BeNullOrEmpty
+            Should -ActualValue $acl -BeOfType [object[]]
+            $acl | Should -BeOfType [byte]
+        }
+    }
+}
+
 Describe "New-AzFileAcl" {
     Context "-Context -FileShareName" {
         It "Should create a new permission key" {
