@@ -5,32 +5,32 @@ online version:
 schema: 2.0.0
 ---
 
-# Get-AzFileAcl
+# Get-AzFileAclFromKey
 
 ## SYNOPSIS
-Retrieves the ACL (Access Control List) for a specified file or directory in an Azure file share.
+Retrieves the ACL (Access Control List) for a specified ACL key.
 
 ## SYNTAX
 
 ### Share
 ```
-Get-AzFileAcl -Key <String> -Share <AzureStorageFileShare> [-OutputFormat <SecurityDescriptorFormat>]
+Get-AzFileAclFromKey -Key <String> -Share <AzureStorageFileShare> [-OutputFormat <SecurityDescriptorFormat>]
  [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
 ```
 
 ### FileShareName
 ```
-Get-AzFileAcl -Key <String> -Context <IStorageContext> -FileShareName <String>
+Get-AzFileAclFromKey -Key <String> -Context <IStorageContext> -FileShareName <String>
  [-OutputFormat <SecurityDescriptorFormat>] [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm]
  [<CommonParameters>]
 ```
 
 ## DESCRIPTION
-The \`Get-AzFileAcl\` function retrieves the ACL for a specified file or directory in an Azure file share.
-It supports retrieving the ACL in various formats, including SDDL (Security Descriptor Definition Language)
-or binary formats.
-The function supports retrieving the ACL from a file share specified either directly or
-by its name and context.
+The \`Get-AzFileAclFromKey\` function retrieves the ACL for a specified ACL key.
+It supports retrieving the ACL in
+various formats, including SDDL (Security Descriptor Definition Language) or binary formats.
+The function supports
+retrieving the ACL from a file share specified either directly or its name and context.
 
 ## EXAMPLES
 
@@ -39,7 +39,7 @@ by its name and context.
 $context = Get-AzStorageContext -StorageAccountName "mystorageaccount" -StorageAccountKey "mykey"
 PS> $file = Get-AzStorageFile -Context $context -ShareName "myfileshare" -Path "myfolder/myfile.txt"
 PS> $key = Get-AzFileAclKey -File $file
-PS> Get-AzFileAcl -Key $key -Share $file.Share -OutputFormat Sddl
+PS> Get-AzFileAclFromKey -Key $key -Share $file.Share -OutputFormat Sddl
 ```
 
 Retrieves the SDDL ACL for the specified file using the permission key.

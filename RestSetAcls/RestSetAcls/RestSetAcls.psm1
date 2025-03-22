@@ -597,16 +597,15 @@ function Get-AzFileAclKey {
     }
 }
 
-function Get-AzFileAcl {
+function Get-AzFileAclFromKey {
 <#
     .SYNOPSIS
-    Retrieves the ACL (Access Control List) for a specified file or directory in an Azure file share.
+    Retrieves the ACL (Access Control List) for a specified ACL key.
 
     .DESCRIPTION
-    The `Get-AzFileAcl` function retrieves the ACL for a specified file or directory in an Azure file share.
-    It supports retrieving the ACL in various formats, including SDDL (Security Descriptor Definition Language)
-    or binary formats. The function supports retrieving the ACL from a file share specified either directly or
-    by its name and context.
+    The `Get-AzFileAclFromKey` function retrieves the ACL for a specified ACL key. It supports retrieving the ACL in
+    various formats, including SDDL (Security Descriptor Definition Language) or binary formats. The function supports
+    retrieving the ACL from a file share specified either directly or its name and context.
 
     .PARAMETER Key
     Specifies the ACL key to be retrieved. This is the key returned from the `New-AzFileAcl`, `Set-AzFileAclKey`,
@@ -632,7 +631,7 @@ function Get-AzFileAcl {
     PS> $context = Get-AzStorageContext -StorageAccountName "mystorageaccount" -StorageAccountKey "mykey"
     PS> $file = Get-AzStorageFile -Context $context -ShareName "myfileshare" -Path "myfolder/myfile.txt"
     PS> $key = Get-AzFileAclKey -File $file
-    PS> Get-AzFileAcl -Key $key -Share $file.Share -OutputFormat Sddl
+    PS> Get-AzFileAclFromKey -Key $key -Share $file.Share -OutputFormat Sddl
 
     Retrieves the SDDL ACL for the specified file using the permission key.
 

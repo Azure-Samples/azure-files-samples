@@ -97,14 +97,14 @@ Describe "Get-AzFileAclKey" {
     }
 }
 
-Describe "Get-AzFileAcl" {
+Describe "Get-AzFileAclFromKey" {
     Context "-Share" {
         It "Should retrieve the permission" {
             $fileName = "$(New-RandomString -Length 8).txt"
             $fileInfo = New-File $fileName
             
             $key = $fileInfo.SmbProperties.FilePermissionKey
-            $permission = Get-AzFileAcl -Key $key -Share $global:share
+            $permission = Get-AzFileAclFromKey -Key $key -Share $global:share
             
             $permission | Should -Not -BeNullOrEmpty
             $permission | Should -BeOfType [string]
@@ -118,7 +118,7 @@ Describe "Get-AzFileAcl" {
             $fileInfo = New-File $fileName
             
             $key = $fileInfo.SmbProperties.FilePermissionKey
-            $permission = Get-AzFileAcl -Key $key -Context $global:context -FileShareName $global:fileShareName
+            $permission = Get-AzFileAclFromKey -Key $key -Context $global:context -FileShareName $global:fileShareName
 
             $permission | Should -Not -BeNullOrEmpty
             $permission | Should -BeOfType [string]
@@ -137,7 +137,7 @@ Describe "New-AzFileAcl" {
             $key | Should -BeOfType [string]
             $key | Should -Match "^[0-9]+\*[0-9]+$"
 
-            $permission = Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -Key $key
+            $permission = Get-AzFileAclFromKey -Context $global:context -FileShareName $global:fileShareName -Key $key
             $permission | Should -Be "O:SYG:SYD:P(A;;FA;;;BA)S:NO_ACCESS_CONTROL"
         }
     }
@@ -150,7 +150,7 @@ Describe "Set-AzFileAclKey" {
             $fileInfo = New-File $fileName
             
             $keyBefore = $fileInfo.SmbProperties.FilePermissionKey
-            $sddlBefore = Get-AzFileAcl -Key $keyBefore -Share $global:share
+            $sddlBefore = Get-AzFileAclFromKey -Key $keyBefore -Share $global:share
 
             $sddl = "O:SYG:SYD:P(A;;FA;;;AU)"
             $key = New-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -Acl $sddl
@@ -159,7 +159,7 @@ Describe "Set-AzFileAclKey" {
             
             $file = Get-File $fileName
             $keyAfter = Get-AzFileAclKey -File $file
-            $sddlAfter = Get-AzFileAcl -Key $keyAfter -Share $global:share
+            $sddlAfter = Get-AzFileAclFromKey -Key $keyAfter -Share $global:share
 
             $sddlBefore | Should -Be "O:SYG:SYD:(A;;FA;;;BA)(A;;FA;;;SY)(A;;0x1200a9;;;BU)(A;;0x1301bf;;;AU)(A;;FA;;;SY)"
             $sddlAfter | Should -Be "O:SYG:SYD:P(A;;FA;;;AU)S:NO_ACCESS_CONTROL"
@@ -173,7 +173,7 @@ Describe "Set-AzFileAclKey" {
             $dirInfo = New-Directory $dirName
             
             $keyBefore = $dirInfo.SmbProperties.FilePermissionKey
-            $sddlBefore = Get-AzFileAcl -Key $keyBefore -Share $global:share
+            $sddlBefore = Get-AzFileAclFromKey -Key $keyBefore -Share $global:share
 
             $sddl = "O:SYG:SYD:P(A;;FA;;;AU)"
             $key = New-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -Acl $sddl
@@ -182,7 +182,7 @@ Describe "Set-AzFileAclKey" {
             
             $dir = Get-File $dirName
             $keyAfter = Get-AzFileAclKey -File $dir
-            $sddlAfter = Get-AzFileAcl -Key $keyAfter -Share $global:share
+            $sddlAfter = Get-AzFileAclFromKey -Key $keyAfter -Share $global:share
 
             $sddlBefore | Should -Be "O:SYG:SYD:(A;OICI;FA;;;BA)(A;OICI;FA;;;SY)(A;;0x1200a9;;;BU)(A;OICIIO;GXGR;;;BU)(A;OICI;0x1301bf;;;AU)(A;;FA;;;SY)(A;OICIIO;GA;;;CO)"
             $sddlAfter | Should -Be "O:SYG:SYD:P(A;;FA;;;AU)S:NO_ACCESS_CONTROL"
@@ -232,7 +232,7 @@ Describe "Set-AzFileAcl" {
             $returnedKey | Should -BeOfType [string]
             $returnedKey | Should -Match "^[0-9]+\*[0-9]+$"
 
-            $sddlAfter = Get-AzFileAcl -Key $returnedKey -Share $global:share
+            $sddlAfter = Get-AzFileAclFromKey -Key $returnedKey -Share $global:share
             $sddlAfter | Should -Be "${Sddl}S:NO_ACCESS_CONTROL"
         }
     }
@@ -261,7 +261,7 @@ Describe "Set-AzFileAcl" {
             $returnedKey | Should -BeOfType [string]
             $returnedKey | Should -Match "^[0-9]+\*[0-9]+$"
 
-            $sddlAfter = Get-AzFileAcl -Key $returnedKey -Share $global:share
+            $sddlAfter = Get-AzFileAclFromKey -Key $returnedKey -Share $global:share
             $sddlAfter | Should -Be "${Sddl}S:NO_ACCESS_CONTROL"
         }
     }

@@ -83,7 +83,7 @@
         "New-AzFileAcl",
         "Set-AzFileAclKey",
         "Get-AzFileAclKey"
-        "Get-AzFileAcl",
+        "Get-AzFileAclFromKey",
         "Set-AzFileAcl"
     )
 
