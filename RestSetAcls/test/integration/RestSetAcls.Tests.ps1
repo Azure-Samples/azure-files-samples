@@ -11,7 +11,7 @@ param (
 
 BeforeAll {
     Import-Module $PSScriptRoot/../../RestSetAcls/RestSetAcls.psd1 -Force
-    . $PSScriptRoot/utils.ps1
+    Import-Module $PSScriptRoot/utils.psm1 -Force
 
     # Build context from parameters
     $global:context = New-AzStorageContext -StorageAccountName $StorageAccountName -StorageAccountKey $StorageAccountKey
@@ -49,10 +49,8 @@ Describe "Get-AzFileAclKey" {
             
             $file = Get-File $fileName
             $key = Get-AzFileAclKey -File $file
-
-            $key | Should -Not -BeNullOrEmpty
-            $key | Should -BeOfType [string]
-            $key | Should -Match "^[0-9]+\*[0-9]+$"
+            
+            Assert-IsAclKey $key
             $key | Should -Be $fileInfo.SmbProperties.FilePermissionKey
         }
 
@@ -63,9 +61,7 @@ Describe "Get-AzFileAclKey" {
             $file = Get-File $dirName
             $key = Get-AzFileAclKey -File $file
 
-            $key | Should -Not -BeNullOrEmpty
-            $key | Should -BeOfType [string]
-            $key | Should -Match "^[0-9]+\*[0-9]+$"
+            Assert-IsAclKey $key
             $key | Should -Be $dirInfo.SmbProperties.FilePermissionKey
         }
     }
@@ -77,9 +73,7 @@ Describe "Get-AzFileAclKey" {
 
             $key = Get-AzFileAclKey -Context $global:context -FileShareName $global:fileShareName -FilePath $fileName
 
-            $key | Should -Not -BeNullOrEmpty
-            $key | Should -BeOfType [string]
-            $key | Should -Match "^[0-9]+\*[0-9]+$"
+            Assert-IsAclKey $key
             $key | Should -Be $fileInfo.SmbProperties.FilePermissionKey
         }
 
@@ -89,9 +83,7 @@ Describe "Get-AzFileAclKey" {
 
             $key = Get-AzFileAclKey -Context $global:context -FileShareName $global:fileShareName -FilePath $dirName
 
-            $key | Should -Not -BeNullOrEmpty
-            $key | Should -BeOfType [string]
-            $key | Should -Match "^[0-9]+\*[0-9]+$"
+            Assert-IsAclKey $key
             $key | Should -Be $dirInfo.SmbProperties.FilePermissionKey
         }
     }
@@ -106,8 +98,6 @@ Describe "Get-AzFileAclFromKey" {
             $key = $fileInfo.SmbProperties.FilePermissionKey
             $permission = Get-AzFileAclFromKey -Key $key -Share $global:share
             
-            $permission | Should -Not -BeNullOrEmpty
-            $permission | Should -BeOfType [string]
             $permission | Should -Be "O:SYG:SYD:(A;;FA;;;BA)(A;;FA;;;SY)(A;;0x1200a9;;;BU)(A;;0x1301bf;;;AU)(A;;FA;;;SY)"
         }
     }
@@ -120,8 +110,6 @@ Describe "Get-AzFileAclFromKey" {
             $key = $fileInfo.SmbProperties.FilePermissionKey
             $permission = Get-AzFileAclFromKey -Key $key -Context $global:context -FileShareName $global:fileShareName
 
-            $permission | Should -Not -BeNullOrEmpty
-            $permission | Should -BeOfType [string]
             $permission | Should -Be "O:SYG:SYD:(A;;FA;;;BA)(A;;FA;;;SY)(A;;0x1200a9;;;BU)(A;;0x1301bf;;;AU)(A;;FA;;;SY)"
         }
     }
@@ -130,77 +118,90 @@ Describe "Get-AzFileAclFromKey" {
 Describe "Get-AzFileAcl" {
     Context "-File" {
         It "Should retrieve the ACL of a file in SDDL format" {
+            $sddl = "O:SYG:SYD:P(A;;FA;;;AU)S:NO_ACCESS_CONTROL"
+
             $fileName = "$(New-RandomString -Length 8).txt"
-            $fileInfo = New-File $fileName
+            New-File $fileName
+            $file = Get-File $fileName
+            Set-AzFileAcl -File $file -Acl $sddl
 
             $file = Get-File $fileName
             $acl = Get-AzFileAcl -File $file -OutputFormat Sddl
 
-            $acl | Should -Not -BeNullOrEmpty
-            $acl | Should -BeOfType [string]
-            $acl | Should -Match "^O:.*"
+            $acl | Should -Be $sddl
         }
 
         It "Should retrieve the ACL of a directory in SDDL format" {
+            $sddl = "O:SYG:SYD:P(A;;FA;;;AU)S:NO_ACCESS_CONTROL"
+
             $dirName = "$(New-RandomString -Length 8).txt"
-            $dirInfo = New-Directory $dirName
+            New-Directory $dirName
+            $dir = Get-File $dirName
+            Set-AzFileAcl -File $dir -Acl $sddl
 
             $dir = Get-File $dirName
             $acl = Get-AzFileAcl -File $dir -OutputFormat Sddl
 
-            $acl | Should -Not -BeNullOrEmpty
-            $acl | Should -BeOfType [string]
-            $acl | Should -Match "^O:.*"
+            $acl | Should -Be $sddl
+        }
+
+        It "Should retrieve the ACL of a file in Base64 format" {
+            $sddl = "O:SYG:SYD:P(A;;FA;;;AU)S:NO_ACCESS_CONTROL"
+
+            $fileName = "$(New-RandomString -Length 8).txt"
+            New-File $fileName
+            $file = Get-File $fileName
+            Set-AzFileAcl -File $file -Acl $sddl
+
+            $acl = Get-AzFileAcl -File $file -OutputFormat Base64
+
+            Assert-IsBase64Acl $acl
         }
     }
 
     Context "-FileShareName -FilePath" {
         It "Should retrieve the ACL of a file in Base64 format" {
+            $sddl = "O:SYG:SYD:P(A;;FA;;;AU)S:NO_ACCESS_CONTROL"
             $fileName = "$(New-RandomString -Length 8).txt"
-            $fileInfo = New-File $fileName
+            New-File $fileName
+            $file = Get-File $fileName
+            Set-AzFileAcl -File $file -Acl $sddl
 
             $acl = Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $fileName -OutputFormat Base64
-
-            $acl | Should -Not -BeNullOrEmpty
-            $acl | Should -BeOfType [string]
-            $acl | Should -Match "^[A-Za-z0-9+/=]+$"
+            
+            Assert-IsBase64Acl $acl
+            Convert-SecurityDescriptor $acl -From Base64 -To Sddl | Should -Be $sddl
         }
 
         It "Should retrieve the ACL of a directory in Base64 format" {
             $dirName = "$(New-RandomString -Length 8).txt"
-            $dirInfo = New-Directory $dirName
+            New-Directory $dirName
 
             $acl = Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $dirName -OutputFormat Base64
 
-            $acl | Should -Not -BeNullOrEmpty
-            $acl | Should -BeOfType [string]
-            $acl | Should -Match "^[A-Za-z0-9+/=]+$"
+            Assert-IsBase64Acl $acl
         }
     }
 
     Context "-File with Binary Output" {
         It "Should retrieve the ACL of a file in Binary format" {
             $fileName = "$(New-RandomString -Length 8).txt"
-            $fileInfo = New-File $fileName
+            New-File $fileName
 
             $file = Get-File $fileName
             $acl = Get-AzFileAcl -File $file -OutputFormat Binary
 
-            $acl | Should -Not -BeNullOrEmpty
-            Should -ActualValue $acl -BeOfType [object[]]
-            $acl | Should -BeOfType [byte]
+            Assert-IsBinaryAcl $acl
         }
 
         It "Should retrieve the ACL of a directory in Binary format" {
             $dirName = "$(New-RandomString -Length 8).txt"
-            $dirInfo = New-Directory $dirName
+            New-Directory $dirName
 
             $dir = Get-File $dirName
             $acl = Get-AzFileAcl -File $dir -OutputFormat Binary
 
-            $acl | Should -Not -BeNullOrEmpty
-            Should -ActualValue $acl -BeOfType [object[]]
-            $acl | Should -BeOfType [byte]
+            Assert-IsBinaryAcl $acl
         }
     }
 }
@@ -211,9 +212,7 @@ Describe "New-AzFileAcl" {
             $sddl = "O:SYG:SYD:P(A;;FA;;;BA)"
 
             $key = New-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -Acl $sddl
-            $key | Should -Not -BeNullOrEmpty
-            $key | Should -BeOfType [string]
-            $key | Should -Match "^[0-9]+\*[0-9]+$"
+            Assert-IsAclKey $key
 
             $permission = Get-AzFileAclFromKey -Context $global:context -FileShareName $global:fileShareName -Key $key
             $permission | Should -Be "O:SYG:SYD:P(A;;FA;;;BA)S:NO_ACCESS_CONTROL"
@@ -304,11 +303,8 @@ Describe "Set-AzFileAcl" {
             }
             $file = Get-File $name
 
-            $returnedKey = Set-AzFileAcl -File $file -Acl $Sddl
-            
-            $returnedKey | Should -Not -BeNullOrEmpty
-            $returnedKey | Should -BeOfType [string]
-            $returnedKey | Should -Match "^[0-9]+\*[0-9]+$"
+            $returnedKey = Set-AzFileAcl -File $file -Acl $Sddl        
+            Assert-IsAclKey $returnedKey
 
             $sddlAfter = Get-AzFileAclFromKey -Key $returnedKey -Share $global:share
             $sddlAfter | Should -Be "${Sddl}S:NO_ACCESS_CONTROL"
@@ -334,11 +330,8 @@ Describe "Set-AzFileAcl" {
 
             $base64 = Convert-SecurityDescriptor $sddl -From Sddl -To Base64
             $returnedKey = Set-AzFileAcl -File $file -Acl $base64 -AclFormat Base64
+            Assert-IsAclKey $returnedKey
             
-            $returnedKey | Should -Not -BeNullOrEmpty
-            $returnedKey | Should -BeOfType [string]
-            $returnedKey | Should -Match "^[0-9]+\*[0-9]+$"
-
             $sddlAfter = Get-AzFileAclFromKey -Key $returnedKey -Share $global:share
             $sddlAfter | Should -Be "${Sddl}S:NO_ACCESS_CONTROL"
         }
