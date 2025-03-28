@@ -49,7 +49,7 @@ Describe "Get-AzFileAclKey" {
             
             $file = Get-File $fileName
             $key = Get-AzFileAclKey -File $file
-            
+
             Assert-IsAclKey $key
             $key | Should -Be $fileInfo.SmbProperties.FilePermissionKey
         }
@@ -116,92 +116,54 @@ Describe "Get-AzFileAclFromKey" {
 }
 
 Describe "Get-AzFileAcl" {
-    Context "-File" {
-        It "Should retrieve the ACL of a file in SDDL format" {
-            $sddl = "O:SYG:SYD:P(A;;FA;;;AU)S:NO_ACCESS_CONTROL"
+    Context "<type>" -ForEach @(
+        @{ Type = "file"; Sddl = "O:SYG:SYD:P(A;;FA;;;AU)S:NO_ACCESS_CONTROL" },
+        @{ Type = "directory"; Sddl = "O:SYG:SYD:P(A;;FA;;;AU)S:NO_ACCESS_CONTROL" }
+    ) {
+        BeforeEach {
+            # Create file or directory
+            if ($_.Type -eq "file") {
+                $fileName = "$(New-RandomString -Length 8).txt"
+                New-File -Path $fileName -Size 1024
+            } elseif ($_.Type -eq "directory") {
+                $fileName = New-RandomString -Length 8
+                New-Directory $fileName
+            } else {
+                throw "Invalid type specified. Use 'file' or 'directory'."
+            }
 
-            $fileName = "$(New-RandomString -Length 8).txt"
-            New-File $fileName
+            # Set the ACL
             $file = Get-File $fileName
-            Set-AzFileAcl -File $file -Acl $sddl
+            Set-AzFileAcl -File $file -Acl $_.Sddl
 
+            # Get a reference to it
             $file = Get-File $fileName
-            $acl = Get-AzFileAcl -File $file -OutputFormat Sddl
-
-            $acl | Should -Be $sddl
         }
 
-        It "Should retrieve the ACL of a directory in SDDL format" {
-            $sddl = "O:SYG:SYD:P(A;;FA;;;AU)S:NO_ACCESS_CONTROL"
+        Describe "-File" {
+            It "Should retrieve the ACL in SDDL format" {
+                $acl = Get-AzFileAcl -File $file -OutputFormat Sddl
+                $acl | Should -Be $_.Sddl
+            }
 
-            $dirName = "$(New-RandomString -Length 8).txt"
-            New-Directory $dirName
-            $dir = Get-File $dirName
-            Set-AzFileAcl -File $dir -Acl $sddl
-
-            $dir = Get-File $dirName
-            $acl = Get-AzFileAcl -File $dir -OutputFormat Sddl
-
-            $acl | Should -Be $sddl
+            It "Should retrieve the ACL in Base64 format" {
+                $acl = Get-AzFileAcl -File $file -OutputFormat Base64
+                Assert-IsBase64Acl $acl
+                Convert-SecurityDescriptor $acl -From Base64 -To Sddl | Should -Be $_.Sddl
+            }
         }
 
-        It "Should retrieve the ACL of a file in Base64 format" {
-            $sddl = "O:SYG:SYD:P(A;;FA;;;AU)S:NO_ACCESS_CONTROL"
+        Describe "-FileShareName -FilePath" {
+            It "Should retrieve the ACL in SDDL format" {
+                $acl = Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $fileName -OutputFormat Sddl
+                $acl | Should -Be $_.Sddl
+            }
 
-            $fileName = "$(New-RandomString -Length 8).txt"
-            New-File $fileName
-            $file = Get-File $fileName
-            Set-AzFileAcl -File $file -Acl $sddl
-
-            $acl = Get-AzFileAcl -File $file -OutputFormat Base64
-
-            Assert-IsBase64Acl $acl
-        }
-    }
-
-    Context "-FileShareName -FilePath" {
-        It "Should retrieve the ACL of a file in Base64 format" {
-            $sddl = "O:SYG:SYD:P(A;;FA;;;AU)S:NO_ACCESS_CONTROL"
-            $fileName = "$(New-RandomString -Length 8).txt"
-            New-File $fileName
-            $file = Get-File $fileName
-            Set-AzFileAcl -File $file -Acl $sddl
-
-            $acl = Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $fileName -OutputFormat Base64
-            
-            Assert-IsBase64Acl $acl
-            Convert-SecurityDescriptor $acl -From Base64 -To Sddl | Should -Be $sddl
-        }
-
-        It "Should retrieve the ACL of a directory in Base64 format" {
-            $dirName = "$(New-RandomString -Length 8).txt"
-            New-Directory $dirName
-
-            $acl = Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $dirName -OutputFormat Base64
-
-            Assert-IsBase64Acl $acl
-        }
-    }
-
-    Context "-File with Binary Output" {
-        It "Should retrieve the ACL of a file in Binary format" {
-            $fileName = "$(New-RandomString -Length 8).txt"
-            New-File $fileName
-
-            $file = Get-File $fileName
-            $acl = Get-AzFileAcl -File $file -OutputFormat Binary
-
-            Assert-IsBinaryAcl $acl
-        }
-
-        It "Should retrieve the ACL of a directory in Binary format" {
-            $dirName = "$(New-RandomString -Length 8).txt"
-            New-Directory $dirName
-
-            $dir = Get-File $dirName
-            $acl = Get-AzFileAcl -File $dir -OutputFormat Binary
-
-            Assert-IsBinaryAcl $acl
+            It "Should retrieve the ACL in Base64 format" {
+                $acl = Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $fileName -OutputFormat Base64
+                Assert-IsBase64Acl $acl
+                Convert-SecurityDescriptor $acl -From Base64 -To Sddl | Should -Be $_.Sddl
+            }
         }
     }
 }
@@ -287,7 +249,7 @@ Describe "Set-AzFileAcl" {
     }
 
     Context "Sddl" {
-        It "Should set a <size > permission on a <type>" -ForEach @(
+        It "Should set a <size> permission on a <type>" -ForEach @(
             @{ Type = "file"; Size = "small"; Sddl = $smallSddl },
             @{ Type = "file"; Size = "large"; Sddl = $largeSddl },
             @{ Type = "directory"; Size = "small"; Sddl = $smallSddl },
@@ -312,7 +274,7 @@ Describe "Set-AzFileAcl" {
     }
 
     Context "Base64" {
-        It "Should set a <size > permission on a <type>" -ForEach @(
+        It "Should set a <size> permission on a <type>" -ForEach @(
             @{ Type = "file"; Size = "small"; Sddl = $smallSddl },
             @{ Type = "file"; Size = "large"; Sddl = $largeSddl },
             @{ Type = "directory"; Size = "small"; Sddl = $smallSddl },
