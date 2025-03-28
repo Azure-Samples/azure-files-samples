@@ -42,75 +42,86 @@ AfterAll {
 }
 
 Describe "Get-AzFileAclKey" {
-    Context "-File" {
-        It "Should retrieve the permission key of a file" {
-            $fileName = "$(New-RandomString -Length 8).txt"
-            $fileInfo = New-File $fileName
-            
+    Context "<type>" -ForEach @(
+        @{ Type = "file" },
+        @{ Type = "directory" }
+    ) {
+        BeforeEach {
+            # Create file or directory
+            if ($_.Type -eq "file") {
+                $fileName = "$(New-RandomString -Length 8).txt"
+                $fileInfo = New-File -Path $fileName -Size 1024
+                $expectedKey = $fileInfo.SmbProperties.FilePermissionKey
+            } elseif ($_.Type -eq "directory") {
+                $fileName = New-RandomString -Length 8
+                $dirInfo = New-Directory $fileName
+                $expectedKey = $dirInfo.SmbProperties.FilePermissionKey
+            } else {
+                throw "Invalid type specified. Use 'file' or 'directory'."
+            }
+
+            # Get a reference to it
             $file = Get-File $fileName
-            $key = Get-AzFileAclKey -File $file
-
-            Assert-IsAclKey $key
-            $key | Should -Be $fileInfo.SmbProperties.FilePermissionKey
         }
 
-        It "Should retrieve the permission key of a directory" {
-            $dirName = "$(New-RandomString -Length 8).txt"
-            $dirInfo = New-Directory $dirName
-            
-            $file = Get-File $dirName
-            $key = Get-AzFileAclKey -File $file
+        Describe "-File" {
+            It "Should retrieve the permission key" {
+                $key = Get-AzFileAclKey -File $file
 
-            Assert-IsAclKey $key
-            $key | Should -Be $dirInfo.SmbProperties.FilePermissionKey
-        }
-    }
-
-    Context "-FileShareName -FilePath" {
-        It "Should retrieve the permission key of a file" {
-            $fileName = "$(New-RandomString -Length 8).txt"
-            $fileInfo = New-File $fileName
-
-            $key = Get-AzFileAclKey -Context $global:context -FileShareName $global:fileShareName -FilePath $fileName
-
-            Assert-IsAclKey $key
-            $key | Should -Be $fileInfo.SmbProperties.FilePermissionKey
+                Assert-IsAclKey $key
+                $key | Should -Be $expectedKey
+            }
         }
 
-        It "Should retrieve the permission key of a directory" {
-            $dirName = "$(New-RandomString -Length 8).txt"
-            $dirInfo = New-File $dirName
+        Describe "-Context -FileShareName -FilePath" {
+            It "Should retrieve the permission key" {
+                $key = Get-AzFileAclKey -Context $global:context -FileShareName $global:fileShareName -FilePath $fileName
 
-            $key = Get-AzFileAclKey -Context $global:context -FileShareName $global:fileShareName -FilePath $dirName
-
-            Assert-IsAclKey $key
-            $key | Should -Be $dirInfo.SmbProperties.FilePermissionKey
+                Assert-IsAclKey $key
+                $key | Should -Be $expectedKey
+            }
         }
     }
 }
 
 Describe "Get-AzFileAclFromKey" {
-    Context "-Share" {
-        It "Should retrieve the permission" {
-            $fileName = "$(New-RandomString -Length 8).txt"
-            $fileInfo = New-File $fileName
-            
-            $key = $fileInfo.SmbProperties.FilePermissionKey
-            $permission = Get-AzFileAclFromKey -Key $key -Share $global:share
-            
-            $permission | Should -Be "O:SYG:SYD:(A;;FA;;;BA)(A;;FA;;;SY)(A;;0x1200a9;;;BU)(A;;0x1301bf;;;AU)(A;;FA;;;SY)"
+    Context "<type>" -ForEach @(
+        @{ Type = "file" },
+        @{ Type = "directory" }
+    ) {
+        BeforeEach {
+            # Create file or directory, and get the key
+            if ($_.Type -eq "file") {
+                $fileName = "$(New-RandomString -Length 8).txt"
+                $fileInfo = New-File -Path $fileName -Size 1024
+                $key = $fileInfo.SmbProperties.FilePermissionKey
+                $defaultSddl = "O:SYG:SYD:(A;;FA;;;BA)(A;;FA;;;SY)(A;;0x1200a9;;;BU)(A;;0x1301bf;;;AU)(A;;FA;;;SY)"
+            }
+            elseif ($_.Type -eq "directory") {
+                $fileName = New-RandomString -Length 8
+                $dirInfo = New-Directory $fileName
+                $key = $dirInfo.SmbProperties.FilePermissionKey
+                $defaultSddl = "O:SYG:SYD:(A;OICI;FA;;;BA)(A;OICI;FA;;;SY)(A;;0x1200a9;;;BU)(A;OICIIO;GXGR;;;BU)(A;OICI;0x1301bf;;;AU)(A;;FA;;;SY)(A;OICIIO;GA;;;CO)"
+            }
+            else {
+                throw "Invalid type specified. Use 'file' or 'directory'."
+            }
         }
-    }
 
-    Context "-Context -FileShareName" {
-        It "Should retrieve the permission" {
-            $fileName = "$(New-RandomString -Length 8).txt"
-            $fileInfo = New-File $fileName
-            
-            $key = $fileInfo.SmbProperties.FilePermissionKey
-            $permission = Get-AzFileAclFromKey -Key $key -Context $global:context -FileShareName $global:fileShareName
+        Describe "-File" {
+            It "Should retrieve the default permission" {
+                $permission = Get-AzFileAclFromKey -Key $key -Share $global:share
 
-            $permission | Should -Be "O:SYG:SYD:(A;;FA;;;BA)(A;;FA;;;SY)(A;;0x1200a9;;;BU)(A;;0x1301bf;;;AU)(A;;FA;;;SY)"
+                $permission | Should -Be $defaultSddl
+            }
+        }
+
+        Describe "-Context -FileShareName -FilePath" {
+            It "Should retrieve the default permission" {
+                $permission = Get-AzFileAclFromKey -Key $key -Context $global:context -FileShareName $global:fileShareName
+
+                $permission | Should -Be $defaultSddl
+            }
         }
     }
 }
@@ -169,7 +180,7 @@ Describe "Get-AzFileAcl" {
 }
 
 Describe "New-AzFileAcl" {
-    Context "-Context -FileShareName" {
+    Describe "-Context -FileShareName" {
         It "Should create a new permission key" {
             $sddl = "O:SYG:SYD:P(A;;FA;;;BA)"
 
@@ -183,119 +194,117 @@ Describe "New-AzFileAcl" {
 }
 
 Describe "Set-AzFileAclKey" {
-    Context "-File" {
-        It "Should set the permission key on a file" {
-            $fileName = "$(New-RandomString -Length 8).txt"
-            $fileInfo = New-File $fileName
-            
-            $keyBefore = $fileInfo.SmbProperties.FilePermissionKey
-            $sddlBefore = Get-AzFileAclFromKey -Key $keyBefore -Share $global:share
+    Context "<type>" -ForEach @(
+        @{ Type = "file" },
+        @{ Type = "directory" }
+    ) {
+        BeforeEach {
+            # Create file or directory
+            if ($_.Type -eq "file") {
+                $fileName = "$(New-RandomString -Length 8).txt"
+                $fileInfo = New-File -Path $fileName -Size 1024
+                $keyBefore = $fileInfo.SmbProperties.FilePermissionKey
+            } elseif ($_.Type -eq "directory") {
+                $fileName = New-RandomString -Length 8
+                $dirInfo = New-Directory $fileName
+                $keyBefore = $dirInfo.SmbProperties.FilePermissionKey
+            } else {
+                throw "Invalid type specified. Use 'file' or 'directory'."
+            }
 
-            $sddl = "O:SYG:SYD:P(A;;FA;;;AU)"
-            $key = New-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -Acl $sddl
+            # Get a reference to it
             $file = Get-File $fileName
-            $returnedKey = Set-AzFileAclKey -File $file -Key $key
-            
-            $file = Get-File $fileName
-            $keyAfter = Get-AzFileAclKey -File $file
-            $sddlAfter = Get-AzFileAclFromKey -Key $keyAfter -Share $global:share
-
-            $sddlBefore | Should -Be "O:SYG:SYD:(A;;FA;;;BA)(A;;FA;;;SY)(A;;0x1200a9;;;BU)(A;;0x1301bf;;;AU)(A;;FA;;;SY)"
-            $sddlAfter | Should -Be "O:SYG:SYD:P(A;;FA;;;AU)S:NO_ACCESS_CONTROL"
-            $returnedKey | Should -Be $key
-            $keyAfter | Should -Be $key
-            $keyAfter | Should -Not -Be $keyBefore
         }
 
-        It "Should set the permission key on a directory" {
-            $dirName = "$(New-RandomString -Length 8).txt"
-            $dirInfo = New-Directory $dirName
-            
-            $keyBefore = $dirInfo.SmbProperties.FilePermissionKey
-            $sddlBefore = Get-AzFileAclFromKey -Key $keyBefore -Share $global:share
+        Describe "-File" {
+            It "Should set the permission key" {
+                $sddl = "O:SYG:SYD:P(A;;FA;;;AU)S:NO_ACCESS_CONTROL"
+                $key = New-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -Acl $sddl
 
-            $sddl = "O:SYG:SYD:P(A;;FA;;;AU)"
-            $key = New-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -Acl $sddl
-            $dir = Get-File $dirName
-            $returnedKey = Set-AzFileAclKey -File $dir -Key $key
-            
-            $dir = Get-File $dirName
-            $keyAfter = Get-AzFileAclKey -File $dir
-            $sddlAfter = Get-AzFileAclFromKey -Key $keyAfter -Share $global:share
+                $keyAfter = Set-AzFileAclKey -File $file -Key $key
+                
+                Assert-IsAclKey $keyAfter
+                $keyAfter | Should -Not -Be $keyBefore
+                $sddlAfter = Get-AzFileAclFromKey -Key $keyAfter -Share $global:share
+                $sddlAfter | Should -Be $sddl
+            }
+        }
 
-            $sddlBefore | Should -Be "O:SYG:SYD:(A;OICI;FA;;;BA)(A;OICI;FA;;;SY)(A;;0x1200a9;;;BU)(A;OICIIO;GXGR;;;BU)(A;OICI;0x1301bf;;;AU)(A;;FA;;;SY)(A;OICIIO;GA;;;CO)"
-            $sddlAfter | Should -Be "O:SYG:SYD:P(A;;FA;;;AU)S:NO_ACCESS_CONTROL"
-            $returnedKey | Should -Be $key
-            $keyAfter | Should -Be $key
-            $keyAfter | Should -Not -Be $keyBefore
+        Describe "-Context -FileShareName -FilePath" {
+            It "Should set the permission key" {
+                $sddl = "O:SYG:SYD:P(A;;FA;;;AU)S:NO_ACCESS_CONTROL"
+                $key = New-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -Acl $sddl
+
+                $keyAfter = Set-AzFileAclKey -Context $global:context -FileShareName $global:fileShareName -FilePath $fileName -Key $key
+                
+                Assert-IsAclKey $keyAfter
+                $keyAfter | Should -Not -Be $keyBefore
+                $sddlAfter = Get-AzFileAclFromKey -Key $keyAfter -Context $global:context -FileShareName $global:fileShareName
+                $sddlAfter | Should -Be $sddl
+            }
         }
     }
 }
 
 Describe "Set-AzFileAcl" {
-    BeforeDiscovery {
-        function Get-LargeSddl {
-            $sddl = "O:SYG:SYD:P"
-            $i = 0
-            while ($sddl.Length -lt 8500) {
-                $sddl += "(A;;FA;;;S-1-5-21-1001-1001-1001-$i)"
-                $i++
+    Context "<type>" -ForEach @(
+        @{ Type = "file" },
+        @{ Type = "directory" }
+    ) {
+        BeforeEach {
+            # Create file or directory
+            if ($Type -eq "file") {
+                $fileName = "$(New-RandomString -Length 8).txt"
+                New-File -Path $fileName -Size 1024
+            } elseif ($Type -eq "directory") {
+                $fileName = New-RandomString -Length 8
+                New-Directory $fileName
+            } else {
+                throw "Invalid type specified. Use 'file' or 'directory'."
             }
-            return $sddl
+
+            # Get a reference to it
+            $file = Get-File $fileName
         }
 
-        $largeSddl = Get-LargeSddl
-        $smallSddl = "O:SYG:SYD:P(A;;FA;;;AU)"
-    }
+        BeforeDiscovery {
+            $smallSddl = "O:SYG:SYD:P(A;;FA;;;AU)S:NO_ACCESS_CONTROL"
+            $smallBase64 = Convert-SecurityDescriptor $smallSddl -From Sddl -To Base64
 
-    Context "Sddl" {
-        It "Should set a <size> permission on a <type>" -ForEach @(
-            @{ Type = "file"; Size = "small"; Sddl = $smallSddl },
-            @{ Type = "file"; Size = "large"; Sddl = $largeSddl },
-            @{ Type = "directory"; Size = "small"; Sddl = $smallSddl },
-            @{ Type = "directory"; Size = "large"; Sddl = $largeSddl }
-        ) {
-            param ($Type, $Size, $Sddl)
-
-            $name = "$(New-RandomString -Length 8).txt"
-            if ($Type -eq "file") {
-                New-File $name
-            } else {
-                New-Directory $name
+            function Get-LargeSddl {
+                $sddl = "O:SYG:SYD:P"
+                $i = 0
+                while ($sddl.Length -lt 8500) {
+                    $sddl += "(A;;FA;;;S-1-5-21-1001-1001-1001-$i)"
+                    $i++
+                }
+                return "${sddl}S:NO_ACCESS_CONTROL"
             }
-            $file = Get-File $name
+    
+            $largeSddl = Get-LargeSddl
+            $largeBase64 = Convert-SecurityDescriptor $largeSddl -From Sddl -To Base64
+        }
 
+        It "Should set a <size> SDDL permission" -ForEach @(
+            @{ Size = "small"; Sddl = $smallSddl },
+            @{ Size = "large"; Sddl = $largeSddl }
+        ) {
             $returnedKey = Set-AzFileAcl -File $file -Acl $Sddl        
             Assert-IsAclKey $returnedKey
 
             $sddlAfter = Get-AzFileAclFromKey -Key $returnedKey -Share $global:share
-            $sddlAfter | Should -Be "${Sddl}S:NO_ACCESS_CONTROL"
+            $sddlAfter | Should -Be $Sddl
         }
-    }
 
-    Context "Base64" {
-        It "Should set a <size> permission on a <type>" -ForEach @(
-            @{ Type = "file"; Size = "small"; Sddl = $smallSddl },
-            @{ Type = "file"; Size = "large"; Sddl = $largeSddl },
-            @{ Type = "directory"; Size = "small"; Sddl = $smallSddl },
-            @{ Type = "directory"; Size = "large"; Sddl = $largeSddl }
+        It "Should set a <size> base64 permission" -ForEach @(
+            @{ Size = "small"; Base64 = $smallBase64 },
+            @{ Size = "large"; Base64 = $largeBase64 }
         ) {
-            param ($Type, $Size, $Sddl)
-
-            $name = "$(New-RandomString -Length 8).txt"
-            if ($Type -eq "file") {
-                New-File $name
-            } else {
-                New-Directory $name
-            }
-            $file = Get-File $name
-
-            $base64 = Convert-SecurityDescriptor $sddl -From Sddl -To Base64
-            $returnedKey = Set-AzFileAcl -File $file -Acl $base64 -AclFormat Base64
+            $returnedKey = Set-AzFileAcl -File $file -Acl $Base64 -AclFormat Base64
             Assert-IsAclKey $returnedKey
             
-            $sddlAfter = Get-AzFileAclFromKey -Key $returnedKey -Share $global:share
-            $sddlAfter | Should -Be "${Sddl}S:NO_ACCESS_CONTROL"
+            $base64After = Get-AzFileAclFromKey -Key $returnedKey -Share $global:share -OutputFormat Base64
+            $base64After | Should -Be $Base64
         }
     }
 }
