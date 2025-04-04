@@ -111,6 +111,17 @@ enum StandardRights {
 
 <#
 .SYNOPSIS
+Standard rights for any type of securable object (including files and folders).
+#>
+enum GenericRights {
+    GENERIC_READ = 0x80000000
+    GENERIC_WRITE = 0x40000000
+    GENERIC_EXECUTE = 0x20000000
+    GENERIC_ALL = 0x10000000
+}
+
+<#
+.SYNOPSIS
 These are the basic permissions, as displayed by the Windows File Explorer.
 We have also been calling these "composite rights".
 #>
@@ -150,13 +161,66 @@ enum BasicPermissions {
 
 <#
 .SYNOPSIS
-Standard rights for any type of securable object (including files and folders).
+Standard rights combinations for any type of securable object (including files and folders).
+
+.LINK
+https://learn.microsoft.com/en-us/windows/win32/secauthz/standard-access-rights
 #>
-enum GenericRights {
-    GENERIC_READ = 0x80000000
-    GENERIC_WRITE = 0x40000000
-    GENERIC_EXECUTE = 0x20000000
-    GENERIC_ALL = 0x10000000
+enum StandardRightsCombination {
+    # 2031616 is obtained via:
+    #   [StandardRights]::DELETE -bor
+    #   [StandardRights]::READ_CONTROL -bor
+    #   [StandardRights]::WRITE_DAC -bor
+    #   [StandardRights]::WRITE_OWNER -bor
+    #   [StandardRights]::SYNCHRONIZE
+    STANDARD_RIGHTS_ALL = 2031616
+    STANDARD_RIGHTS_EXECUTE = [StandardRights]::READ_CONTROL
+    STANDARD_RIGHTS_READ = [StandardRights]::READ_CONTROL
+    # 983040 is obtained via:
+    #   [StandardRights]::DELETE -bor
+    #   [StandardRights]::READ_CONTROL -bor
+    #   [StandardRights]::WRITE_DAC -bor
+    #   [StandardRights]::WRITE_OWNER
+    STANDARD_RIGHTS_REQUIRED = 983040
+    STANDARD_RIGHTS_WRITE = [StandardRights]::READ_CONTROL
+}
+
+<#
+.SYNOPSIS
+This is a mapping of the generic rights to the specific rights for files and folders.
+
+.LINK
+https://learn.microsoft.com/en-us/windows/win32/fileio/file-security-and-access-rights
+#>
+enum FileGenericRightsMapping {
+    # FILE_GENERIC_READ is defined as the following, which evaluates to 1179785:
+    #
+    #   [SpecificRights]::FILE_READ_ATTRIBUTES -bor
+    #   [SpecificRights]::FILE_READ_DATA -bor
+    #   [SpecificRights]::FILE_READ_EA -bor
+    #   [StandardRightsCombination]::STANDARD_RIGHTS_READ -bor
+    #   [StandardRights]::SYNCHRONIZE
+    FILE_GENERIC_READ = 1179785
+
+    # FILE_GENERIC_WRITE is defined as the following, which evaluates to 1179926:
+    #
+    #   [SpecificRights]::FILE_APPEND_DATA -bor
+    #   [SpecificRights]::FILE_WRITE_ATTRIBUTES -bor
+    #   [SpecificRights]::FILE_WRITE_DATA -bor
+    #   [SpecificRights]::FILE_WRITE_EA -bor
+    #   [StandardRightsCombination]::STANDARD_RIGHTS_WRITE -bor
+    #   [StandardRights]::SYNCHRONIZE
+    FILE_GENERIC_WRITE = 1179926
+
+    # FILE_GENERIC_EXECUTE is defined as the following, which evaluates to 1179808:
+    #   [SpecificRights]::FILE_EXECUTE -bor
+    #   [SpecificRights]::FILE_READ_ATTRIBUTES -bor
+    #   [StandardRightsCombination]::STANDARD_RIGHTS_EXECUTE -bor
+    #   [StandardRights]::SYNCHRONIZE
+    FILE_GENERIC_EXECUTE = 1179808
+
+    # FILE_ALL_ACCESS is not documented, but in practice it's the same as FULL_ACCESS
+    FILE_ALL_ACCESS = 2032127
 }
 
 class AccessMask {
