@@ -81,7 +81,7 @@ function ConvertTo-SecurityDescriptor {
             }
             "Base64" {
                 if ($InputDescriptor -isnot [string]) {
-                    throw "Invalid input type. Expected string."
+                    throw "Invalid input type. Expected string, got $($InputDescriptor.GetType().FullName)."
                 }
 
                 try {
@@ -94,14 +94,14 @@ function ConvertTo-SecurityDescriptor {
                 return [System.Security.AccessControl.RawSecurityDescriptor]::new($binary, 0)
             }
             "Binary" {
-                if ($InputDescriptor -isnot [object[]]) {
-                    throw "Invalid input type. Expected object[]."
+                if ($InputDescriptor -isnot [array]) {
+                    throw "Invalid input type. Expected array, got $($InputDescriptor.GetType().FullName)."
                 }
                 return [System.Security.AccessControl.RawSecurityDescriptor]::new($InputDescriptor, 0)
             }
             "Raw" {
                 if ($InputDescriptor -isnot [System.Security.AccessControl.RawSecurityDescriptor]) {
-                    throw "Invalid input type. Expected RawSecurityDescriptor."
+                    throw "Invalid input type. Expected RawSecurityDescriptor, got $($InputDescriptor.GetType().FullName)"
                 }
                 return $InputDescriptor
             }
