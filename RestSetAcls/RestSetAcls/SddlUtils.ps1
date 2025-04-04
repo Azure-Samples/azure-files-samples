@@ -332,7 +332,10 @@ function Write-AccessMask {
         [int]$accessMask,
 
         [Parameter(Mandatory = $false)]
-        [int]$indent = 0
+        [int]$indent = 0,
+
+        [Parameter(Mandatory = $false)]
+        [switch]$ShowFullList = $false
     )
 
     $spaces = " " * $indent
@@ -341,29 +344,59 @@ function Write-AccessMask {
     $checkmark = [System.Char]::ConvertFromUtf32([System.Convert]::ToInt32("2713", 16))
     $cross = [System.Char]::ConvertFromUtf32([System.Convert]::ToInt32("2717", 16))
     
-    Write-Host "${spaces}simplified list:"
+    if ($ShowFullList) {
+        Write-Host "${spaces}simplified list:"
+    }
+    
+    # Write "basic permissions" first (e.g. composite rights like "Read", "Write", "Modify", etc.)
+    $checkedValues = 0
     foreach ($key in [Enum]::GetValues([BasicPermissions])) {
         $value = $key.value__
         if ($mask.Has($value)) {
-            Write-Host "${spaces}    $($PSStyle.Foreground.Green)$checkmark$($PSStyle.Reset) $key"
+            $checkedValues = $checkedValues -bor $value
+            Write-Host "${spaces}$($PSStyle.Foreground.Green)$checkmark$($PSStyle.Reset) $key"
         }
         else {
-            Write-Host "${spaces}    $($PSStyle.Foreground.Red)$cross$($PSStyle.Reset) $key"
+            Write-Host "${spaces}$($PSStyle.Foreground.Red)$cross$($PSStyle.Reset) $key"
         }
     }
-
-    Write-Host "${spaces}full list:"
-    foreach ($key in [Enum]::GetValues([SpecificRights]) + [Enum]::GetValues([StandardRights]) + [Enum]::GetValues([GenericRights])) {
-        $value = $key.value__
-        if ($mask.Has($value)) {
-            Write-Host "${spaces}    ${key}"
-            $mask.Remove($value)
+    
+    # Write if there are any permissions not covered by basic
+    $remaining = [AccessMask]::new($accessMask)
+    $remaining.Remove($checkedValues)
+    if ($remaining.Value -ne 0) {
+        # Check what known values remain, in addition to the values already checked above
+        $allValues = [Enum]::GetValues([SpecificRights]) + [Enum]::GetValues([StandardRights]) + [Enum]::GetValues([GenericRights])
+        $remainingValueList = $allValues | Where-Object { $remaining.Has($_.value__) }
+        
+        # If there are any bits not covered by the known permissions, add it to the list
+        $remainingValueList | ForEach-Object { $remaining.Remove($_.value__) }
+        if ($remaining.Value -ne 0) {
+            $remainingValueList += [string]::Format("0x{0:X}", $remaining.Value)
         }
+
+        $remainingString = $remainingValueList -join ", "
+        Write-Host "${spaces}$($PSStyle.Foreground.Green)$checkmark$($PSStyle.Reset) SPECIAL_PERMISSIONS ($remainingString)"
+    }
+    else {
+        Write-Host "${spaces}$($PSStyle.Foreground.Red)$cross$($PSStyle.Reset) $key SPECIAL_PERMISSIONS"
     }
 
-    if ($mask.Value -ne 0) {
-        $hex = "0x{0:X}" -f $mask.Value
-        Write-Host "${spaces}    Others: $hex"
+    # Optionally write the full list of permissions bits
+    if ($ShowFullList) {
+        Write-Host "${spaces}full list:"
+        foreach ($key in [Enum]::GetValues([SpecificRights]) + [Enum]::GetValues([StandardRights]) + [Enum]::GetValues([GenericRights])) {
+            $value = $key.value__
+            if ($mask.Has($value)) {
+                Write-Host "${spaces}    ${key}"
+                $mask.Remove($value)
+            }
+        }
+
+        if ($mask.Value -ne 0) {
+            $hex = "0x{0:X}" -f $mask.Value
+            Write-Host "${spaces}    Others: $hex"
+        }
     }
 }
 
