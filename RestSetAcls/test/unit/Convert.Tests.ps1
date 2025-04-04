@@ -18,88 +18,158 @@ Describe "Convert-SecurityDescriptor" {
         $rawSecurityDescriptor = [System.Security.AccessControl.RawSecurityDescriptor]::new($sddl)
     }
 
-    It "Should convert from <from> to <to>" -ForEach @(
-        @{ From = "Sddl";   To = "Sddl" },
-        @{ From = "Sddl";   To = "Base64" },
-        @{ From = "Sddl";   To = "Binary" },
-        @{ From = "Sddl";   To = "Raw"    },
-        @{ From = "Base64"; To = "Sddl"   },
-        @{ From = "Base64"; To = "Base64" },
-        @{ From = "Base64"; To = "Binary" },
-        @{ From = "Base64"; To = "Raw"    },
-        @{ From = "Binary"; To = "Sddl"   },
-        @{ From = "Binary"; To = "Base64" },
-        @{ From = "Binary"; To = "Binary" },
-        @{ From = "Binary"; To = "Raw"    },
-        @{ From = "Raw";    To = "Sddl"   },
-        @{ From = "Raw";    To = "Base64" },
-        @{ From = "Raw";    To = "Binary" },
-        @{ From = "Raw";    To = "Raw"    }
-    ) {
-        param ($From, $To, $ExpectedType)
+    Describe "-From -To" {
+        It "Should convert from <from> to <to>" -ForEach @(
+            @{ From = "Sddl";   To = "Sddl" },
+            @{ From = "Sddl";   To = "Base64" },
+            @{ From = "Sddl";   To = "Binary" },
+            @{ From = "Sddl";   To = "Raw"    },
+            @{ From = "Base64"; To = "Sddl"   },
+            @{ From = "Base64"; To = "Base64" },
+            @{ From = "Base64"; To = "Binary" },
+            @{ From = "Base64"; To = "Raw"    },
+            @{ From = "Binary"; To = "Sddl"   },
+            @{ From = "Binary"; To = "Base64" },
+            @{ From = "Binary"; To = "Binary" },
+            @{ From = "Binary"; To = "Raw"    },
+            @{ From = "Raw";    To = "Sddl"   },
+            @{ From = "Raw";    To = "Base64" },
+            @{ From = "Raw";    To = "Binary" },
+            @{ From = "Raw";    To = "Raw"    }
+        ) {
+            param ($From, $To, $ExpectedType)
 
-        $inputValue = switch ($From) {
-            'Sddl' { $sddl }
-            'Base64' { $base64 }
-            'Binary' { $binary }
-            'Raw' { $rawSecurityDescriptor }
+            $inputValue = switch ($From) {
+                'Sddl' { $sddl }
+                'Base64' { $base64 }
+                'Binary' { $binary }
+                'Raw' { $rawSecurityDescriptor }
+            }
+
+            $outputValue = Convert-SecurityDescriptor $inputValue -From $From -To $To
+            
+            switch ($_.To) {
+                'Sddl' {
+                    $outputValue | Should -BeOfType [string]
+                    $outputValue | Should -Be $sddl
+                }
+                'Base64' {
+                    $outputValue | Should -BeOfType [string]
+                    $outputValue | Should -Be $base64
+                }
+                'Binary' {
+                    $outputValue | Should -BeOfType [byte[]]
+                    $outputValue | Should -Be $binary
+                }
+                'Raw' {
+                    $outputValue | Should -BeOfType [System.Security.AccessControl.RawSecurityDescriptor]
+                    $outputValue | Should -Be $rawSecurityDescriptor
+                }
+            }
         }
 
-        $outputValue = Convert-SecurityDescriptor $inputValue -From $From -To $To
-        
-        switch ($_.To) {
-            'Sddl' {
-                $outputValue | Should -BeOfType [string]
-                $outputValue | Should -Be $sddl
-            }
-            'Base64' {
-                $outputValue | Should -BeOfType [string]
-                $outputValue | Should -Be $base64
-            }
-            'Binary' {
-                $outputValue | Should -BeOfType [byte[]]
-                $outputValue | Should -Be $binary
-            }
-            'Raw' {
-                $outputValue | Should -BeOfType [System.Security.AccessControl.RawSecurityDescriptor]
-                $outputValue | Should -Be $rawSecurityDescriptor
-            }
+        It "Should throw an error for null -From input format" {
+            { Convert-SecurityDescriptor $sddl -From $null -To Sddl } | Should -Throw
+        }
+
+        It "Should throw an error for invalid -From input format" {
+            { Convert-SecurityDescriptor $sddl -From "InvalidFormat" -To Sddl } | Should -Throw
+        }
+
+        It "Should throw an error for invalid -To output format" {
+            { Convert-SecurityDescriptor $sddl -From Sddl -To "InvalidFormat" } | Should -Throw
+        }
+
+        It "Should process multiple inputs from pipeline" {
+            $sddl1 = "O:SYG:SYD:AI(A;;0x1301bf;;;WD)"
+            $sddl2 = "O:SYG:SYD:AI(A;;0x1201bf;;;AU)"
+            $sddls = @($sddl1, $sddl2)
+            $results = $sddls | Convert-SecurityDescriptor -From Sddl -To Base64
+            $results | Should -BeOfType [string]
+            $results.Count | Should -Be 2
+        }
+
+        It "Should throw an error when -InputDescriptor type doesn't match -From type" {
+            { Convert-SecurityDescriptor $sddl -From Binary -To Raw } | Should -Throw
+            { Convert-SecurityDescriptor $sddl -From Base64 -To Raw } | Should -Throw
+            { Convert-SecurityDescriptor $sddl -From Raw -To Raw } | Should -Throw
+    
+            { Convert-SecurityDescriptor $binary -From Sddl -To Raw } | Should -Throw
+            { Convert-SecurityDescriptor $binary -From Base64 -To Raw } | Should -Throw
+            { Convert-SecurityDescriptor $binary -From Raw -To Raw } | Should -Throw
+    
+            { Convert-SecurityDescriptor $base64 -From Sddl -To Raw } | Should -Throw
+            { Convert-SecurityDescriptor $base64 -From Binary -To Raw } | Should -Throw
+            { Convert-SecurityDescriptor $base64 -From Raw -To Raw } | Should -Throw
+    
+            { Convert-SecurityDescriptor $rawSecurityDescriptor -From Sddl -To Raw } | Should -Throw
+            { Convert-SecurityDescriptor $rawSecurityDescriptor -From Base64 -To Raw } | Should -Throw
+            { Convert-SecurityDescriptor $rawSecurityDescriptor -From Binary -To Raw } | Should -Throw        
         }
     }
 
-    It "Should throw an error for invalid -From input format" {
-        { Convert-SecurityDescriptor $sddl -From "InvalidFormat" -To Sddl } | Should -Throw
-    }
+    Describe "-To" {
+        It "Should convert from <from> to <to>" -ForEach @(
+            @{ From = "Sddl";   To = "Sddl" },
+            @{ From = "Sddl";   To = "Base64" },
+            @{ From = "Sddl";   To = "Binary" },
+            @{ From = "Sddl";   To = "Raw"    },
+            @{ From = "Base64"; To = "Sddl"   },
+            @{ From = "Base64"; To = "Base64" },
+            @{ From = "Base64"; To = "Binary" },
+            @{ From = "Base64"; To = "Raw"    },
+            @{ From = "Binary"; To = "Sddl"   },
+            @{ From = "Binary"; To = "Base64" },
+            @{ From = "Binary"; To = "Binary" },
+            @{ From = "Binary"; To = "Raw"    },
+            @{ From = "Raw";    To = "Sddl"   },
+            @{ From = "Raw";    To = "Base64" },
+            @{ From = "Raw";    To = "Binary" },
+            @{ From = "Raw";    To = "Raw"    }
+        ) {
+            param ($From, $To, $ExpectedType)
 
-    It "Should throw an error for invalid -To output format" {
-        { Convert-SecurityDescriptor $sddl -From Sddl -To "InvalidFormat" } | Should -Throw
-    }
+            $inputValue = switch ($From) {
+                'Sddl' { $sddl }
+                'Base64' { $base64 }
+                'Binary' { $binary }
+                'Raw' { $rawSecurityDescriptor }
+            }
 
-    It "Should process multiple inputs from pipeline" {
-        $sddl1 = "O:SYG:SYD:AI(A;;0x1301bf;;;WD)"
-        $sddl2 = "O:SYG:SYD:AI(A;;0x1201bf;;;AU)"
-        $sddls = @($sddl1, $sddl2)
-        $results = $sddls | Convert-SecurityDescriptor -InputFormat Sddl -OutputFormat Base64
-        $results | Should -BeOfType [string]
-        $results.Count | Should -Be 2
-    }
+            $outputValue = Convert-SecurityDescriptor $inputValue -To $To
+            
+            switch ($_.To) {
+                'Sddl' {
+                    $outputValue | Should -BeOfType [string]
+                    $outputValue | Should -Be $sddl
+                }
+                'Base64' {
+                    $outputValue | Should -BeOfType [string]
+                    $outputValue | Should -Be $base64
+                }
+                'Binary' {
+                    $outputValue | Should -BeOfType [byte[]]
+                    $outputValue | Should -Be $binary
+                }
+                'Raw' {
+                    $outputValue | Should -BeOfType [System.Security.AccessControl.RawSecurityDescriptor]
+                    $outputValue | Should -Be $rawSecurityDescriptor
+                }
+            }
+        }
 
-    It "Should throw an error when -InputDescriptor type doesn't match -From type" {
-        { Convert-SecurityDescriptor $sddl -From Binary -To Raw } | Should -Throw
-        { Convert-SecurityDescriptor $sddl -From Base64 -To Raw } | Should -Throw
-        { Convert-SecurityDescriptor $sddl -From Raw -To Raw } | Should -Throw
+        It "Should throw an error for invalid -To output format" {
+            { Convert-SecurityDescriptor $sddl -To "InvalidFormat" } | Should -Throw
+        }
 
-        { Convert-SecurityDescriptor $binary -From Sddl -To Raw } | Should -Throw
-        { Convert-SecurityDescriptor $binary -From Base64 -To Raw } | Should -Throw
-        { Convert-SecurityDescriptor $binary -From Raw -To Raw } | Should -Throw
-
-        { Convert-SecurityDescriptor $base64 -From Sddl -To Raw } | Should -Throw
-        { Convert-SecurityDescriptor $base64 -From Binary -To Raw } | Should -Throw
-        { Convert-SecurityDescriptor $base64 -From Raw -To Raw } | Should -Throw
-
-        { Convert-SecurityDescriptor $rawSecurityDescriptor -From Sddl -To Raw } | Should -Throw
-        { Convert-SecurityDescriptor $rawSecurityDescriptor -From Base64 -To Raw } | Should -Throw
-        { Convert-SecurityDescriptor $rawSecurityDescriptor -From Binary -To Raw } | Should -Throw        
+        It "Should process multiple inputs from pipeline" {
+            $sddl1 = "O:SYG:SYD:AI(A;;0x1301bf;;;WD)"
+            $sddl2 = "O:SYG:SYD:AI(A;;0x1201bf;;;AU)"
+            $sddls = @($sddl1, $sddl2)
+            $results = $sddls | Convert-SecurityDescriptor -To Base64
+            $results | Should -BeOfType [string]
+            $results.Count | Should -Be 2
+        }
     }
 }
 

@@ -178,14 +178,14 @@ function Convert-SecurityDescriptor {
         # Convert a security descriptor from SDDL to Base64
         Convert-SecurityDescriptor "O:BAG:BAD:(A;;FA;;;SY)" -From Sddl -To Base64
 #>
-    [CmdletBinding()]
+    [CmdletBinding(SupportsShouldProcess = $true)]
     [OutputType([System.Security.AccessControl.RawSecurityDescriptor], [string], [byte[]])]
     param (
         [Parameter(Mandatory = $true, Position = 0, ValueFromPipeline = $true)]
         [Alias("Input")]
         [object]$InputDescriptor,
 
-        [Parameter(Mandatory = $true)]
+        [Parameter(Mandatory = $false)]
         [Alias("InputFormat")]
         [SecurityDescriptorFormat]$From,
 
@@ -195,7 +195,18 @@ function Convert-SecurityDescriptor {
     )
 
     process {
-        $rawDescriptor = ConvertTo-SecurityDescriptor $InputDescriptor -InputFormat $From
-        return ConvertFrom-SecurityDescriptor $rawDescriptor -OutputFormat $To
+        if ($null -eq $From) {
+            try {
+                $From = Get-InferredAclFormat $InputDescriptor
+            }
+            catch {
+                throw "Could not infer the format of the input. Use -From to explicitly specify the format."
+            }
+        }
+
+        if ($PSCmdlet.ShouldProcess($InputDescriptor, "Convert security descriptor from $From to $To")) {
+            $rawDescriptor = ConvertTo-SecurityDescriptor $InputDescriptor -InputFormat $From
+            return ConvertFrom-SecurityDescriptor $rawDescriptor -OutputFormat $To
+        }
     }
 }
