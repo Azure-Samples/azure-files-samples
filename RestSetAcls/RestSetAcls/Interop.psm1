@@ -1,4 +1,5 @@
-. $PSScriptRoot\SddlUtils.ps1
+. $PSScriptRoot\SddlUtils.ps1 -Force
+. $PSScriptRoot\Convert.ps1 -Force
 
 $signature = @'
 using System;
@@ -173,13 +174,20 @@ function CreatePrivateObjectSecurityEx {
         [bool]$isContainerObject = $IsDirectory
 
         # We don't want to run this with a token, so set AVOID_PRIVILEGE_CHECK and AVOID_OWNER_CHECK.
-        # We want to opt in to ACL inheritance, so set the SEF_DACL_AUTO_INHERIT and SEF_SACL_AUTO_INHERIT flags.
         $autoInheritFlags = (
             [AutoInheritFlags]::SEF_AVOID_PRIVILEGE_CHECK -bor
-            [AutoInheritFlags]::SEF_AVOID_OWNER_CHECK -bor
-            [AutoInheritFlags]::SEF_DACL_AUTO_INHERIT -bor
-            [AutoInheritFlags]::SEF_SACL_AUTO_INHERIT
-        )
+            [AutoInheritFlags]::SEF_AVOID_OWNER_CHECK
+        )     
+
+        # TODO: this is a hack. This logic should be in the caller...
+        # We want to opt in to ACL inheritance, so set the SEF_DACL_AUTO_INHERIT and SEF_SACL_AUTO_INHERIT flags if the DACL/SACL are not protected.
+        if (-not ($CreatorDescriptor.ControlFlags -band [System.Security.AccessControl.ControlFlags]::DiscretionaryAclProtected)) {
+            $autoInheritFlags = $autoInheritFlags -bor [AutoInheritFlags]::SEF_DACL_AUTO_INHERIT
+        }
+
+        if (-not ($CreatorDescriptor.ControlFlags -band [System.Security.AccessControl.ControlFlags]::SystemAclProtected)) {
+            $autoInheritFlags = $autoInheritFlags -bor [AutoInheritFlags]::SEF_SACL_AUTO_INHERIT
+        }
 
         # We do not allow CreatorDescriptor to be null in this implementation, so according to
         # MS-DTYP 2.5.3.4, the token will never be used. Hence we can safely set it to null.
