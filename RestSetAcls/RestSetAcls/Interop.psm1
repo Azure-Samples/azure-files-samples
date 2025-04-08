@@ -210,7 +210,7 @@ function CreatePrivateObjectSecurityEx {
             [ref] $newDescriptorIntPtr, 
             $objectTypeIntPtr,
             $isContainerObject,
-            [uint]$autoInheritFlags,
+            [uint32]$autoInheritFlags,
             $token, 
             [ref] $genericMapping
         )
