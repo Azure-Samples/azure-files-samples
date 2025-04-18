@@ -6,7 +6,7 @@ Describe "Interop" {
     Describe "CreatePrivateObjectSecurityEx" {
         Context "Child is a folder" {
             BeforeAll {
-                function Test {
+                function Test-Inheritance {
                     param (
                         [Parameter(Mandatory = $true)]
                         [string]$ParentSddl,
@@ -28,14 +28,14 @@ Describe "Interop" {
             }
 
             It "Only adds AI when there is nothing to inherit in the parent" {
-                Test `
+                Test-Inheritance `
                     -ParentSddl "O:BAG:BAD:(A;;FA;;;BA)" `
                     -ChildSddl "O:SYG:SYD:(A;;FA;;;SY)" `
                     -ExpectedSddl "O:SYG:SYD:AI(A;;FA;;;SY)"
             }
 
             It "Changes nothing when child is already AI and there is nothing to inherit in the parent" {
-                Test `
+                Test-Inheritance `
                     -ParentSddl "O:BAG:BAD:(A;;FA;;;BA)" `
                     -ChildSddl "O:SYG:SYD:AI(A;;FA;;;SY)" `
                     -ExpectedSddl "O:SYG:SYD:AI(A;;FA;;;SY)"
@@ -59,14 +59,14 @@ Describe "Interop" {
               @{ ParentAceFlags = "OICIIOID"; ChildAceFlags = "OICIID" }
 
             ) {
-                Test `
+                Test-Inheritance `
                     -ParentSddl "O:BAG:BAD:(A;$($_.ParentAceFlags);FA;;;BA)" `
                     -ChildSddl "O:SYG:SYD:(A;;FA;;;SY)" `
                     -ExpectedSddl "O:SYG:SYD:AI(A;;FA;;;SY)(A;$($_.ChildAceFlags);FA;;;BA)"
             }
 
             It "Inherits nothing when child is marked as P" {
-                Test `
+                Test-Inheritance `
                     -ParentSddl "O:BAG:BAD:(A;OICI;FA;;;BA)" `
                     -ChildSddl "O:SYG:SYD:P(A;;FA;;;SY)" `
                     -ExpectedSddl "O:SYG:SYD:P(A;;FA;;;SY)"
@@ -75,7 +75,7 @@ Describe "Interop" {
 
         Context "Child is a file" {
             BeforeAll {
-                function Test {
+                function Test-Inheritance {
                     param (
                         [Parameter(Mandatory = $true)]
                         [string]$ParentSddl,
@@ -98,14 +98,14 @@ Describe "Interop" {
             }
 
             It "Only adds AI when there is nothing to inherit in the parent" {
-                Test `
+                Test-Inheritance `
                     -ParentSddl "O:BAG:BAD:(A;;FA;;;BA)" `
                     -ChildSddl "O:SYG:SYD:(A;;FA;;;SY)" `
                     -ExpectedSddl "O:SYG:SYD:AI(A;;FA;;;SY)"
             }
 
             It "Changes nothing when child is already AI and there is nothing to inherit in the parent" {
-                Test `
+                Test-Inheritance `
                     -ParentSddl "O:BAG:BAD:(A;;FA;;;BA)" `
                     -ChildSddl "O:SYG:SYD:AI(A;;FA;;;SY)" `
                     -ExpectedSddl "O:SYG:SYD:AI(A;;FA;;;SY)"
@@ -124,7 +124,7 @@ Describe "Interop" {
               @{ ParentAceFlags = "OICIIOID"; ChildAceFlags = "ID" }
 
             ) {
-                Test `
+                Test-Inheritance `
                     -ParentSddl "O:BAG:BAD:(A;$($_.ParentAceFlags);FA;;;BA)" `
                     -ChildSddl "O:SYG:SYD:(A;;FA;;;SY)" `
                     -ExpectedSddl "O:SYG:SYD:AI(A;;FA;;;SY)(A;$($_.ChildAceFlags);FA;;;BA)"
@@ -137,14 +137,14 @@ Describe "Interop" {
                 @{ ParentAceFlags = "CIID" },
                 @{ ParentAceFlags = "CIIOID" }
             ) {
-                Test `
+                Test-Inheritance `
                     -ParentSddl "O:BAG:BAD:(A;$($_.ParentAceFlags);FA;;;BA)" `
                     -ChildSddl "O:SYG:SYD:(A;;FA;;;SY)" `
                     -ExpectedSddl "O:SYG:SYD:AI(A;;FA;;;SY)"
             }
 
             It "Inherits nothing when child is marked as P" {
-                Test `
+                Test-Inheritance `
                     -ParentSddl "O:BAG:BAD:(A;OICI;FA;;;BA)" `
                     -ChildSddl "O:SYG:SYD:P(A;;FA;;;SY)" `
                     -ExpectedSddl "O:SYG:SYD:P(A;;FA;;;SY)"
