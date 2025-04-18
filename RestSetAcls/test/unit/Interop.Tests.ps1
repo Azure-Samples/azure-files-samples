@@ -3,40 +3,80 @@ BeforeAll {
 }
 
 Describe "Interop" {
+    BeforeAll {
+        function Test-Inheritance {
+            param (
+                [Parameter(Mandatory = $true)]
+                [string]$ParentSddl,
+
+                [Parameter(Mandatory = $true)]
+                [string]$ChildSddl,
+
+                [Parameter(Mandatory = $true)]
+                [string]$ExpectedSddl,
+
+                [Parameter(Mandatory = $true)]
+                [bool]$ChildIsDirectory
+            )
+
+            $childFormat = if ($ChildIsDirectory) { "FolderAcl" } else { "FileAcl" }
+
+            $parentDescriptor = Convert-SecurityDescriptor $ParentSddl -From Sddl -To FolderAcl
+            $creatorDescriptor = Convert-SecurityDescriptor $ChildSddl -From Sddl -To $childFormat
+            
+            $result = CreatePrivateObjectSecurityEx `
+                -ParentDescriptor $parentDescriptor `
+                -CreatorDescriptor $creatorDescriptor `
+                -IsDirectory $ChildIsDirectory
+
+            $result | Should -Not -BeNullOrEmpty
+            $resultSddl = Convert-SecurityDescriptor $result -From $childFormat -To Sddl
+            $reason = "inheritance with parent sddl: $ParentSddl, creator sddl: $ChildSddl is not as expected"
+            $resultSddl | Should -Be $ExpectedSddl -Because $reason
+        }
+
+        function Test-FileInheritance {
+            param (
+                [Parameter(Mandatory = $true)]
+                [string]$ParentSddl,
+
+                [Parameter(Mandatory = $true)]
+                [string]$ChildSddl,
+
+                [Parameter(Mandatory = $true)]
+                [string]$ExpectedSddl
+            )
+
+            Test-Inheritance -ParentSddl $ParentSddl -ChildSddl $ChildSddl -ExpectedSddl $ExpectedSddl -ChildIsDirectory $false
+        }
+
+        function Test-FolderInheritance {
+            param (
+                [Parameter(Mandatory = $true)]
+                [string]$ParentSddl,
+
+                [Parameter(Mandatory = $true)]
+                [string]$ChildSddl,
+
+                [Parameter(Mandatory = $true)]
+                [string]$ExpectedSddl
+            )
+
+            Test-Inheritance -ParentSddl $ParentSddl -ChildSddl $ChildSddl -ExpectedSddl $ExpectedSddl -ChildIsDirectory $true
+        }
+    }
+
     Describe "CreatePrivateObjectSecurityEx" {
         Context "Child is a folder" {
-            BeforeAll {
-                function Test-Inheritance {
-                    param (
-                        [Parameter(Mandatory = $true)]
-                        [string]$ParentSddl,
-                        [Parameter(Mandatory = $true)]
-                        [string]$ChildSddl,
-                        [Parameter(Mandatory = $true)]
-                        [string]$ExpectedSddl
-                    )
-
-                    $parentDescriptor = Convert-SecurityDescriptor $ParentSddl -From Sddl -To FolderAcl
-                    $creatorDescriptor = Convert-SecurityDescriptor $ChildSddl -From Sddl -To FolderAcl
-    
-                    $result = CreatePrivateObjectSecurityEx -ParentDescriptor $parentDescriptor -CreatorDescriptor $creatorDescriptor -IsDirectory $true
-    
-                    $result | Should -Not -BeNullOrEmpty
-                    $resultSddl = Convert-SecurityDescriptor $result -From FolderAcl -To Sddl
-                    $reason = "inheritance with parent Sddl: $ParentSddl, creator sddl: $ChildSddl is not as expected"
-                    $resultSddl | Should -Be $ExpectedSddl -Because $reason
-                }
-            }
-
             It "Only adds AI when there is nothing to inherit in the parent" {
-                Test-Inheritance `
+                Test-FolderInheritance `
                     -ParentSddl "O:BAG:BAD:(A;;FA;;;BA)" `
                     -ChildSddl "O:SYG:SYD:(A;;FA;;;SY)" `
                     -ExpectedSddl "O:SYG:SYD:AI(A;;FA;;;SY)"
             }
 
             It "Changes nothing when child is already AI and there is nothing to inherit in the parent" {
-                Test-Inheritance `
+                Test-FolderInheritance `
                     -ParentSddl "O:BAG:BAD:(A;;FA;;;BA)" `
                     -ChildSddl "O:SYG:SYD:AI(A;;FA;;;SY)" `
                     -ExpectedSddl "O:SYG:SYD:AI(A;;FA;;;SY)"
@@ -60,7 +100,7 @@ Describe "Interop" {
               @{ ParentAceFlags = "OICIIOID"; ChildAceFlags = "OICIID" }
 
             ) {
-                Test-Inheritance `
+                Test-FolderInheritance `
                     -ParentSddl "O:BAG:BAD:(A;$($_.ParentAceFlags);FA;;;BA)" `
                     -ChildSddl "O:SYG:SYD:(A;;FA;;;SY)" `
                     -ExpectedSddl "O:SYG:SYD:AI(A;;FA;;;SY)(A;$($_.ChildAceFlags);FA;;;BA)"
@@ -74,7 +114,7 @@ Describe "Interop" {
                 @{ ParentAclFlags = "PAI"; ChildAclFlags = "P" },
                 @{ ParentAclFlags = "PAI"; ChildAclFlags = "PAI" }
             ) {
-                Test-Inheritance `
+                Test-FolderInheritance `
                     -ParentSddl "O:BAG:BAD:$($_.ParentAclFlags)(A;OICI;FA;;;BA)" `
                     -ChildSddl "O:SYG:SYD:$($_.ChildAclFlags)(A;;FA;;;SY)" `
                     -ExpectedSddl "O:SYG:SYD:P(A;;FA;;;SY)"
@@ -86,7 +126,7 @@ Describe "Interop" {
                 @{ ParentAclFlags = "PAI"; ChildAclFlags = "" },
                 @{ ParentAclFlags = "PAI"; ChildAclFlags = "AI" }
             ) {
-                Test-Inheritance `
+                Test-FolderInheritance `
                     -ParentSddl "O:BAG:BAD:$($_.ParentAclFlags)(A;OICI;FA;;;BA)" `
                     -ChildSddl "O:SYG:SYD:$($_.ChildAclFlags)(A;;FA;;;SY)" `
                     -ExpectedSddl "O:SYG:SYD:AI(A;;FA;;;SY)(A;OICIID;FA;;;BA)"
@@ -94,38 +134,15 @@ Describe "Interop" {
         }
 
         Context "Child is a file" {
-            BeforeAll {
-                function Test-Inheritance {
-                    param (
-                        [Parameter(Mandatory = $true)]
-                        [string]$ParentSddl,
-                        [Parameter(Mandatory = $true)]
-                        [string]$ChildSddl,
-                        [Parameter(Mandatory = $true)]
-                        [string]$ExpectedSddl
-                    )
-
-                    $parentDescriptor = Convert-SecurityDescriptor $ParentSddl -From Sddl -To FolderAcl
-                    $creatorDescriptor = Convert-SecurityDescriptor $ChildSddl -From Sddl -To FileAcl
-    
-                    $result = CreatePrivateObjectSecurityEx -ParentDescriptor $parentDescriptor -CreatorDescriptor $creatorDescriptor -IsDirectory $false
-    
-                    $result | Should -Not -BeNullOrEmpty
-                    #$resultSddl = $result.GetSddlForm([System.Security.AccessControl.AccessControlSections]::All)
-                    $resultSddl = Convert-SecurityDescriptor $result -From FileAcl -To Sddl
-                    $resultSddl | Should -Be $ExpectedSddl -Because "Parent Sddl: $ParentSddl, Child Sddl: $ChildSddl"
-                }
-            }
-
             It "Only adds AI when there is nothing to inherit in the parent" {
-                Test-Inheritance `
+                Test-FileInheritance `
                     -ParentSddl "O:BAG:BAD:(A;;FA;;;BA)" `
                     -ChildSddl "O:SYG:SYD:(A;;FA;;;SY)" `
                     -ExpectedSddl "O:SYG:SYD:AI(A;;FA;;;SY)"
             }
 
             It "Changes nothing when child is already AI and there is nothing to inherit in the parent" {
-                Test-Inheritance `
+                Test-FileInheritance `
                     -ParentSddl "O:BAG:BAD:(A;;FA;;;BA)" `
                     -ChildSddl "O:SYG:SYD:AI(A;;FA;;;SY)" `
                     -ExpectedSddl "O:SYG:SYD:AI(A;;FA;;;SY)"
@@ -144,7 +161,7 @@ Describe "Interop" {
               @{ ParentAceFlags = "OICIIOID"; ChildAceFlags = "ID" }
 
             ) {
-                Test-Inheritance `
+                Test-FileInheritance `
                     -ParentSddl "O:BAG:BAD:(A;$($_.ParentAceFlags);FA;;;BA)" `
                     -ChildSddl "O:SYG:SYD:(A;;FA;;;SY)" `
                     -ExpectedSddl "O:SYG:SYD:AI(A;;FA;;;SY)(A;$($_.ChildAceFlags);FA;;;BA)"
@@ -157,7 +174,7 @@ Describe "Interop" {
                 @{ ParentAceFlags = "CIID" },
                 @{ ParentAceFlags = "CIIOID" }
             ) {
-                Test-Inheritance `
+                Test-FileInheritance `
                     -ParentSddl "O:BAG:BAD:(A;$($_.ParentAceFlags);FA;;;BA)" `
                     -ChildSddl "O:SYG:SYD:(A;;FA;;;SY)" `
                     -ExpectedSddl "O:SYG:SYD:AI(A;;FA;;;SY)"
@@ -171,7 +188,7 @@ Describe "Interop" {
                 @{ ParentAclFlags = "PAI"; ChildAclFlags = "P" },
                 @{ ParentAclFlags = "PAI"; ChildAclFlags = "PAI" }
             ) {
-                Test-Inheritance `
+                Test-FileInheritance `
                     -ParentSddl "O:BAG:BAD:$($_.ParentAclFlags)(A;OICI;FA;;;BA)" `
                     -ChildSddl "O:SYG:SYD:$($_.ChildAclFlags)(A;;FA;;;SY)" `
                     -ExpectedSddl "O:SYG:SYD:P(A;;FA;;;SY)"
@@ -183,7 +200,7 @@ Describe "Interop" {
                 @{ ParentAclFlags = "PAI"; ChildAclFlags = "" },
                 @{ ParentAclFlags = "PAI"; ChildAclFlags = "AI" }
             ) {
-                Test-Inheritance `
+                Test-FileInheritance `
                     -ParentSddl "O:BAG:BAD:$($_.ParentAclFlags)(A;OICI;FA;;;BA)" `
                     -ChildSddl "O:SYG:SYD:$($_.ChildAclFlags)(A;;FA;;;SY)" `
                     -ExpectedSddl "O:SYG:SYD:AI(A;;FA;;;SY)(A;ID;FA;;;BA)"
