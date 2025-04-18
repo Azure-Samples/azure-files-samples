@@ -23,7 +23,8 @@ Describe "Interop" {
     
                     $result | Should -Not -BeNullOrEmpty
                     $resultSddl = Convert-SecurityDescriptor $result -From FolderAcl -To Sddl
-                    $resultSddl | Should -Be $ExpectedSddl -Because "Parent Sddl: $ParentSddl, Child Sddl: $ChildSddl"
+                    $reason = "inheritance with parent Sddl: $ParentSddl, creator sddl: $ChildSddl is not as expected"
+                    $resultSddl | Should -Be $ExpectedSddl -Because $reason
                 }
             }
 
@@ -65,11 +66,30 @@ Describe "Interop" {
                     -ExpectedSddl "O:SYG:SYD:AI(A;;FA;;;SY)(A;$($_.ChildAceFlags);FA;;;BA)"
             }
 
-            It "Inherits nothing when child is marked as P" {
+            It "Inherits nothing when parent ACL is '<ParentAclFlags>' and child ACL is '<ChildAclFlags>'" -ForEach @(
+                @{ ParentAclFlags = ""; ChildAclFlags = "P" },
+                @{ ParentAclFlags = ""; ChildAclFlags = "PAI" },
+                @{ ParentAclFlags = "P"; ChildAclFlags = "P" },
+                @{ ParentAclFlags = "P"; ChildAclFlags = "PAI" },
+                @{ ParentAclFlags = "PAI"; ChildAclFlags = "P" },
+                @{ ParentAclFlags = "PAI"; ChildAclFlags = "PAI" }
+            ) {
                 Test-Inheritance `
-                    -ParentSddl "O:BAG:BAD:(A;OICI;FA;;;BA)" `
-                    -ChildSddl "O:SYG:SYD:P(A;;FA;;;SY)" `
+                    -ParentSddl "O:BAG:BAD:$($_.ParentAclFlags)(A;OICI;FA;;;BA)" `
+                    -ChildSddl "O:SYG:SYD:$($_.ChildAclFlags)(A;;FA;;;SY)" `
                     -ExpectedSddl "O:SYG:SYD:P(A;;FA;;;SY)"
+            }
+
+            It "Inherits parent ACE when parent ACL is '<ParentAclFlags>' and child ACL is '<ChildAclFlags>'" -ForEach @(
+                @{ ParentAclFlags = "P"; ChildAclFlags = "" },
+                @{ ParentAclFlags = "P"; ChildAclFlags = "AI" },
+                @{ ParentAclFlags = "PAI"; ChildAclFlags = "" },
+                @{ ParentAclFlags = "PAI"; ChildAclFlags = "AI" }
+            ) {
+                Test-Inheritance `
+                    -ParentSddl "O:BAG:BAD:$($_.ParentAclFlags)(A;OICI;FA;;;BA)" `
+                    -ChildSddl "O:SYG:SYD:$($_.ChildAclFlags)(A;;FA;;;SY)" `
+                    -ExpectedSddl "O:SYG:SYD:AI(A;;FA;;;SY)(A;OICIID;FA;;;BA)"
             }
         }
 
@@ -143,11 +163,30 @@ Describe "Interop" {
                     -ExpectedSddl "O:SYG:SYD:AI(A;;FA;;;SY)"
             }
 
-            It "Inherits nothing when child is marked as P" {
+            It "Inherits nothing when parent ACL is '<ParentAclFlags>' and child ACL is '<ChildAclFlags>'" -ForEach @(
+                @{ ParentAclFlags = ""; ChildAclFlags = "P" },
+                @{ ParentAclFlags = ""; ChildAclFlags = "PAI" },
+                @{ ParentAclFlags = "P"; ChildAclFlags = "P" },
+                @{ ParentAclFlags = "P"; ChildAclFlags = "PAI" },
+                @{ ParentAclFlags = "PAI"; ChildAclFlags = "P" },
+                @{ ParentAclFlags = "PAI"; ChildAclFlags = "PAI" }
+            ) {
                 Test-Inheritance `
-                    -ParentSddl "O:BAG:BAD:(A;OICI;FA;;;BA)" `
-                    -ChildSddl "O:SYG:SYD:P(A;;FA;;;SY)" `
+                    -ParentSddl "O:BAG:BAD:$($_.ParentAclFlags)(A;OICI;FA;;;BA)" `
+                    -ChildSddl "O:SYG:SYD:$($_.ChildAclFlags)(A;;FA;;;SY)" `
                     -ExpectedSddl "O:SYG:SYD:P(A;;FA;;;SY)"
+            }
+
+            It "Inherits parent ACE when parent ACL is '<ParentAclFlags>' and child ACL is '<ChildAclFlags>'" -ForEach @(
+                @{ ParentAclFlags = "P"; ChildAclFlags = "" },
+                @{ ParentAclFlags = "P"; ChildAclFlags = "AI" },
+                @{ ParentAclFlags = "PAI"; ChildAclFlags = "" },
+                @{ ParentAclFlags = "PAI"; ChildAclFlags = "AI" }
+            ) {
+                Test-Inheritance `
+                    -ParentSddl "O:BAG:BAD:$($_.ParentAclFlags)(A;OICI;FA;;;BA)" `
+                    -ChildSddl "O:SYG:SYD:$($_.ChildAclFlags)(A;;FA;;;SY)" `
+                    -ExpectedSddl "O:SYG:SYD:AI(A;;FA;;;SY)(A;ID;FA;;;BA)"
             }
         }
     }
