@@ -199,6 +199,18 @@ Describe "New-AzFileAcl" {
             $permission | Should -Be "O:SYG:SYD:P(A;;FA;;;BA)S:NO_ACCESS_CONTROL"
         }
     }
+
+    Describe "-ShareClient" {
+        It "Should create a new permission key" {
+            $sddl = "O:SYG:SYD:P(A;;FA;;;BA)"
+
+            $key = New-AzFileAcl -ShareClient $global:share.ShareClient -Acl $sddl
+            Assert-IsAclKey $key
+
+            $permission = Get-AzFileAclFromKey -Context $global:context -FileShareName $global:fileShareName -Key $key
+            $permission | Should -Be "O:SYG:SYD:P(A;;FA;;;BA)S:NO_ACCESS_CONTROL"
+        }
+    }
 }
 
 Describe "Set-AzFileAclKey" {
@@ -222,6 +234,7 @@ Describe "Set-AzFileAclKey" {
 
             # Get a reference to it
             $file = Get-File $fileName
+            $client = if ($_.Type -eq "file") { $file.ShareFileClient } else { $file.ShareDirectoryClient }
         }
 
         Describe "-File" {
@@ -251,6 +264,20 @@ Describe "Set-AzFileAclKey" {
                 $sddlAfter | Should -Be $sddl
             }
         }
+
+        Describe "-Client" {
+            It "Should set the permission key" {
+                $sddl = "O:SYG:SYD:P(A;;FA;;;AU)S:NO_ACCESS_CONTROL"
+                $key = New-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -Acl $sddl
+
+                $keyAfter = Set-AzFileAclKey -Client $client -Key $key
+                
+                Assert-IsAclKey $keyAfter
+                $keyAfter | Should -Not -Be $keyBefore
+                $sddlAfter = Get-AzFileAclFromKey -Key $keyAfter -Context $global:context -FileShareName $global:fileShareName
+                $sddlAfter | Should -Be $sddl
+            }
+        }
     }
 }
 
@@ -259,22 +286,6 @@ Describe "Set-AzFileAcl" {
         @{ Type = "file" },
         @{ Type = "directory" }
     ) {
-        BeforeEach {
-            # Create file or directory
-            if ($Type -eq "file") {
-                $fileName = "$(New-RandomString -Length 8).txt"
-                New-File -Path $fileName -Size 1024
-            } elseif ($Type -eq "directory") {
-                $fileName = New-RandomString -Length 8
-                New-Directory $fileName
-            } else {
-                throw "Invalid type specified. Use 'file' or 'directory'."
-            }
-
-            # Get a reference to it
-            $file = Get-File $fileName
-        }
-
         BeforeDiscovery {
             $smallSddl = "O:SYG:SYD:P(A;;FA;;;AU)S:NO_ACCESS_CONTROL"
             $smallBase64 = Convert-SecurityDescriptor $smallSddl -From Sddl -To Base64
@@ -293,26 +304,69 @@ Describe "Set-AzFileAcl" {
             $largeBase64 = Convert-SecurityDescriptor $largeSddl -From Sddl -To Base64
         }
 
-        It "Should set a <size> SDDL permission" -ForEach @(
-            @{ Size = "small"; Sddl = $smallSddl },
-            @{ Size = "large"; Sddl = $largeSddl }
-        ) {
-            $returnedKey = Set-AzFileAcl -File $file -Acl $Sddl        
-            Assert-IsAclKey $returnedKey
+        BeforeEach {
+            # Create file or directory
+            if ($Type -eq "file") {
+                $fileName = "$(New-RandomString -Length 8).txt"
+                New-File -Path $fileName -Size 1024
+            } elseif ($Type -eq "directory") {
+                $fileName = New-RandomString -Length 8
+                New-Directory $fileName
+            } else {
+                throw "Invalid type specified. Use 'file' or 'directory'."
+            }
 
-            $sddlAfter = Get-AzFileAclFromKey -Key $returnedKey -Share $global:share
-            $sddlAfter | Should -Be $Sddl
+            # Get a reference to it
+            $file = Get-File $fileName
+            $client = if ($Type -eq "file") { $file.ShareFileClient } else { $file.ShareDirectoryClient }
         }
 
-        It "Should set a <size> base64 permission" -ForEach @(
-            @{ Size = "small"; Base64 = $smallBase64 },
-            @{ Size = "large"; Base64 = $largeBase64 }
-        ) {
-            $returnedKey = Set-AzFileAcl -File $file -Acl $Base64 -AclFormat Base64
-            Assert-IsAclKey $returnedKey
-            
-            $base64After = Get-AzFileAclFromKey -Key $returnedKey -Share $global:share -OutputFormat Base64
-            $base64After | Should -Be $Base64
+        Describe "-File" {
+            It "Should set a <size> SDDL permission" -ForEach @(
+                @{ Size = "small"; Sddl = $smallSddl },
+                @{ Size = "large"; Sddl = $largeSddl }
+            ) {
+                $returnedKey = Set-AzFileAcl -File $file -Acl $Sddl        
+                Assert-IsAclKey $returnedKey
+
+                $sddlAfter = Get-AzFileAclFromKey -Key $returnedKey -Share $global:share
+                $sddlAfter | Should -Be $Sddl
+            }
+
+            It "Should set a <size> base64 permission" -ForEach @(
+                @{ Size = "small"; Base64 = $smallBase64 },
+                @{ Size = "large"; Base64 = $largeBase64 }
+            ) {
+                $returnedKey = Set-AzFileAcl -File $file -Acl $Base64 -AclFormat Base64
+                Assert-IsAclKey $returnedKey
+                
+                $base64After = Get-AzFileAclFromKey -Key $returnedKey -Share $global:share -OutputFormat Base64
+                $base64After | Should -Be $Base64
+            }
+        }
+
+        Describe "-Client" {
+            It "Should set a <size> SDDL permission" -ForEach @(
+                @{ Size = "small"; Sddl = $smallSddl },
+                @{ Size = "large"; Sddl = $largeSddl }
+            ) {
+                $returnedKey = Set-AzFileAcl -Client $client -Acl $Sddl
+                Assert-IsAclKey $returnedKey
+
+                $sddlAfter = Get-AzFileAclFromKey -Key $returnedKey -Share $global:share
+                $sddlAfter | Should -Be $Sddl
+            }
+
+            It "Should set a <size> base64 permission" -ForEach @(
+                @{ Size = "small"; Base64 = $smallBase64 },
+                @{ Size = "large"; Base64 = $largeBase64 }
+            ) {
+                $returnedKey = Set-AzFileAcl -Client $client -Acl $Base64 -AclFormat Base64
+                Assert-IsAclKey $returnedKey
+                
+                $base64After = Get-AzFileAclFromKey -Key $returnedKey -Share $global:share -OutputFormat Base64
+                $base64After | Should -Be $Base64
+            }
         }
     }
 }

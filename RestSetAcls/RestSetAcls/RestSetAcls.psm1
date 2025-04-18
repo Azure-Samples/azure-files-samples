@@ -185,110 +185,52 @@ function Get-ShareName {
     }
 }
 
-function Get-AzFilesAndDirectoriesRecursiveV2 {
+function Get-ClientFromFile {
     param (
         [Parameter(Mandatory = $true)]
-        [Azure.Storage.Files.Shares.ShareDirectoryClient]$DirectoryClient,
-
-        [Parameter(Mandatory = $false)]
-        [switch]$IncludePermissionKey = $false,
-
-        [Parameter(Mandatory = $false)]
-        [switch]$IncludePermissionKeyAndPermission = $false
+        [Microsoft.WindowsAzure.Commands.Common.Storage.ResourceModel.AzureStorageBase]$File
     )
 
-    if ($IncludePermissionKeyAndPermission) {
-        $IncludePermissionKey = $true
+    if ($File -is [Microsoft.WindowsAzure.Commands.Common.Storage.ResourceModel.AzureStorageFileDirectory]) {
+        return $File.ShareDirectoryClient
     }
-
-    $shareClient = $DirectoryClient.GetParentShareClient()
-    $options = [Azure.Storage.Files.Shares.Models.ShareDirectoryGetFilesAndDirectoriesOptions]::new()  
-    
-    # Get permission keys, if requested
-    $directoryPermissionKey = $null
-    $parentPermissionKey = $null
-    if ($IncludePermissionKey) {
-        # Get the root directory's permission key
-        $directoryPermissionKey = $DirectoryClient.GetProperties().Value.SmbProperties.FilePermissionKey
-        
-        # Get the parent directory's permission key, if there is a parent
-        if ($DirectoryClient.Path -ne "") {
-            $parentClient = $DirectoryClient.GetParentDirectoryClient()
-            if ($null -ne $parentClient) {
-                $parentPermissionKey = $parentClient.GetProperties().Value.SmbProperties.FilePermissionKey
-            }
-        }
-
-        # Tweak the options to include the permission key in the response
-        $options.IncludeExtendedInfo = $true
-        $options.Traits = [Azure.Storage.Files.Shares.Models.ShareFileTraits]::PermissionKey
+    elseif ($File -is [Microsoft.WindowsAzure.Commands.Common.Storage.ResourceModel.AzureStorageFile]) {
+        return $File.ShareFileClient
     }
-
-    # Get permission values, if requested
-    $directoryPermission = $null
-    $parentPermission = $null
-    if ($IncludePermissionKeyAndPermission) {
-        $directoryPermission = Get-AzFileAclFromKey `
-            -Key $directoryPermissionKey
-            -ShareClient $shareClient `
-            -OutputFormat Raw
-
-        # Get parent directory's permission value, if if it exists
-        if ($null -ne $parentPermissionKey) {
-            $parentPermission = Get-AzFileAclFromKey `
-                -Key $parentPermissionKey `
-                -ShareClient $shareClient `
-                -OutputFormat Raw
-        }
-    }    
-
-    # Visit the root first
-    Write-Output @{
-        Name = $DirectoryClient.Name
-        Path = $DirectoryClient.Path
-        IsDirectory = $true
-        Permission = $directoryPermission
-        PermissionKey = $directoryPermissionKey
-        ParentPermission = $parentPermission
-        ParentPermissionKey = $parentPermissionKey
+    else {
+        throw "Invalid parameter File. Expected AzureStorageFileDirectory or AzureStorageFile."
     }
+}
 
-    # Then recursively visit all subdirectories. This is a breadth-first search.
-    $stack = [System.Collections.Generic.Stack[Azure.Storage.Files.Shares.ShareDirectoryClient]]::new()
-    $stack.Push($DirectoryClient)
+function Get-IsDirectoryClient {
+    param (
+        [Parameter(Mandatory = $true, Position = 0)]
+        [object]$Client
+    )
 
-    $permissionKeysStack = $null
-    if ($IncludePermissionKey) {
-        $permissionKeysStack = [System.Collections.Generic.Stack[string]]::new()
-        $permissionKeysStack.Push($directoryPermissionKey)
+    if ($Client -is [Azure.Storage.Files.Shares.ShareDirectoryClient]) {
+        return $true
     }
-    
-    while ($stack.Count -gt 0) {
-        $parent = $stack.Pop()
-        $parentPermissionKey = if ($IncludePermissionKey) { $permissionKeysStack.Pop() } else { $null }
+    elseif ($Client -is [Azure.Storage.Files.Shares.ShareFileClient]) {
+        return $false
+    }
+    else {
+        throw "Invalid parameter Client. Expected ShareDirectoryClient or ShareFileClient."
+    }
+}
 
-        # Get the files and directories in the parent directory
-        $contents = $parent.GetFilesAndDirectories($options)
-        foreach ($item in $contents.GetEnumerator()) {
-            $path = if ($parent.Path -eq "") { $item.Name } else { $parent.Path + "/" + $item.Name }
+function Get-ShareClientFromFileOrDirectoryClient {
+    param (
+        [Parameter(Mandatory = $true, Position = 0)]
+        [object]$Client
+    )
 
-            Write-Output @{
-                Name = $item.Name
-                Path = $path
-                IsDirectory = $item.IsDirectory
-                PermissionKey = $item.PermissionKey
-                ParentPermissionKey = $parentPermissionKey
-            }
-
-            # Recurse on directories
-            if ($item.IsDirectory) {
-                $subdirectoryClient = $parent.GetSubdirectoryClient($item.Name)
-                $stack.Push($subdirectoryClient)
-                if ($IncludePermissionKey) {
-                    $permissionKeysStack.Push($item.PermissionKey)
-                }
-            }
-        }
+    if ($Client -is [Azure.Storage.Files.Shares.ShareDirectoryClient] -or
+        $Client -is [Azure.Storage.Files.Shares.ShareFileClient]) {
+        return [Azure.Storage.Files.Shares.Specialized.SpecializedShareExtensions]::GetParentShareClient($Client)
+    }
+    else {
+        throw "Invalid parameter Client. Expected ShareDirectoryClient or ShareFileClient."
     }
 }
 
@@ -360,6 +302,9 @@ function New-AzFileAcl {
     .PARAMETER FileShareName
     Specifies the name of the Azure file share where the ACL will be applied.
 
+    .PARAMETER ShareClient
+    Specifies the Azure storage file share client with which the ACL will be applied.
+
     .PARAMETER Acl
     Specifies the ACL to be applied. This can be in SDDL format, base64-encoded binary, binary array, or RawSecurityDescriptor.
 
@@ -390,46 +335,59 @@ function New-AzFileAcl {
     [CmdletBinding(SupportsShouldProcess = $true)]
     [OutputType([string])]
     param (
-        [Parameter(Mandatory = $true, HelpMessage = "Azure storage context")]
+        [Parameter(Mandatory = $true, ParameterSetName = "FileShareName")]
         [Microsoft.Azure.Commands.Common.Authentication.Abstractions.IStorageContext]$Context,
 
-        [Parameter(Mandatory = $true, HelpMessage = "Name of the file share")]
+        [Parameter(Mandatory = $true, ParameterSetName = "FileShareName")]
         [string]$FileShareName,
 
-        [Parameter(Mandatory = $true)]
+        [Parameter(Mandatory = $true, ParameterSetName = "FileShareClient")]
+        [Azure.Storage.Files.Shares.ShareClient]$ShareClient,
+
+        [Parameter(Mandatory = $true, ParameterSetName = "FileShareName")]
+        [Parameter(Mandatory = $true, ParameterSetName = "FileShareClient")]
         [object]$Acl,
 
-        [Parameter(Mandatory = $false)]
+        [Parameter(Mandatory = $false, ParameterSetName = "FileShareName")]
+        [Parameter(Mandatory = $false, ParameterSetName = "FileShareClient")]
         [SecurityDescriptorFormat]$AclFormat
     )
 
-    $share = Get-AzStorageShare -Name $FileShareName -Context $Context
-    
-    if (-not $AclFormat) {
-        $AclFormat = Get-InferredAclFormat $Acl
-        Write-Verbose "Inferred ACL format: $AclFormat. To override, use -AclFormat."
-    }
-
-    # If it's SDDL, then upload the SDDL directly
-    if ($AclFormat -eq "Sddl") {
-        [string]$sddl = $Acl
-        if ($PSCmdlet.ShouldProcess("File share '$FileShareName'", "Create SDDL permission '$sddl'")) {
-            $permissionInfo = $share.ShareClient.CreatePermission($sddl, [System.Threading.CancellationToken]::None)
-            return $permissionInfo.Value.FilePermissionKey
+    begin {
+        # Get a ShareClient instance from the parameters
+        if ($PSCmdlet.ParameterSetName -eq "FileShareName") {
+            $share = Get-AzStorageShare -Name $FileShareName -Context $Context
+            $ShareClient = $share.ShareClient
         }
-        return
+
+        # Infer AclFormat if not provided
+        if (-not $AclFormat) {
+            $AclFormat = Get-InferredAclFormat $Acl
+            Write-Verbose "Inferred ACL format: $AclFormat. To override, use -AclFormat."
+        }
     }
 
-    # All other formats should use the binary API
-    $base64 = Convert-SecurityDescriptor $Acl -From $AclFormat -To Base64
-
-    if ($PSCmdlet.ShouldProcess("File share '$FileShareName'", "Create binary permission '$base64'")) {
-        $permission = [Azure.Storage.Files.Shares.Models.ShareFilePermission]::new()
-        $permission.Permission = $base64
-        $permission.PermissionFormat = [Azure.Storage.Files.Shares.Models.FilePermissionFormat]::Binary
-
-        $permissionInfo = $share.ShareClient.CreatePermission($permission, [System.Threading.CancellationToken]::None)
-        return $permissionInfo.Value.FilePermissionKey
+    process {
+        # If it's SDDL, then upload the SDDL directly
+        if ($AclFormat -eq "Sddl") {
+            [string]$sddl = $Acl
+            if ($PSCmdlet.ShouldProcess("File share '$($ShareClient.Name)'", "Create SDDL permission '$sddl'")) {
+                $permissionInfo = $ShareClient.CreatePermission($sddl, [System.Threading.CancellationToken]::None)
+                return $permissionInfo.Value.FilePermissionKey
+            }
+        }
+        # All other formats should use the binary API
+        else {
+            $base64 = Convert-SecurityDescriptor $Acl -From $AclFormat -To Base64
+            if ($PSCmdlet.ShouldProcess("File share '$($ShareClient.Name)'", "Create binary permission '$base64'")) {
+                $permission = [Azure.Storage.Files.Shares.Models.ShareFilePermission]::new()
+                $permission.Permission = $base64
+                $permission.PermissionFormat = [Azure.Storage.Files.Shares.Models.FilePermissionFormat]::Binary
+    
+                $permissionInfo = $ShareClient.CreatePermission($permission, [System.Threading.CancellationToken]::None)
+                return $permissionInfo.Value.FilePermissionKey
+            }
+        }
     }    
 }
 
@@ -449,6 +407,9 @@ function Set-AzFileAclKey {
 
     .PARAMETER FileShareName
     Specifies the name of the Azure file share where the ACL will be applied.
+
+    .PARAMETER Client
+    Specifies the Azure storage file or directory client with which the ACL will be applied.
 
     .PARAMETER Key
     Specifies the ACL key to be applied. This is the key returned from the `New-AzFileAcl` function.
@@ -485,38 +446,45 @@ function Set-AzFileAclKey {
         [Parameter(Mandatory = $true, ParameterSetName = "FilePath", HelpMessage = "Path to the file or directory on which to set the permission key")]
         [string]$FilePath,
 
+        [Parameter(Mandatory = $true, ParameterSetName = "Client")]
+        [object]$Client,
+
         [Parameter(Mandatory = $true, ValueFromPipeline = $true)]
         [string]$Key
     )
 
-    process {
+    begin {
+        # Ensure $Client and $isDirectory are initialized for all parameter sets
         if ($PSCmdlet.ParameterSetName -eq "FilePath") {
-            $file = Get-AzStorageFile -Context $Context -ShareName $FileShareName -Path $FilePath
-            $File = [Microsoft.WindowsAzure.Commands.Common.Storage.ResourceModel.AzureStorageBase]$file
+            $File = Get-AzStorageFile -Context $Context -ShareName $FileShareName -Path $FilePath
+            $Client = Get-ClientFromFile $File
         }
+        elseif ($PSCmdlet.ParameterSetName -eq "File") {
+            $Client = Get-ClientFromFile $File
+        }
+
+        $isDirectory = Get-IsDirectoryClient $Client
+    }
+
+    process {
+        # Set the ACL
 
         $smbProperties = [Azure.Storage.Files.Shares.Models.FileSmbProperties]::new()
         $smbProperties.FilePermissionKey = $Key
 
-        if ($File.GetType().Name -eq "AzureStorageFileDirectory") {
-            $options = [Azure.Storage.Files.Shares.Models.ShareDirectorySetHttpHeadersOptions]::new()
-            $options.SmbProperties = $smbProperties
-
-            $directory = [Microsoft.WindowsAzure.Commands.Common.Storage.ResourceModel.AzureStorageFileDirectory]$File
-
-            if ($PSCmdlet.ShouldProcess("Directory '$($directory.Name)'", "Set permission key '$Key'")) {
-                $response = $directory.ShareDirectoryClient.SetHttpHeaders($options)
+        if ($isDirectory) {
+            if ($PSCmdlet.ShouldProcess("Directory '$($Client.Path)'", "Set permission key '$Key'")) {
+                $options = [Azure.Storage.Files.Shares.Models.ShareDirectorySetHttpHeadersOptions]::new()
+                $options.SmbProperties = $smbProperties
+                $response = $client.SetHttpHeaders($options)
                 return $response.Value.SmbProperties.FilePermissionKey
             }
         }
         else {
-            $options = [Azure.Storage.Files.Shares.Models.ShareFileSetHttpHeadersOptions]::new()
-            $options.SmbProperties = $smbProperties
-
-            $file = [Microsoft.WindowsAzure.Commands.Common.Storage.ResourceModel.AzureStorageFile]$File
-
-            if ($PSCmdlet.ShouldProcess("File '$($file.Name)'", "Set permission key '$Key'")) {
-                $response = $file.ShareFileClient.SetHttpHeaders($options)
+            if ($PSCmdlet.ShouldProcess("File '$($Client.Path))'", "Set permission key '$Key'")) {
+                $options = [Azure.Storage.Files.Shares.Models.ShareFileSetHttpHeadersOptions]::new()
+                $options.SmbProperties = $smbProperties
+                $response = $client.SetHttpHeaders($options)
                 return $response.Value.SmbProperties.FilePermissionKey
             }
         }
@@ -567,17 +535,29 @@ function Set-AzFileAcl {
     [CmdletBinding(SupportsShouldProcess = $true)]
     [OutputType([string])]
     param (
-        [Parameter(Mandatory = $true, ValueFromPipeline = $true)]
+        [Parameter(Mandatory = $true, ValueFromPipeline = $true, ParameterSetName = "File")]
         [Microsoft.WindowsAzure.Commands.Common.Storage.ResourceModel.AzureStorageBase]$File,
+
+        [Parameter(Mandatory = $true, ParameterSetName = "Client")]
+        [Object]$Client,
         
-        [Parameter(Mandatory = $true)]
+        [Parameter(Mandatory = $true, ParameterSetName = "File")]
+        [Parameter(Mandatory = $true, ParameterSetName = "Client")]
         [object]$Acl,
 
-        [Parameter(Mandatory = $false)]
+        [Parameter(Mandatory = $false, ParameterSetName = "File")]
+        [Parameter(Mandatory = $false, ParameterSetName = "Client")]
         [SecurityDescriptorFormat]$AclFormat
     )
 
     begin {
+        # Convert parameters to a $Client, and determine if $isDirectory
+        if ($PSCmdlet.ParameterSetName -eq "File") {
+            $Client = Get-ClientFromFile $File
+        }
+        $isDirectory = Get-IsDirectoryClient $Client
+
+        # Get the permission value to set from the parameters
         if (-not $AclFormat) {
             $AclFormat = Get-InferredAclFormat $Acl
             Write-Verbose "Inferred ACL format: $AclFormat. To override, use -AclFormat."
@@ -599,15 +579,13 @@ function Set-AzFileAcl {
     process {
         # If it's < 8 KiB, update directly via HTTP headers in a single request
         # If it's >= 8 KiB, create a new permission key and set it (two requests)
-        if (-not $AvoidInlineApi -and $permission.Permission.Length -lt 8192) {
-            if ($File.GetType().Name -eq "AzureStorageFileDirectory") {
+        if ($permission.Permission.Length -lt 8192) {
+            if ($IsDirectory) {
                 $options = [Azure.Storage.Files.Shares.Models.ShareDirectorySetHttpHeadersOptions]::new()
                 $options.FilePermission = $permission
-                
-                $directory = [Microsoft.WindowsAzure.Commands.Common.Storage.ResourceModel.AzureStorageFileDirectory]$File
 
-                if ($PSCmdlet.ShouldProcess("Directory '$($directory.Name)'", "Set permission '$($permission.Permission)' in format '$($permission.PermissionFormat)'")) {
-                    $response = $directory.ShareDirectoryClient.SetHttpHeaders($options)
+                if ($PSCmdlet.ShouldProcess("Directory '$($Client.Path)'", "Set permission '$($permission.Permission)' in format '$($permission.PermissionFormat)'")) {
+                    $response = $Client.SetHttpHeaders($options)
                     return $response.Value.SmbProperties.FilePermissionKey
                 }
             }
@@ -615,26 +593,28 @@ function Set-AzFileAcl {
                 $options = [Azure.Storage.Files.Shares.Models.ShareFileSetHttpHeadersOptions]::new()
                 $options.FilePermission = $permission
 
-                $file = [Microsoft.WindowsAzure.Commands.Common.Storage.ResourceModel.AzureStorageFile]$File
-
-                if ($PSCmdlet.ShouldProcess("File '$($file.Name)'", "Set permission '$($permission.Permission)' in format '$($permission.PermissionFormat)'")) {
-                    $response = $file.ShareFileClient.SetHttpHeaders($options)
+                if ($PSCmdlet.ShouldProcess("File '$($Client.Path)'", "Set permission '$($permission.Permission)' in format '$($permission.PermissionFormat)'")) {
+                    $response = $Client.SetHttpHeaders($options)
                     return $response.Value.SmbProperties.FilePermissionKey
                 }
             }
         }
         else {
-            $context = $File.Context
-            $shareName = Get-ShareName -File $File
-            
+            $ShareClient = Get-ShareClientFromFileOrDirectoryClient $Client
+
             # Create a new permission key
-            $key = New-AzFileAcl -Context $context -FileShareName $shareName -Acl $permission.Permission -AclFormat $aclCreationFormat -WhatIf:$WhatIfPreference
+            $key = New-AzFileAcl `
+                -ShareClient $shareClient `
+                -Acl $permission.Permission `
+                -AclFormat $aclCreationFormat `
+                -WhatIf:$WhatIfPreference
+            
             if ([string]::IsNullOrEmpty($key)) {
                 Write-Error "Failed to create file permission" -ErrorAction Stop
             }
 
             # Set the permission key
-            return Set-AzFileAclKey -File $File -Key $key -WhatIf:$WhatIfPreference
+            return Set-AzFileAclKey -Client $Client -Key $key -WhatIf:$WhatIfPreference
         }
     }
 }
@@ -686,21 +666,25 @@ function Get-AzFileAclKey {
         [string]$FileShareName,
 
         [Parameter(Mandatory = $true, ParameterSetName = "FilePath", HelpMessage = "Path to the file or directory on which to set the permission key")]
-        [string]$FilePath
+        [string]$FilePath,
+
+        [Parameter(Mandatory = $false, ParameterSetName = "Client")]
+        [object]$Client
     )
 
-    if ($PSCmdlet.ParameterSetName -eq "FilePath") {
-        $file = Get-AzStorageFile -Context $Context -ShareName $FileShareName -Path $FilePath
-        $File = [Microsoft.WindowsAzure.Commands.Common.Storage.ResourceModel.AzureStorageBase]$file
+    begin {
+        # Get a $Client from the parameters
+        if ($PSCmdlet.ParameterSetName -eq "FilePath") {
+            $File = Get-AzStorageFile -Context $Context -ShareName $FileShareName -Path $FilePath
+            $Client = Get-ClientFromFile $File
+        }
+        elseif ($PSCmdlet.ParameterSetName -eq "File") {
+            $Client = Get-ClientFromFile $File
+        }
     }
 
-    if ($File.GetType().Name -eq "AzureStorageFileDirectory") {
-        $directory = [Microsoft.WindowsAzure.Commands.Common.Storage.ResourceModel.AzureStorageFileDirectory]$File
-        return $directory.ShareDirectoryProperties.SmbProperties.FilePermissionKey
-    }
-    else {
-        $file = [Microsoft.WindowsAzure.Commands.Common.Storage.ResourceModel.AzureStorageFile]$File
-        return $file.FileProperties.SmbProperties.FilePermissionKey
+    process {
+        return $Client.GetProperties([System.Threading.CancellationToken]::None).Value.SmbProperties.FilePermissionKey
     }
 }
 
@@ -776,22 +760,17 @@ function Get-AzFileAclFromKey {
         [SecurityDescriptorFormat]$OutputFormat = [SecurityDescriptorFormat]::Sddl
     )
     begin {
-        # Ensure $FileShareName and $ShareClient are set correctly
+        # Get a $ShareClient from the parameters
         if ($PSCmdlet.ParameterSetName -eq "FileShareName") {
-            $Share = Get-AzStorageShare -Name $FileShareName -Context $Context
-            $ShareClient = $Share.ShareClient
+            $ShareClient = (Get-AzStorageShare -Name $FileShareName -Context $Context).ShareClient
         }
         elseif ($PSCmdlet.ParameterSetName -eq "Share") {
             $ShareClient = $Share.ShareClient
-            $FileShareName = $Share.Name
-        }
-        elseif ($PSCmdlet.ParameterSetName -eq "ShareClient") {
-            $FileShareName = $ShareClient.Name
         }
     }
 
     process {
-        if ($PSCmdlet.ShouldProcess("File share '$FileShareName'", "Get permission key '$Key'")) {
+        if ($PSCmdlet.ShouldProcess("File share '$($ShareClient.Name)'", "Get permission key '$Key'")) {
             if ($OutputFormat -eq [SecurityDescriptorFormat]::Sddl) {
                 $format = [Azure.Storage.Files.Shares.Models.FilePermissionFormat]::Sddl
                 $permissionInfo = $ShareClient.GetPermission($Key, $format, [System.Threading.CancellationToken]::None)
@@ -868,31 +847,35 @@ function Get-AzFileAcl {
         [Parameter(Mandatory = $true, ParameterSetName = "FilePath", HelpMessage = "Path to the file or directory on which to set the permission key")]
         [string]$FilePath,
 
+        [Parameter(Mandatory = $false, ParameterSetName = "Client")]
+        [object]$Client,
+
         [Parameter(Mandatory = $false, HelpMessage = "Output format of the security descriptor")]
         [SecurityDescriptorFormat]$OutputFormat = [SecurityDescriptorFormat]::Sddl
     )
 
-    # Get ACL key
-    switch ($PSCmdlet.ParameterSetName) {
-        "File" {
-            $key = Get-AzFileAclKey -File $file
-            $Context = $file.Context
-            $FileShareName = Get-ShareName $file
+    begin {
+        # Get a $Client from the parameters
+        if ($PSCmdlet.ParameterSetName -eq "FilePath") {
+            $File = Get-AzStorageFile -Context $Context -ShareName $FileShareName -Path $FilePath
+            $Client = Get-ClientFromFile $File
         }
-        "FilePath" {
-            $key = Get-AzFileAclKey -Context $Context -FileShareName $FileShareName -FilePath $FilePath
-        }
-        default {
-            throw "Invalid parameter set '$($PSCmdlet.ParameterSetName)'."
+        elseif ($PSCmdlet.ParameterSetName -eq "File") {
+            $Client = Get-ClientFromFile $File
         }
     }
 
-    if ([string]::IsNullOrEmpty($key)) {
-        Write-Error "Failed to get file permission key" -ErrorAction Stop
-    }
+    process {
+        $key = Get-AzFileAclKey -Client $Client
+        
+        if ([string]::IsNullOrEmpty($key)) {
+            Write-Error "Failed to get file permission key" -ErrorAction Stop
+        }
 
-    # Get ACL from key
-    Get-AzFileAclFromKey -Key $key -Context $Context -FileShareName $FileShareName -OutputFormat $OutputFormat
+        $shareClient = Get-ShareClientFromFileOrDirectoryClient $Client
+        return Get-AzFileAclFromKey -Key $key -ShareClient $shareClient -OutputFormat $OutputFormat
+
+    }
 }
 
 function Set-AzFileAclRecursive {
