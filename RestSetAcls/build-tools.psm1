@@ -59,7 +59,11 @@ function Format {
 }
 
 function Test {
-    Invoke-Pester -Path $PSScriptRoot\test\unit -Output Detailed
+    param (
+        [Parameter(Mandatory = $false)]
+        [string]$Path = "$PSScriptRoot\test\unit"
+    )
+    Invoke-Pester -Path $Path -Output Detailed
 }
 
 function Test-Integration {
