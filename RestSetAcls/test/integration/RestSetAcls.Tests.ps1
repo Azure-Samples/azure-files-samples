@@ -108,7 +108,7 @@ Describe "Get-AzFileAclFromKey" {
             }
         }
 
-        Describe "-File" {
+        Describe "-Share" {
             It "Should retrieve the default permission" {
                 $permission = Get-AzFileAclFromKey -Key $key -Share $global:share
 
@@ -116,9 +116,17 @@ Describe "Get-AzFileAclFromKey" {
             }
         }
 
-        Describe "-Context -FileShareName -FilePath" {
+        Describe "-Context -FileShareName" {
             It "Should retrieve the default permission" {
                 $permission = Get-AzFileAclFromKey -Key $key -Context $global:context -FileShareName $global:fileShareName
+
+                $permission | Should -Be $defaultSddl
+            }
+        }
+
+        Describe "-ShareClient" {
+            It "Should retrieve the default permission" {
+                $permission = Get-AzFileAclFromKey -Key $key -ShareClient $global:share.ShareClient
 
                 $permission | Should -Be $defaultSddl
             }

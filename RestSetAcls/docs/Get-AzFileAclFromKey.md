@@ -25,6 +25,12 @@ Get-AzFileAclFromKey -Key <String> -Context <IStorageContext> -FileShareName <St
  [<CommonParameters>]
 ```
 
+### ShareClient
+```
+Get-AzFileAclFromKey -Key <String> [-ShareClient <ShareClient>] [-OutputFormat <SecurityDescriptorFormat>]
+ [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
+```
+
 ## DESCRIPTION
 The \`Get-AzFileAclFromKey\` function retrieves the ACL for a specified ACL key.
 It supports retrieving the ACL in
@@ -103,6 +109,21 @@ Parameter Sets: FileShareName
 Aliases:
 
 Required: True
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -ShareClient
+Specifies the Azure storage file share client from which to retrieve the ACL key.
+
+```yaml
+Type: ShareClient
+Parameter Sets: ShareClient
+Aliases:
+
+Required: False
 Position: Named
 Default value: None
 Accept pipeline input: False

@@ -659,26 +659,38 @@ function Get-AzFileAclFromKey {
         [Parameter(Mandatory = $true, ParameterSetName = "FileShareName", HelpMessage = "Name of the file share")]
         [string]$FileShareName,
 
+        [Parameter(Mandatory = $false, ParameterSetName = "ShareClient", HelpMessage = "Azure storage file share client")]
+        [Azure.Storage.Files.Shares.ShareClient]$ShareClient,
+
         [Parameter(Mandatory = $false, HelpMessage = "Output format of the security descriptor")]
         [SecurityDescriptorFormat]$OutputFormat = [SecurityDescriptorFormat]::Sddl
     )
     begin {
+        # Ensure $FileShareName and $ShareClient are set correctly
         if ($PSCmdlet.ParameterSetName -eq "FileShareName") {
             $Share = Get-AzStorageShare -Name $FileShareName -Context $Context
+            $ShareClient = $Share.ShareClient
+        }
+        elseif ($PSCmdlet.ParameterSetName -eq "Share") {
+            $ShareClient = $Share.ShareClient
+            $FileShareName = $Share.Name
+        }
+        elseif ($PSCmdlet.ParameterSetName -eq "ShareClient") {
+            $FileShareName = $ShareClient.Name
         }
     }
 
     process {
-        if ($PSCmdlet.ShouldProcess("File share '$($Share.Name)'", "Get permission key '$Key'")) {
+        if ($PSCmdlet.ShouldProcess("File share '$FileShareName'", "Get permission key '$Key'")) {
             if ($OutputFormat -eq [SecurityDescriptorFormat]::Sddl) {
                 $format = [Azure.Storage.Files.Shares.Models.FilePermissionFormat]::Sddl
-                $permissionInfo = $Share.ShareClient.GetPermission($Key, $format, [System.Threading.CancellationToken]::None)
+                $permissionInfo = $ShareClient.GetPermission($Key, $format, [System.Threading.CancellationToken]::None)
                 $sddl = $permissionInfo.Value.Permission 
                 return $sddl
             }
             else {
                 $format = [Azure.Storage.Files.Shares.Models.FilePermissionFormat]::Binary
-                $permissionInfo = $Share.ShareClient.GetPermission($Key, $format, [System.Threading.CancellationToken]::None)
+                $permissionInfo = $ShareClient.GetPermission($Key, $format, [System.Threading.CancellationToken]::None)
                 $base64 = $permissionInfo.Value.Permission
                 return Convert-SecurityDescriptor $base64 -From Base64 -To $OutputFormat  
             }
