@@ -620,6 +620,9 @@ function Get-AzFileAclFromKey {
     .PARAMETER FileShareName
     Specifies the name of the Azure file share from which to retrieve the ACL key.
 
+    .PARAMETER ShareClient
+    Specifies the Azure storage file share client from which to retrieve the ACL key.
+
     .PARAMETER OutputFormat
     Specifies the output format of the security descriptor. Supported formats include SDDL, Base64, and Binary.
 

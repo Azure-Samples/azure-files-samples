@@ -113,7 +113,7 @@ Supported formats include SDDL, Base64, and Binary.
 Type: SecurityDescriptorFormat
 Parameter Sets: (All)
 Aliases:
-Accepted values: Sddl, Binary, Base64, Raw
+Accepted values: Sddl, Binary, Base64, Raw, FolderAcl, FileAcl
 
 Required: False
 Position: Named

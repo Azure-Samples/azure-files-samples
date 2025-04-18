@@ -100,7 +100,7 @@ If not provided, the function will infer the format automatically.
 Type: SecurityDescriptorFormat
 Parameter Sets: (All)
 Aliases:
-Accepted values: Sddl, Binary, Base64, Raw
+Accepted values: Sddl, Binary, Base64, Raw, FolderAcl, FileAcl
 
 Required: False
 Position: 4
