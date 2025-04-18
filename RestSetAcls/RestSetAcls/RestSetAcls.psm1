@@ -185,6 +185,113 @@ function Get-ShareName {
     }
 }
 
+function Get-AzFilesAndDirectoriesRecursiveV2 {
+    param (
+        [Parameter(Mandatory = $true)]
+        [Azure.Storage.Files.Shares.ShareDirectoryClient]$DirectoryClient,
+
+        [Parameter(Mandatory = $false)]
+        [switch]$IncludePermissionKey = $false,
+
+        [Parameter(Mandatory = $false)]
+        [switch]$IncludePermissionKeyAndPermission = $false
+    )
+
+    if ($IncludePermissionKeyAndPermission) {
+        $IncludePermissionKey = $true
+    }
+
+    $shareClient = $DirectoryClient.GetParentShareClient()
+    $options = [Azure.Storage.Files.Shares.Models.ShareDirectoryGetFilesAndDirectoriesOptions]::new()  
+    
+    # Get permission keys, if requested
+    $directoryPermissionKey = $null
+    $parentPermissionKey = $null
+    if ($IncludePermissionKey) {
+        # Get the root directory's permission key
+        $directoryPermissionKey = $DirectoryClient.GetProperties().Value.SmbProperties.FilePermissionKey
+        
+        # Get the parent directory's permission key, if there is a parent
+        if ($DirectoryClient.Path -ne "") {
+            $parentClient = $DirectoryClient.GetParentDirectoryClient()
+            if ($null -ne $parentClient) {
+                $parentPermissionKey = $parentClient.GetProperties().Value.SmbProperties.FilePermissionKey
+            }
+        }
+
+        # Tweak the options to include the permission key in the response
+        $options.IncludeExtendedInfo = $true
+        $options.Traits = [Azure.Storage.Files.Shares.Models.ShareFileTraits]::PermissionKey
+    }
+
+    # Get permission values, if requested
+    $directoryPermission = $null
+    $parentPermission = $null
+    if ($IncludePermissionKeyAndPermission) {
+        $directoryPermission = Get-AzFileAclFromKey `
+            -Key $directoryPermissionKey
+            -ShareClient $shareClient `
+            -OutputFormat Raw
+
+        # Get parent directory's permission value, if if it exists
+        if ($null -ne $parentPermissionKey) {
+            $parentPermission = Get-AzFileAclFromKey `
+                -Key $parentPermissionKey `
+                -ShareClient $shareClient `
+                -OutputFormat Raw
+        }
+    }    
+
+    # Visit the root first
+    Write-Output @{
+        Name = $DirectoryClient.Name
+        Path = $DirectoryClient.Path
+        IsDirectory = $true
+        Permission = $directoryPermission
+        PermissionKey = $directoryPermissionKey
+        ParentPermission = $parentPermission
+        ParentPermissionKey = $parentPermissionKey
+    }
+
+    # Then recursively visit all subdirectories. This is a breadth-first search.
+    $stack = [System.Collections.Generic.Stack[Azure.Storage.Files.Shares.ShareDirectoryClient]]::new()
+    $stack.Push($DirectoryClient)
+
+    $permissionKeysStack = $null
+    if ($IncludePermissionKey) {
+        $permissionKeysStack = [System.Collections.Generic.Stack[string]]::new()
+        $permissionKeysStack.Push($directoryPermissionKey)
+    }
+    
+    while ($stack.Count -gt 0) {
+        $parent = $stack.Pop()
+        $parentPermissionKey = if ($IncludePermissionKey) { $permissionKeysStack.Pop() } else { $null }
+
+        # Get the files and directories in the parent directory
+        $contents = $parent.GetFilesAndDirectories($options)
+        foreach ($item in $contents.GetEnumerator()) {
+            $path = if ($parent.Path -eq "") { $item.Name } else { $parent.Path + "/" + $item.Name }
+
+            Write-Output @{
+                Name = $item.Name
+                Path = $path
+                IsDirectory = $item.IsDirectory
+                PermissionKey = $item.PermissionKey
+                ParentPermissionKey = $parentPermissionKey
+            }
+
+            # Recurse on directories
+            if ($item.IsDirectory) {
+                $subdirectoryClient = $parent.GetSubdirectoryClient($item.Name)
+                $stack.Push($subdirectoryClient)
+                if ($IncludePermissionKey) {
+                    $permissionKeysStack.Push($item.PermissionKey)
+                }
+            }
+        }
+    }
+}
+
 function Get-AzureFilesRecursive {
     param (
         [Parameter(Mandatory = $true)]
