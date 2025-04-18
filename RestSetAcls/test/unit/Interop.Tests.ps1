@@ -68,7 +68,7 @@ Describe "Interop" {
 
     Describe "CreatePrivateObjectSecurityEx" {
         Context "Child is a folder" {
-            It "Only adds AI when there is nothing to inherit in the parent" {
+            It "Just adds AI when there is nothing to inherit in the parent" {
                 Test-FolderInheritance `
                     -ParentSddl "O:BAG:BAD:(A;;FA;;;BA)" `
                     -ChildSddl "O:SYG:SYD:(A;;FA;;;SY)" `
@@ -131,10 +131,31 @@ Describe "Interop" {
                     -ChildSddl "O:SYG:SYD:$($_.ChildAclFlags)(A;;FA;;;SY)" `
                     -ExpectedSddl "O:SYG:SYD:AI(A;;FA;;;SY)(A;OICIID;FA;;;BA)"
             }
+
+            It "Inherits nothing new if it already has the parent ACE" {
+                Test-FolderInheritance `
+                    -ParentSddl "O:BAG:BAD:(A;OICI;FA;;;SY)" `
+                    -ChildSddl "O:SYG:SYD:(A;OICIID;FA;;;SY)" `
+                    -ExpectedSddl "O:SYG:SYD:AI(A;OICIID;FA;;;SY)"
+            }
+
+            It "Inherits parent ACEs if it has empty DACL" {
+                Test-FolderInheritance `
+                    -ParentSddl "O:BAG:BAD:(A;OICI;FA;;;BA)" `
+                    -ChildSddl "O:SYG:SYD:" `
+                    -ExpectedSddl "O:SYG:SYD:AI(A;OICIID;FA;;;BA)"
+            }
+
+            It "Inherits parent ACEs if it has null DACL" {
+                Test-FolderInheritance `
+                    -ParentSddl "O:BAG:BAD:(A;OICI;FA;;;BA)" `
+                    -ChildSddl "O:SYG:SYD:NO_ACCESS_CONTROL" `
+                    -ExpectedSddl "O:SYG:SYD:AI(A;OICIID;FA;;;BA)"
+            }
         }
 
         Context "Child is a file" {
-            It "Only adds AI when there is nothing to inherit in the parent" {
+            It "Just adds AI when there is nothing to inherit in the parent" {
                 Test-FileInheritance `
                     -ParentSddl "O:BAG:BAD:(A;;FA;;;BA)" `
                     -ChildSddl "O:SYG:SYD:(A;;FA;;;SY)" `
@@ -204,6 +225,27 @@ Describe "Interop" {
                     -ParentSddl "O:BAG:BAD:$($_.ParentAclFlags)(A;OICI;FA;;;BA)" `
                     -ChildSddl "O:SYG:SYD:$($_.ChildAclFlags)(A;;FA;;;SY)" `
                     -ExpectedSddl "O:SYG:SYD:AI(A;;FA;;;SY)(A;ID;FA;;;BA)"
+            }
+
+            It "Inherits nothing new if it already has the parent ACE" {
+                Test-FileInheritance `
+                    -ParentSddl "O:BAG:BAD:(A;OICI;FA;;;SY)" `
+                    -ChildSddl "O:SYG:SYD:(A;ID;FA;;;SY)" `
+                    -ExpectedSddl "O:SYG:SYD:AI(A;ID;FA;;;SY)"
+            }
+
+            It "Inherits parent ACEs if it has empty DACL" {
+                Test-FileInheritance `
+                    -ParentSddl "O:BAG:BAD:(A;OICI;FA;;;BA)" `
+                    -ChildSddl "O:SYG:SYD:" `
+                    -ExpectedSddl "O:SYG:SYD:AI(A;ID;FA;;;BA)"
+            }
+
+            It "Inherits parent ACEs if it has null DACL" {
+                Test-FileInheritance `
+                    -ParentSddl "O:BAG:BAD:(A;OICI;FA;;;BA)" `
+                    -ChildSddl "O:SYG:SYD:NO_ACCESS_CONTROL" `
+                    -ExpectedSddl "O:SYG:SYD:AI(A;ID;FA;;;BA)"
             }
         }
     }
