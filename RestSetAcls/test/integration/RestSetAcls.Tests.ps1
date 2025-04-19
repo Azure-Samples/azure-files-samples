@@ -62,6 +62,7 @@ Describe "Get-AzFileAclKey" {
 
             # Get a reference to it
             $file = Get-File $fileName
+            $client = if ($_.Type -eq "file") { $file.ShareFileClient } else { $file.ShareDirectoryClient }
         }
 
         Describe "-File" {
@@ -76,6 +77,15 @@ Describe "Get-AzFileAclKey" {
         Describe "-Context -FileShareName -FilePath" {
             It "Should retrieve the permission key" {
                 $key = Get-AzFileAclKey -Context $global:context -FileShareName $global:fileShareName -FilePath $fileName
+
+                Assert-IsAclKey $key
+                $key | Should -Be $expectedKey
+            }
+        }
+
+        Describe "-Client" {
+            It "Should retrieve the permission key" {
+                $key = Get-AzFileAclKey -Client $client
 
                 Assert-IsAclKey $key
                 $key | Should -Be $expectedKey
@@ -157,6 +167,7 @@ Describe "Get-AzFileAcl" {
 
             # Get a reference to it
             $file = Get-File $fileName
+            $client = if ($_.Type -eq "file") { $file.ShareFileClient } else { $file.ShareDirectoryClient }
         }
 
         Describe "-File" {
@@ -180,6 +191,19 @@ Describe "Get-AzFileAcl" {
 
             It "Should retrieve the ACL in Base64 format" {
                 $acl = Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $fileName -OutputFormat Base64
+                Assert-IsBase64Acl $acl
+                Convert-SecurityDescriptor $acl -From Base64 -To Sddl | Should -Be $_.Sddl
+            }
+        }
+
+        Describe "-Client" {
+            It "Should retrieve the ACL in SDDL format" {
+                $acl = Get-AzFileAcl -Client $client -OutputFormat Sddl
+                $acl | Should -Be $_.Sddl
+            }
+
+            It "Should retrieve the ACL in Base64 format" {
+                $acl = Get-AzFileAcl -Client $client -OutputFormat Base64
                 Assert-IsBase64Acl $acl
                 Convert-SecurityDescriptor $acl -From Base64 -To Sddl | Should -Be $_.Sddl
             }
