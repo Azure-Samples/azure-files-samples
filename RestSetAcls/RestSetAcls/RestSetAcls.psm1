@@ -1,6 +1,7 @@
 . $PSScriptRoot/Convert.ps1
 . $PSScriptRoot/SddlUtils.ps1
 . $PSScriptRoot/PrintUtils.ps1
+Import-Module $PSScriptRoot/Interop.psm1
 
 function Write-LiveFilesAndFoldersProcessingStatus {
     [OutputType([int])]
@@ -1091,3 +1092,230 @@ function Set-AzFileAclRecursive {
     Write-FinalFilesAndFoldersProcessed -ProcessedCount $processedCount -Errors $errors -TotalTime $totalTime
 }
 
+function Apply-AzFileAclInheritance {
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    param (
+        [Parameter(Mandatory = $true, ParameterSetName = "Single")]
+        [Parameter(Mandatory = $true, ParameterSetName = "Recursive")]
+        [Microsoft.Azure.Commands.Common.Authentication.Abstractions.IStorageContext]$Context,
+
+        [Parameter(Mandatory = $true, ParameterSetName = "Single")]
+        [Parameter(Mandatory = $true, ParameterSetName = "Recursive")]
+        [string]$FileShareName,
+
+        [Parameter(Mandatory = $true, ParameterSetName = "Single")]
+        [string]$ParentPath,
+
+        [Parameter(Mandatory = $true, ParameterSetName = "Single")]
+        [string]$ChildPath,
+
+        [Parameter(Mandatory = $true, ParameterSetName = "Recursive")]
+        [switch]$Recursive,
+
+        [Parameter(Mandatory = $true, ParameterSetName = "Recursive")]
+        [string]$Path
+    )
+
+    if ($PSCmdlet.ParameterSetName -eq "Recursive") {
+        $ParentPath = $Path
+    }
+
+    # Check that parent path exists and is a directory
+    $parentFile = Get-AzStorageFile -Context $Context -ShareName $FileShareName -Path $ParentPath
+    if ($null -eq $parentFile) {
+        Write-Host "The specified parent path '$ParentPath' does not exist." -ForegroundColor Red
+        return
+    }
+
+    if ($parentFile -is [Microsoft.WindowsAzure.Commands.Common.Storage.ResourceModel.AzureStorageFile]) {
+        Write-Host "The specified parent path '$ParentPath' is a file. Expected it to be a directory." -ForegroundColor Red
+        return
+    }
+
+    # Dispatch to either recursive or single file processing
+    if ($PSCmdlet.ParameterSetName -eq "Single") {
+        $parentAcl = Get-AzFileAcl -File $parentFile -OutputFormat Raw
+
+        return Apply-AzFileAclInheritanceSingle `
+            -Context $Context `
+            -FileShareName $FileShareName `
+            -ParentAcl $parentAcl `
+            -ChildPath $ChildPath `
+            -WhatIf:$WhatIfPreference
+    }
+    elseif ($PSCmdlet.ParameterSetName -eq "Recursive") {  
+        $startTime = Get-Date
+        $processedCount = 0
+        $errors = @{}
+
+        Apply-AzFileAclInheritanceRecursive `
+            -DirectoryClient $parentFile.ShareDirectoryClient `
+            -PassThru `
+            -WhatIf:$WhatIfPreference `
+        | ForEach-Object {
+            if (-not $_.Success) {
+                $errors[$_.Path] = "failed"
+            }
+            $processedCount++
+            Write-Output $_
+        }
+        | Write-LiveFilesAndFoldersProcessingStatus -RefreshRateHertz 10 -StartTime $startTime `
+        | ForEach-Object { if ($PassThru) { Write-Output $_ } }
+
+        Write-Host "`r" -NoNewline # Clear the line from the live progress reporting
+        Write-FinalFilesAndFoldersProcessed `
+            -ProcessedCount $processedCount `
+            -Errors $errors `
+            -TotalTime ((Get-Date) - $startTime)
+    }
+}
+
+function Apply-AzFileAclInheritanceSingle {
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    [OutputType([System.Security.AccessControl.GenericSecurityDescriptor])]
+    param (
+        [Parameter(Mandatory = $true)]
+        [Microsoft.Azure.Commands.Common.Authentication.Abstractions.IStorageContext]$Context,
+
+        [Parameter(Mandatory = $true)]
+        [string]$FileShareName,
+
+        [Parameter(Mandatory = $true)]
+        [AllowNull()]
+        [System.Security.AccessControl.GenericSecurityDescriptor]$ParentAcl,
+
+        [Parameter(Mandatory = $true)]
+        [string]$ChildPath
+    )
+
+    # Presupposition: the parent path exists and is a directory. It is the responsibility of the caller to check this.
+
+    # Check that the child path exists
+    $childFile = Get-AzStorageFile -Context $Context -ShareName $FileShareName -Path $ChildPath
+    if ($null -eq $childFile) {
+        Write-Host "The specified child path '$ChildPath' does not exist." -ForegroundColor Red
+        return
+    }
+
+    # Get parent and child ACLs
+    $childAcl = Get-AzFileAcl -File $childFile -OutputFormat Raw
+    $childIsFolder = $childFile -is [Microsoft.WindowsAzure.Commands.Common.Storage.ResourceModel.AzureStorageFileDirectory]
+
+    # Compute inheritance
+    $newChildAcl = CreatePrivateObjectSecurityEx `
+        -ParentDescriptor $ParentAcl `
+        -CreatorDescriptor $childAcl `
+        -IsDirectory $childIsFolder
+
+    $parentSddl = ConvertFrom-SecurityDescriptor $parentAcl -To Sddl
+    $childSddl = ConvertFrom-SecurityDescriptor $newChildAcl -To Sddl
+    $childNewSddl = ConvertFrom-SecurityDescriptor $childAcl -To Sddl
+    Write-Verbose "Parent SDDL: $parentSddl"
+    Write-Verbose "Child SDDL: $childSddl"
+    Write-Verbose "New child SDDL: $childNewSddl"
+
+    # Update ACL according to inheritance
+    if ($PSCmdlet.ShouldProcess("File share '$($FileShareName)'", "Apply inheritance from '$ParentPath' to '$ChildPath'")) {
+        Set-AzFileAcl -File $childFile -Acl $newChildAcl -AclFormat Sddl -WhatIf:$WhatIfPreference
+    }
+
+    return $newChildAcl
+}
+
+function Apply-AzFileAclInheritanceRecursive {
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    [OutputType([System.Security.AccessControl.GenericSecurityDescriptor])]
+    param (
+        [Parameter(Mandatory = $true)]
+        [Azure.Storage.Files.Shares.ShareDirectoryClient]$DirectoryClient,
+
+        [Parameter(Mandatory = $false)]
+        [switch]$PassThru = $false
+    )
+
+    # Presupposition: the parent path exists and is a directory. It is the responsibility of the caller to check this.
+    $directoryPermissionKey = $DirectoryClient.GetProperties().Value.SmbProperties.FilePermissionKey
+
+    $shareClient = Get-ShareClientFromFileOrDirectoryClient $DirectoryClient
+
+    $options = [Azure.Storage.Files.Shares.Models.ShareDirectoryGetFilesAndDirectoriesOptions]::new()
+    $options.IncludeExtendedInfo = $true
+    $options.Traits = [Azure.Storage.Files.Shares.Models.ShareFileTraits]::PermissionKey
+
+    # Recursively visit all subdirectories. This is a breadth-first search.
+    $stack = [System.Collections.Generic.Stack[Tuple[Azure.Storage.Files.Shares.ShareDirectoryClient, string]]]::new()
+    $stack.Push([System.Tuple]::Create($DirectoryClient, $directoryPermissionKey))
+
+    while ($stack.Count -gt 0) {
+        $tuple = $stack.Pop()
+        $directoryClient = $tuple.Item1
+        $directoryPermissionKey = $tuple.Item2
+
+        # Get permission of parent directory
+        $directoryPermission = $null
+        if ($null -eq $directoryPermissionKey) {
+            Write-Verbose "The directory '$($directoryClient.Name)' does not have a permission key..."
+        }
+        else {
+            $directoryPermission = Get-AzFileAclFromKey `
+                -Key $directoryPermissionKey `
+                -ShareClient $shareClient `
+                -OutputFormat FolderAcl
+        }
+
+        # Iterate over the contents of the directory
+        foreach ($item in $directoryClient.GetFilesAndDirectories($options).GetEnumerator()) {
+            $itemPermissionFormat = if ($item.IsDirectory) { "FolderAcl" } else { "FileAcl" }
+
+            # Get ACL for the item
+            $itemPermission = Get-AzFileAclFromKey `
+                -Key $item.PermissionKey `
+                -ShareClient $shareClient `
+                -OutputFormat $itemPermissionFormat
+
+            # Compute inheritance
+            $itemNewPermission = CreatePrivateObjectSecurityEx `
+                -ParentDescriptor $directoryPermission `
+                -CreatorDescriptor $itemPermission `
+                -IsDirectory $item.IsDirectory
+            
+            # Set new ACL on the item
+            $itemClient = if ($item.IsDirectory) {
+                $directoryClient.GetSubdirectoryClient($item.Name)
+            } else {
+                $directoryClient.GetFileClient($item.Name)
+            }
+
+            $parentSddl = Convert-SecurityDescriptor $directoryPermission -From FolderAcl -To Sddl
+            $creatorSddl = Convert-SecurityDescriptor $itemPermission -From $itemPermissionFormat -To Sddl
+            $newSddl = Convert-SecurityDescriptor $itemNewPermission -From $itemPermissionFormat -To Sddl
+
+            Write-Verbose "Computed inheritance for item '$($itemClient.Path)'"
+            # Write-Verbose "Parent SDDL: $parentSddl"
+            # Write-Verbose "Creator SDDL: $creatorSddl"
+            # Write-Verbose "New SDDL: $newSddl"
+
+            $newPermissionKey = Set-AzFileAcl `
+                -Client $itemClient `
+                -Acl $itemNewPermission `
+                -AclFormat $itemPermissionFormat `
+                -WhatIf:$WhatIfPreference
+            
+            # Write to the pipeline
+            if ($PassThru) {
+                Write-Output @{
+                    Path = $itemClient.Path
+                    IsDirectory = $item.IsDirectory
+                    NewPermission = (Convert-SecurityDescriptor $itemNewPermission -To Sddl)
+                    PermissionKey = $newPermissionKey
+                    Success = $true
+                }
+            }
+
+            # If item is a directory, push it onto the stack
+            if ($item.IsDirectory) {
+                $stack.Push([System.Tuple]::Create($itemClient, $newPermissionKey))
+            }
+        }
+    }   
+}
