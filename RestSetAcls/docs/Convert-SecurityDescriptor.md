@@ -13,8 +13,8 @@ Converts a security descriptor between different formats (Sddl, Base64, Binary, 
 ## SYNTAX
 
 ```
-Convert-SecurityDescriptor [-InputDescriptor] <Object> -From <SecurityDescriptorFormat>
- -To <SecurityDescriptorFormat> [-ProgressAction <ActionPreference>] [<CommonParameters>]
+Convert-SecurityDescriptor [-InputDescriptor] <Object> [-From <SecurityDescriptorFormat>]
+ -To <SecurityDescriptorFormat> [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
 ```
 
 ## DESCRIPTION
@@ -23,7 +23,8 @@ Supported formats include:
 - SDDL (Security Descriptor Definition Language)
 - Base64
 - Binary
-- Raw
+- RawSecurityDescriptor
+- CommonSecurityDescriptor (for folders and files)
 
 Security descriptors are used to define access control and permissions for resources. 
 This script is useful for scenarios where you need to translate security descriptors 
@@ -56,15 +57,15 @@ Accept wildcard characters: False
 
 ### -From
 Specifies the format of the input security descriptor. 
-Accepted values: Sddl, Base64, Binary, Raw.
+Accepted values: Sddl, Base64, Binary, Raw, FolderAcl, FileAcl.
 
 ```yaml
 Type: SecurityDescriptorFormat
 Parameter Sets: (All)
 Aliases: InputFormat
-Accepted values: Sddl, Binary, Base64, Raw
+Accepted values: Sddl, Binary, Base64, Raw, FolderAcl, FileAcl
 
-Required: True
+Required: False
 Position: Named
 Default value: None
 Accept pipeline input: False
@@ -73,15 +74,46 @@ Accept wildcard characters: False
 
 ### -To
 Specifies the desired format for the output security descriptor. 
-Accepted values: Sddl, Base64, Binary, Raw.
+Accepted values: Sddl, Base64, Binary, Raw, FolderAcl, FileAcl.
 
 ```yaml
 Type: SecurityDescriptorFormat
 Parameter Sets: (All)
 Aliases: OutputFormat
-Accepted values: Sddl, Binary, Base64, Raw
+Accepted values: Sddl, Binary, Base64, Raw, FolderAcl, FileAcl
 
 Required: True
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -WhatIf
+Shows what would happen if the cmdlet runs.
+The cmdlet is not run.
+
+```yaml
+Type: SwitchParameter
+Parameter Sets: (All)
+Aliases: wi
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -Confirm
+Prompts you for confirmation before running the cmdlet.
+
+```yaml
+Type: SwitchParameter
+Parameter Sets: (All)
+Aliases: cf
+
+Required: False
 Position: Named
 Default value: None
 Accept pipeline input: False

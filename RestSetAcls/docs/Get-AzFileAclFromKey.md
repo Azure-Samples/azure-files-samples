@@ -5,30 +5,38 @@ online version:
 schema: 2.0.0
 ---
 
-# Set-AzFileAcl
+# Get-AzFileAclFromKey
 
 ## SYNOPSIS
-Sets the Access Control List (ACL) for a specified Azure file or directory.
+Retrieves the ACL (Access Control List) for a specified ACL key.
 
 ## SYNTAX
 
-### File
+### Share
 ```
-Set-AzFileAcl -File <AzureStorageBase> -Acl <Object> [-AclFormat <SecurityDescriptorFormat>]
+Get-AzFileAclFromKey -Key <String> -Share <AzureStorageFileShare> [-OutputFormat <SecurityDescriptorFormat>]
  [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
 ```
 
-### Client
+### FileShareName
 ```
-Set-AzFileAcl -Client <Object> -Acl <Object> [-AclFormat <SecurityDescriptorFormat>]
+Get-AzFileAclFromKey -Key <String> -Context <IStorageContext> -FileShareName <String>
+ [-OutputFormat <SecurityDescriptorFormat>] [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm]
+ [<CommonParameters>]
+```
+
+### ShareClient
+```
+Get-AzFileAclFromKey -Key <String> [-ShareClient <ShareClient>] [-OutputFormat <SecurityDescriptorFormat>]
  [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
 ```
 
 ## DESCRIPTION
-The \`Set-AzFileAcl\` function applies an ACL to a specified Azure file or directory. 
-It supports both SDDL (Security Descriptor Definition Language) and binary ACL formats. 
-The function determines the ACL format if not explicitly provided and applies the ACL directly 
-or via a permission key, depending on the size of the ACL.
+The \`Get-AzFileAclFromKey\` function retrieves the ACL for a specified ACL key.
+It supports retrieving the ACL in
+various formats, including SDDL (Security Descriptor Definition Language) or binary formats.
+The function supports
+retrieving the ACL from a file share specified either directly or its name and context.
 
 ## EXAMPLES
 
@@ -36,29 +44,22 @@ or via a permission key, depending on the size of the ACL.
 ```
 $context = Get-AzStorageContext -StorageAccountName "mystorageaccount" -StorageAccountKey "mykey"
 PS> $file = Get-AzStorageFile -Context $context -ShareName "myfileshare" -Path "myfolder/myfile.txt"
-PS> Set-AzFileAcl -File $file -Acl "O:BAG:SYD:(A;;FA;;;SY)" -AclFormat Sddl
+PS> $key = Get-AzFileAclKey -File $file
+PS> Get-AzFileAclFromKey -Key $key -Share $file.Share -OutputFormat Sddl
 ```
 
-Sets the specified SDDL ACL on the given file.
-
-### EXAMPLE 2
-```
-$context = Get-AzStorageContext -StorageAccountName "mystorageaccount" -StorageAccountKey "mykey"
-PS> $file = Get-AzStorageFile -Context $context -ShareName "myfileshare" -Path "myfolder/myfile.txt"
-PS> $binaryAcl = [byte[]](0x01, 0x02, 0x03, 0x04, ...)
-PS> Set-AzFileAcl -File $file -Acl $binaryAcl -AclFormat Binary
-```
-
-Sets the specified binary ACL on the given file.
+Retrieves the SDDL ACL for the specified file using the permission key.
 
 ## PARAMETERS
 
-### -File
-Specifies the Azure storage file or directory on which to set the ACL.
+### -Key
+Specifies the ACL key to be retrieved.
+This is the key returned from the \`New-AzFileAcl\`, \`Set-AzFileAclKey\`,
+or \`Get-AzFileAclKey\` functions.
 
 ```yaml
-Type: AzureStorageBase
-Parameter Sets: File
+Type: String
+Parameter Sets: (All)
 Aliases:
 
 Required: True
@@ -68,12 +69,12 @@ Accept pipeline input: True (ByValue)
 Accept wildcard characters: False
 ```
 
-### -Client
-{{ Fill Client Description }}
+### -Share
+Specifies the Azure storage file share from which to retrieve the ACL key.
 
 ```yaml
-Type: Object
-Parameter Sets: Client
+Type: AzureStorageFileShare
+Parameter Sets: Share
 Aliases:
 
 Required: True
@@ -83,13 +84,13 @@ Accept pipeline input: False
 Accept wildcard characters: False
 ```
 
-### -Acl
-Specifies the ACL to be applied.
-This can be in SDDL format, base64-encoded binary, binary array, or RawSecurityDescriptor.
+### -Context
+Specifies the Azure storage context.
+This is required to authenticate and interact with the Azure storage account.
 
 ```yaml
-Type: Object
-Parameter Sets: (All)
+Type: IStorageContext
+Parameter Sets: FileShareName
 Aliases:
 
 Required: True
@@ -99,9 +100,38 @@ Accept pipeline input: False
 Accept wildcard characters: False
 ```
 
-### -AclFormat
-Specifies the format of the ACL.
-If not provided, the function will infer the format automatically. 
+### -FileShareName
+Specifies the name of the Azure file share from which to retrieve the ACL key.
+
+```yaml
+Type: String
+Parameter Sets: FileShareName
+Aliases:
+
+Required: True
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -ShareClient
+Specifies the Azure storage file share client from which to retrieve the ACL key.
+
+```yaml
+Type: ShareClient
+Parameter Sets: ShareClient
+Aliases:
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -OutputFormat
+Specifies the output format of the security descriptor.
 Supported formats include SDDL, Base64, and Binary.
 
 ```yaml
@@ -112,7 +142,7 @@ Accepted values: Sddl, Binary, Base64, Raw, FolderAcl, FileAcl
 
 Required: False
 Position: Named
-Default value: None
+Default value: Sddl
 Accept pipeline input: False
 Accept wildcard characters: False
 ```
@@ -171,7 +201,14 @@ This cmdlet supports the common parameters: -Debug, -ErrorAction, -ErrorVariable
 ## OUTPUTS
 
 ### System.String
-### Returns the file permission key associated with the applied ACL.
+### Returns the ACL in the specified format. The default format is SDDL.
 ## NOTES
 
 ## RELATED LINKS
+
+[New-AzFileAcl]()
+
+[Set-AzFileAcl]()
+
+[Set-AzFileAclKey]()
+

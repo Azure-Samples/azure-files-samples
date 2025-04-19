@@ -8,29 +8,34 @@ schema: 2.0.0
 # Get-AzFileAcl
 
 ## SYNOPSIS
-Retrieves the ACL (Access Control List) for a specified file or directory in an Azure file share.
+Retrieves the ACL (Access Control List) for a specified file or directory.
 
 ## SYNTAX
 
-### Share
+### File
 ```
-Get-AzFileAcl -Key <String> -Share <AzureStorageFileShare> [-OutputFormat <SecurityDescriptorFormat>]
- [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
+Get-AzFileAcl -File <AzureStorageBase> [-OutputFormat <SecurityDescriptorFormat>]
+ [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
-### FileShareName
+### FilePath
 ```
-Get-AzFileAcl -Key <String> -Context <IStorageContext> -FileShareName <String>
- [-OutputFormat <SecurityDescriptorFormat>] [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm]
- [<CommonParameters>]
+Get-AzFileAcl -Context <IStorageContext> -FileShareName <String> -FilePath <String>
+ [-OutputFormat <SecurityDescriptorFormat>] [-ProgressAction <ActionPreference>] [<CommonParameters>]
+```
+
+### Client
+```
+Get-AzFileAcl [-Client <Object>] [-OutputFormat <SecurityDescriptorFormat>]
+ [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
 ## DESCRIPTION
-The \`Get-AzFileAcl\` function retrieves the ACL for a specified file or directory in an Azure file share.
-It supports retrieving the ACL in various formats, including SDDL (Security Descriptor Definition Language)
-or binary formats.
-The function supports retrieving the ACL from a file share specified either directly or
-by its name and context.
+The \`Get-AzFileAcl\` function retrieves the ACL for a specified file or directory.
+It supports retrieving the ACL in
+various formats, including SDDL (Security Descriptor Definition Language) or binary formats.
+The function supports
+retrieving the ACL from a file share specified either directly or its name and context.
 
 ## EXAMPLES
 
@@ -38,37 +43,19 @@ by its name and context.
 ```
 $context = Get-AzStorageContext -StorageAccountName "mystorageaccount" -StorageAccountKey "mykey"
 PS> $file = Get-AzStorageFile -Context $context -ShareName "myfileshare" -Path "myfolder/myfile.txt"
-PS> $key = Get-AzFileAclKey -File $file
-PS> Get-AzFileAcl -Key $key -Share $file.Share -OutputFormat Sddl
+PS> Get-AzFileAcl -File $file
 ```
 
 Retrieves the SDDL ACL for the specified file using the permission key.
 
 ## PARAMETERS
 
-### -Key
-Specifies the ACL key to be retrieved.
-This is the key returned from the \`New-AzFileAcl\`, \`Set-AzFileAclKey\`,
-or \`Get-AzFileAclKey\` functions.
+### -File
+Specifies the Azure storage file or directory from which to retrieve the ACL key.
 
 ```yaml
-Type: String
-Parameter Sets: (All)
-Aliases:
-
-Required: True
-Position: Named
-Default value: None
-Accept pipeline input: True (ByValue)
-Accept wildcard characters: False
-```
-
-### -Share
-Specifies the Azure storage file share from which to retrieve the ACL key.
-
-```yaml
-Type: AzureStorageFileShare
-Parameter Sets: Share
+Type: AzureStorageBase
+Parameter Sets: File
 Aliases:
 
 Required: True
@@ -84,7 +71,7 @@ This is required to authenticate and interact with the Azure storage account.
 
 ```yaml
 Type: IStorageContext
-Parameter Sets: FileShareName
+Parameter Sets: FilePath
 Aliases:
 
 Required: True
@@ -99,10 +86,40 @@ Specifies the name of the Azure file share from which to retrieve the ACL key.
 
 ```yaml
 Type: String
-Parameter Sets: FileShareName
+Parameter Sets: FilePath
 Aliases:
 
 Required: True
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -FilePath
+Specifies the path to the file or directory from which to retrieve the ACL key.
+
+```yaml
+Type: String
+Parameter Sets: FilePath
+Aliases:
+
+Required: True
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -Client
+{{ Fill Client Description }}
+
+```yaml
+Type: Object
+Parameter Sets: Client
+Aliases:
+
+Required: False
 Position: Named
 Default value: None
 Accept pipeline input: False
@@ -117,42 +134,11 @@ Supported formats include SDDL, Base64, and Binary.
 Type: SecurityDescriptorFormat
 Parameter Sets: (All)
 Aliases:
-Accepted values: Sddl, Binary, Base64, Raw
+Accepted values: Sddl, Binary, Base64, Raw, FolderAcl, FileAcl
 
 Required: False
 Position: Named
 Default value: Sddl
-Accept pipeline input: False
-Accept wildcard characters: False
-```
-
-### -WhatIf
-Shows what would happen if the cmdlet runs.
-The cmdlet is not run.
-
-```yaml
-Type: SwitchParameter
-Parameter Sets: (All)
-Aliases: wi
-
-Required: False
-Position: Named
-Default value: None
-Accept pipeline input: False
-Accept wildcard characters: False
-```
-
-### -Confirm
-Prompts you for confirmation before running the cmdlet.
-
-```yaml
-Type: SwitchParameter
-Parameter Sets: (All)
-Aliases: cf
-
-Required: False
-Position: Named
-Default value: None
 Accept pipeline input: False
 Accept wildcard characters: False
 ```

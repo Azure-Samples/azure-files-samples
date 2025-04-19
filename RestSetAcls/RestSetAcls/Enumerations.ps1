@@ -3,4 +3,6 @@ enum SecurityDescriptorFormat {
     Binary
     Base64
     Raw
+    FolderAcl
+    FileAcl
 }

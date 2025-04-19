@@ -24,6 +24,12 @@ Set-AzFileAclKey -Context <IStorageContext> -FileShareName <String> -FilePath <S
  [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
 ```
 
+### Client
+```
+Set-AzFileAclKey -Client <Object> -Key <String> [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm]
+ [<CommonParameters>]
+```
+
 ## DESCRIPTION
 The \`Set-AzFileAclKey\` takes an ACL key, and sets it on a specified file or directory in Azure Files.
 
@@ -93,6 +99,21 @@ Path to the file or directory on which to set the permission key
 ```yaml
 Type: String
 Parameter Sets: FilePath
+Aliases:
+
+Required: True
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -Client
+Specifies the Azure storage file or directory client with which the ACL will be applied.
+
+```yaml
+Type: Object
+Parameter Sets: Client
 Aliases:
 
 Required: True
