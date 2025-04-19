@@ -12,8 +12,15 @@ Sets the Access Control List (ACL) for a specified Azure file or directory.
 
 ## SYNTAX
 
+### File
 ```
-Set-AzFileAcl [-File] <AzureStorageBase> [-Acl] <Object> [[-AclFormat] <SecurityDescriptorFormat>]
+Set-AzFileAcl -File <AzureStorageBase> -Acl <Object> [-AclFormat <SecurityDescriptorFormat>]
+ [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
+```
+
+### Client
+```
+Set-AzFileAcl -Client <Object> -Acl <Object> [-AclFormat <SecurityDescriptorFormat>]
  [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
 ```
 
@@ -51,13 +58,28 @@ Specifies the Azure storage file or directory on which to set the ACL.
 
 ```yaml
 Type: AzureStorageBase
-Parameter Sets: (All)
+Parameter Sets: File
 Aliases:
 
 Required: True
-Position: 1
+Position: Named
 Default value: None
 Accept pipeline input: True (ByValue)
+Accept wildcard characters: False
+```
+
+### -Client
+{{ Fill Client Description }}
+
+```yaml
+Type: Object
+Parameter Sets: Client
+Aliases:
+
+Required: True
+Position: Named
+Default value: None
+Accept pipeline input: False
 Accept wildcard characters: False
 ```
 
@@ -71,7 +93,7 @@ Parameter Sets: (All)
 Aliases:
 
 Required: True
-Position: 2
+Position: Named
 Default value: None
 Accept pipeline input: False
 Accept wildcard characters: False
@@ -89,7 +111,7 @@ Aliases:
 Accepted values: Sddl, Binary, Base64, Raw, FolderAcl, FileAcl
 
 Required: False
-Position: 3
+Position: Named
 Default value: None
 Accept pipeline input: False
 Accept wildcard characters: False

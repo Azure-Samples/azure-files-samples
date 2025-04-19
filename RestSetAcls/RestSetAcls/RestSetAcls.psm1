@@ -506,6 +506,9 @@ function Set-AzFileAcl {
     .PARAMETER File
     Specifies the Azure storage file or directory on which to set the ACL.
 
+    .PARAMETER Client
+    Specifies the Azure storage file or directory client with which to set the ACL.
+
     .PARAMETER Acl
     Specifies the ACL to be applied. This can be in SDDL format, base64-encoded binary, binary array, or RawSecurityDescriptor.
 
@@ -642,6 +645,9 @@ function Get-AzFileAclKey {
 
     .PARAMETER FilePath
     Specifies the path to the file or directory from which to retrieve the ACL key.
+
+    .PARAMETER Client
+    Specifies the Azure storage file or directory client with which to retrieve the ACL key.
 
     .OUTPUTS
     System.String
@@ -809,6 +815,9 @@ function Get-AzFileAcl {
 
     .PARAMETER FilePath
     Specifies the path to the file or directory from which to retrieve the ACL key.
+
+    .PARAMETER Client
+    Specifies the Azure storage file share client with which to retrieve the ACL key.
 
     .PARAMETER OutputFormat
     Specifies the output format of the security descriptor. Supported formats include SDDL, Base64, and Binary.

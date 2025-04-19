@@ -24,6 +24,12 @@ Get-AzFileAcl -Context <IStorageContext> -FileShareName <String> -FilePath <Stri
  [-OutputFormat <SecurityDescriptorFormat>] [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
+### Client
+```
+Get-AzFileAcl [-Client <Object>] [-OutputFormat <SecurityDescriptorFormat>]
+ [-ProgressAction <ActionPreference>] [<CommonParameters>]
+```
+
 ## DESCRIPTION
 The \`Get-AzFileAcl\` function retrieves the ACL for a specified file or directory.
 It supports retrieving the ACL in
@@ -99,6 +105,21 @@ Parameter Sets: FilePath
 Aliases:
 
 Required: True
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -Client
+{{ Fill Client Description }}
+
+```yaml
+Type: Object
+Parameter Sets: Client
+Aliases:
+
+Required: False
 Position: Named
 Default value: None
 Accept pipeline input: False

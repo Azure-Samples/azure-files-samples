@@ -12,10 +12,17 @@ Creates a new Azure File ACL (Access Control List) for a specified file share.
 
 ## SYNTAX
 
+### FileShareName
 ```
-New-AzFileAcl [-Context] <IStorageContext> [-FileShareName] <String> [-Acl] <Object>
- [[-AclFormat] <SecurityDescriptorFormat>] [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm]
+New-AzFileAcl -Context <IStorageContext> -FileShareName <String> -Acl <Object>
+ [-AclFormat <SecurityDescriptorFormat>] [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm]
  [<CommonParameters>]
+```
+
+### FileShareClient
+```
+New-AzFileAcl -ShareClient <ShareClient> -Acl <Object> [-AclFormat <SecurityDescriptorFormat>]
+ [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
 ```
 
 ## DESCRIPTION
@@ -51,11 +58,11 @@ This is required to authenticate and interact with the Azure storage account.
 
 ```yaml
 Type: IStorageContext
-Parameter Sets: (All)
+Parameter Sets: FileShareName
 Aliases:
 
 Required: True
-Position: 1
+Position: Named
 Default value: None
 Accept pipeline input: False
 Accept wildcard characters: False
@@ -66,11 +73,26 @@ Specifies the name of the Azure file share where the ACL will be applied.
 
 ```yaml
 Type: String
-Parameter Sets: (All)
+Parameter Sets: FileShareName
 Aliases:
 
 Required: True
-Position: 2
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -ShareClient
+Specifies the Azure storage file share client with which the ACL will be applied.
+
+```yaml
+Type: ShareClient
+Parameter Sets: FileShareClient
+Aliases:
+
+Required: True
+Position: Named
 Default value: None
 Accept pipeline input: False
 Accept wildcard characters: False
@@ -86,7 +108,7 @@ Parameter Sets: (All)
 Aliases:
 
 Required: True
-Position: 3
+Position: Named
 Default value: None
 Accept pipeline input: False
 Accept wildcard characters: False
@@ -103,7 +125,7 @@ Aliases:
 Accepted values: Sddl, Binary, Base64, Raw, FolderAcl, FileAcl
 
 Required: False
-Position: 4
+Position: Named
 Default value: None
 Accept pipeline input: False
 Accept wildcard characters: False
