@@ -1252,13 +1252,16 @@ function Restore-AzFileAclInheritanceRecursive {
     $options.Traits = [Azure.Storage.Files.Shares.Models.ShareFileTraits]::PermissionKey
 
     # Recursively visit all subdirectories. This is a breadth-first search.
-    $stack = [System.Collections.Generic.Stack[Tuple[Azure.Storage.Files.Shares.ShareDirectoryClient, string]]]::new()
-    $stack.Push([System.Tuple]::Create($DirectoryClient, $directoryPermissionKey))
+    $stack = [System.Collections.Generic.Stack[PSCustomObject]]::new()
+    $stack.Push([PSCustomObject]@{
+        DirectoryClient = $DirectoryClient
+        DirectoryPermissionKey = $directoryPermissionKey
+    })
 
     while ($stack.Count -gt 0) {
-        $tuple = $stack.Pop()
-        $directoryClient = $tuple.Item1
-        $directoryPermissionKey = $tuple.Item2
+        $popped = $stack.Pop()
+        $directoryClient = $popped.DirectoryClient
+        $directoryPermissionKey = $popped.DirectoryPermissionKey
 
         # Get permission of parent directory
         $directoryPermission = $null
@@ -1323,7 +1326,10 @@ function Restore-AzFileAclInheritanceRecursive {
 
             # If item is a directory, push it onto the stack
             if ($item.IsDirectory) {
-                $stack.Push([System.Tuple]::Create($itemClient, $newPermissionKey))
+                $stack.Push([PSCustomObject]@{
+                    DirectoryClient = $itemClient
+                    DirectoryPermissionKey = $newPermissionKey
+                })
             }
         }
     }   
