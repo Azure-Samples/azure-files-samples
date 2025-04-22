@@ -1152,7 +1152,7 @@ function Apply-AzFileAclInheritance {
             -ChildPath $ChildPath `
             -WhatIf:$WhatIfPreference
     }
-    elseif ($PSCmdlet.ParameterSetName -eq "Recursive") {  
+    elseif ($PSCmdlet.ParameterSetName -eq "Recursive" -and $Recursive) {  
         $startTime = Get-Date
         $processedCount = 0
         $errors = @{}
@@ -1300,9 +1300,9 @@ function Apply-AzFileAclInheritanceRecursive {
             $newSddl = Convert-SecurityDescriptor $itemNewPermission -From $itemPermissionFormat -To Sddl
 
             Write-Verbose "Computed inheritance for item '$($itemClient.Path)'"
-            # Write-Verbose "Parent SDDL: $parentSddl"
-            # Write-Verbose "Creator SDDL: $creatorSddl"
-            # Write-Verbose "New SDDL: $newSddl"
+            Write-Verbose "Parent SDDL: $parentSddl"
+            Write-Verbose "Creator SDDL: $creatorSddl"
+            Write-Verbose "New SDDL: $newSddl"
 
             $newPermissionKey = Set-AzFileAcl `
                 -Client $itemClient `

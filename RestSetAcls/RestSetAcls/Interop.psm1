@@ -58,7 +58,7 @@ function MarshalSecurityDescriptor {
 
 function UnmarshalSecurityDescriptor {
     [CmdletBinding()]
-    [OutputType([System.Security.AccessControl.RawSecurityDescriptor])]
+    [OutputType([System.Security.AccessControl.CommonSecurityDescriptor])]
     param (
         [Parameter(Mandatory = $true)]
         [IntPtr]$IntPtr,

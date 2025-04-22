@@ -164,7 +164,12 @@ function ConvertTo-SecurityDescriptor {
 
 function ConvertFrom-SecurityDescriptor {
     [CmdletBinding()]
-    [OutputType([string], [byte[]], [System.Security.AccessControl.RawSecurityDescriptor])]
+    [OutputType(
+        [string],
+        [byte[]],
+        [System.Security.AccessControl.RawSecurityDescriptor],
+        [System.Security.AccessControl.CommonSecurityDescriptor]
+    )]
     param (
         [Parameter(Mandatory = $true, Position = 0, ValueFromPipeline = $true)]
         [System.Security.AccessControl.RawSecurityDescriptor]$SecurityDescriptor,
