@@ -1101,7 +1101,7 @@ function Set-AzFileAclRecursive {
     Write-FinalFilesAndFoldersProcessed -ProcessedCount $processedCount -Errors $errors -TotalTime $totalTime
 }
 
-function Apply-AzFileAclInheritance {
+function Restore-AzFileAclInheritance {
     [CmdletBinding(SupportsShouldProcess = $true)]
     param (
         [Parameter(Mandatory = $true, ParameterSetName = "Single")]
@@ -1145,7 +1145,7 @@ function Apply-AzFileAclInheritance {
     if ($PSCmdlet.ParameterSetName -eq "Single") {
         $parentAcl = Get-AzFileAcl -File $parentFile -OutputFormat Raw
 
-        return Apply-AzFileAclInheritanceSingle `
+        return Restore-AzFileAclInheritanceSingle `
             -Context $Context `
             -FileShareName $FileShareName `
             -ParentAcl $parentAcl `
@@ -1157,7 +1157,7 @@ function Apply-AzFileAclInheritance {
         $processedCount = 0
         $errors = @{}
 
-        Apply-AzFileAclInheritanceRecursive `
+        Restore-AzFileAclInheritanceRecursive `
             -DirectoryClient $parentFile.ShareDirectoryClient `
             -PassThru `
             -WhatIf:$WhatIfPreference `
@@ -1179,7 +1179,7 @@ function Apply-AzFileAclInheritance {
     }
 }
 
-function Apply-AzFileAclInheritanceSingle {
+function Restore-AzFileAclInheritanceSingle {
     [CmdletBinding(SupportsShouldProcess = $true)]
     [OutputType([System.Security.AccessControl.GenericSecurityDescriptor])]
     param (
@@ -1231,7 +1231,7 @@ function Apply-AzFileAclInheritanceSingle {
     return $newChildAcl
 }
 
-function Apply-AzFileAclInheritanceRecursive {
+function Restore-AzFileAclInheritanceRecursive {
     [CmdletBinding(SupportsShouldProcess = $true)]
     [OutputType([System.Security.AccessControl.GenericSecurityDescriptor])]
     param (
