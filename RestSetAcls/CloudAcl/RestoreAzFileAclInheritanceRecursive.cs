@@ -1,8 +1,8 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Management.Automation;
 using System.Security.AccessControl;
 using Azure.Storage.Files.Shares;
-using Azure.Storage.Files.Shares.Models;
 using Azure.Storage.Files.Shares.Specialized;
 
 namespace CloudAcl
@@ -17,12 +17,37 @@ namespace CloudAcl
         [Parameter(Mandatory = true)]
         public bool PassThru { get; set; }
 
-        protected class WorkItem
+
+
+        protected abstract class WorkItem { }
+
+        // A DirectoryOpenWorkItem says that we should list the contents of a directory, and add each child to the
+        // stack as FileInherit or DirectoryInheritAndOpen work
+        protected class DirectoryOpenWorkItem : WorkItem
         {
-            public bool IsDirectory;
             public ShareDirectoryClient DirectoryClient { get; set; }
+        }
+
+        // An ApplyInheritanceToFolderAndRecurseWorkItem says to compute inheritance from the parent permission onto
+        // the folder's permission, and then recurse on the folder contents, and add each child as an
+        // ApplyInheritanceToFileWorkItem or ApplyInheritanceToFolderAndRecurseWorkItem to the stack
+        protected class DirectoryInheritAndOpenWorkItem : WorkItem
+        {
+            public ShareDirectoryClient DirectoryClient { get; set; }
+
+            public string DirectoryPermissionKey { get; set; }
+
+            public CommonSecurityDescriptor ParentPermission { get; set; }
+        }
+
+        // An ApplyInheritanceToFileWorkItem says to compute inheritance from the parent permission onto the file's permission
+        protected class FileInheritWorkItem : WorkItem
+        {
             public ShareFileClient FileClient { get; set; }
-            public CommonSecurityDescriptor DirectoryPermission { get; set; }
+
+            public string FilePermissionKey { get; set; }
+
+            public CommonSecurityDescriptor ParentPermission { get; set; }
         }
 
         // This method gets called once for each cmdlet in the pipeline when the pipeline starts executing
@@ -34,12 +59,9 @@ namespace CloudAcl
         // This method will be called for each input received from the pipeline to this cmdlet; if no input is received, this method is not called
         protected override void ProcessRecord()
         {
-            var initialWorkItem = new WorkItem
+            var initialWorkItem = new DirectoryOpenWorkItem
             {
-                IsDirectory = true,
                 DirectoryClient = this.DirectoryClient,
-                FileClient = null,
-                DirectoryPermission = RestHelpers.GetDirectoryPermission(this.DirectoryClient),
             };
 
             var threadPool = new WorkStackThreadPool<WorkItem>(workerCount: 5, initialWorkItem, ProcessWorkItem);
@@ -51,46 +73,72 @@ namespace CloudAcl
         {
             List<WorkItem> foldersToExploreLater = new List<WorkItem>();
 
-            var parentClient = workItem.DirectoryClient;
-            var shareClient = parentClient.GetParentShareClient();
-
-            var options = new ShareDirectoryGetFilesAndDirectoriesOptions
+            if (workItem is DirectoryOpenWorkItem dowi)
             {
-                IncludeExtendedInfo = true,
-                Traits = ShareFileTraits.All
-            };
-
-            foreach (var child in parentClient.GetFilesAndDirectories(options))
+                CommonSecurityDescriptor directoryPermission = RestHelpers.GetDirectoryPermission(dowi.DirectoryClient);
+                return GetChildWorkItems(dowi.DirectoryClient, directoryPermission);
+            }
+            else if (workItem is DirectoryInheritAndOpenWorkItem diaowi)
             {
-                // Gather parent and child permissions
-                var parentPermission = workItem.DirectoryPermission;
-                var permissionKey = child.PermissionKey;
-                var childPermission = RestHelpers.GetPermission(shareClient, child.PermissionKey, child.IsDirectory);
+                // Step 1: inherit
+                CommonSecurityDescriptor oldPermission = RestHelpers.GetPermission(
+                    diaowi.DirectoryClient.GetParentShareClient(),
+                    diaowi.DirectoryPermissionKey,
+                    isDirectory: true);
 
-                // Compute inheritance
-                CommonSecurityDescriptor newPermission = InheritanceHelpers.ComputeInheritance(parentPermission, childPermission);
+                CommonSecurityDescriptor newPermission = InheritanceHelpers.ComputeInheritance(diaowi.ParentPermission, oldPermission);
 
-                // Set new permission on child
-                // TODO: double check the permission key we get back matches what we set.
-                if (!child.IsDirectory)
+                RestHelpers.SetDirectoryPermission(diaowi.DirectoryClient, newPermission);
+
+                WriteObject(diaowi.DirectoryClient.Path); // log that it's done
+
+                // Step 2: open 
+                return GetChildWorkItems(diaowi.DirectoryClient, newPermission);
+            }
+            else if (workItem is FileInheritWorkItem fiwi)
+            {
+                CommonSecurityDescriptor filePermission = RestHelpers.GetPermission(
+                    fiwi.FileClient.GetParentShareClient(),
+                    fiwi.FilePermissionKey,
+                    isDirectory: false);
+
+                CommonSecurityDescriptor newPermission = InheritanceHelpers.ComputeInheritance(fiwi.ParentPermission, filePermission);
+
+                RestHelpers.SetFilePermission(fiwi.FileClient, newPermission);
+
+                WriteObject(fiwi.FileClient.Path); // log that it's done
+
+                return new List<WorkItem>();
+            }
+            else
+            {
+                throw new ArgumentException("WorkItem is not of a known type");
+            }
+        }
+
+        private IEnumerable<WorkItem> GetChildWorkItems(ShareDirectoryClient directoryClient, CommonSecurityDescriptor directoryPermission)
+        {
+            foreach (var item in RestHelpers.GetFilesAndDirectories(directoryClient))
+            {
+                if (item.IsDirectory)
                 {
-                    var fileClient = parentClient.GetFileClient(child.Name);
-                    RestHelpers.SetFilePermission(fileClient, newPermission);
+                    yield return new DirectoryInheritAndOpenWorkItem
+                    {
+                        DirectoryClient = directoryClient.GetSubdirectoryClient(item.Name),
+                        DirectoryPermissionKey = item.PermissionKey,
+                        ParentPermission = directoryPermission
+                    };
                 }
                 else
                 {
-                    var folderClient = parentClient.GetSubdirectoryClient(child.Name);
-                    RestHelpers.SetDirectoryPermission(folderClient, newPermission);
-
-                    foldersToExploreLater.Add(new WorkItem
+                    yield return new FileInheritWorkItem
                     {
-                        DirectoryClient = parentClient.GetSubdirectoryClient(child.Name),
-                        DirectoryPermission = newPermission
-                    });
+                        FileClient = directoryClient.GetFileClient(item.Name),
+                        FilePermissionKey = item.PermissionKey,
+                        ParentPermission = directoryPermission
+                    };
                 }
             }
-
-            return foldersToExploreLater;
         }
 
         

@@ -1,16 +1,34 @@
-﻿using Azure.Storage.Files.Shares.Models;
-using Azure.Storage.Files.Shares;
+﻿using System;
 using System.Security.AccessControl;
+
+using Azure;
+using Azure.Storage.Files.Shares;
+using Azure.Storage.Files.Shares.Models;
 using Azure.Storage.Files.Shares.Specialized;
-using System;
 
 namespace CloudAcl
 {
     internal class RestHelpers
     {
+        public static Pageable<ShareFileItem> GetFilesAndDirectories(ShareDirectoryClient client)
+        {
+            var options = new ShareDirectoryGetFilesAndDirectoriesOptions
+            {
+                IncludeExtendedInfo = true,
+                Traits = ShareFileTraits.All
+            };
+
+            return client.GetFilesAndDirectories(options);
+        }
+
+        public static string GetDirectoryPermissionKey(ShareDirectoryClient client)
+        {
+            return client.GetProperties().Value.SmbProperties.FilePermissionKey;
+        }
+
         public static CommonSecurityDescriptor GetDirectoryPermission(ShareDirectoryClient client)
         {
-            var key = client.GetProperties().Value.SmbProperties.FilePermissionKey;
+            var key = GetDirectoryPermissionKey(client);
             return GetPermission(client.GetParentShareClient(), key, isDirectory: true);
         }
 
