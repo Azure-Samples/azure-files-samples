@@ -1,33 +1,55 @@
 param (
     [Parameter(Mandatory = $true)]
-    [string]$ResourceGroupName,
-
-    [Parameter(Mandatory = $true)]
-    [string]$StorageAccountName,
-
-    [Parameter(Mandatory = $true)]
-    [string]$StorageAccountKey
+    [object]$InputConfig
 )
 
+class Config {
+    [string]$ResourceGroupName
+    [string]$StorageAccountName
+    [string]$StorageAccountKey
+    [User]$HybridUser
+    [Group]$HybridGroup
+    [User]$CloudNativeUser
+    [Group]$CloudNativeGroup
+}
+
+class User {
+    [string]$Upn    
+    [string]$Sid
+    [string]$DisplayName
+    [string]$ObjectId
+}
+
+class Group {
+    [string]$Sid
+    [string]$DisplayName
+    [string]$ObjectId
+}
+
+BeforeDiscovery {
+    # Parse config object
+    $Config = [Config]$InputConfig
+}
+
 BeforeAll {
-    Import-Module $PSScriptRoot/../../RestSetAcls/RestSetAcls.psd1 -Force
     Import-Module $PSScriptRoot/utils.psm1 -Force
+    Import-Module $PSScriptRoot/../../RestSetAcls/RestSetAcls.psd1 -Force
 
     # Build context from parameters
-    $global:context = New-AzStorageContext -StorageAccountName $StorageAccountName -StorageAccountKey $StorageAccountKey
+    $global:context = New-AzStorageContext -StorageAccountName $Config.StorageAccountName -StorageAccountKey $Config.StorageAccountKey
 
     # Check that account exists
-    $account = Get-AzStorageAccount -ResourceGroupName $ResourceGroupName -Name $StorageAccountName -ErrorAction SilentlyContinue
+    $account = Get-AzStorageAccount -ResourceGroupName $Config.ResourceGroupName -Name $Config.StorageAccountName -ErrorAction SilentlyContinue
     if ($null -eq $account) {
-        throw "Storage account $StorageAccountName not found in resource group $ResourceGroupName."
+        throw "Storage account $($Config.StorageAccountName) not found in resource group $($Config.ResourceGroupName)."
     }
 
     # Create a temporary file share in account
     $global:fileShareName = New-RandomString -Length 12    
-    Write-Host "Creating a temporary file share $global:fileShareName in storage account $StorageAccountName..."
+    Write-Host "Creating a temporary file share $global:fileShareName in storage account $($Config.StorageAccountName)..."
     $global:share = New-AzStorageShare -Name $global:fileShareName -Context $global:context
     if ($null -eq $global:fileShareName) {
-        throw "Failed to create a temporary file share in storage account $StorageAccountName."
+        throw "Failed to create a temporary file share in storage account $($Config.StorageAccountName)."
     }
 
     $global:rootDirectoryClient = $global:share.ShareClient.GetRootDirectoryClient()
@@ -390,6 +412,90 @@ Describe "Set-AzFileAcl" {
                 
                 $base64After = Get-AzFileAclFromKey -Key $returnedKey -Share $global:share -OutputFormat Base64
                 $base64After | Should -Be $Base64
+            }
+        }
+    }
+}
+
+Describe "Set-AzFileOwner" {
+    Context "<type>" -ForEach @(
+        @{ Type = "file" },
+        @{ Type = "directory" }
+    ) {
+        Context "<Context>" -ForEach @(
+            # Hybrid users
+            @{ Context = "hybrid user SID"; Input = $Config.HybridUser.Sid; Sid = $Config.HybridUser.Sid },
+            @{ Context = "hybrid user UPN"; Input = $Config.HybridUser.Upn; Sid = $Config.HybridUser.Sid },
+            @{ Context = "hybrid user object ID"; Input = $Config.HybridUser.ObjectId; Sid = $Config.HybridUser.Sid },
+            @{ Context = "hybrid user display name"; Input = $Config.HybridUser.DisplayName; Sid = $Config.HybridUser.Sid },
+            # Hybrid groups
+            @{ Context = "hybrid group SID"; Input = $Config.HybridGroup.Sid; Sid = $Config.HybridGroup.Sid },
+            @{ Context = "hybrid group object ID"; Input = $Config.HybridGroup.ObjectId; Sid = $Config.HybridGroup.Sid },
+            @{ Context = "hybrid group display name"; Input = $Config.HybridGroup.DisplayName; Sid = $Config.HybridGroup.Sid },
+            # Cloud native users
+            @{ Context = "cloud native user SID"; Input = $Config.CloudNativeUser.Sid; Sid = $Config.CloudNativeUser.Sid },
+            @{ Context = "cloud native user UPN"; Input = $Config.CloudNativeUser.Upn; Sid = $Config.CloudNativeUser.Sid },
+            @{ Context = "cloud native user object ID"; Input = $Config.CloudNativeUser.ObjectId; Sid = $Config.CloudNativeUser.Sid },
+            @{ Context = "cloud native user display name"; Input = $Config.CloudNativeUser.DisplayName; Sid = $Config.CloudNativeUser.Sid },
+            # Cloud native groups
+            @{ Context = "cloud native group SID"; Input = $Config.CloudNativeGroup.Sid; Sid = $Config.CloudNativeGroup.Sid },
+            @{ Context = "cloud native group object ID"; Input = $Config.CloudNativeGroup.ObjectId; Sid = $Config.CloudNativeGroup.Sid },
+            @{ Context = "cloud native group display name"; Input = $Config.CloudNativeGroup.DisplayName; Sid = $Config.CloudNativeGroup.Sid }
+        ) {
+            BeforeEach {
+                # Create file or directory
+                if ($Type -eq "file") {
+                    $fileName = "$(New-RandomString -Length 8).txt"
+                    New-File -Path $fileName -Size 1024
+                } elseif ($Type -eq "directory") {
+                    $fileName = New-RandomString -Length 8
+                    New-Directory $fileName
+                } else {
+                    throw "Invalid type specified. Use 'file' or 'directory'."
+                }
+    
+                # Get a reference to it
+                $file = Get-File $fileName
+                $client = if ($Type -eq "file") { $file.ShareFileClient } else { $file.ShareDirectoryClient }
+            }
+
+            Describe "-File" {
+                It "Should set the owner correctly" {
+                    $returnedKey = Set-AzFileOwner -File $file -Owner $_.Input
+                    Assert-IsAclKey $returnedKey
+
+                    $result = Get-AzFileAclFromKey -Key $returnedKey -Share $global:share -OutputFormat Raw
+                    $result.Owner.ToString() | Should -Be $_.Sid
+
+                    $fileAclKey = Get-AzFileAclKey -Client $client
+                    $fileAclKey | Should -Be $returnedKey
+                }
+            }
+
+            Describe "-Client" {
+                It "Should set the owner correctly" {
+                    $returnedKey = Set-AzFileOwner -Client $client -Owner $_.Input
+                    Assert-IsAclKey $returnedKey
+
+                    $result = Get-AzFileAclFromKey -Key $returnedKey -Share $global:share -OutputFormat Raw
+                    $result.Owner.ToString() | Should -Be $_.Sid
+                    
+                    $fileAclKey = Get-AzFileAclKey -Client $client
+                    $fileAclKey | Should -Be $returnedKey
+                }
+            }
+
+            Describe "-Context -FileShareName -FilePath" {
+                It "Should set the owner correctly" {
+                    $returnedKey = Set-AzFileOwner -Context $global:context -FileShareName $global:fileShareName -FilePath $fileName -Owner $_.Input
+                    Assert-IsAclKey $returnedKey
+
+                    $result = Get-AzFileAclFromKey -Key $returnedKey -Share $global:share -OutputFormat Raw
+                    $result.Owner.ToString() | Should -Be $_.Sid
+                    
+                    $fileAclKey = Get-AzFileAclKey -Client $client
+                    $fileAclKey | Should -Be $returnedKey
+                }
             }
         }
     }

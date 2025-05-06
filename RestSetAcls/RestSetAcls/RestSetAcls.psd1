@@ -56,6 +56,21 @@
             ModuleName    = "Az.Storage"
             GUID          = "dfa9e4ea-1407-446d-9111-79122977ab20"
             ModuleVersion = "8.1.0"
+        },
+        @{
+            ModuleName    = "Microsoft.Graph.Authentication"
+            GUID          = "883916f2-9184-46ee-b1f8-b6a2fb784cee"
+            ModuleVersion = "2.27.0"
+        },
+        @{
+            ModuleName    = "Microsoft.Graph.Users"
+            GUID          = "71150504-37a3-48c6-82c7-7a00a12168db"
+            ModuleVersion = "2.27.0"
+        },
+        @{
+            ModuleName    = "Microsoft.Graph.Groups"
+            GUID          = "50bc9e18-e281-4208-8913-c9e1bef6083d"
+            ModuleVersion = "2.27.0"
         }
     )
 
@@ -86,6 +101,7 @@
         "Get-AzFileAclFromKey",
         "Set-AzFileAcl",
         "Get-AzFileAcl",
+        "Set-AzFileOwner",
         "Restore-AzFileAclInheritance"
     )
 

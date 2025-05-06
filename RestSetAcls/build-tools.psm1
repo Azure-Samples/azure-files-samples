@@ -68,23 +68,26 @@ function Test {
 
 function Test-Integration {
     param (
-        [Parameter(Mandatory = $true)]
-        [string]$ResourceGroupName,
+        [Parameter(Mandatory = $false)]
+        [string]$ConfigFile = "$PSScriptRoot\test\integration\config.json",
 
-        [Parameter(Mandatory = $true)]
-        [string]$StorageAccountName,
-
-        [Parameter(Mandatory = $true)]
-        [string]$StorageAccountKey
+        [Parameter(ValueFromRemainingArguments = $true)]
+        [psobject[]]$RemainingArgs
     )
-    
-    $container = New-PesterContainer -Path $PSScriptRoot\test\integration -Data @{
-        ResourceGroupName = $ResourceGroupName
-        StorageAccountName = $StorageAccountName
-        StorageAccountKey = $StorageAccountKey
+    $config = Get-Content -Raw $ConfigFile | ConvertFrom-Json -AsHashtable
+    $container = New-PesterContainer -Path $PSScriptRoot\test\integration -Data @{ InputConfig = $config }
+
+    # Build object we can splat into Invoke-Pester
+    # See https://stackoverflow.com/a/71073148/918389
+    $params = foreach ($arg in $RemainingArgs) {
+        if ($arg.StartsWith('-')) {
+            $prop = [psnoteproperty]::new('<CommandParameterName>', $arg)
+            $arg.PSObject.Properties.Add($prop)
+        }
+        $arg
     }
 
-    Invoke-Pester -Container $container -Output Detailed
+    Invoke-Pester -Container $container -Output Detailed @params
 }
 
 function Test-Manifest {

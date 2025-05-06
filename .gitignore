@@ -5,6 +5,7 @@
 
 # RestSetAcls
 RestSetAcls/bin
+RestSetAcls/test/integration/config.json
 
 # User-specific files
 *.suo

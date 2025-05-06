@@ -1334,3 +1334,276 @@ function Restore-AzFileAclInheritanceRecursive {
         }
     }   
 }
+
+function Connect-MgGraphIfNeeded {
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    param (
+        [Parameter(Mandatory = $true)]
+        [string[]]$Scopes
+    )
+
+    # Determine if we are connected to Microsoft Graph
+    $context = Get-MgContext
+    if ($null -eq $context) {
+        Write-Verbose "Not connected to Microsoft Graph"
+        if ($PSCmdlet.ShouldProcess("Microsoft Graph", "Connect")) {
+            Write-Verbose "Connecting to Microsoft Graph with required scopes '$Scopes'"
+            Connect-MgGraph -Scopes $Scopes -ErrorAction Stop
+        }
+        return
+    }
+    
+    # Determine if we the current connection has the required scopes
+    $missingScopes = $false
+    $currentScopes = [System.Collections.Generic.HashSet[string]]::new($context.Scopes)
+    foreach ($scope in $Scopes) {
+        if (-not $currentScopes.Contains($scope)) {
+            Write-Verbose "Current connection to Microsoft Graph is missing scope '$scope'"
+            $missingScopes = $true
+        }
+    }
+
+    # Connect with the required scopes if needed
+    if ($missingScopes -and $PSCmdlet.ShouldProcess("Microsoft Graph", "Connect")) {
+        Write-Verbose "Connecting to Microsoft Graph, tenant $($context.TenantId) with required scopes '$Scopes'"
+        Connect-MgGraph -TenantId $context.TenantId -Scopes $Scopes -ErrorAction Stop
+    }
+    else {
+        Write-Verbose "Already connected to Microsoft Graph, tenant $($context.TenantId), with scopes $($currentScopes -join ",")"
+    }
+}
+
+
+function Get-Sid {
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    [OutputType([System.Security.Principal.SecurityIdentifier])]
+    param (
+        [Parameter(Mandatory = $true)]
+        [string]$Identity
+    )
+
+    process {
+        if ($Identity -match "^S-1-(\d+-){1,14}\d+$") {
+            Write-Verbose "Given identity is a SID."
+            return [System.Security.Principal.SecurityIdentifier]::new($Identity)
+        }
+        
+        if ($Identity -match "^[^@]+@[^.]+\..+") {
+            Write-Verbose "Given identity is a UPN."
+            Connect-MgGraphIfNeeded -Scopes @("User.ReadBasic.All") -WhatIf:$WhatIfPreference | Out-Null
+            
+            # Only users have UPNs. Look up the user by UPN.
+            Write-Verbose "Querying Microsoft Graph for user with UPN '$Identity'"
+            $user = Get-MgUserByUserPrincipalName -UserPrincipalName $Identity -Property "OnPremisesSecurityIdentifier","SecurityIdentifier" -ErrorAction Stop
+            if ($user) {
+                if ($user.OnPremisesSecurityIdentifier) {
+                    Write-Verbose "Hybrid user found with SID '$($user.OnPremisesSecurityIdentifier)'"
+                    return [System.Security.Principal.SecurityIdentifier]::new($user.OnPremisesSecurityIdentifier)
+                }
+                elseif ($user.SecurityIdentifier) {
+                    Write-Verbose "Cloud-only user found with SID '$($user.SecurityIdentifier)'"
+                    return [System.Security.Principal.SecurityIdentifier]::new($user.SecurityIdentifier)
+                }
+                else {
+                    throw "User with UPN '$Identity' was found, but it did not have a SID."
+                }
+            }
+            else {
+                throw "No user found with UPN '$Identity'"
+            }
+        }
+
+        $output = [guid]::Empty
+        if ([guid]::TryParse($Identity, [ref]$output)) {
+            Write-Verbose "Given identity is a an object ID."
+            Connect-MgGraphIfNeeded -Scopes @("User.ReadBasic.All", "GroupMember.Read.All") -WhatIf:$WhatIfPreference | Out-Null
+
+            # Try to look up the user
+            Write-Verbose "Getting user by ID '$Identity' in Microsoft Graph"
+
+            try {
+                $user = Get-MgUser -UserId $Identity -Property "OnPremisesSecurityIdentifier","SecurityIdentifier" -ErrorAction Stop
+            } catch {
+                if ($_.FullyQualifiedErrorId.StartsWith("Request_ResourceNotFound")) {
+                    Write-Verbose "User not found by ID '$Identity' in Microsoft Graph"
+                } else {
+                    throw $_
+                }
+            }
+
+            if ($user) {
+                if ($user.OnPremisesSecurityIdentifier) {
+                    Write-Verbose "Hybrid user found with SID '$($user.OnPremisesSecurityIdentifier)'"
+                    return [System.Security.Principal.SecurityIdentifier]::new($user.OnPremisesSecurityIdentifier)
+                }
+                elseif ($user.SecurityIdentifier) {
+                    Write-Verbose "Cloud-only user found with SID '$($user.SecurityIdentifier)'"
+                    return [System.Security.Principal.SecurityIdentifier]::new($user.SecurityIdentifier)
+                }
+                else {
+                    throw "User with object ID '$Identity' was found, but it did not have a SID."
+                }
+            }
+
+            # Try to look up the group
+            Write-Verbose "Getting group by ID '$Identity' in Microsoft Graph"
+            try {
+                $group = Get-MgGroup -GroupId $Identity -Property "OnPremisesSecurityIdentifier","SecurityIdentifier" -ErrorAction Stop
+            } catch {
+                if ($_.FullyQualifiedErrorId.StartsWith("Request_ResourceNotFound")) {
+                    Write-Verbose "Group not found by ID '$Identity' in Microsoft Graph"
+                } else {
+                    throw $_
+                }
+            }
+
+            if ($group) {
+                if ($group.OnPremisesSecurityIdentifier) {
+                    Write-Verbose "Hybrid group found with SID '$($group.OnPremisesSecurityIdentifier)'"
+                    return [System.Security.Principal.SecurityIdentifier]::new($group.OnPremisesSecurityIdentifier)
+                }
+                elseif ($group.SecurityIdentifier) {
+                    Write-Verbose "Cloud-only group found with SID '$($group.SecurityIdentifier)'"
+                    return [System.Security.Principal.SecurityIdentifier]::new($group.SecurityIdentifier)
+                }
+                else {
+                    throw "Group with object ID '$Identity' was found, but it did not have a SID."
+                }
+            }
+            else {
+                throw "No user or group found with ID '$Identity'"
+            }
+        }
+        
+        
+        Write-Verbose "Given identity is a display name."
+        Connect-MgGraphIfNeeded -Scopes @("User.ReadBasic.All", "GroupMember.Read.All") -WhatIf:$WhatIfPreference | Out-Null
+        
+        # Replace single quotes with double quotes for the query
+        # See https://learn.microsoft.com/en-us/graph/query-parameters?tabs=http#escaping-single-quotes
+        $displayName = $Identity -replace "'", "''"
+        $filter = "DisplayName eq '${displayName}'"
+
+        # Get the user by display name
+        Write-Verbose "Getting user or group by display name '$Identity' in Microsoft Graph"
+        $user = Get-MgUser -Filter $filter -Property "OnPremisesSecurityIdentifier","SecurityIdentifier" -ErrorAction Stop
+
+        if ($user) {
+            if ($user -is [array] -and $user.Count -gt 1) {
+                throw "$($user.Count) users found with display name '$Identity'. Use SID, object ID or UPN to specify which user is being referred to."
+            }
+
+            if ($user.OnPremisesSecurityIdentifier) {
+                Write-Verbose "Hybrid user found with SID '$($user.OnPremisesSecurityIdentifier)'"
+                return [System.Security.Principal.SecurityIdentifier]::new($user.OnPremisesSecurityIdentifier)
+            }
+            elseif ($user.SecurityIdentifier) {
+                Write-Verbose "Cloud-only user found with SID '$($user.SecurityIdentifier)'"
+                return [System.Security.Principal.SecurityIdentifier]::new($user.SecurityIdentifier)
+            }
+            else {
+                throw "User with display name '$Identity' was found, but it did not have a SID."
+            }
+        }
+
+        # If no user was found, try to get the group by display name
+        Write-Verbose "Getting group by display name '$Identity' in Microsoft Graph"
+        $group = Get-MgGroup -Filter $filter -Property "OnPremisesSecurityIdentifier","SecurityIdentifier" -ErrorAction Stop
+        if ($group) {
+            if ($group -is [array] -and $group.Count -gt 1) {
+                throw "$($group.Count) groups found with display name '$Identity'. Use SID or object ID to specify which group is being referred to."
+            }
+
+            if ($group.OnPremisesSecurityIdentifier) {
+                Write-Verbose "Hybrid group found with SID '$($group.OnPremisesSecurityIdentifier)'"
+                return [System.Security.Principal.SecurityIdentifier]::new($group.OnPremisesSecurityIdentifier)
+            }
+            elseif ($group.SecurityIdentifier) {
+                Write-Verbose "Cloud-only group found with SID '$($group.SecurityIdentifier)'"
+                return [System.Security.Principal.SecurityIdentifier]::new($group.SecurityIdentifier)
+            }
+            else {
+                throw "Group with display name '$Identity' was found, but it did not have a SID."
+            }
+        }
+        else {
+            throw "No user or group found with display name '$Identity'"
+        }
+    }
+}
+
+function Set-AzFileOwner {
+<#
+    .SYNOPSIS
+    Sets the owner for a specified Azure file or directory.
+
+    .DESCRIPTION
+    It supports both SID values and UPNs (User Principal Names) for specifying the owner.
+    The function can be used to set the owner for a file or directory in an Azure file share.
+
+    .PARAMETER File
+    Specifies the Azure storage file or directory on which to set the ACL.
+
+    .PARAMETER Client
+    Specifies the Azure storage file or directory client with which to set the ACL.
+
+    .PARAMETER Owner
+    Specifies the owner that should be set. This can be a SID or a UPN (User Principal Name).
+
+    .OUTPUTS
+    System.String
+    Returns the file permission key associated with the applied ACL.
+#>
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    [OutputType([string])]
+    param (
+        [Parameter(Mandatory = $true, ParameterSetName = "File", HelpMessage = "Azure storage file or directory")]
+        [Microsoft.WindowsAzure.Commands.Common.Storage.ResourceModel.AzureStorageBase]$File,
+
+        [Parameter(Mandatory = $true, ParameterSetName = "FilePath", HelpMessage = "Azure storage context")]
+        [Microsoft.Azure.Commands.Common.Authentication.Abstractions.IStorageContext]$Context,
+        
+        [Parameter(Mandatory = $true, ParameterSetName = "FilePath", HelpMessage = "Name of the file share")]
+        [string]$FileShareName,
+
+        [Parameter(Mandatory = $true, ParameterSetName = "FilePath", HelpMessage = "Path to the file or directory within the share")]
+        [string]$FilePath,
+
+        [Parameter(Mandatory = $false, ParameterSetName = "Client")]
+        [object]$Client,
+        
+        [Parameter(Mandatory = $true, ParameterSetName = "File")]
+        [Parameter(Mandatory = $true, ParameterSetName = "FilePath")]
+        [Parameter(Mandatory = $true, ParameterSetName = "Client")]
+        [string]$Owner
+    )
+
+    begin {
+        # Get a $Client from the parameters
+        if ($PSCmdlet.ParameterSetName -eq "FilePath") {
+            $File = Get-AzStorageFile -Context $Context -ShareName $FileShareName -Path $FilePath
+            $Client = Get-ClientFromFile $File
+        }
+        elseif ($PSCmdlet.ParameterSetName -eq "File") {
+            $Client = Get-ClientFromFile $File
+        }
+    }
+
+    process {
+        # Convert the owner to a SID
+        $ownerSid = Get-Sid -Identity $Owner -Verbose:$VerbosePreference -WhatIf:$WhatIfPreference -ErrorAction Stop
+        if ($null -eq $ownerSid) {
+            Write-Error "Failed to get SID for owner '$Owner'"
+            return
+        }
+
+        # Get the current ACL for the file or directory
+        $acl = Get-AzFileAcl -Client $Client -OutputFormat Raw
+        
+        # Update the owner in the ACL
+        if ($PSCmdlet.ShouldProcess($Client.Path, "Set owner to '$OwnerSid'")) {
+            $acl.Owner = $ownerSid
+            return Set-AzFileAcl -Client $Client -Acl $acl -AclFormat Raw -WhatIf:$WhatIfPreference
+        }
+    }
+}
