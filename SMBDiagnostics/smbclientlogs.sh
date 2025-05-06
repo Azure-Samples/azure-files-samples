@@ -116,6 +116,41 @@ start_trace() {
   trace-cmd start -e cifs
 }
 
+dump_system_logs() {
+  local output_file=$1
+  local -a log_files=(
+    "/var/log/syslog"
+    "/var/log/messages"
+  )
+
+  for log_file in "${log_files[@]}"; do
+    if [ -f "$log_file" ]; then
+      echo " Dumping last 500 lines from: $log_file" >> "$output_file"
+      tail -n 500 "$log_file" | sed 's/^/  /' >> "$output_file"
+      echo -e "\n\n" >> "$output_file"
+    else
+      echo " $log_file not found, skipping..." >> "$output_file"
+    fi
+  done
+}
+
+dump_azfileauth_logs() {
+  local output_file=$1
+  if which azfilesauthmanager >/dev/null 2>&1; then
+    echo -e "\nDumping azfileauth tickets" >> "$output_file"
+    azfilesauthmanager list >> "$output_file" 2>&1
+  else
+    echo "azfilesauthmanager is not installed." >> "$output_file"
+  fi
+
+  if [ -f /etc/azfilesauth/config.yaml ]; then
+    echo -e "\nDumping contents of /etc/azfilesauth/config.yaml:" >> "$output_file"
+    cat /etc/azfilesauth/config.yaml >> "$output_file"
+  else
+    echo " /etc/azfilesauth/config.yaml not found." >> "$output_file"
+  fi
+}
+
 dump_os_information() {
   echo "======= Distro details =======" > os_details.txt
   cat /etc/os-release >> os_details.txt
@@ -158,11 +193,16 @@ dump_debug_stats() {
 }
 
 dump_process_callstacks() {
+  local stack_file
   # Iterate through all stack files in /proc/*/stack
   for stack_file in /proc/*/stack; do
-    echo "Process: $stack_file" >> process_callstack.txt
-    cat "$stack_file" >> process_callstack.txt
-    echo -e "\n\n" >> process_callstack.txt
+    if [ -r "$stack_file" ]; then
+      echo "Process: $stack_file" >> process_callstack.txt
+      cat "$stack_file" >> process_callstack.txt 2>/dev/null
+      echo -e "\n\n" >> process_callstack.txt
+    else
+      echo "Skipping $stack_file (unreadable or disappeared)" >> process_callstack.txt
+    fi
   done
 }
 
@@ -185,6 +225,14 @@ stop() {
   echo -e "\n\n======= Dumping Process callstacks at end  ========" >> process_callstack.txt
   dump_process_callstacks
 
+  echo -e "======= Dumping System logs ========" > system_logs.txt
+  dump_system_logs "system_logs.txt"
+
+  echo -e "======= Dumping AzFileAuth diagnostics  ========" > azfileauth.txt
+  dump_azfileauth_logs "azfileauth.txt"
+
+  mv system_logs.txt "${DIRNAME}"
+  mv azfileauth.txt "${DIRNAME}"
   mv cifs_diag.txt "${DIRNAME}"
   mv os_details.txt "${DIRNAME}"
   mv process_callstack.txt "${DIRNAME}"
