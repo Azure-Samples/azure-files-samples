@@ -112,7 +112,7 @@ Accept wildcard characters: False
 ```
 
 ### -Client
-{{ Fill Client Description }}
+Specifies the Azure storage file share client with which to retrieve the ACL key.
 
 ```yaml
 Type: Object

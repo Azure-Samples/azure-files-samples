@@ -5,7 +5,7 @@ online version:
 schema: 2.0.0
 ---
 
-# Apply-AzFileAclInheritance
+# Restore-AzFileAclInheritance
 
 ## SYNOPSIS
 {{ Fill in the Synopsis }}
@@ -14,13 +14,13 @@ schema: 2.0.0
 
 ### Recursive
 ```
-Apply-AzFileAclInheritance -Context <IStorageContext> -FileShareName <String> [-Recursive] -Path <String>
+Restore-AzFileAclInheritance -Context <IStorageContext> -FileShareName <String> [-Recursive] -Path <String>
  [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
 ```
 
 ### Single
 ```
-Apply-AzFileAclInheritance -Context <IStorageContext> -FileShareName <String> -ParentPath <String>
+Restore-AzFileAclInheritance -Context <IStorageContext> -FileShareName <String> -ParentPath <String>
  -ChildPath <String> [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
 ```
 

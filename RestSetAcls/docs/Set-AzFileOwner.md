@@ -5,51 +5,43 @@ online version:
 schema: 2.0.0
 ---
 
-# Set-AzFileAcl
+# Set-AzFileOwner
 
 ## SYNOPSIS
-Sets the Access Control List (ACL) for a specified Azure file or directory.
+Sets the owner for a specified Azure file or directory.
 
 ## SYNTAX
 
 ### File
 ```
-Set-AzFileAcl -File <AzureStorageBase> -Acl <Object> [-AclFormat <SecurityDescriptorFormat>]
+Set-AzFileOwner -File <AzureStorageBase> -Owner <String> [-ProgressAction <ActionPreference>] [-WhatIf]
+ [-Confirm] [<CommonParameters>]
+```
+
+### FilePath
+```
+Set-AzFileOwner -Context <IStorageContext> -FileShareName <String> -FilePath <String> -Owner <String>
  [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
 ```
 
 ### Client
 ```
-Set-AzFileAcl -Client <Object> -Acl <Object> [-AclFormat <SecurityDescriptorFormat>]
- [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
+Set-AzFileOwner [-Client <Object>] -Owner <String> [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm]
+ [<CommonParameters>]
 ```
 
 ## DESCRIPTION
-The \`Set-AzFileAcl\` function applies an ACL to a specified Azure file or directory. 
-It supports both SDDL (Security Descriptor Definition Language) and binary ACL formats. 
-The function determines the ACL format if not explicitly provided and applies the ACL directly 
-or via a permission key, depending on the size of the ACL.
+It supports both SID values and UPNs (User Principal Names) for specifying the owner.
+The function can be used to set the owner for a file or directory in an Azure file share.
 
 ## EXAMPLES
 
-### EXAMPLE 1
-```
-$context = Get-AzStorageContext -StorageAccountName "mystorageaccount" -StorageAccountKey "mykey"
-PS> $file = Get-AzStorageFile -Context $context -ShareName "myfileshare" -Path "myfolder/myfile.txt"
-PS> Set-AzFileAcl -File $file -Acl "O:BAG:SYD:(A;;FA;;;SY)" -AclFormat Sddl
+### Example 1
+```powershell
+PS C:\> {{ Add example code here }}
 ```
 
-Sets the specified SDDL ACL on the given file.
-
-### EXAMPLE 2
-```
-$context = Get-AzStorageContext -StorageAccountName "mystorageaccount" -StorageAccountKey "mykey"
-PS> $file = Get-AzStorageFile -Context $context -ShareName "myfileshare" -Path "myfolder/myfile.txt"
-PS> $binaryAcl = [byte[]](0x01, 0x02, 0x03, 0x04, ...)
-PS> Set-AzFileAcl -File $file -Acl $binaryAcl -AclFormat Binary
-```
-
-Sets the specified binary ACL on the given file.
+{{ Add example description here }}
 
 ## PARAMETERS
 
@@ -64,7 +56,52 @@ Aliases:
 Required: True
 Position: Named
 Default value: None
-Accept pipeline input: True (ByValue)
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -Context
+Azure storage context
+
+```yaml
+Type: IStorageContext
+Parameter Sets: FilePath
+Aliases:
+
+Required: True
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -FileShareName
+Name of the file share
+
+```yaml
+Type: String
+Parameter Sets: FilePath
+Aliases:
+
+Required: True
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -FilePath
+Path to the file or directory within the share
+
+```yaml
+Type: String
+Parameter Sets: FilePath
+Aliases:
+
+Required: True
+Position: Named
+Default value: None
+Accept pipeline input: False
 Accept wildcard characters: False
 ```
 
@@ -76,41 +113,23 @@ Type: Object
 Parameter Sets: Client
 Aliases:
 
-Required: True
-Position: Named
-Default value: None
-Accept pipeline input: False
-Accept wildcard characters: False
-```
-
-### -Acl
-Specifies the ACL to be applied.
-This can be in SDDL format, base64-encoded binary, binary array, or RawSecurityDescriptor.
-
-```yaml
-Type: Object
-Parameter Sets: (All)
-Aliases:
-
-Required: True
-Position: Named
-Default value: None
-Accept pipeline input: False
-Accept wildcard characters: False
-```
-
-### -AclFormat
-Specifies the format of the ACL.
-If not provided, the function will infer the format automatically. 
-Supported formats include SDDL, Base64, and Binary.
-
-```yaml
-Type: SecurityDescriptorFormat
-Parameter Sets: (All)
-Aliases:
-Accepted values: Sddl, Binary, Base64, Raw, FolderAcl, FileAcl
-
 Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -Owner
+Specifies the owner that should be set.
+This can be a SID or a UPN (User Principal Name).
+
+```yaml
+Type: String
+Parameter Sets: (All)
+Aliases:
+
+Required: True
 Position: Named
 Default value: None
 Accept pipeline input: False
