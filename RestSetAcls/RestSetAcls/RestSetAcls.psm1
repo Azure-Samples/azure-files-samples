@@ -1538,11 +1538,20 @@ function Set-AzFileOwner {
     Sets the owner for a specified Azure file or directory.
 
     .DESCRIPTION
-    It supports both SID values and UPNs (User Principal Names) for specifying the owner.
+    It supports SIDs, UPNs (User Principal Names), object IDs and display name for specifying the owner.
     The function can be used to set the owner for a file or directory in an Azure file share.
 
     .PARAMETER File
-    Specifies the Azure storage file or directory on which to set the ACL.
+    Specifies the Azure storage file or directory on which to update the owner.
+
+    .PARAMETER Context
+    Specifies the Azure storage context. This is required to authenticate and interact with the Azure storage account.
+
+    .PARAMETER FileShareName
+    Specifies the name of the Azure file share on which to update the owner.
+
+    .PARAMETER FilePath
+    Specifies the path to the file or directory on which to update the owner.
 
     .PARAMETER Client
     Specifies the Azure storage file or directory client with which to set the ACL.
