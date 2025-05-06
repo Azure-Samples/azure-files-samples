@@ -506,6 +506,15 @@ function Set-AzFileAcl {
     .PARAMETER File
     Specifies the Azure storage file or directory on which to set the ACL.
 
+    .PARAMETER Context
+    Specifies the Azure storage context. This is required to authenticate and interact with the Azure storage account.
+
+    .PARAMETER FileShareName
+    Specifies the name of the Azure file share where the ACL will be applied.
+
+    .PARAMETER Client
+    Specifies the Azure storage file or directory client with which the ACL will be applied.
+
     .PARAMETER Client
     Specifies the Azure storage file or directory client with which to set the ACL.
 
@@ -542,21 +551,36 @@ function Set-AzFileAcl {
         [Parameter(Mandatory = $true, ValueFromPipeline = $true, ParameterSetName = "File")]
         [Microsoft.WindowsAzure.Commands.Common.Storage.ResourceModel.AzureStorageBase]$File,
 
+        [Parameter(Mandatory = $true, ParameterSetName = "FilePath", HelpMessage = "Azure storage context")]
+        [Microsoft.Azure.Commands.Common.Authentication.Abstractions.IStorageContext]$Context,
+        
+        [Parameter(Mandatory = $true, ParameterSetName = "FilePath", HelpMessage = "Name of the file share")]
+        [string]$FileShareName,
+
+        [Parameter(Mandatory = $true, ParameterSetName = "FilePath", HelpMessage = "Path to the file or directory on which to set the permission key")]
+        [string]$FilePath,
+
         [Parameter(Mandatory = $true, ParameterSetName = "Client")]
         [Object]$Client,
         
         [Parameter(Mandatory = $true, ParameterSetName = "File")]
+        [Parameter(Mandatory = $true, ParameterSetName = "FilePath")]
         [Parameter(Mandatory = $true, ParameterSetName = "Client")]
         [object]$Acl,
 
         [Parameter(Mandatory = $false, ParameterSetName = "File")]
+        [Parameter(Mandatory = $false, ParameterSetName = "FilePath")]
         [Parameter(Mandatory = $false, ParameterSetName = "Client")]
         [SecurityDescriptorFormat]$AclFormat
     )
 
     begin {
         # Convert parameters to a $Client, and determine if $isDirectory
-        if ($PSCmdlet.ParameterSetName -eq "File") {
+        if ($PSCmdlet.ParameterSetName -eq "FilePath") {
+            $File = Get-AzStorageFile -Context $Context -ShareName $FileShareName -Path $FilePath
+            $Client = Get-ClientFromFile $File
+        }
+        elseif ($PSCmdlet.ParameterSetName -eq "File") {
             $Client = Get-ClientFromFile $File
         }
         $isDirectory = Get-IsDirectoryClient $Client

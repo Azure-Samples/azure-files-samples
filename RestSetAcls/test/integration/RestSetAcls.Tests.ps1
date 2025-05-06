@@ -372,7 +372,7 @@ Describe "Set-AzFileAcl" {
                 @{ Size = "small"; Sddl = $smallSddl },
                 @{ Size = "large"; Sddl = $largeSddl }
             ) {
-                $returnedKey = Set-AzFileAcl -File $file -Acl $Sddl        
+                $returnedKey = Set-AzFileAcl -File $file -Acl $Sddl
                 Assert-IsAclKey $returnedKey
 
                 $sddlAfter = Get-AzFileAclFromKey -Key $returnedKey -Share $global:share
@@ -384,6 +384,30 @@ Describe "Set-AzFileAcl" {
                 @{ Size = "large"; Base64 = $largeBase64 }
             ) {
                 $returnedKey = Set-AzFileAcl -File $file -Acl $Base64 -AclFormat Base64
+                Assert-IsAclKey $returnedKey
+                
+                $base64After = Get-AzFileAclFromKey -Key $returnedKey -Share $global:share -OutputFormat Base64
+                $base64After | Should -Be $Base64
+            }
+        }
+
+        Describe "-Context -FileShareName -FilePath" {
+            It "Should set a <size> SDDL permission" -ForEach @(
+                @{ Size = "small"; Sddl = $smallSddl },
+                @{ Size = "large"; Sddl = $largeSddl }
+            ) {
+                $returnedKey = Set-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $fileName -Acl $Sddl
+                Assert-IsAclKey $returnedKey
+
+                $sddlAfter = Get-AzFileAclFromKey -Key $returnedKey -Share $global:share
+                $sddlAfter | Should -Be $Sddl
+            }
+
+            It "Should set a <size> base64 permission" -ForEach @(
+                @{ Size = "small"; Base64 = $smallBase64 },
+                @{ Size = "large"; Base64 = $largeBase64 }
+            ) {
+                $returnedKey = Set-AzFileAcl  -Context $global:context -FileShareName $global:fileShareName -FilePath $fileName -Acl $Base64 -AclFormat Base64
                 Assert-IsAclKey $returnedKey
                 
                 $base64After = Get-AzFileAclFromKey -Key $returnedKey -Share $global:share -OutputFormat Base64
