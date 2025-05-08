@@ -133,7 +133,11 @@
             Tags       = @(
                 "Azure",
                 "Storage",
+                "Files"
                 "ACL",
+                "SMB",
+                "Kerberos",
+                "Permissions",
                 "PSEdition_Desktop", # Packages that are compatible with Windows PowerShell
                 "PSEdition_Core", # Packages that are compatible with PowerShell 6 and higher
                 "Windows" # Packages that are compatible with the Windows Operating System
