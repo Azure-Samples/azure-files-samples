@@ -401,16 +401,16 @@ function ValidateRestrictSendingNTLMTraffic {
 
     if ($Result -eq $null) {
         Write-Log -level success "`n[OK]: HKLM:SYSTEM\CurrentControlSet\Control\Lsa\MSV1_0|RestrictSendingNTLMTraffic IS NOT set, by default it should be 0 as Allow All (or 1 as Audit All) 
-                                  `nMore information:https://docs.microsoft.com/en-us/windows/security/threat-protection/security-policy-settings/network-security-restrict-ntlm-outgoing-ntlm-traffic-to-remote-servers" 
+                                  `nMore information: https://docs.microsoft.com/en-us/windows/security/threat-protection/security-policy-settings/network-security-restrict-ntlm-outgoing-ntlm-traffic-to-remote-servers" 
     }
     else {
         if ( $result.RestrictSendingNTLMTraffic -lt 2 -and $result.RestrictSendingNTLMTraffic -ge 0) {
             Write-Log -level success "`n[OK]: HKLM:SYSTEM\CurrentControlSet\Control\Lsa\MSV1_0|RestrictSendingNTLMTraffic is set to default value 0 as Allow All (or 1 as Audit All)
-                                      `nMore information:https://docs.microsoft.com/en-us/windows/security/threat-protection/security-policy-settings/network-security-restrict-ntlm-outgoing-ntlm-traffic-to-remote-servers" 
+                                      `nMore information: https://docs.microsoft.com/en-us/windows/security/threat-protection/security-policy-settings/network-security-restrict-ntlm-outgoing-ntlm-traffic-to-remote-servers" 
         }
         else {
             Write-Log -level error "`n[ERROR]: HKLM:SYSTEM\CurrentControlSet\Control\Lsa\MSV1_0|RestrictSendingNTLMTraffic IS NOT set to default value 0 as Allow All (or 1 as Audit All) and current value is $($result.RestrictSendingNTLMTraffic), it will cause mouting share to fail.
-                                    `nMore information:https://docs.microsoft.com/en-us/windows/security/threat-protection/security-policy-settings/network-security-restrict-ntlm-outgoing-ntlm-traffic-to-remote-servers" 
+                                    `nMore information: https://docs.microsoft.com/en-us/windows/security/threat-protection/security-policy-settings/network-security-restrict-ntlm-outgoing-ntlm-traffic-to-remote-servers" 
             $Script:ValidationPass = $false
         }
     }    
@@ -1469,7 +1469,7 @@ function CheckAzPowershell {
     if($module -ne $null) {
         Write-log -level success "`n[OK]Azure Powershell module installed.!"
     } else {
-        Write-log -level error "`nPlease install Azure power shell module using following instructions to proceed further:https://docs.microsoft.com/en-us/powershell/azure/install-az-ps"
+        Write-log -level error "`nPlease install Azure power shell module using following instructions to proceed further: https://docs.microsoft.com/en-us/powershell/azure/install-az-ps"
         exit 1
     }
 
