@@ -24,6 +24,48 @@ This module has PR validations that enforce formatting rules, so it's recommende
 Test
 ```
 
+### Run integration tests
+
+First, create a file in `RestSetAcls/test/integration` called `config.json`. The fields of the config should match the `Config` class in `RestSetAcls/test/integration/RestSetAcls.Tests.ps1`. E.g.:
+
+```json
+{
+    // Specify which test account to run the operations against
+    "StorageAccountName": "<storage-account-name>",
+    "ResourceGroupName": "<resource-group-name>",
+    "StorageAccountKey": "<account-key>",
+    // Specify some test users and groups to use when running the tests
+    "HybridUser": {
+        "DisplayName": "<unique-display-name>",
+        "Upn": "<user-upn>",
+        "Sid": "<user-on-prem-sid>",
+        "ObjectId": "<user-object-id>"
+    },
+    "HybridGroup": {
+        "DisplayName": "<unique-display-name>",
+        "Sid": "<group-on-prem-sid>",
+        "ObjectId": "<group-object-id>"
+    },
+    "CloudNativeUser": {
+        "DisplayName": "<unique-display-name>",
+        "Upn": "<user-upn>",
+        "Sid": "<cloud-sid>",
+        "ObjectId": "<user-object-id>"
+    },
+    "CloudNativeGroup": {
+        "DisplayName": "<unique-display-name>",
+        "Sid": "<group-cloud-sid>",
+        "ObjectId": "<group-object-id>"
+    }
+}
+```
+
+Then run the integration tests:
+
+```powershell
+Test-Integration
+```
+
 ### Test formatting
 
 ```powershell
