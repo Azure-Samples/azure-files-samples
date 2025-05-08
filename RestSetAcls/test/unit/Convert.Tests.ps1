@@ -1,12 +1,12 @@
 BeforeAll {
-    . $PSScriptRoot/../../RestSetAcls/Enumerations.ps1
+    . $PSScriptRoot/../../RestSetAcls/Enumerations.ps1 -Force
     . $PSScriptRoot/../../RestSetAcls/Convert.ps1
     . $PSScriptRoot/../../RestSetAcls/SddlUtils.ps1
 }
 
 Describe "Convert-SecurityDescriptor" {
     BeforeAll {
-        # This is where you can set up any common variables or states needed for the tests.
+        # Set up test values of equivalent permissions
         $sddl = "O:SYG:SYD:AI(A;;0x1301bf;;;WD)(A;ID;0x1201bf;;;WD)(A;;0x1301ff;;;AU)"
         $base64 = "AQAEhBQAAAAgAAAAAAAAACwAAAABAQAAAAAABRIAAAABAQAAAAAABRIAAAACAEQAAwAAAAAAFAC/ARMAAQEAAAAAAAEAAAAAABAUAL8BEgABAQAAAAAAAQAAAAAAABQA/wETAAEBAAAAAAAFCwAAAA=="
         [byte[]]$binary = @(
@@ -16,90 +16,181 @@ Describe "Convert-SecurityDescriptor" {
             1, 0, 0, 0, 0, 0, 5, 11, 0, 0, 0
         )
         $rawSecurityDescriptor = [System.Security.AccessControl.RawSecurityDescriptor]::new($sddl)
-    }
+        $folderSecurityDescriptor = [System.Security.AccessControl.CommonSecurityDescriptor]::new($true, $false, $sddl)
+        $fileSecurityDescriptor = [System.Security.AccessControl.CommonSecurityDescriptor]::new($true, $false, $sddl)
 
-    It "Should convert from <from> to <to>" -ForEach @(
-        @{ From = "Sddl";   To = "Sddl" },
-        @{ From = "Sddl";   To = "Base64" },
-        @{ From = "Sddl";   To = "Binary" },
-        @{ From = "Sddl";   To = "Raw"    },
-        @{ From = "Base64"; To = "Sddl"   },
-        @{ From = "Base64"; To = "Base64" },
-        @{ From = "Base64"; To = "Binary" },
-        @{ From = "Base64"; To = "Raw"    },
-        @{ From = "Binary"; To = "Sddl"   },
-        @{ From = "Binary"; To = "Base64" },
-        @{ From = "Binary"; To = "Binary" },
-        @{ From = "Binary"; To = "Raw"    },
-        @{ From = "Raw";    To = "Sddl"   },
-        @{ From = "Raw";    To = "Base64" },
-        @{ From = "Raw";    To = "Binary" },
-        @{ From = "Raw";    To = "Raw"    }
-    ) {
-        param ($From, $To, $ExpectedType)
-
-        $inputValue = switch ($From) {
-            'Sddl' { $sddl }
-            'Base64' { $base64 }
-            'Binary' { $binary }
-            'Raw' { $rawSecurityDescriptor }
+        function Get-TestInputValue([SecurityDescriptorFormat]$format) {
+            switch ($format) {
+                'Sddl' { return $sddl }
+                'Base64' { return $base64 }
+                'Binary' { return $binary }
+                'Raw' { return $rawSecurityDescriptor }
+                'FileAcl' { return $fileSecurityDescriptor }
+                'FolderAcl' { return $folderSecurityDescriptor }
+            }
         }
 
-        $outputValue = Convert-SecurityDescriptor $inputValue -From $From -To $To
-        
-        switch ($_.To) {
-            'Sddl' {
+        function Assert-OutputIsCorrect {
+            param (
+                [Parameter(Mandatory = $true)]
+                [string]$Format,
+                
+                [Parameter(Mandatory = $true)]
+                [object]$outputValue
+            )
+
+            if ($format -eq 'Sddl') {
                 $outputValue | Should -BeOfType [string]
                 $outputValue | Should -Be $sddl
             }
-            'Base64' {
+            elseif ($format -eq 'Base64') {
                 $outputValue | Should -BeOfType [string]
                 $outputValue | Should -Be $base64
             }
-            'Binary' {
-                $outputValue | Should -BeOfType [byte[]]
+            elseif ($format -eq 'Binary') {
+                Should -ActualValue $outputValue -BeOfType [array]
                 $outputValue | Should -Be $binary
             }
-            'Raw' {
-                $outputValue | Should -BeOfType [System.Security.AccessControl.RawSecurityDescriptor]
-                $outputValue | Should -Be $rawSecurityDescriptor
+            elseif ($format -eq 'Raw' -or $format -eq 'FileAcl' -or $format -eq 'FolderAcl') {
+                $expectedType = switch ($format) {
+                    'Raw' { [System.Security.AccessControl.RawSecurityDescriptor] }
+                    default { [System.Security.AccessControl.CommonSecurityDescriptor] }
+                }
+                $outputValue | Should -BeOfType $expectedType
+
+                $sd = $outputValue -as [System.Security.AccessControl.GenericSecurityDescriptor]
+                $sd.BinaryLength | Should -Be $binary.Length
+                $bytes = New-Object byte[] $sd.BinaryLength
+                $sd.GetBinaryForm($bytes, 0)
+            }
+            else {
+                throw "Unknown format: $format"
             }
         }
     }
 
-    It "Should throw an error for invalid -From input format" {
-        { Convert-SecurityDescriptor $sddl -From "InvalidFormat" -To Sddl } | Should -Throw
+    Describe "-From -To" {
+        It "Should convert from <from> to <to>" -ForEach @(
+            @{ From = "Sddl";   To = "Sddl"      },
+            @{ From = "Sddl";   To = "Base64"    },
+            @{ From = "Sddl";   To = "Binary"    },
+            @{ From = "Sddl";   To = "Raw"       },
+            @{ From = "Sddl";   To = "FileAcl"   },
+            @{ From = "Sddl";   To = "FolderAcl" },
+            @{ From = "Base64"; To = "Sddl"      },
+            @{ From = "Base64"; To = "Base64"    },
+            @{ From = "Base64"; To = "Binary"    },
+            @{ From = "Base64"; To = "Raw"       },
+            @{ From = "Base64"; To = "FileAcl"   },
+            @{ From = "Base64"; To = "FolderAcl" },
+            @{ From = "Binary"; To = "Sddl"      },
+            @{ From = "Binary"; To = "Base64"    },
+            @{ From = "Binary"; To = "Binary"    },
+            @{ From = "Binary"; To = "Raw"       },
+            @{ From = "Binary"; To = "FileAcl"   },
+            @{ From = "Binary"; To = "FolderAcl" },
+            @{ From = "Raw";    To = "Sddl"      },
+            @{ From = "Raw";    To = "Base64"    },
+            @{ From = "Raw";    To = "Binary"    },
+            @{ From = "Raw";    To = "Raw"       },
+            @{ From = "Raw";    To = "FileAcl"   },
+            @{ From = "Raw";    To = "FolderAcl" }
+        ) {
+            param ($From, $To)
+            $inputValue = Get-TestInputValue $From
+            
+            $outputValue = Convert-SecurityDescriptor $inputValue -From $From -To $To
+
+            Assert-OutputIsCorrect -Format $To -OutputValue $outputValue   
+        }
+
+        It "Should throw an error for null -From input format" {
+            { Convert-SecurityDescriptor $sddl -From $null -To Sddl } | Should -Throw
+        }
+
+        It "Should throw an error for invalid -From input format" {
+            { Convert-SecurityDescriptor $sddl -From "InvalidFormat" -To Sddl } | Should -Throw
+        }
+
+        It "Should throw an error for invalid -To output format" {
+            { Convert-SecurityDescriptor $sddl -From Sddl -To "InvalidFormat" } | Should -Throw
+        }
+
+        It "Should process multiple inputs from pipeline" {
+            $sddl1 = "O:SYG:SYD:AI(A;;0x1301bf;;;WD)"
+            $sddl2 = "O:SYG:SYD:AI(A;;0x1201bf;;;AU)"
+            $sddls = @($sddl1, $sddl2)
+            $results = $sddls | Convert-SecurityDescriptor -From Sddl -To Base64
+            $results | Should -BeOfType [string]
+            $results.Count | Should -Be 2
+        }
+
+        It "Should throw an error when -InputDescriptor type doesn't match -From type" {
+            { Convert-SecurityDescriptor $sddl -From Binary -To Raw } | Should -Throw
+            { Convert-SecurityDescriptor $sddl -From Base64 -To Raw } | Should -Throw
+            { Convert-SecurityDescriptor $sddl -From Raw -To Raw } | Should -Throw
+    
+            { Convert-SecurityDescriptor $binary -From Sddl -To Raw } | Should -Throw
+            { Convert-SecurityDescriptor $binary -From Base64 -To Raw } | Should -Throw
+            { Convert-SecurityDescriptor $binary -From Raw -To Raw } | Should -Throw
+    
+            { Convert-SecurityDescriptor $base64 -From Sddl -To Raw } | Should -Throw
+            { Convert-SecurityDescriptor $base64 -From Binary -To Raw } | Should -Throw
+            { Convert-SecurityDescriptor $base64 -From Raw -To Raw } | Should -Throw
+    
+            { Convert-SecurityDescriptor $rawSecurityDescriptor -From Sddl -To Raw } | Should -Throw
+            { Convert-SecurityDescriptor $rawSecurityDescriptor -From Base64 -To Raw } | Should -Throw
+            { Convert-SecurityDescriptor $rawSecurityDescriptor -From Binary -To Raw } | Should -Throw        
+        }
     }
 
-    It "Should throw an error for invalid -To output format" {
-        { Convert-SecurityDescriptor $sddl -From Sddl -To "InvalidFormat" } | Should -Throw
-    }
+    Describe "-To" {
+        It "Should convert from <from> to <to>" -ForEach @(
+            @{ From = "Sddl";   To = "Sddl"      },
+            @{ From = "Sddl";   To = "Base64"    },
+            @{ From = "Sddl";   To = "Binary"    },
+            @{ From = "Sddl";   To = "Raw"       },
+            @{ From = "Sddl";   To = "FileAcl"   },
+            @{ From = "Sddl";   To = "FolderAcl" },
+            @{ From = "Base64"; To = "Sddl"      },
+            @{ From = "Base64"; To = "Base64"    },
+            @{ From = "Base64"; To = "Binary"    },
+            @{ From = "Base64"; To = "Raw"       },
+            @{ From = "Base64"; To = "FileAcl"   },
+            @{ From = "Base64"; To = "FolderAcl" },
+            @{ From = "Binary"; To = "Sddl"      },
+            @{ From = "Binary"; To = "Base64"    },
+            @{ From = "Binary"; To = "Binary"    },
+            @{ From = "Binary"; To = "Raw"       },
+            @{ From = "Binary"; To = "FileAcl"   },
+            @{ From = "Binary"; To = "FolderAcl" },
+            @{ From = "Raw";    To = "Sddl"      },
+            @{ From = "Raw";    To = "Base64"    },
+            @{ From = "Raw";    To = "Binary"    },
+            @{ From = "Raw";    To = "Raw"       },
+            @{ From = "Raw";    To = "FileAcl"   },
+            @{ From = "Raw";    To = "FolderAcl" }
+        ) {
+            param ($From, $To)
+            $inputValue = Get-TestInputValue $From
 
-    It "Should process multiple inputs from pipeline" {
-        $sddl1 = "O:SYG:SYD:AI(A;;0x1301bf;;;WD)"
-        $sddl2 = "O:SYG:SYD:AI(A;;0x1201bf;;;AU)"
-        $sddls = @($sddl1, $sddl2)
-        $results = $sddls | Convert-SecurityDescriptor -InputFormat Sddl -OutputFormat Base64
-        $results | Should -BeOfType [string]
-        $results.Count | Should -Be 2
-    }
+            $outputValue = Convert-SecurityDescriptor $inputValue -To $To
+            
+            Assert-OutputIsCorrect -Format $To -OutputValue $outputValue
+        }
 
-    It "Should throw an error when -InputDescriptor type doesn't match -From type" {
-        { Convert-SecurityDescriptor $sddl -From Binary -To Raw } | Should -Throw
-        { Convert-SecurityDescriptor $sddl -From Base64 -To Raw } | Should -Throw
-        { Convert-SecurityDescriptor $sddl -From Raw -To Raw } | Should -Throw
+        It "Should throw an error for invalid -To output format" {
+            { Convert-SecurityDescriptor $sddl -To "InvalidFormat" } | Should -Throw
+        }
 
-        { Convert-SecurityDescriptor $binary -From Sddl -To Raw } | Should -Throw
-        { Convert-SecurityDescriptor $binary -From Base64 -To Raw } | Should -Throw
-        { Convert-SecurityDescriptor $binary -From Raw -To Raw } | Should -Throw
-
-        { Convert-SecurityDescriptor $base64 -From Sddl -To Raw } | Should -Throw
-        { Convert-SecurityDescriptor $base64 -From Binary -To Raw } | Should -Throw
-        { Convert-SecurityDescriptor $base64 -From Raw -To Raw } | Should -Throw
-
-        { Convert-SecurityDescriptor $rawSecurityDescriptor -From Sddl -To Raw } | Should -Throw
-        { Convert-SecurityDescriptor $rawSecurityDescriptor -From Base64 -To Raw } | Should -Throw
-        { Convert-SecurityDescriptor $rawSecurityDescriptor -From Binary -To Raw } | Should -Throw        
+        It "Should process multiple inputs from pipeline" {
+            $sddl1 = "O:SYG:SYD:AI(A;;0x1301bf;;;WD)"
+            $sddl2 = "O:SYG:SYD:AI(A;;0x1201bf;;;AU)"
+            $sddls = @($sddl1, $sddl2)
+            $results = $sddls | Convert-SecurityDescriptor -To Base64
+            $results | Should -BeOfType [string]
+            $results.Count | Should -Be 2
+        }
     }
 }
 
@@ -598,5 +689,19 @@ Describe "Get-InferredAclFormat" {
         $rawSecurityDescriptor = [System.Security.AccessControl.RawSecurityDescriptor]::new($sddl)
         $format = Get-InferredAclFormat $rawSecurityDescriptor
         $format | Should -Be Raw
+    }
+
+    It "Should return FileAcl for valid CommonSecurityDescriptor objects with IsContainer false" {
+        $sddl = "O:SYG:SYD:AI(A;;0x1301bf;;;WD)(A;ID;0x1201bf;;;WD)(A;;0x1301ff;;;AU)"
+        $rawSecurityDescriptor = [System.Security.AccessControl.CommonSecurityDescriptor]::new($false, $false, $sddl)
+        $format = Get-InferredAclFormat $rawSecurityDescriptor
+        $format | Should -Be FileAcl
+    }
+
+    It "Should return FolderAcl for valid CommonSecurityDescriptor objects with IsContainer true" {
+        $sddl = "O:SYG:SYD:AI(A;;0x1301bf;;;WD)(A;ID;0x1201bf;;;WD)(A;;0x1301ff;;;AU)"
+        $rawSecurityDescriptor = [System.Security.AccessControl.CommonSecurityDescriptor]::new($true, $false, $sddl)
+        $format = Get-InferredAclFormat $rawSecurityDescriptor
+        $format | Should -Be FolderAcl
     }
 }

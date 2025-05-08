@@ -23,6 +23,11 @@ Get-AzFileAclKey -Context <IStorageContext> -FileShareName <String> -FilePath <S
  [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
+### Client
+```
+Get-AzFileAclKey [-Client <Object>] [-ProgressAction <ActionPreference>] [<CommonParameters>]
+```
+
 ## DESCRIPTION
 The \`Get-AzFileAclKey\` function retrieves the ACL key for a given file or directory in an Azure file share. 
 The ACL can be returned in various formats, including SDDL (Security Descriptor Definition Language) 
@@ -98,6 +103,21 @@ Parameter Sets: FilePath
 Aliases:
 
 Required: True
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -Client
+Specifies the Azure storage file or directory client with which to retrieve the ACL key.
+
+```yaml
+Type: Object
+Parameter Sets: Client
+Aliases:
+
+Required: False
 Position: Named
 Default value: None
 Accept pipeline input: False

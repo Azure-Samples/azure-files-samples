@@ -12,7 +12,7 @@
     RootModule        = 'RestSetAcls.psm1'
 
     # Version number of this module.
-    ModuleVersion     = '0.1.3'
+    ModuleVersion     = '0.2.0'
 
     # Supported PSEditions
     # CompatiblePSEditions = @()
@@ -56,6 +56,21 @@
             ModuleName    = "Az.Storage"
             GUID          = "dfa9e4ea-1407-446d-9111-79122977ab20"
             ModuleVersion = "8.1.0"
+        },
+        @{
+            ModuleName    = "Microsoft.Graph.Authentication"
+            GUID          = "883916f2-9184-46ee-b1f8-b6a2fb784cee"
+            ModuleVersion = "2.27.0"
+        },
+        @{
+            ModuleName    = "Microsoft.Graph.Users"
+            GUID          = "71150504-37a3-48c6-82c7-7a00a12168db"
+            ModuleVersion = "2.27.0"
+        },
+        @{
+            ModuleName    = "Microsoft.Graph.Groups"
+            GUID          = "50bc9e18-e281-4208-8913-c9e1bef6083d"
+            ModuleVersion = "2.27.0"
         }
     )
 
@@ -83,8 +98,11 @@
         "New-AzFileAcl",
         "Set-AzFileAclKey",
         "Get-AzFileAclKey"
+        "Get-AzFileAclFromKey",
+        "Set-AzFileAcl",
         "Get-AzFileAcl",
-        "Set-AzFileAcl"
+        "Set-AzFileOwner",
+        "Restore-AzFileAclInheritance"
     )
 
     # Cmdlets to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no cmdlets to export.
@@ -115,7 +133,11 @@
             Tags       = @(
                 "Azure",
                 "Storage",
+                "Files"
                 "ACL",
+                "SMB",
+                "Kerberos",
+                "Permissions",
                 "PSEdition_Desktop", # Packages that are compatible with Windows PowerShell
                 "PSEdition_Core", # Packages that are compatible with PowerShell 6 and higher
                 "Windows" # Packages that are compatible with the Windows Operating System

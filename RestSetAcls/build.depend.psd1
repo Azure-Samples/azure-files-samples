@@ -11,4 +11,6 @@
     PSScriptAnalyzer = 'latest'
     platyPS          = 'latest'
     'Az.Storage'     = '8.1.0'
+    'Microsoft.Graph.Users' = '2.27.0'
+    'Microsoft.Graph.Groups' = '2.27.0'
 }

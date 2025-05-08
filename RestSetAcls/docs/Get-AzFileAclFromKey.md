@@ -5,33 +5,34 @@ online version:
 schema: 2.0.0
 ---
 
-# Get-AzFileAcl
+# Get-AzFileAclFromKey
 
 ## SYNOPSIS
-Retrieves the ACL (Access Control List) for a specified file or directory.
+Retrieves the ACL (Access Control List) for a specified ACL key.
 
 ## SYNTAX
 
-### File
+### Share
 ```
-Get-AzFileAcl -File <AzureStorageBase> [-OutputFormat <SecurityDescriptorFormat>]
- [-ProgressAction <ActionPreference>] [<CommonParameters>]
-```
-
-### FilePath
-```
-Get-AzFileAcl -Context <IStorageContext> -FileShareName <String> -FilePath <String>
- [-OutputFormat <SecurityDescriptorFormat>] [-ProgressAction <ActionPreference>] [<CommonParameters>]
+Get-AzFileAclFromKey -Key <String> -Share <AzureStorageFileShare> [-OutputFormat <SecurityDescriptorFormat>]
+ [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
 ```
 
-### Client
+### FileShareName
 ```
-Get-AzFileAcl [-Client <Object>] [-OutputFormat <SecurityDescriptorFormat>]
- [-ProgressAction <ActionPreference>] [<CommonParameters>]
+Get-AzFileAclFromKey -Key <String> -Context <IStorageContext> -FileShareName <String>
+ [-OutputFormat <SecurityDescriptorFormat>] [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm]
+ [<CommonParameters>]
+```
+
+### ShareClient
+```
+Get-AzFileAclFromKey -Key <String> [-ShareClient <ShareClient>] [-OutputFormat <SecurityDescriptorFormat>]
+ [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
 ```
 
 ## DESCRIPTION
-The \`Get-AzFileAcl\` function retrieves the ACL for a specified file or directory.
+The \`Get-AzFileAclFromKey\` function retrieves the ACL for a specified ACL key.
 It supports retrieving the ACL in
 various formats, including SDDL (Security Descriptor Definition Language) or binary formats.
 The function supports
@@ -43,19 +44,37 @@ retrieving the ACL from a file share specified either directly or its name and c
 ```
 $context = Get-AzStorageContext -StorageAccountName "mystorageaccount" -StorageAccountKey "mykey"
 PS> $file = Get-AzStorageFile -Context $context -ShareName "myfileshare" -Path "myfolder/myfile.txt"
-PS> Get-AzFileAcl -File $file
+PS> $key = Get-AzFileAclKey -File $file
+PS> Get-AzFileAclFromKey -Key $key -Share $file.Share -OutputFormat Sddl
 ```
 
 Retrieves the SDDL ACL for the specified file using the permission key.
 
 ## PARAMETERS
 
-### -File
-Specifies the Azure storage file or directory from which to retrieve the ACL key.
+### -Key
+Specifies the ACL key to be retrieved.
+This is the key returned from the \`New-AzFileAcl\`, \`Set-AzFileAclKey\`,
+or \`Get-AzFileAclKey\` functions.
 
 ```yaml
-Type: AzureStorageBase
-Parameter Sets: File
+Type: String
+Parameter Sets: (All)
+Aliases:
+
+Required: True
+Position: Named
+Default value: None
+Accept pipeline input: True (ByValue)
+Accept wildcard characters: False
+```
+
+### -Share
+Specifies the Azure storage file share from which to retrieve the ACL key.
+
+```yaml
+Type: AzureStorageFileShare
+Parameter Sets: Share
 Aliases:
 
 Required: True
@@ -71,7 +90,7 @@ This is required to authenticate and interact with the Azure storage account.
 
 ```yaml
 Type: IStorageContext
-Parameter Sets: FilePath
+Parameter Sets: FileShareName
 Aliases:
 
 Required: True
@@ -86,7 +105,7 @@ Specifies the name of the Azure file share from which to retrieve the ACL key.
 
 ```yaml
 Type: String
-Parameter Sets: FilePath
+Parameter Sets: FileShareName
 Aliases:
 
 Required: True
@@ -96,27 +115,12 @@ Accept pipeline input: False
 Accept wildcard characters: False
 ```
 
-### -FilePath
-Specifies the path to the file or directory from which to retrieve the ACL key.
+### -ShareClient
+Specifies the Azure storage file share client from which to retrieve the ACL key.
 
 ```yaml
-Type: String
-Parameter Sets: FilePath
-Aliases:
-
-Required: True
-Position: Named
-Default value: None
-Accept pipeline input: False
-Accept wildcard characters: False
-```
-
-### -Client
-Specifies the Azure storage file share client with which to retrieve the ACL key.
-
-```yaml
-Type: Object
-Parameter Sets: Client
+Type: ShareClient
+Parameter Sets: ShareClient
 Aliases:
 
 Required: False
@@ -139,6 +143,37 @@ Accepted values: Sddl, Binary, Base64, Raw, FolderAcl, FileAcl
 Required: False
 Position: Named
 Default value: Sddl
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -WhatIf
+Shows what would happen if the cmdlet runs.
+The cmdlet is not run.
+
+```yaml
+Type: SwitchParameter
+Parameter Sets: (All)
+Aliases: wi
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -Confirm
+Prompts you for confirmation before running the cmdlet.
+
+```yaml
+Type: SwitchParameter
+Parameter Sets: (All)
+Aliases: cf
+
+Required: False
+Position: Named
+Default value: None
 Accept pipeline input: False
 Accept wildcard characters: False
 ```

@@ -28,8 +28,18 @@ function Get-InferredAclFormat {
         if ($Acl -is [System.Security.AccessControl.RawSecurityDescriptor]) {
             return [SecurityDescriptorFormat]::Raw
         }
+
+        if ($Acl -is [System.Security.AccessControl.CommonSecurityDescriptor]) {
+            $securityDescriptor = $Acl -as [System.Security.AccessControl.CommonSecurityDescriptor]
+            if ($securityDescriptor.IsContainer) {
+                return [SecurityDescriptorFormat]::FolderAcl
+            }
+            else {
+                return [SecurityDescriptorFormat]::FileAcl
+            }
+        }
         
-        throw "Could not infer the format of the input. Expected SDDL, Base64, Binary or Raw."
+        throw "Could not infer the format of the input. Expected SDDL string, Base64 string, byte array, RawSecurityDescriptor or CommonSecurityDescriptor."
     }
 }
 
@@ -81,7 +91,7 @@ function ConvertTo-SecurityDescriptor {
             }
             "Base64" {
                 if ($InputDescriptor -isnot [string]) {
-                    throw "Invalid input type. Expected string."
+                    throw "Invalid input type. Expected string, got $($InputDescriptor.GetType().FullName)."
                 }
 
                 try {
@@ -94,19 +104,59 @@ function ConvertTo-SecurityDescriptor {
                 return [System.Security.AccessControl.RawSecurityDescriptor]::new($binary, 0)
             }
             "Binary" {
-                if ($InputDescriptor -isnot [object[]]) {
-                    throw "Invalid input type. Expected object[]."
+                if ($InputDescriptor -isnot [array]) {
+                    throw "Invalid input type. Expected array, got $($InputDescriptor.GetType().FullName)."
                 }
                 return [System.Security.AccessControl.RawSecurityDescriptor]::new($InputDescriptor, 0)
             }
             "Raw" {
                 if ($InputDescriptor -isnot [System.Security.AccessControl.RawSecurityDescriptor]) {
-                    throw "Invalid input type. Expected RawSecurityDescriptor."
+                    throw "Invalid input type. Expected RawSecurityDescriptor, got $($InputDescriptor.GetType().FullName)"
                 }
                 return $InputDescriptor
             }
+            "FolderAcl" {
+                if ($InputDescriptor -isnot [System.Security.AccessControl.CommonSecurityDescriptor]) {
+                    throw "Invalid input type. Expected CommonSecurityDescriptor, got $($InputDescriptor.GetType().FullName)."
+                }
+                
+                $securityDescriptor = $InputDescriptor -as [System.Security.AccessControl.CommonSecurityDescriptor]
+
+                if (-not $securityDescriptor.IsContainer) {
+                    throw "Invalid input type. Expected CommonSecurityDescriptor with IsContainer set to true."
+                }
+                if ($securityDescriptor.IsDS) {
+                    throw "Invalid input type. Expected CommonSecurityDescriptor with IsDS set to false."
+                }
+
+                $length = $SecurityDescriptor.BinaryLength
+                $bytes = New-Object byte[] $length
+                $securityDescriptor.GetBinaryForm($bytes, 0)
+
+                return [System.Security.AccessControl.RawSecurityDescriptor]::new($bytes, 0)
+            }
+            "FileAcl" {
+                if ($InputDescriptor -isnot [System.Security.AccessControl.CommonSecurityDescriptor]) {
+                    throw "Invalid input type. Expected CommonSecurityDescriptor, got $($InputDescriptor.GetType().FullName)."
+                }
+                
+                $securityDescriptor = $InputDescriptor -as [System.Security.AccessControl.CommonSecurityDescriptor]
+
+                if ($securityDescriptor.IsContainer) {
+                    throw "Invalid input type. Expected CommonSecurityDescriptor with IsContainer set to false."
+                }
+                if ($securityDescriptor.IsDS) {
+                    throw "Invalid input type. Expected CommonSecurityDescriptor with IsDS set to false."
+                }
+
+                $length = $SecurityDescriptor.BinaryLength
+                $bytes = New-Object byte[] $length
+                $securityDescriptor.GetBinaryForm($bytes, 0)
+
+                return [System.Security.AccessControl.RawSecurityDescriptor]::new($bytes, 0)
+            }
             default {
-                throw "Invalid input format. Expected Sddl, Base64, Binary or Raw."
+                throw "Invalid input format '$InputFormat'. Expected Sddl, Base64, Binary, Raw, FolderAcl or FileAcl."
             }
         }
     }
@@ -114,7 +164,12 @@ function ConvertTo-SecurityDescriptor {
 
 function ConvertFrom-SecurityDescriptor {
     [CmdletBinding()]
-    [OutputType([string], [byte[]], [System.Security.AccessControl.RawSecurityDescriptor])]
+    [OutputType(
+        [string],
+        [byte[]],
+        [System.Security.AccessControl.RawSecurityDescriptor],
+        [System.Security.AccessControl.CommonSecurityDescriptor]
+    )]
     param (
         [Parameter(Mandatory = $true, Position = 0, ValueFromPipeline = $true)]
         [System.Security.AccessControl.RawSecurityDescriptor]$SecurityDescriptor,
@@ -142,6 +197,15 @@ function ConvertFrom-SecurityDescriptor {
             "Raw" {
                 return $SecurityDescriptor
             }
+            "FolderAcl" {
+                return [System.Security.AccessControl.CommonSecurityDescriptor]::new($true, $false, $SecurityDescriptor)
+            }
+            "FileAcl" {
+                return [System.Security.AccessControl.CommonSecurityDescriptor]::new($false, $false, $SecurityDescriptor)
+            }
+            default {
+                throw "Invalid output format '$OutputFormat'. Expected Sddl, Base64, Binary, Raw, FolderAcl or FileAcl."
+            }
         }
     }
 }
@@ -157,7 +221,8 @@ function Convert-SecurityDescriptor {
         - SDDL (Security Descriptor Definition Language)
         - Base64
         - Binary
-        - Raw
+        - RawSecurityDescriptor
+        - CommonSecurityDescriptor (for folders and files)
 
         Security descriptors are used to define access control and permissions for resources. 
         This script is useful for scenarios where you need to translate security descriptors 
@@ -168,24 +233,24 @@ function Convert-SecurityDescriptor {
 
     .PARAMETER From
         Specifies the format of the input security descriptor. 
-        Accepted values: Sddl, Base64, Binary, Raw.
+        Accepted values: Sddl, Base64, Binary, Raw, FolderAcl, FileAcl.
 
     .PARAMETER To
         Specifies the desired format for the output security descriptor. 
-        Accepted values: Sddl, Base64, Binary, Raw.
+        Accepted values: Sddl, Base64, Binary, Raw, FolderAcl, FileAcl.
     
     .EXAMPLE
         # Convert a security descriptor from SDDL to Base64
         Convert-SecurityDescriptor "O:BAG:BAD:(A;;FA;;;SY)" -From Sddl -To Base64
 #>
-    [CmdletBinding()]
+    [CmdletBinding(SupportsShouldProcess = $true)]
     [OutputType([System.Security.AccessControl.RawSecurityDescriptor], [string], [byte[]])]
     param (
         [Parameter(Mandatory = $true, Position = 0, ValueFromPipeline = $true)]
         [Alias("Input")]
         [object]$InputDescriptor,
 
-        [Parameter(Mandatory = $true)]
+        [Parameter(Mandatory = $false)]
         [Alias("InputFormat")]
         [SecurityDescriptorFormat]$From,
 
@@ -195,7 +260,18 @@ function Convert-SecurityDescriptor {
     )
 
     process {
-        $rawDescriptor = ConvertTo-SecurityDescriptor $InputDescriptor -InputFormat $From
-        return ConvertFrom-SecurityDescriptor $rawDescriptor -OutputFormat $To
+        if ($null -eq $From) {
+            try {
+                $From = Get-InferredAclFormat $InputDescriptor
+            }
+            catch {
+                throw "Could not infer the format of the input. Use -From to explicitly specify the format."
+            }
+        }
+
+        if ($PSCmdlet.ShouldProcess($InputDescriptor, "Convert security descriptor from $From to $To")) {
+            $rawDescriptor = ConvertTo-SecurityDescriptor $InputDescriptor -InputFormat $From
+            return ConvertFrom-SecurityDescriptor $rawDescriptor -OutputFormat $To
+        }
     }
 }
