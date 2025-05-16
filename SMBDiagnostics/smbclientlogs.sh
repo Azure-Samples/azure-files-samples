@@ -34,27 +34,6 @@ main() {
   exit $?
 }
 
-start() {
-  init
-  start_trace $@
-  dump_os_information
-  echo "======= Dumping CIFS Debug Stats at start =======" > cifs_diag.txt
-  dump_debug_stats
-  echo "=================================================" >> cifs_diag.txt
-
-  echo "======= Dumping Process callstacks at start =====" > process_callstack.txt
-  dump_process_callstacks
-  echo "=================================================" >> process_callstack.txt
-
-  if [[ "$*" =~ "CaptureNetwork" ]]; then
-    capture_network
-  fi
-
-  if [[ "$*" =~ "OnAnomaly" ]]; then
-    trace_cifsbpf
-  fi
-}
-
 init() {
   check_utils
   if [[ -f $DIRNAME ]];
@@ -141,6 +120,7 @@ dump_azfileauth_logs() {
     azfilesauthmanager list >> "$output_file" 2>&1
   else
     echo "azfilesauthmanager is not installed." >> "$output_file"
+    return
   fi
 
   if [ -f /etc/azfilesauth/config.yaml ]; then
@@ -213,6 +193,29 @@ capture_network() {
 
 trace_cifsbpf() {
   nohup "${PYTHON_PROG}" "${TRACE_CIFSBPF_ABS_PATH}" "${DIRNAME}" 0<&- 2>&1 &
+}
+
+start() {
+  init
+  start_trace $@
+  dump_os_information
+  echo "======= Dumping CIFS Debug Stats at start =======" > cifs_diag.txt
+  dump_debug_stats
+  echo "=================================================" >> cifs_diag.txt
+
+  echo "======= Dumping Process callstacks at start =====" > process_callstack.txt
+  date >> process_callstack.txt
+  dump_process_callstacks
+  echo "=================================================" >> process_callstack.txt
+  date >> process_callstack.txt
+
+  if [[ "$*" =~ "CaptureNetwork" ]]; then
+    capture_network
+  fi
+
+  if [[ "$*" =~ "OnAnomaly" ]]; then
+    trace_cifsbpf
+  fi
 }
 
 stop() {
