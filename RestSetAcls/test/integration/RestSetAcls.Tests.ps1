@@ -35,6 +35,11 @@ BeforeAll {
     Import-Module $PSScriptRoot/utils.psm1 -Force
     Import-Module $PSScriptRoot/../../RestSetAcls/RestSetAcls.psd1 -Force
 
+    # Check that the session has an Azure context
+    if (-not (Get-AzContext -ErrorAction SilentlyContinue)) {
+        throw "No Azure context found. Please log in to Azure using Connect-AzAccount."
+    }
+
     # Build context from parameters
     $global:context = New-AzStorageContext -StorageAccountName $Config.StorageAccountName -StorageAccountKey $Config.StorageAccountKey
 
@@ -522,5 +527,26 @@ Describe "Set-AzFileOwner" {
                 }
             }
         }
+    }
+}
+
+Describe "Set-AzFileAclRecursive" -Tag "Current" {
+    It "Works on a small example" {
+        $directoryName = "recursivetest-" + (New-RandomString -Length 8)
+        New-Directory -Path $directoryName
+        New-File -Path "$directoryName/testfile.txt"
+        New-File -Path "$directoryName/testfile2.txt"
+
+        $sddl = "O:SYG:SYD:P(A;OICI;FA;;;BA)S:NO_ACCESS_CONTROL"
+
+        Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $directoryName -OutputFormat Sddl | Should -Not -Be $sddl
+        Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath "$directoryName/testfile.txt" -OutputFormat Sddl | Should -Not -Be $sddl
+        Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath "$directoryName/testfile2.txt" -OutputFormat Sddl | Should -Not -Be $sddl
+
+        Set-AzFileAclRecursive -Context $global:context -FileShareName $global:fileShareName -FilePath $directoryName -SddlPermission $sddl
+
+        Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $directoryName -OutputFormat Sddl | Should -Be $sddl
+        Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath "$directoryName/testfile.txt" -OutputFormat Sddl | Should -Be $sddl
+        Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath "$directoryName/testfile2.txt" -OutputFormat Sddl | Should -Be $sddl
     }
 }

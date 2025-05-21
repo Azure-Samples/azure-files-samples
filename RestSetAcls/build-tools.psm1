@@ -74,6 +74,12 @@ function Test-Integration {
         [Parameter(ValueFromRemainingArguments = $true)]
         [psobject[]]$RemainingArgs
     )
+    # Check if the config file exists
+    if (-not (Test-Path -Path $ConfigFile)) {
+        Write-Error "Config file not found: $ConfigFile" -ErrorAction Stop
+    }
+
+    # Parse config into Pester container
     $config = Get-Content -Raw $ConfigFile | ConvertFrom-Json -AsHashtable
     $container = New-PesterContainer -Path $PSScriptRoot\test\integration -Data @{ InputConfig = $config }
 

@@ -996,7 +996,13 @@ function Set-AzFileAclRecursive {
     # The idea is to create the permission early. If this fails (e.g. due to invalid SDDL), we can fail early.
     # Setting permission key should in theory also be slightly faster than setting SDDL directly (though this may not be noticeable in practice).
     try {
-        $filePermissionKey = New-AzFileAcl -Context $Context -FileShareName $FileShareName -Sddl $SddlPermission -WhatIf:$WhatIfPreference
+        $filePermissionKey = New-AzFileAcl `
+            -Context $Context `
+            -FileShareName $FileShareName `
+            -Acl $SddlPermission `
+            -AclFormat Sddl `
+            -WhatIf:$WhatIfPreference
+        
         if ([string]::IsNullOrEmpty($filePermissionKey)) {
             Write-Failure "Failed to create file permission"
             return
@@ -1025,7 +1031,10 @@ function Set-AzFileAclRecursive {
     $ProgressPreference = "SilentlyContinue"
 
     if ($Parallel) {
-        $funcDef = ${function:Set-AzFileAclKey}.ToString()
+        $setAzFileAclKey = ${function:Set-AzFileAclKey}.ToString()
+        $getIsDirectoryClient = ${function:Get-IsDirectoryClient}.ToString()
+        $getFileClientFromFile = ${function:Get-ClientFromFile}.ToString()
+
         Get-AzureFilesRecursive `
             -Context $Context `
             -DirectoryContents @($directory) `
@@ -1033,11 +1042,13 @@ function Set-AzFileAclRecursive {
             -SkipDirectories:$SkipDirectories `
         | ForEach-Object -ThrottleLimit $ThrottleLimit -Parallel {
             # Set the ACL
-            ${function:Set-AzFileAclKey} = $using:funcDef
+            ${function:Set-AzFileAclKey} = $using:setAzFileAclKey
+            ${function:Get-IsDirectoryClient} = $using:getIsDirectoryClient
+            ${function:Get-ClientFromFile} = $using:getFileClientFromFile
             $success = $true
-            $errorMessage = ""            
+            $errorMessage = ""
             try {
-                Set-AzFileAclKey -File $_.File -Key $using:filePermissionKey -WhatIf:$using:WhatIfPreference
+                Set-AzFileAclKey -File $_.File -Key $using:filePermissionKey -WhatIf:$using:WhatIfPreference | Out-Null
             }
             catch {
                 $success = $false
