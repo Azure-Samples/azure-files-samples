@@ -530,7 +530,7 @@ Describe "Set-AzFileOwner" {
     }
 }
 
-Describe "Set-AzFileAclRecursive" -Tag "Current" {
+Describe "Set-AzFileAclRecursive" {
     It "Works on a small example" {
         $directoryName = "recursivetest-" + (New-RandomString -Length 8)
         New-Directory -Path $directoryName
