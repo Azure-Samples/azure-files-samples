@@ -1137,7 +1137,50 @@ function Set-AzFileAclRecursive {
 }
 
 function Restore-AzFileAclInheritance {
+<#
+    .SYNOPSIS
+    Applies ACL inheritance from parent folders to child files or folders.
+
+    .DESCRIPTION
+    The `Restore-AzFileAclInheritance` cmdlet applies the inheritance of ACLs from a parent directory to a child file
+    or directory, or recursively to all items within a directory. This is useful to propagate inheritable permissions
+    from a parent directory to its children, according to NTFS inheritance rules. The function supports both single
+    file/directory and recursive modes.
+    
+    .PARAMETER Context
+    Specifies the Azure storage context. This is required to authenticate and interact with the Azure storage account.
+
+    .PARAMETER FileShareName
+    Specifies the name of the Azure file share containing the files or directories.
+
+    .PARAMETER ParentPath
+    Specifies the path to the parent directory from which to inherit ACLs (used in single mode).
+
+    .PARAMETER ChildPath
+    Specifies the path to the child file or directory to which inheritance will be restored (used in single mode).
+
+    .PARAMETER Recursive
+    Switch to enable recursive mode, restoring inheritance for all files and directories under the specified path.
+
+    .PARAMETER Path
+    Specifies the root directory path for recursive inheritance restoration. Used in recursive mode.
+
+    .OUTPUTS
+    System.Security.AccessControl.GenericSecurityDescriptor
+    In single mode, returns the updated ACL for the child file or directory.
+
+    .EXAMPLE
+    PS> Restore-AzFileAclInheritance -Context $context -FileShareName "myshare" -ParentPath "folder1" -ChildPath "folder1/file.txt"
+
+    Restores ACL inheritance from 'folder1' to 'folder1/file.txt'.
+
+    .EXAMPLE
+    PS> Restore-AzFileAclInheritance -Context $context -FileShareName "myshare" -Recursive -Path "folder1"
+
+    Recursively restores ACL inheritance for all files and directories under 'folder1'.
+#>
     [CmdletBinding(SupportsShouldProcess = $true)]
+    [OutputType([System.Security.AccessControl.GenericSecurityDescriptor])]
     param (
         [Parameter(Mandatory = $true, ParameterSetName = "Single")]
         [Parameter(Mandatory = $true, ParameterSetName = "Recursive")]

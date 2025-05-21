@@ -8,7 +8,7 @@ schema: 2.0.0
 # Restore-AzFileAclInheritance
 
 ## SYNOPSIS
-{{ Fill in the Synopsis }}
+Applies ACL inheritance from parent folders to child files or folders.
 
 ## SYNTAX
 
@@ -25,51 +25,34 @@ Restore-AzFileAclInheritance -Context <IStorageContext> -FileShareName <String> 
 ```
 
 ## DESCRIPTION
-{{ Fill in the Description }}
+The `Restore-AzFileAclInheritance` cmdlet applies the inheritance of ACLs from a parent directory to a child file
+or directory, or recursively to all items within a directory.
+This is useful to propagate inheritable permissions
+from a parent directory to its children, according to NTFS inheritance rules.
+The function supports both single
+file/directory and recursive modes.
 
 ## EXAMPLES
 
-### Example 1
-```powershell
-PS C:\> {{ Add example code here }}
+### EXAMPLE 1
+```
+Restore-AzFileAclInheritance -Context $context -FileShareName "myshare" -ParentPath "folder1" -ChildPath "folder1/file.txt"
 ```
 
-{{ Add example description here }}
+Restores ACL inheritance from 'folder1' to 'folder1/file.txt'.
+
+### EXAMPLE 2
+```
+Restore-AzFileAclInheritance -Context $context -FileShareName "myshare" -Recursive -Path "folder1"
+```
+
+Recursively restores ACL inheritance for all files and directories under 'folder1'.
 
 ## PARAMETERS
 
-### -ChildPath
-{{ Fill ChildPath Description }}
-
-```yaml
-Type: String
-Parameter Sets: Single
-Aliases:
-
-Required: True
-Position: Named
-Default value: None
-Accept pipeline input: False
-Accept wildcard characters: False
-```
-
-### -Confirm
-Prompts you for confirmation before running the cmdlet.
-
-```yaml
-Type: SwitchParameter
-Parameter Sets: (All)
-Aliases: cf
-
-Required: False
-Position: Named
-Default value: None
-Accept pipeline input: False
-Accept wildcard characters: False
-```
-
 ### -Context
-{{ Fill Context Description }}
+Specifies the Azure storage context.
+This is required to authenticate and interact with the Azure storage account.
 
 ```yaml
 Type: IStorageContext
@@ -84,7 +67,7 @@ Accept wildcard characters: False
 ```
 
 ### -FileShareName
-{{ Fill FileShareName Description }}
+Specifies the name of the Azure file share containing the files or directories.
 
 ```yaml
 Type: String
@@ -99,7 +82,7 @@ Accept wildcard characters: False
 ```
 
 ### -ParentPath
-{{ Fill ParentPath Description }}
+Specifies the path to the parent directory from which to inherit ACLs (used in single mode).
 
 ```yaml
 Type: String
@@ -113,12 +96,12 @@ Accept pipeline input: False
 Accept wildcard characters: False
 ```
 
-### -Path
-{{ Fill Path Description }}
+### -ChildPath
+Specifies the path to the child file or directory to which inheritance will be restored (used in single mode).
 
 ```yaml
 Type: String
-Parameter Sets: Recursive
+Parameter Sets: Single
 Aliases:
 
 Required: True
@@ -129,10 +112,26 @@ Accept wildcard characters: False
 ```
 
 ### -Recursive
-{{ Fill Recursive Description }}
+Switch to enable recursive mode, restoring inheritance for all files and directories under the specified path.
 
 ```yaml
 Type: SwitchParameter
+Parameter Sets: Recursive
+Aliases:
+
+Required: True
+Position: Named
+Default value: False
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -Path
+Specifies the root directory path for recursive inheritance restoration.
+Used in recursive mode.
+
+```yaml
+Type: String
 Parameter Sets: Recursive
 Aliases:
 
@@ -151,6 +150,21 @@ The cmdlet is not run.
 Type: SwitchParameter
 Parameter Sets: (All)
 Aliases: wi
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -Confirm
+Prompts you for confirmation before running the cmdlet.
+
+```yaml
+Type: SwitchParameter
+Parameter Sets: (All)
+Aliases: cf
 
 Required: False
 Position: Named
@@ -179,11 +193,10 @@ This cmdlet supports the common parameters: -Debug, -ErrorAction, -ErrorVariable
 
 ## INPUTS
 
-### None
-
 ## OUTPUTS
 
 ### System.Object
+### Returns information about processed files and directories, including success or failure for each item.
 ## NOTES
 
 ## RELATED LINKS
