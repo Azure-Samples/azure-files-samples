@@ -31,7 +31,7 @@ Set-AzFileOwner [-Client <Object>] -Owner <String> [-ProgressAction <ActionPrefe
 ```
 
 ## DESCRIPTION
-It supports both SID values and UPNs (User Principal Names) for specifying the owner.
+It supports SIDs, UPNs (User Principal Names), object IDs and display name for specifying the owner.
 The function can be used to set the owner for a file or directory in an Azure file share.
 
 ## EXAMPLES
@@ -46,7 +46,7 @@ PS C:\> {{ Add example code here }}
 ## PARAMETERS
 
 ### -File
-Specifies the Azure storage file or directory on which to set the ACL.
+Specifies the Azure storage file or directory on which to update the owner.
 
 ```yaml
 Type: AzureStorageBase
@@ -61,7 +61,8 @@ Accept wildcard characters: False
 ```
 
 ### -Context
-Azure storage context
+Specifies the Azure storage context.
+This is required to authenticate and interact with the Azure storage account.
 
 ```yaml
 Type: IStorageContext
@@ -76,7 +77,7 @@ Accept wildcard characters: False
 ```
 
 ### -FileShareName
-Name of the file share
+Specifies the name of the Azure file share on which to update the owner.
 
 ```yaml
 Type: String
@@ -91,7 +92,7 @@ Accept wildcard characters: False
 ```
 
 ### -FilePath
-Path to the file or directory within the share
+Specifies the path to the file or directory on which to update the owner.
 
 ```yaml
 Type: String

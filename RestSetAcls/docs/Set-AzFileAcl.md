@@ -18,6 +18,13 @@ Set-AzFileAcl -File <AzureStorageBase> -Acl <Object> [-AclFormat <SecurityDescri
  [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
 ```
 
+### FilePath
+```
+Set-AzFileAcl -Context <IStorageContext> -FileShareName <String> -FilePath <String> -Acl <Object>
+ [-AclFormat <SecurityDescriptorFormat>] [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm]
+ [<CommonParameters>]
+```
+
 ### Client
 ```
 Set-AzFileAcl -Client <Object> -Acl <Object> [-AclFormat <SecurityDescriptorFormat>]
@@ -68,8 +75,54 @@ Accept pipeline input: True (ByValue)
 Accept wildcard characters: False
 ```
 
+### -Context
+Specifies the Azure storage context.
+This is required to authenticate and interact with the Azure storage account.
+
+```yaml
+Type: IStorageContext
+Parameter Sets: FilePath
+Aliases:
+
+Required: True
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -FileShareName
+Specifies the name of the Azure file share where the ACL will be applied.
+
+```yaml
+Type: String
+Parameter Sets: FilePath
+Aliases:
+
+Required: True
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -FilePath
+Path to the file or directory on which to set the permission key
+
+```yaml
+Type: String
+Parameter Sets: FilePath
+Aliases:
+
+Required: True
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
 ### -Client
-Specifies the Azure storage file or directory client with which to set the ACL.
+Specifies the Azure storage file or directory client with which the ACL will be applied.
 
 ```yaml
 Type: Object
