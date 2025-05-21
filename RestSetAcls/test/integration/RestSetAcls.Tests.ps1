@@ -35,6 +35,11 @@ BeforeAll {
     Import-Module $PSScriptRoot/utils.psm1 -Force
     Import-Module $PSScriptRoot/../../RestSetAcls/RestSetAcls.psd1 -Force
 
+    # Check that the session has an Azure context
+    if (-not (Get-AzContext -ErrorAction SilentlyContinue)) {
+        throw "No Azure context found. Please log in to Azure using Connect-AzAccount."
+    }
+
     # Build context from parameters
     $global:context = New-AzStorageContext -StorageAccountName $Config.StorageAccountName -StorageAccountKey $Config.StorageAccountKey
 
@@ -522,5 +527,53 @@ Describe "Set-AzFileOwner" {
                 }
             }
         }
+    }
+}
+
+Describe "Set-AzFileAclRecursive" {
+    It "Works on a small example" {
+        $directoryName = "recursivetest-" + (New-RandomString -Length 8)
+        New-Directory -Path $directoryName
+        New-File -Path "$directoryName/testfile.txt"
+        New-File -Path "$directoryName/testfile2.txt"
+
+        $sddl = "O:SYG:SYD:P(A;OICI;FA;;;BA)S:NO_ACCESS_CONTROL"
+
+        Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $directoryName -OutputFormat Sddl | Should -Not -Be $sddl
+        Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath "$directoryName/testfile.txt" -OutputFormat Sddl | Should -Not -Be $sddl
+        Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath "$directoryName/testfile2.txt" -OutputFormat Sddl | Should -Not -Be $sddl
+
+        Set-AzFileAclRecursive -Context $global:context -FileShareName $global:fileShareName -FilePath $directoryName -SddlPermission $sddl
+
+        Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $directoryName -OutputFormat Sddl | Should -Be $sddl
+        Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath "$directoryName/testfile.txt" -OutputFormat Sddl | Should -Be $sddl
+        Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath "$directoryName/testfile2.txt" -OutputFormat Sddl | Should -Be $sddl
+    }
+
+    It "Returns results in pipeline mode" {
+        $directoryName = "recursivetest2-" + (New-RandomString -Length 8)
+        New-Directory -Path $directoryName
+        New-File -Path "$directoryName/testfile.txt"
+        New-File -Path "$directoryName/testfile2.txt"
+
+        $sddl = "O:SYG:SYD:P(A;OICI;FA;;;BA)S:NO_ACCESS_CONTROL"
+
+        Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $directoryName -OutputFormat Sddl | Should -Not -Be $sddl
+        Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath "$directoryName/testfile.txt" -OutputFormat Sddl | Should -Not -Be $sddl
+        Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath "$directoryName/testfile2.txt" -OutputFormat Sddl | Should -Not -Be $sddl
+
+        $results = Set-AzFileAclRecursive -Context $global:context -FileShareName $global:fileShareName -FilePath $directoryName -SddlPermission $sddl -WriteToPipeline
+
+        $results.Count | Should -Be 3
+        $results[0].Success | Should -Be $true
+        $results[1].Success | Should -Be $true
+        $results[2].Success | Should -Be $true
+        $results[0].Permission | Should -Be $sddl
+        $results[1].Permission | Should -Be $sddl
+        $results[2].Permission | Should -Be $sddl
+
+        Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $directoryName -OutputFormat Sddl | Should -Be $sddl
+        Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath "$directoryName/testfile.txt" -OutputFormat Sddl | Should -Be $sddl
+        Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath "$directoryName/testfile2.txt" -OutputFormat Sddl | Should -Be $sddl
     }
 }
