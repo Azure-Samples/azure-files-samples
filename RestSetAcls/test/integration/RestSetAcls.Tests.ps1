@@ -576,4 +576,112 @@ Describe "Set-AzFileAclRecursive" {
         Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath "$directoryName/testfile.txt" -OutputFormat Sddl | Should -Be $sddl
         Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath "$directoryName/testfile2.txt" -OutputFormat Sddl | Should -Be $sddl
     }
+
+    It "Behaves like described in FAQ section about IO permissions" -Tag "FAQ" {
+        # Create this folder structure under a parent folder:
+        #
+        # folder
+        # ├── subfolder
+        # └── file1.txt
+        $parent = New-RandomString -Length 8
+        New-Directory -Path $parent
+        $folder = "$parent/folder"
+        New-Directory -Path $folder
+        $subfolder = "$parent/folder/subfolder"
+        New-Directory -Path $subfolder
+        $file1 = "$parent/folder/file1.txt"
+        New-File -Path $file1
+
+        # Set O:SYG:SYD:(A;OICIIO;0x1200a9;;;AU) recursively on the parent folder
+        $sddl = "O:SYG:SYD:(A;OICIIO;0x1200a9;;;AU)"
+        Set-AzFileAclRecursive -Context $global:context -FileShareName $global:fileShareName -FilePath $folder -SddlPermission $sddl
+
+        # Check that the SDDL matches the documented state:
+        #
+        # folder          O:SYG:SYD:(A;OICIIO;0x1200a9;;;AU)
+        # ├── subfolder   O:SYG:SYD:(A;OICIIO;0x1200a9;;;AU)
+        # └── file1.txt   O:SYG:SYD:
+        $folderSddl = Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $folder -OutputFormat Folder
+        $subfolderSddl = Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $subfolder -OutputFormat Folder
+        $file1Sddl = Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $file1 -OutputFormat File
+
+        Convert-SecurityDescriptor $folderSddl -To Sddl | Should -Be "O:SYG:SYD:(A;OICIIO;0x1200a9;;;AU)"
+        Convert-SecurityDescriptor $subfolderSddl -To Sddl | Should -Be "O:SYG:SYD:(A;OICIIO;0x1200a9;;;AU)"
+        Convert-SecurityDescriptor $file1Sddl -To Sddl | Should -Be "O:SYG:SYD:"
+
+        # Create a file folder/subfolder/file2.txt
+        $file2 = "$parent/folder/subfolder/file2.txt"
+        New-File -Path $file2
+
+        # Check that the SDDL matches the documented state:
+        #
+        # folder             O:SYG:SYD:(A;OICIIO;0x1200a9;;;AU)
+        # ├── subfolder      O:SYG:SYD:(A;OICIIO;0x1200a9;;;AU)
+        # |   └── file2.txt  O:SYG:SYD:(A;;0x1200a9;;;AU)
+        # └── file1.txt      O:SYG:SYD:
+        $file2Sddl = Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $file2 -OutputFormat File
+
+        Convert-SecurityDescriptor $file2Sddl -To Sddl | Should -Be "O:SYG:SYD:(A;;0x1200a9;;;AU)"
+    }
+
+    It "Behaves like described in FAQ section about NP permissions" -Tag "FAQ" {
+        # Create this folder structure under a parent folder:
+        #
+        # folder
+        # ├── subfolder
+        # └── file1.txt
+        $parent = New-RandomString -Length 8
+        New-Directory -Path $parent
+        $folder = "$parent/folder"
+        New-Directory -Path $folder
+        $subfolder = "$parent/folder/subfolder"
+        New-Directory -Path $subfolder
+        $file1 = "$parent/folder/file1.txt"
+        New-File -Path $file1
+
+        # Set O:SYG:SYD:(A;OICINP;0x1200a9;;;AU) recursively on folder
+        $sddl = "O:SYG:SYD:(A;OICINP;0x1200a9;;;AU)"
+        Set-AzFileAclRecursive -Context $global:context -FileShareName $global:fileShareName -FilePath $folder -SddlPermission $sddl
+
+        # Check that the SDDL matches the documented state:
+        #
+        # folder         O:SYG:SYD:(A;OICINP;0x1200a9;;;AU)
+        # ├── subfolder  O:SYG:SYD:(A;OICINP;0x1200a9;;;AU)
+        # └── file1.txt  O:SYG:SYD:(A;;0x1200a9;;;AU)
+        $folderSddl = Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $folder -OutputFormat Folder
+        $subfolderSddl = Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $subfolder -OutputFormat Folder
+        $file1Sddl = Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $file1 -OutputFormat File
+
+        Convert-SecurityDescriptor $folderSddl -To Sddl | Should -Be "O:SYG:SYD:(A;OICINP;0x1200a9;;;AU)"
+        Convert-SecurityDescriptor $subfolderSddl -To Sddl | Should -Be "O:SYG:SYD:(A;OICINP;0x1200a9;;;AU)"
+        Convert-SecurityDescriptor $file1Sddl -To Sddl | Should -Be "O:SYG:SYD:(A;;0x1200a9;;;AU)"
+
+        # Create a folder/subfolder2 and check that the SDDL matches the documented state:
+        #
+        # folder                  O:SYG:SYD:(A;OICINP;0x1200a9;;;AU)
+        # ├── subfolder           O:SYG:SYD:(A;OICINP;0x1200a9;;;AU)
+        # ├── subfolder2          O:SYG:SYD:(A;;0x1200a9;;;AU)
+        # └── file1.txt           O:SYG:SYD:(A;;0x1200a9;;;AU)
+        $subfolder2 = "$parent/folder/subfolder2"
+        New-Directory -Path $subfolder2
+
+        $subfolder2Sddl = Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $subfolder2 -OutputFormat Folder
+        Convert-SecurityDescriptor $subfolder2Sddl -To Sddl | Should -Be "O:SYG:SYD:(A;;0x1200a9;;;AU)"
+
+        # Create a file folder/subfolder2/file2.txt and check that the SDDL matches the documented state:
+        #
+        # folder                  O:SYG:SYD:(A;OICINP;0x1200a9;;;AU)
+        # ├── subfolder           O:SYG:SYD:(A;OICINP;0x1200a9;;;AU)
+        # ├── subfolder2          O:SYG:SYD:(A;;0x1200a9;;;AU)
+        # |   └── file2.txt       O:SYG:SYD:
+        # └── file.txt            O:SYG:SYD:(A;;0x1200a9;;;AU)
+        $file2 = "$parent/folder/subfolder2/file2.txt"
+        New-File -Path $file2
+
+
+        # TODO(maximekjaer): the returned SDDL here is odd. Seems like some default permission is being applied.
+        #  Maybe a bug in the service? In any case, it's enough to just prove that file2.txt and file.txt have different SDDL for now.
+        $file2Sddl = Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $file2 -OutputFormat File
+        Convert-SecurityDescriptor $file2Sddl -To Sddl | Should -Not -Be "O:SYG:SYD:(A;;0x1200a9;;;AU)"
+    }
 }

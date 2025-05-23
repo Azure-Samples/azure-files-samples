@@ -970,6 +970,7 @@ function Set-AzFileAclRecursive {
     }
 
     # Check if inheritance flags are okay
+    # IO and NP should be not be set when applying SDDL permissions recursively. See docs/faq.md for more details.
     $shouldBeEnabled = "ContainerInherit, ObjectInherit"
     $shouldBeDisabled = "NoPropagateInherit, InheritOnly"
 
