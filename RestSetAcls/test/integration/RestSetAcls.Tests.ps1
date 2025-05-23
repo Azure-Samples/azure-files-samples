@@ -594,7 +594,7 @@ Describe "Set-AzFileAclRecursive" {
 
         # Set O:SYG:SYD:(A;OICIIO;0x1200a9;;;AU) recursively on the parent folder
         $sddl = "O:SYG:SYD:(A;OICIIO;0x1200a9;;;AU)"
-        Set-AzFileAclRecursive -Context $global:context -FileShareName $global:fileShareName -FilePath $folder -SddlPermission $sddl
+        Set-AzFileAclRecursive -Context $global:context -FileShareName $global:fileShareName -FilePath $folder -SddlPermission $sddl -SkipWarning
 
         # Check that the SDDL matches the documented state:
         #
@@ -641,7 +641,7 @@ Describe "Set-AzFileAclRecursive" {
 
         # Set O:SYG:SYD:(A;OICINP;0x1200a9;;;AU) recursively on folder
         $sddl = "O:SYG:SYD:(A;OICINP;0x1200a9;;;AU)"
-        Set-AzFileAclRecursive -Context $global:context -FileShareName $global:fileShareName -FilePath $folder -SddlPermission $sddl
+        Set-AzFileAclRecursive -Context $global:context -FileShareName $global:fileShareName -FilePath $folder -SddlPermission $sddl -SkipWarning
 
         # Check that the SDDL matches the documented state:
         #
