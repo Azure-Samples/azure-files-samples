@@ -83,18 +83,33 @@ Describe "Interop" {
               @{ ParentAceFlags = "CI"; ChildAceFlags = "CIID" },
               @{ ParentAceFlags = "CIIO"; ChildAceFlags = "CIID" },
               @{ ParentAceFlags = "CIID"; ChildAceFlags = "CIID" },
+              @{ ParentAceFlags = "CINP"; ChildAceFlags = "ID" },
               @{ ParentAceFlags = "CIIOID"; ChildAceFlags = "CIID" },
+              @{ ParentAceFlags = "CINPID"; ChildAceFlags = "ID" },
               # OICI
               @{ ParentAceFlags = "OICI"; ChildAceFlags = "OICIID" },
               @{ ParentAceFlags = "OICIIO"; ChildAceFlags = "OICIID" },
               @{ ParentAceFlags = "OICIID"; ChildAceFlags = "OICIID" },
-              @{ ParentAceFlags = "OICIIOID"; ChildAceFlags = "OICIID" }
-
+              @{ ParentAceFlags = "OICIIOID"; ChildAceFlags = "OICIID" },
+              @{ ParentAceFlags = "OICINP"; ChildAceFlags = "ID" },
+              @{ ParentAceFlags = "OICINPID"; ChildAceFlags = "ID" }
             ) {
                 Test-Inheritance `
                     -ParentSddl "O:BAG:BAD:(A;$($_.ParentAceFlags);FA;;;BA)" `
                     -ChildSddl "O:SYG:SYD:(A;;FA;;;SY)" `
                     -ExpectedSddl "O:SYG:SYD:AI(A;;FA;;;SY)(A;$($_.ChildAceFlags);FA;;;BA)"
+            }
+
+            It "Does not inherit <ParentAceFlags> ACEs from parent" -ForEach @(
+                @{ ParentAceFlags = "OINP" },
+                @{ ParentAceFlags = "OINPID" },
+                @{ ParentAceFlags = "OIIONP" },
+                @{ ParentAceFlags = "OIIONPID" }
+            ) {
+                Test-Inheritance `
+                    -ParentSddl "O:BAG:BAD:(A;$($_.ParentAceFlags);FA;;;BA)" `
+                    -ChildSddl "O:SYG:SYD:(A;;FA;;;SY)" `
+                    -ExpectedSddl "O:SYG:SYD:AI(A;;FA;;;SY)"
             }
 
             It "Inherits nothing when parent ACL is '<ParentAclFlags>' and child ACL is '<ChildAclFlags>'" -ForEach @(

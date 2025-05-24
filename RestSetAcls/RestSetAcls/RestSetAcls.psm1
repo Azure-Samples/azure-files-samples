@@ -946,7 +946,10 @@ function Set-AzFileAclRecursive {
         [switch]$SkipDirectories = $false,
 
         [Parameter(Mandatory = $false)]
-        [switch]$WriteToPipeline = $false
+        [switch]$WriteToPipeline = $false,
+
+        [Parameter(Mandatory = $false)]
+        [switch]$SkipWarning = $false
     )
 
     if ($SkipFiles -and $SkipDirectories) {
@@ -969,26 +972,30 @@ function Set-AzFileAclRecursive {
         return
     }
 
-    # Check if inheritance flags are okay
-    $shouldBeEnabled = "ContainerInherit, ObjectInherit"
-    $shouldBeDisabled = "NoPropagateInherit, InheritOnly"
+    if (-not $SkipWarning)
+    {
+        # Check if inheritance flags are okay
+        # IO and NP should be not be set when applying SDDL permissions recursively. See docs/faq.md for more details.
+        $shouldBeEnabled = "ContainerInherit, ObjectInherit"
+        $shouldBeDisabled = "NoPropagateInherit, InheritOnly"
 
-    $matchesTarget = Get-AllAceFlagsMatch `
-        -SecurityDescriptor $securityDescriptor `
-        -EnabledFlags $shouldBeEnabled `
-        -DisabledFlags $shouldBeDisabled
-
-    if (-not ($matchesTarget)) {
-        Set-AceFlags `
+        $matchesTarget = Get-AllAceFlagsMatch `
             -SecurityDescriptor $securityDescriptor `
-            -EnableFlags $shouldBeEnabled `
-            -DisableFlags $shouldBeDisabled
+            -EnabledFlags $shouldBeEnabled `
+            -DisabledFlags $shouldBeDisabled
 
-        $newSddl = ConvertFrom-SecurityDescriptor $securityDescriptor -OutputFormat Sddl
+        if (-not ($matchesTarget)) {
+            Set-AceFlags `
+                -SecurityDescriptor $securityDescriptor `
+                -EnableFlags $shouldBeEnabled `
+                -DisableFlags $shouldBeDisabled
 
-        $continue = Write-SddlWarning -Sddl $SddlPermission -NewSddl $newSddl
-        if (-not $continue) {
-            return
+            $newSddl = ConvertFrom-SecurityDescriptor $securityDescriptor -OutputFormat Sddl
+
+            $continue = Write-SddlWarning -Sddl $SddlPermission -NewSddl $newSddl
+            if (-not $continue) {
+                return
+            }
         }
     }
 
