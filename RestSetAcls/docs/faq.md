@@ -18,20 +18,20 @@ Do you want to continue with the current SDDL? [Y/n]:
 This warning exists to help prevent common pitfalls around permission inheritance.
 
 > [!NOTE]
-> There are valid scenarios in which you may want to ignore this warning. For instance, if you explicitly want future files/folders to have different permissions than the present ones, you may choose to override the warning. It is recommended to spend some time understanding the implications of this before doing so.
+> There are valid scenarios in which you may want to ignore this warning. For instance, if you explicitly want future files/folders to have different permissions than the present ones, you may choose to override the warning. However, it is recommended to spend some time understanding the implications of this before doing so.
 
 Here are the inheritance flags that you can set on a permission (also known as an Access Control Entry, or ACE). See the [Microsoft ACE flags documentation](https://learn.microsoft.com/en-us/windows/win32/secauthz/ace-inheritance-flags) for more detailed information.
 
 | Flag  | Name                 | Description                                                                                     |
 |-------|----------------------|-------------------------------------------------------------------------------------------------|
-| OI    | Object Inherit       | ACE will be inherited by files (objects) within the folder.                                     |
-| CI    | Container Inherit    | ACE will be inherited by subfolders (containers) within the folder.                             |
-| IO    | Inherit Only         | ACE does not apply to the folder itself, only to its children.                                  |
-| NP    | No Propagate Inherit | ACE will be inherited only by direct children, not by further descendants (grandchildren, etc). |
+| `OI`  | Object Inherit       | ACE will be inherited by files (objects) within the folder.                                     |
+| `CI`  | Container Inherit    | ACE will be inherited by subfolders (containers) within the folder.                             |
+| `IO`  | Inherit Only         | ACE does not apply to the folder itself, only to its children.                                  |
+| `NP`  | No Propagate Inherit | ACE will be inherited only by direct children, not by further descendants (grandchildren, etc). |
 
-`Set-AzFileAclRecursive` recommends setting Object Inherit (OI) and Container Inherit (CI) on all ACEs, as this will lead to the most predictable result, i.e. that all present and future files/folders will have the exact same permissions.
+`Set-AzFileAclRecursive` recommends setting Object Inherit (`OI`) and Container Inherit (`CI`) on all ACEs, as this will lead to the most predictable result, i.e. that all present and future files/folders will have the exact same permissions.
 
-The following subsections explain why the other inheritance flags (IO and NP) are not recommended in most cases. A prerequisite for understanding these sections is an understanding of the [Security Descriptor Definition Language (SDDL)](https://learn.microsoft.com/en-us/windows/win32/secauthz/security-descriptor-string-format).
+The following subsections explain why the other inheritance flags (`IO` and `NP`) are not recommended in most cases. These sections will assume some basic familiarity with the [Security Descriptor Definition Language (SDDL)](https://learn.microsoft.com/en-us/windows/win32/secauthz/security-descriptor-string-format).
 
 ### Why is Inherit Only (IO) not recommended?
 
@@ -45,13 +45,13 @@ folder
 
 Let's suppose you set this SDDL recursively on all items under the top-level folder: `O:SYG:SYD:(A;OICIIO;FA;;;AU)`. Let's take a moment to understand the SDDL:
 
-- Owner is `SY` (NT AUTHORITY\SYSTEM)
-- Group is `SY` (NT AUTHORITY\SYSTEM)
+- Owner is `SY` (`NT AUTHORITY\SYSTEM`)
+- Group is `SY` (`NT AUTHORITY\SYSTEM`)
 - The permissions has a single ACE:
     - It Allows access (`A`)
     - It has inheritance flags `OI` (Object Inherit), `CI` (Container Inherit), and `IO` (Inherit Only)
     - It grants the permission `FA` (File All, also called "Modify")
-    - It applies to `AU` (NT AUTHORITY\Authenticated Users)
+    - It applies to `AU` (`NT AUTHORITY\Authenticated Users`)
 
 The result of applying this permission recursively across the above folder structure would be:
 
@@ -87,13 +87,13 @@ folder
 Let's suppose you set this SDDL recursively on all items under the top-level folder: `O:SYG:SYD:(A;OICINP;FA;;;AU)`. Let's again take a moment to understand this permission:
 
 
-- Owner is `SY` (NT AUTHORITY\SYSTEM)
-- Group is `SY` (NT AUTHORITY\SYSTEM)
+- Owner is `SY` (`NT AUTHORITY\SYSTEM`)
+- Group is `SY` (`NT AUTHORITY\SYSTEM`)
 - The permissions has a single ACE:
     - It Allows access (`A`)
     - It has inheritance flags `OI` (Object Inherit), `CI` (Container Inherit), and `NP` (No Propagate Inherit)
     - It grants the permission `FA` (File All, also called "Modify")
-    - It applies to `AU` (NT AUTHORITY\Authenticated Users)
+    - It applies to `AU` (`NT AUTHORITY\Authenticated Users`)
 
 The NP (No Propagate Inheritance) flag means the ACE is inherited by children but not by grandchildren.
 
