@@ -5,7 +5,8 @@ Import-Module $PSScriptRoot/Interop.psm1
 
 function Write-LiveFilesAndFoldersProcessingStatus {
     [OutputType([int])]
-    [Diagnostics.CodeAnalysis.SuppressMessageAttribute("PSReviewUnusedParameter",
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute(
+        "PSReviewUnusedParameter",
         "FileOrFolder",
         Justification = "We don't print `$FileOrFolder but we do want to iterate over it")]
     param (
@@ -922,10 +923,7 @@ function Set-AzFileAclRecursive {
         [switch]$SkipDirectories = $false,
 
         [Parameter(Mandatory = $false)]
-        [switch]$WriteToPipeline = $false,
-
-        [Parameter(Mandatory = $false)]
-        [switch]$SkipWarning = $false
+        [switch]$WriteToPipeline = $false
     )
 
     if ($SkipFiles -and $SkipDirectories) {
