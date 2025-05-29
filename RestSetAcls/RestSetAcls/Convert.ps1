@@ -243,7 +243,9 @@ function Convert-SecurityDescriptor {
         # Convert a security descriptor from SDDL to Base64
         Convert-SecurityDescriptor "O:BAG:BAD:(A;;FA;;;SY)" -From Sddl -To Base64
 #>
-    [CmdletBinding(SupportsShouldProcess = $true)]
+    [CmdletBinding(
+        SupportsShouldProcess = $true,
+        ConfirmImpact = 'Low')]
     [OutputType([System.Security.AccessControl.RawSecurityDescriptor], [string], [byte[]])]
     param (
         [Parameter(Mandatory = $true, Position = 0, ValueFromPipeline = $true)]
