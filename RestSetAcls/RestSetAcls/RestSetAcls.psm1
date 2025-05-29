@@ -146,32 +146,6 @@ function Write-FinalFilesAndFoldersProcessed {
     }
 }
 
-function Write-SddlWarning {
-    param (
-        [Parameter(Mandatory = $true)]
-        [string]$Sddl,
-
-        [Parameter(Mandatory = $true)]
-        [string]$NewSddl
-    )
-    Write-WarningHeader
-    Write-Host "The SDDL string has non-standard inheritance rules."
-    Write-Host "It is recommended to set OI (Object Inherit) and CI (Container Inherit) on every permission. " -ForegroundColor DarkGray
-    Write-Host "This ensures that the permissions are inherited by files and folders created in the future." -ForegroundColor DarkGray
-    Write-Host
-    Write-Host "   Current:     "  -NoNewline -ForegroundColor Yellow
-    Write-Host $Sddl
-    Write-Host "   Recommended: " -NoNewline -ForegroundColor Green
-    Write-Host $NewSddl
-    Write-Host
-
-    Write-Host "Do you want to continue with the " -NoNewline
-    Write-Host "current" -ForegroundColor Yellow -NoNewline
-    Write-Host " SDDL?" -NoNewline
-
-    return Ask ""
-}
-
 function Get-ShareName {
     param (
         [Parameter(Mandatory = $true)]
@@ -913,7 +887,9 @@ function Get-AzFileAcl {
 }
 
 function Set-AzFileAclRecursive {
-    [CmdletBinding(SupportsShouldProcess)]
+    [CmdletBinding(
+        SupportsShouldProcess,
+        ConfirmImpact = 'High')]
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseCompatibleCommands',
         'ForEach-Object/Parallel',
         Justification = "We are guarding the usage of -Parallel with a PowerShell version check")]
@@ -972,10 +948,9 @@ function Set-AzFileAclRecursive {
         return
     }
 
-    if (-not $SkipWarning)
-    {
-        # Check if inheritance flags are okay
-        # IO and NP should be not be set when applying SDDL permissions recursively. See docs/faq.md for more details.
+    # Check if inheritance flags are okay
+    # IO and NP should be not be set when applying SDDL permissions recursively. See docs/faq.md for more details.
+    if ($ConfirmPreference -ne 'None') {
         $shouldBeEnabled = "ContainerInherit, ObjectInherit"
         $shouldBeDisabled = "NoPropagateInherit, InheritOnly"
 
@@ -990,10 +965,10 @@ function Set-AzFileAclRecursive {
                 -EnableFlags $shouldBeEnabled `
                 -DisableFlags $shouldBeDisabled
 
-            $newSddl = ConvertFrom-SecurityDescriptor $securityDescriptor -OutputFormat Sddl
+            $recommendedSddl = Convert-SecurityDescriptor $securityDescriptor -From Raw -To Sddl
+            Write-SddlWarning -Current $SddlPermission -Recommended $recommendedSddl
 
-            $continue = Write-SddlWarning -Sddl $SddlPermission -NewSddl $newSddl
-            if (-not $continue) {
+            if (-not $PSCmdlet.ShouldProcess("", "", "Continuing with current SDDL permission.")) {
                 return
             }
         }

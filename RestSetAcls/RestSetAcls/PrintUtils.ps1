@@ -1,17 +1,3 @@
-function Ask([Parameter(Mandatory = $false)][string] $question) {
-    while ($true) {
-        $yn = Read-Host "${question} [Y/n]"
-        $yn = $yn.Trim().ToLower()
-        if ($yn -eq 'n') {
-            return $false
-        }
-        elseif ($yn -eq '' -or $yn -eq 'y') {
-            return $true
-        }
-        Write-Host "Invalid answer '$yn'. Answer with either 'y' or 'n'" -ForegroundColor Red
-    }
-}
-
 function Get-IsPowerShellIse {
     return $host.Name -eq "Windows PowerShell ISE Host"
 }
@@ -88,3 +74,24 @@ function Write-Failure {
     }
 }
 
+function Write-SddlWarning {
+    param (
+        [Parameter(Mandatory = $true)]
+        [string]$Current,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Recommended
+    )
+    Write-WarningHeader
+    Write-Host "The SDDL string has non-standard inheritance rules." -ForegroundColor White
+    Write-Host "It is recommended to set OI (Object Inherit) and CI (Container Inherit) on every permission. " -ForegroundColor Gray
+    Write-Host "This ensures that the permissions are inherited by files and folders created in the future." -ForegroundColor Gray
+    Write-Host "To learn more, see " -ForegroundColor Gray -NoNewline
+    Write-Host "https://aka.ms/restsetacls/faq" -ForegroundColor DarkCyan
+    Write-Host
+    Write-Host "   Current:     "  -NoNewline -ForegroundColor Yellow
+    Write-Host $Current
+    Write-Host "   Recommended: " -NoNewline -ForegroundColor Green
+    Write-Host $Recommended
+
+}
