@@ -337,7 +337,7 @@ function New-AzFileAcl {
         }
 
         # Infer AclFormat if not provided
-        if (-not $AclFormat) {
+        if ($null -eq $AclFormat) {
             $AclFormat = Get-InferredAclFormat $Acl
             Write-Verbose "Inferred ACL format: $AclFormat. To override, use -AclFormat."
         }
@@ -561,7 +561,7 @@ function Set-AzFileAcl {
         $isDirectory = Get-IsDirectoryClient $Client
 
         # Get the permission value to set from the parameters
-        if (-not $AclFormat) {
+        if ($null -eq $AclFormat) {
             $AclFormat = Get-InferredAclFormat $Acl
             Write-Verbose "Inferred ACL format: $AclFormat. To override, use -AclFormat."
         }
