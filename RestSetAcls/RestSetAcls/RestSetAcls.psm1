@@ -337,7 +337,7 @@ function New-AzFileAcl {
         }
 
         # Infer AclFormat if not provided
-        if (-not $AclFormat) {
+        if ($null -eq $AclFormat) {
             $AclFormat = Get-InferredAclFormat $Acl
             Write-Verbose "Inferred ACL format: $AclFormat. To override, use -AclFormat."
         }
@@ -561,7 +561,7 @@ function Set-AzFileAcl {
         $isDirectory = Get-IsDirectoryClient $Client
 
         # Get the permission value to set from the parameters
-        if (-not $AclFormat) {
+        if ($null -eq $AclFormat) {
             $AclFormat = Get-InferredAclFormat $Acl
             Write-Verbose "Inferred ACL format: $AclFormat. To override, use -AclFormat."
         }
@@ -1190,13 +1190,11 @@ function Restore-AzFileAclInheritance {
     # Check that parent path exists and is a directory
     $parentFile = Get-AzStorageFile -Context $Context -ShareName $FileShareName -Path $ParentPath
     if ($null -eq $parentFile) {
-        Write-Host "The specified parent path '$ParentPath' does not exist." -ForegroundColor Red
-        return
+        throw "The specified parent path '$ParentPath' does not exist."
     }
 
     if ($parentFile -is [Microsoft.WindowsAzure.Commands.Common.Storage.ResourceModel.AzureStorageFile]) {
-        Write-Host "The specified parent path '$ParentPath' is a file. Expected it to be a directory." -ForegroundColor Red
-        return
+        throw "The specified parent path '$ParentPath' is a file. Expected it to be a directory."
     }
 
     # Dispatch to either recursive or single file processing
@@ -1260,8 +1258,7 @@ function Restore-AzFileAclInheritanceSingle {
     # Check that the child path exists
     $childFile = Get-AzStorageFile -Context $Context -ShareName $FileShareName -Path $ChildPath
     if ($null -eq $childFile) {
-        Write-Host "The specified child path '$ChildPath' does not exist." -ForegroundColor Red
-        return
+        throw "The specified child path '$ChildPath' does not exist."
     }
 
     # Get parent and child ACLs
@@ -1274,16 +1271,21 @@ function Restore-AzFileAclInheritanceSingle {
         -CreatorDescriptor $childAcl `
         -IsDirectory $childIsFolder
 
-    $parentSddl = ConvertFrom-SecurityDescriptor $parentAcl -To Sddl
-    $childSddl = ConvertFrom-SecurityDescriptor $newChildAcl -To Sddl
-    $childNewSddl = ConvertFrom-SecurityDescriptor $childAcl -To Sddl
-    Write-Verbose "Parent SDDL: $parentSddl"
-    Write-Verbose "Child SDDL: $childSddl"
-    Write-Verbose "New child SDDL: $childNewSddl"
+    $childAclFormat = if ($childIsFolder) { [SecurityDescriptorFormat]::FolderAcl } else { [SecurityDescriptorFormat]::FileAcl }
+
+    # Optionally log SDDL for debugging
+    if ($VerbosePreference -ne 'SilentlyContinue') {
+        $parentSddl = Convert-SecurityDescriptor $parentAcl -To Sddl
+        Write-Verbose "Parent SDDL: $parentSddl"
+        $childSddl = Convert-SecurityDescriptor $newChildAcl -To Sddl
+        Write-Verbose "Child SDDL: $childSddl"
+        $childNewSddl = Convert-SecurityDescriptor $childAcl -To Sddl
+        Write-Verbose "New child SDDL: $childNewSddl"
+    }
 
     # Update ACL according to inheritance
     if ($PSCmdlet.ShouldProcess("File share '$($FileShareName)'", "Apply inheritance from '$ParentPath' to '$ChildPath'")) {
-        Set-AzFileAcl -File $childFile -Acl $newChildAcl -AclFormat Sddl -WhatIf:$WhatIfPreference
+        Set-AzFileAcl -File $childFile -Acl $newChildAcl -AclFormat $childAclFormat -WhatIf:$WhatIfPreference
     }
 
     return $newChildAcl
