@@ -685,3 +685,161 @@ Describe "Set-AzFileAclRecursive" {
         Convert-SecurityDescriptor $file2Sddl -To Sddl | Should -Not -Be "O:SYG:SYD:(A;;0x1200a9;;;AU)"
     }
 }
+
+Describe "Restore-AzFileAclInheritance" -Tag "Current" {
+    Context "Single mode" {
+        It "Restores inheritance from a parent folder to a child directory" {
+            # Create a parent directory and a child directory
+            $parent = New-RandomString -Length 8
+            New-Directory -Path $parent
+
+            $child = "$parent/child"
+            New-Directory -Path $child
+
+            # Set an inheritable ACL on the parent directory
+            $parentSddl = "O:SYG:SYD:(A;OICI;0x1200a9;;;SY)S:NO_ACCESS_CONTROL"
+            Set-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $parent -Acl $parentSddl
+
+            # Set an ACL with explicit ACE on the child directory
+            $childSddl = "O:SYG:SYD:(A;;0x1200a9;;;AU)S:NO_ACCESS_CONTROL"
+            Set-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $child -Acl $childSddl
+
+            # Restore inheritance from parent to child
+            Restore-AzFileAclInheritance -Context $global:context -FileShareName $global:fileShareName -ParentPath $parent -ChildPath $child
+
+            # Verify that the child ACL got the inherited ACE from the parent
+            $childNewSddl = Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $child -OutputFormat Sddl
+            $parentNewSddl = Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $parent -OutputFormat Sddl
+
+            $parentNewSddl | Should -Be $parentSddl
+            $childNewSddl | Should -Be "O:SYG:SYD:AI(A;;0x1200a9;;;AU)(A;OICIID;0x1200a9;;;SY)S:AINO_ACCESS_CONTROL"
+        }
+
+        It "Fails when parent path does not exist" {
+            $nonExistentParent = "non-existent-$(New-RandomString -Length 8)"
+            $childPath = "non-existent-$(New-RandomString -Length 8).txt"
+            
+            {
+                Restore-AzFileAclInheritance `
+                    -Context $global:context `
+                    -FileShareName $global:fileShareName `
+                    -ParentPath $nonExistentParent `
+                    -ChildPath $childPath `
+                    -ErrorAction SilentlyContinue
+            } | Should -Throw
+        }
+        
+        It "Fails when child path does not exist" {
+            $parentDir = New-RandomString -Length 8
+            New-Directory -Path $parentDir
+
+            $nonExistentChild = "$parentDir/non-existent-$(New-RandomString -Length 8)"
+            
+            {
+                Restore-AzFileAclInheritance `
+                    -Context $global:context `
+                    -FileShareName $global:fileShareName `
+                    -ParentPath $parentDir `
+                    -ChildPath $nonExistentChild `
+                    -ErrorAction SilentlyContinue
+            } | Should -Throw
+        }
+
+        It "Fails when parent is a file, not a directory" {
+            $file1 = "$(New-RandomString -Length 8).txt"
+            New-File -Path $file1 -Size 1024
+
+            $file2 = "$(New-RandomString -Length 8).txt"
+            New-File -Path $file2 -Size 1024
+            
+            { 
+                Restore-AzFileAclInheritance `
+                    -Context $global:context `
+                    -FileShareName $global:fileShareName `
+                    -ParentPath $file1 `
+                    -ChildPath $file2 `
+                    -ErrorAction SilentlyContinue
+            } | Should -Throw
+        }
+    }
+
+    Context "Recursive mode" {
+        It "Restores inheritance from a parent folder to all child directories and files" {
+            # Create a parent directory and a child directory with a file
+            $parent = New-RandomString -Length 8
+            New-Directory -Path $parent
+
+            $childFile = "$parent/childFile.txt"
+            New-File -Path $childFile
+
+            $childDir = "$parent/childDir"
+            New-Directory -Path $childDir
+
+            $grandChildFile = "$childDir/grandChildFile.txt"
+            New-File -Path $grandChildFile
+
+            $grandChildDir = "$childDir/grandChildDir"
+            New-Directory -Path $grandChildDir
+
+            # Set an inheritable ACL on the parent directory
+            $parentSddl = "O:SYG:SYD:(A;OICI;0x1200a9;;;SY)S:NO_ACCESS_CONTROL"
+            Set-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $parent -Acl $parentSddl
+
+            # Set an ACL with explicit ACE on the child directory and file
+            $childrenSddl = "O:SYG:SYD:(A;;0x1200a9;;;AU)S:NO_ACCESS_CONTROL"
+            Set-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $childDir -Acl $childrenSddl
+            Set-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $childFile -Acl $childrenSddl
+            Set-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $grandChildFile -Acl $childrenSddl
+            Set-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $grandChildDir -Acl $childrenSddl
+
+        
+            # Restore inheritance recursively from parent to all children
+            Restore-AzFileAclInheritance -Context $global:context -FileShareName $global:fileShareName -Path $parent -Recursive
+
+            # Check that parent ACL is still the same
+            $parentNewSddl = Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $parent -OutputFormat Sddl
+            $parentNewSddl | Should -Be $parentSddl
+
+            # Verify that all children inherited the ACE from the parent
+            $expectedDirSddl = "O:SYG:SYD:AI(A;;0x1200a9;;;AU)(A;OICIID;0x1200a9;;;SY)S:AINO_ACCESS_CONTROL"
+            $expectedFileSddl = "O:SYG:SYD:AI(A;;0x1200a9;;;AU)(A;ID;0x1200a9;;;SY)S:AINO_ACCESS_CONTROL"
+
+            $childDirNewSddl = Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $childDir -OutputFormat Sddl
+            $childFileNewSddl = Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $childFile -OutputFormat Sddl
+            $grandChildFileNewSddl = Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $grandChildFile -OutputFormat Sddl
+            $grandChildDirNewSddl = Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $grandChildDir -OutputFormat Sddl
+
+            $childDirNewSddl | Should -Be $expectedDirSddl
+            $childFileNewSddl | Should -Be $expectedFileSddl
+            $grandChildDirNewSddl | Should -Be $expectedDirSddl
+            $grandChildFileNewSddl | Should -Be $expectedFileSddl
+        }
+
+        It "Fails when recursive path does not exist" {
+            $nonExistentPath = "non-existent-$(New-RandomString -Length 8)"
+            
+            { 
+                Restore-AzFileAclInheritance `
+                    -Context $global:context `
+                    -FileShareName $global:fileShareName `
+                    -Path $nonExistentPath `
+                    -Recursive `
+                    -ErrorAction SilentlyContinue
+            } | Should -Throw
+        }
+
+        It "Fails when recursive path is a file, not a directory" {
+            $file = "$(New-RandomString -Length 8).txt"
+            New-File -Path $file -Size 1024
+            
+            { 
+                Restore-AzFileAclInheritance `
+                    -Context $global:context `
+                    -FileShareName $global:fileShareName `
+                    -Path $file `
+                    -Recursive `
+                    -ErrorAction SilentlyContinue
+            } | Should -Throw
+        }
+    }
+}
