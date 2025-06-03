@@ -36,8 +36,19 @@ BeforeAll {
     Import-Module $PSScriptRoot/../../RestSetAcls/RestSetAcls.psd1 -Force
 
     # Check that the session has an Azure context
-    if (-not (Get-AzContext -ErrorAction SilentlyContinue)) {
+    $azContext = Get-AzContext -ErrorAction SilentlyContinue
+    $mgContext = Get-MgContext -ErrorAction SilentlyContinue
+
+    if (-not $azContext) {
         throw "No Azure context found. Please log in to Azure using Connect-AzAccount."
+    }
+
+    if (-not $mgContext) {
+        throw "No Microsoft Graph context found. Please log in to Microsoft Graph using Connect-MgGraph."
+    }
+
+    if ($azContext.Tenant.Id -ne $mgContext.TenantId) {
+        throw "Azure context tenant ID ($($azContext.Tenant.Id)) does not match Microsoft Graph context tenant ID ($($mgContext.TenantId)). Please ensure you are logged into the same tenant in both contexts."
     }
 
     # Build context from parameters
