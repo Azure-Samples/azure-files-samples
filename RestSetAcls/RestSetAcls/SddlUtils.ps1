@@ -101,6 +101,9 @@ function Get-EmptyRawAcl {
 }
 
 function Reset-SecurityDescriptor {
+    [CmdletBinding(
+        SupportsShouldProcess = $true,
+        ConfirmImpact = 'Low')]
     param (
         [Parameter(Mandatory = $true, ValueFromPipeline = $true)]
         [System.Security.AccessControl.RawSecurityDescriptor]$SecurityDescriptor
@@ -116,9 +119,11 @@ function Reset-SecurityDescriptor {
         
         $controlFlags = [int]$SecurityDescriptor.ControlFlags -band (-bnot [int]$flagsToRemove)
 
-        $SecurityDescriptor.DiscretionaryAcl = Get-EmptyRawAcl
-        $SecurityDescriptor.SystemAcl = Get-EmptyRawAcl
-        $SecurityDescriptor.SetFlags($controlFlags)
+        if ($PSCmdlet.ShouldProcess("SecurityDescriptor", "Reset ControlFlags, DACL and SACL")) {
+            $SecurityDescriptor.DiscretionaryAcl = Get-EmptyRawAcl
+            $SecurityDescriptor.SystemAcl = Get-EmptyRawAcl
+            $SecurityDescriptor.SetFlags($controlFlags)
+        }
     }
 }
 
