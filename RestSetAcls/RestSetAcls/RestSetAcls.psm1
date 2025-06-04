@@ -1145,6 +1145,11 @@ function Restore-AzFileAclInheritance {
     .PARAMETER Path
     Specifies the root directory path for recursive inheritance restoration. Used in recursive mode.
 
+    .PARAMETER Reset
+    If specified, resets the ACL of the child file(s) or directory(ies) before restoring inheritance. Used in both
+    single and recursive modes. This option is useful when you want child items to only have permissions obtained
+    through inheritance, and want to discard any permissions that they currently hold.
+
     .OUTPUTS
     System.Security.AccessControl.GenericSecurityDescriptor
     In single mode, returns the updated ACL for the child file or directory.
@@ -1182,7 +1187,8 @@ function Restore-AzFileAclInheritance {
         [Parameter(Mandatory = $true, ParameterSetName = "Recursive")]
         [string]$Path,
 
-        [Parameter(Mandatory = $false)]
+        [Parameter(Mandatory = $false, ParameterSetName = "Single")]
+        [Parameter(Mandatory = $false, ParameterSetName = "Recursive")]
         [switch]$Reset = $false
     )
 
