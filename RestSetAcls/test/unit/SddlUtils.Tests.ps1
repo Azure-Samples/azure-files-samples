@@ -103,3 +103,71 @@ Describe "Set-AceFlags" {
         { $descriptors | Set-AceFlags -EnableFlags "ContainerInherit, ObjectInherit" -DisableFlags "NoPropagateInherit, ContainerInherit" } | Should -Throw
     }
 }
+
+Describe "Reset-SecurityDescriptor" {
+    It "Should reset ControlFlags" {
+        $descriptor = ConvertTo-SecurityDescriptor "O:SYG:SYD:AI(A;NPIO;0x1301bf;;;WD)"
+        # Verify the descriptor has non-zero ControlFlags initially
+        $descriptor.ControlFlags | Should -Not -Be 0
+        
+        Reset-SecurityDescriptor -SecurityDescriptor $descriptor
+        
+        # Verify ControlFlags was reset to 0
+        $expected = [System.Security.AccessControl.ControlFlags]::SelfRelative
+        $descriptor.ControlFlags | Should -Be $expected
+    }
+
+    It "Should reset DiscretionaryAcl to an empty ACL" {
+        $descriptor = ConvertTo-SecurityDescriptor "O:SYG:SYD:AI(A;NPIO;0x1301bf;;;WD)(A;;0x1201bf;;;WD)"
+        # Verify the descriptor has non-empty DiscretionaryAcl initially
+        $descriptor.DiscretionaryAcl.Count | Should -Be 2
+        
+        Reset-SecurityDescriptor -SecurityDescriptor $descriptor
+        
+        # Verify DiscretionaryAcl was reset to empty
+        $descriptor.DiscretionaryAcl.Count | Should -Be 0
+    }
+
+    It "Should reset SystemAcl to an empty ACL" {
+        # Create a descriptor with a SystemAcl (using S: for the SACL in SDDL)
+        $descriptor = ConvertTo-SecurityDescriptor "O:SYG:SYD:AIS:(AU;SAIO;0x1301bf;;;WD)"
+        # Verify the descriptor has a non-empty SystemAcl initially
+        $descriptor.SystemAcl.Count | Should -Not -Be 0
+        
+        Reset-SecurityDescriptor -SecurityDescriptor $descriptor
+        
+        # Verify SystemAcl was reset to empty
+        $descriptor.SystemAcl.Count | Should -Be 0
+    }
+
+    It "Should process multiple items from input pipeline" {
+        $descriptor1 = ConvertTo-SecurityDescriptor "O:SYG:SYD:AI(A;NPIO;0x1301bf;;;WD)(A;NPIO;0x1201bf;;;WD)"
+        $descriptor2 = ConvertTo-SecurityDescriptor "O:SYG:SYD:AI(A;;0x1301bf;;;WD)(A;IO;0x1201bf;;;WD)"
+        $descriptors = @($descriptor1, $descriptor2)
+        
+        $descriptors | Reset-SecurityDescriptor
+        
+        # Verify all descriptors were reset
+        $expected = [System.Security.AccessControl.ControlFlags]::SelfRelative
+
+        $descriptor1.ControlFlags | Should -Be $expected
+        $descriptor1.DiscretionaryAcl.Count | Should -Be 0
+        $descriptor1.SystemAcl.Count | Should -Be 0
+        
+        $descriptor2.ControlFlags | Should -Be $expected
+        $descriptor2.DiscretionaryAcl.Count | Should -Be 0
+        $descriptor2.SystemAcl.Count | Should -Be 0
+    }
+    
+    It "Should maintain owner and group information" {
+        $descriptor = ConvertTo-SecurityDescriptor "O:SYG:SYD:AI(A;NPIO;0x1301bf;;;WD)"
+        $ownerBefore = $descriptor.Owner
+        $groupBefore = $descriptor.Group
+        
+        Reset-SecurityDescriptor -SecurityDescriptor $descriptor
+        
+        # Verify owner and group weren't changed
+        $descriptor.Owner | Should -Be $ownerBefore
+        $descriptor.Group | Should -Be $groupBefore
+    }
+}
