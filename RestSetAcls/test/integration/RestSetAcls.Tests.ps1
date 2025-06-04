@@ -697,7 +697,7 @@ Describe "Set-AzFileAclRecursive" {
     }
 }
 
-Describe "Restore-AzFileAclInheritance" -Tag "Current" {
+Describe "Restore-AzFileAclInheritance" {
     Context "Single mode" {
         It "Restores inheritance from a parent folder to a child directory" {
             # Create a parent directory and a child directory
@@ -724,6 +724,87 @@ Describe "Restore-AzFileAclInheritance" -Tag "Current" {
 
             $parentNewSddl | Should -Be $parentSddl
             $childNewSddl | Should -Be "O:SYG:SYD:AI(A;;0x1200a9;;;AU)(A;OICIID;0x1200a9;;;SY)S:AINO_ACCESS_CONTROL"
+        }
+
+        It "Restores inheritance from a parent folder to a child file" {
+            # Create a parent directory and a child file
+            $parent = New-RandomString -Length 8
+            New-Directory -Path $parent
+
+            $childFile = "$parent/childFile.txt"
+            New-File -Path $childFile
+
+            # Set an inheritable ACL on the parent directory
+            $parentSddl = "O:SYG:SYD:(A;OICI;0x1200a9;;;SY)S:NO_ACCESS_CONTROL"
+            Set-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $parent -Acl $parentSddl
+
+            # Set an ACL with explicit ACE on the child file
+            $childSddl = "O:SYG:SYD:(A;;0x1200a9;;;AU)S:NO_ACCESS_CONTROL"
+            Set-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $childFile -Acl $childSddl
+
+            # Restore inheritance from parent to child
+            Restore-AzFileAclInheritance -Context $global:context -FileShareName $global:fileShareName -ParentPath $parent -ChildPath $childFile
+
+            # Verify that the child ACL got the inherited ACE from the parent
+            $childNewSddl = Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $childFile -OutputFormat Sddl
+            $parentNewSddl = Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $parent -OutputFormat Sddl
+
+            $parentNewSddl | Should -Be $parentSddl
+            $childNewSddl | Should -Be "O:SYG:SYD:AI(A;;0x1200a9;;;AU)(A;ID;0x1200a9;;;SY)S:AINO_ACCESS_CONTROL"
+        }
+
+        It "Restores inheritance from a parent folder to a child directory in -Reset mode" {
+            # Create a parent directory and a child directory
+            $parent = New-RandomString -Length 8
+            New-Directory -Path $parent
+
+            $child = "$parent/child"
+            New-Directory -Path $child
+
+            # Set an inheritable ACL on the parent directory
+            $parentSddl = "O:SYG:SYD:(A;OICI;0x1200a9;;;SY)S:NO_ACCESS_CONTROL"
+            Set-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $parent -Acl $parentSddl
+
+            # Set a Protected (P) ACL with explicit ACE on the child directory
+            $childSddl = "O:SYG:SYD:P(A;;0x1200a9;;;AU)S:NO_ACCESS_CONTROL"
+            Set-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $child -Acl $childSddl
+
+            # Restore inheritance from parent to child in -Reset mode
+            Restore-AzFileAclInheritance -Context $global:context -FileShareName $global:fileShareName -ParentPath $parent -ChildPath $child -Reset
+            
+            # Verify that the child ACL got the inherited ACE from the parent, and that the explicit ACE was removed
+            $parentNewSddl = Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $parent -OutputFormat Sddl
+            $childNewSddl = Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $child -OutputFormat Sddl
+
+            $parentNewSddl | Should -Be $parentSddl
+            $childNewSddl | Should -Be "O:SYG:SYD:AI(A;OICIID;0x1200a9;;;SY)S:AINO_ACCESS_CONTROL"
+        }
+
+        It "Restores inheritance from a parent folder to child file in -Reset mode" {
+            # Create a parent directory and a child file
+            $parent = New-RandomString -Length 8
+            New-Directory -Path $parent
+
+            $childFile = "$parent/childFile.txt"
+            New-File -Path $childFile
+
+            # Set an inheritable ACL on the parent directory
+            $parentSddl = "O:SYG:SYD:(A;OICI;0x1200a9;;;SY)S:NO_ACCESS_CONTROL"
+            Set-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $parent -Acl $parentSddl
+
+            # Set a Protected (P) ACL with explicit ACE on the child file
+            $childSddl = "O:SYG:SYD:P(A;;0x1200a9;;;AU)S:NO_ACCESS_CONTROL"
+            Set-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $childFile -Acl $childSddl
+
+            # Restore inheritance from parent to child in -Reset mode
+            Restore-AzFileAclInheritance -Context $global:context -FileShareName $global:fileShareName -ParentPath $parent -ChildPath $childFile -Reset
+            
+            # Verify that the child ACL got the inherited ACE from the parent, and that the explicit ACE was removed
+            $parentNewSddl = Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $parent -OutputFormat Sddl
+            $childNewSddl = Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $childFile -OutputFormat Sddl
+
+            $parentNewSddl | Should -Be $parentSddl
+            $childNewSddl | Should -Be "O:SYG:SYD:AI(A;ID;0x1200a9;;;SY)S:AINO_ACCESS_CONTROL"
         }
 
         It "Fails when parent path does not exist" {
@@ -820,6 +901,56 @@ Describe "Restore-AzFileAclInheritance" -Tag "Current" {
             $grandChildFileNewSddl = Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $grandChildFile -OutputFormat Sddl
             $grandChildDirNewSddl = Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $grandChildDir -OutputFormat Sddl
 
+            $childDirNewSddl | Should -Be $expectedDirSddl
+            $childFileNewSddl | Should -Be $expectedFileSddl
+            $grandChildDirNewSddl | Should -Be $expectedDirSddl
+            $grandChildFileNewSddl | Should -Be $expectedFileSddl
+        }
+
+        It "Restores inheritance recursively from a parent folder to all child directories and files in -Reset mode" {
+            # Create a parent directory and a child directory with a file
+            $parent = New-RandomString -Length 8
+            New-Directory -Path $parent
+
+            $childFile = "$parent/childFile.txt"
+            New-File -Path $childFile
+
+            $childDir = "$parent/childDir"
+            New-Directory -Path $childDir
+
+            $grandChildFile = "$childDir/grandChildFile.txt"
+            New-File -Path $grandChildFile
+
+            $grandChildDir = "$childDir/grandChildDir"
+            New-Directory -Path $grandChildDir
+
+            # Set an inheritable ACL on the parent directory
+            $parentSddl = "O:SYG:SYD:(A;OICI;0x1200a9;;;SY)S:NO_ACCESS_CONTROL"
+            Set-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $parent -Acl $parentSddl
+
+            # Set a Protected (P) ACL with explicit ACE on the child directory and file
+            $childrenSddl = "O:SYG:SYD:P(A;;0x1200a9;;;AU)S:NO_ACCESS_CONTROL"
+            Set-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $childDir -Acl $childrenSddl
+            Set-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $childFile -Acl $childrenSddl
+            Set-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $grandChildFile -Acl $childrenSddl
+            Set-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $grandChildDir -Acl $childrenSddl
+        
+            # Restore inheritance recursively from parent to all children in Reset mode
+            Restore-AzFileAclInheritance -Context $global:context -FileShareName $global:fileShareName -Path $parent -Recursive -Reset
+
+            # Check that parent ACL is still the same
+            $parentNewSddl = Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $parent -OutputFormat Sddl
+            $parentNewSddl | Should -Be $parentSddl
+
+            # Verify that all children inherited the ACE from the parent, and that the explicit ACE was removed
+            $expectedDirSddl = "O:SYG:SYD:AI(A;OICIID;0x1200a9;;;SY)S:AINO_ACCESS_CONTROL"
+            $expectedFileSddl = "O:SYG:SYD:AI(A;ID;0x1200a9;;;SY)S:AINO_ACCESS_CONTROL"
+
+            $childDirNewSddl = Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $childDir -OutputFormat Sddl
+            $childFileNewSddl = Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $childFile -OutputFormat Sddl
+            $grandChildFileNewSddl = Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $grandChildFile -OutputFormat Sddl
+            $grandChildDirNewSddl = Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $grandChildDir -OutputFormat Sddl
+            
             $childDirNewSddl | Should -Be $expectedDirSddl
             $childFileNewSddl | Should -Be $expectedFileSddl
             $grandChildDirNewSddl | Should -Be $expectedDirSddl

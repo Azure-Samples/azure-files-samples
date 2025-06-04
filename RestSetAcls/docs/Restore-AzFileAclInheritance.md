@@ -15,13 +15,13 @@ Applies ACL inheritance from parent folders to child files or folders.
 ### Recursive
 ```
 Restore-AzFileAclInheritance -Context <IStorageContext> -FileShareName <String> [-Recursive] -Path <String>
- [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
+ [-Reset] [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
 ```
 
 ### Single
 ```
 Restore-AzFileAclInheritance -Context <IStorageContext> -FileShareName <String> -ParentPath <String>
- -ChildPath <String> [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
+ -ChildPath <String> [-Reset] [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
 ```
 
 ## DESCRIPTION
@@ -142,6 +142,25 @@ Accept pipeline input: False
 Accept wildcard characters: False
 ```
 
+### -Reset
+If specified, resets the ACL of the child file(s) or directory(ies) before restoring inheritance.
+Used in both
+single and recursive modes.
+This option is useful when you want child items to only have permissions obtained
+through inheritance, and want to discard any permissions that they currently hold.
+
+```yaml
+Type: SwitchParameter
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: False
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
 ### -WhatIf
 Shows what would happen if the cmdlet runs.
 The cmdlet is not run.
@@ -195,8 +214,8 @@ This cmdlet supports the common parameters: -Debug, -ErrorAction, -ErrorVariable
 
 ## OUTPUTS
 
-### System.Object
-### Returns information about processed files and directories, including success or failure for each item.
+### System.Security.AccessControl.GenericSecurityDescriptor
+### In single mode, returns the updated ACL for the child file or directory.
 ## NOTES
 
 ## RELATED LINKS

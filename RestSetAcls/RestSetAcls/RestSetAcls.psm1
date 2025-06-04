@@ -1145,6 +1145,11 @@ function Restore-AzFileAclInheritance {
     .PARAMETER Path
     Specifies the root directory path for recursive inheritance restoration. Used in recursive mode.
 
+    .PARAMETER Reset
+    If specified, resets the ACL of the child file(s) or directory(ies) before restoring inheritance. Used in both
+    single and recursive modes. This option is useful when you want child items to only have permissions obtained
+    through inheritance, and want to discard any permissions that they currently hold.
+
     .OUTPUTS
     System.Security.AccessControl.GenericSecurityDescriptor
     In single mode, returns the updated ACL for the child file or directory.
@@ -1180,7 +1185,11 @@ function Restore-AzFileAclInheritance {
         [switch]$Recursive,
 
         [Parameter(Mandatory = $true, ParameterSetName = "Recursive")]
-        [string]$Path
+        [string]$Path,
+
+        [Parameter(Mandatory = $false, ParameterSetName = "Single")]
+        [Parameter(Mandatory = $false, ParameterSetName = "Recursive")]
+        [switch]$Reset = $false
     )
 
     if ($PSCmdlet.ParameterSetName -eq "Recursive") {
@@ -1206,6 +1215,7 @@ function Restore-AzFileAclInheritance {
             -FileShareName $FileShareName `
             -ParentAcl $parentAcl `
             -ChildPath $ChildPath `
+            -Reset:$Reset `
             -WhatIf:$WhatIfPreference
     }
     elseif ($PSCmdlet.ParameterSetName -eq "Recursive" -and $Recursive) {  
@@ -1215,6 +1225,7 @@ function Restore-AzFileAclInheritance {
 
         Restore-AzFileAclInheritanceRecursive `
             -DirectoryClient $parentFile.ShareDirectoryClient `
+            -Reset:$Reset `
             -PassThru `
             -WhatIf:$WhatIfPreference `
         | ForEach-Object {
@@ -1250,7 +1261,10 @@ function Restore-AzFileAclInheritanceSingle {
         [System.Security.AccessControl.GenericSecurityDescriptor]$ParentAcl,
 
         [Parameter(Mandatory = $true)]
-        [string]$ChildPath
+        [string]$ChildPath,
+
+        [Parameter(Mandatory = $true)]
+        [switch]$Reset
     )
 
     # Presupposition: the parent path exists and is a directory. It is the responsibility of the caller to check this.
@@ -1264,23 +1278,36 @@ function Restore-AzFileAclInheritanceSingle {
     # Get parent and child ACLs
     $childAcl = Get-AzFileAcl -File $childFile -OutputFormat Raw
     $childIsFolder = $childFile -is [Microsoft.WindowsAzure.Commands.Common.Storage.ResourceModel.AzureStorageFileDirectory]
-
-    # Compute inheritance
-    $newChildAcl = CreatePrivateObjectSecurityEx `
-        -ParentDescriptor $ParentAcl `
-        -CreatorDescriptor $childAcl `
-        -IsDirectory $childIsFolder
-
     $childAclFormat = if ($childIsFolder) { [SecurityDescriptorFormat]::FolderAcl } else { [SecurityDescriptorFormat]::FileAcl }
 
     # Optionally log SDDL for debugging
     if ($VerbosePreference -ne 'SilentlyContinue') {
         $parentSddl = Convert-SecurityDescriptor $parentAcl -To Sddl
-        Write-Verbose "Parent SDDL: $parentSddl"
+        Write-Verbose "Parent folder SDDL: $parentSddl"
         $childSddl = Convert-SecurityDescriptor $newChildAcl -To Sddl
-        Write-Verbose "Child SDDL: $childSddl"
+        Write-Verbose "Child item SDDL: $childSddl"
+    }
+
+    # If reset is passed, we should reset DACL and SACL. We keep the owner and group.
+    if ($Reset) {
+        Reset-SecurityDescriptor -SecurityDescriptor $childAcl
+        if ($VerbosePreference -ne 'SilentlyContinue') {
+            $childNewSddl = Convert-SecurityDescriptor $childAcl -To Sddl
+            Write-Verbose "Running in reset mode. Will compute inheritance on reset child SDDL: $childNewSddl"
+        }
+    }
+
+    # Compute inheritance
+    $newChildAcl = CreatePrivateObjectSecurityEx `
+        -ParentDescriptor $ParentAcl `
+        -CreatorDescriptor $childAcl `
+        -IsDirectory $childIsFolder `
+        -Verbose:$VerbosePreference
+
+    # Optionally log SDDL for debugging
+    if ($VerbosePreference -ne 'SilentlyContinue') {
         $childNewSddl = Convert-SecurityDescriptor $childAcl -To Sddl
-        Write-Verbose "New child SDDL: $childNewSddl"
+        Write-Verbose "Computed inheritance, child should get SDDL: $childNewSddl"
     }
 
     # Update ACL according to inheritance
@@ -1297,6 +1324,9 @@ function Restore-AzFileAclInheritanceRecursive {
     param (
         [Parameter(Mandatory = $true)]
         [Azure.Storage.Files.Shares.ShareDirectoryClient]$DirectoryClient,
+
+        [Parameter(Mandatory = $true)]
+        [switch]$Reset,
 
         [Parameter(Mandatory = $false)]
         [switch]$PassThru = $false
@@ -1337,15 +1367,21 @@ function Restore-AzFileAclInheritanceRecursive {
 
         # Iterate over the contents of the directory
         foreach ($item in $directoryClient.GetFilesAndDirectories($options).GetEnumerator()) {
-            $itemPermissionFormat = if ($item.IsDirectory) { "FolderAcl" } else { "FileAcl" }
-
             # Get ACL for the item
             $itemPermission = Get-AzFileAclFromKey `
                 -Key $item.PermissionKey `
                 -ShareClient $shareClient `
-                -OutputFormat $itemPermissionFormat
+                -OutputFormat Raw
+
+            if ($Reset) {
+                # Reset the DACL and SACL, keeping owner and group
+                Reset-SecurityDescriptor -SecurityDescriptor $itemPermission
+            }
 
             # Compute inheritance
+            $itemPermissionFormat = if ($item.IsDirectory) { [SecurityDescriptorFormat]::FolderAcl } else { [SecurityDescriptorFormat]::FileAcl }
+            $itemPermission = Convert-SecurityDescriptor $itemPermission -From Raw -To $itemPermissionFormat
+
             $itemNewPermission = CreatePrivateObjectSecurityEx `
                 -ParentDescriptor $directoryPermission `
                 -CreatorDescriptor $itemPermission `
