@@ -39,7 +39,10 @@ function Get-InferredAclFormat {
             }
         }
         
-        throw "Could not infer the format of the input. Expected SDDL string, Base64 string, byte array, RawSecurityDescriptor or CommonSecurityDescriptor."
+        throw (
+            "Could not infer the format of the input. Got a value of type $($Acl.GetType().FullName). " + 
+            "Expected SDDL string, Base64 string, byte array, RawSecurityDescriptor or CommonSecurityDescriptor."
+        )
     }
 }
 
