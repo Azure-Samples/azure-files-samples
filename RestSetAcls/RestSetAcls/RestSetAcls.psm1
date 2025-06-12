@@ -1234,7 +1234,7 @@ function Restore-AzFileAclInheritance {
             }
             $processedCount++
             Write-Output $_
-        }
+        } `
         | Write-LiveFilesAndFoldersProcessingStatus -RefreshRateHertz 10 -StartTime $startTime `
         | ForEach-Object { if ($PassThru) { Write-Output $_ } }
 
