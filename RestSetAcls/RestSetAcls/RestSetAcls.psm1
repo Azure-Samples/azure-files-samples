@@ -1414,7 +1414,7 @@ function Restore-AzFileAclInheritanceRecursive {
                 Write-Output @{
                     Path = $itemClient.Path
                     IsDirectory = $item.IsDirectory
-                    NewPermission = (Convert-SecurityDescriptor $itemNewPermission -To Sddl)
+                    NewPermission = (Convert-SecurityDescriptor $itemNewPermission -From $itemPermissionFormat -To Sddl)
                     PermissionKey = $newPermissionKey
                     Success = $true
                 }
