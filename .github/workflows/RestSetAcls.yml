@@ -73,13 +73,27 @@ jobs:
           .\init.ps1
           Test-Manifest
 
-  lint-with-PSScriptAnalyzer:
-    name: Lint with PSScriptAnalyzer
+  lint:
+    name: Lint in PowerShell 7
     runs-on: windows-latest
     defaults:
       run:
         working-directory: .\RestSetAcls
         shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lint with PSScriptAnalyzer
+        run: |
+          .\init.ps1
+          Lint
+  
+  lint-powershell-5:
+    name: Lint in PowerShell 5.1
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: .\RestSetAcls
+        shell: powershell
     steps:
       - uses: actions/checkout@v4
       - name: Lint with PSScriptAnalyzer
