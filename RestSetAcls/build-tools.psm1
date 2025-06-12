@@ -66,6 +66,48 @@ function Test {
     Invoke-Pester -Path $Path -Output Detailed
 }
 
+# https://stackoverflow.com/a/34383413
+function Convert-PSObjectToHashtable
+{
+    param (
+        [Parameter(ValueFromPipeline)]
+        $InputObject
+    )
+
+    process
+    {
+        if ($null -eq $InputObject) {
+            return $null
+        }
+
+        if ($InputObject -is [System.Collections.IEnumerable] -and $InputObject -isnot [string])
+        {
+            $collection = @(
+                foreach ($object in $InputObject) {
+                    Convert-PSObjectToHashtable $object
+                }
+            )
+
+            Write-Output -NoEnumerate $collection
+        }
+        elseif ($InputObject -is [psobject])
+        {
+            $hash = @{}
+
+            foreach ($property in $InputObject.PSObject.Properties)
+            {
+                $hash[$property.Name] = (Convert-PSObjectToHashtable $property.Value).PSObject.BaseObject
+            }
+
+            $hash
+        }
+        else
+        {
+            $InputObject
+        }
+    }
+}
+
 function Test-Integration {
     param (
         [Parameter(Mandatory = $false)]
@@ -80,7 +122,8 @@ function Test-Integration {
     }
 
     # Parse config into Pester container
-    $config = Get-Content -Raw $ConfigFile | ConvertFrom-Json -AsHashtable
+    $config = Get-Content -Raw $ConfigFile | ConvertFrom-Json | Convert-PSObjectToHashtable
+
     $container = New-PesterContainer -Path $PSScriptRoot\test\integration -Data @{ InputConfig = $config }
 
     # Build object we can splat into Invoke-Pester
@@ -107,7 +150,7 @@ function Test-All {
     Test-Format
 }
 
-function Build-Docs {
+function New-Docs {
     Import-Module -Name $PSScriptRoot\RestSetAcls\RestSetAcls.psd1 -Force
     New-MarkdownHelp -Module RestSetAcls -OutputFolder $PSScriptRoot\docs -Force
 }
