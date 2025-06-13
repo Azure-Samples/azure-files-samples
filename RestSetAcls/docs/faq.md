@@ -1,5 +1,47 @@
 # Frequently Asked Questions
 
+## Can I run RestSetAcls commands in an Azure Automation Runbook?
+
+Yes, you can run RestSetAcls commands in an Azure Automation Runbook. However, there are some prerequisites and steps you need to follow to set it up correctly.
+
+1. Create a new Azure Automation account or use an existing one.
+2. Create a new Runbook in the Azure portal. PowerShell 7.2 is recommended.
+3. In the automation account, under the "Shared Resources" section, go to "Modules". Click "Add a module", select "Browse from gallery", and search for "RestSetAcls". Install the module. Select the runtime version that matches the PowerShell version of your Runbook (e.g., PowerShell 7.2).
+4. Still in the "Modules" pane, you will need to manually add all transitive dependencies of the `RestSetAcls` module. Note that many of the dependencies will already be listed in the Modules list by default, but are unfortunately installed with an older version by default. `RestSetAcls` requires the newer versions, so you will need to manually add these newer versions. For each of the dependencies below, click "Add a module", select "Browse from gallery", search for the module name, and install it:
+   - Az.Accounts
+   - Az.Storage
+   - Microsoft.Graph.Authentication 
+   - Microsoft.Graph.Groups
+   - Microsoft.Graph.Users
+5. Set up a secret in the Azure Automation account for the storage account key. In the Azure Automation account, go to "Shared Resources" > "Credentials", click "Add a credential", and set:
+   - **Name**: storage account name
+   - **Username**: storage account name
+   - **Password**: storage account key
+6. Finally, in the runbook, you can use the following code to invoke RestSetAcls commands:
+   
+   ```powershell 
+   Import-Module RestSetAcls
+
+   $secretName = "your-secret-name" # replace with your secret name (might be the same as the storage account name if you configured it that way)
+   $fileShareName = "test" # replace with your file share name
+
+   $cred = Get-AutomationPSCredential -Name $secretName
+
+   # Extract username and password (use with care!)
+   $StorageAccountName = $cred.UserName
+   $StorageAccountKey = $cred.GetNetworkCredential().Password
+
+   # Build the storage context
+   $ctx = New-AzStorageContext -StorageAccountName $StorageAccountName -StorageAccountKey $StorageAccountKey
+
+   # Call RestSetAcls functions.
+   # Customize this as needed, to call the functions you need.
+   # Here, as an example, we print the SDDL of the root of the file share.
+   $sddl = Get-AzFileAcl -Context $ctx -FileShareName $fileShareName -FilePath "/" -OutputFormat Sddl
+   Write-Output $sddl
+   ```
+
+
 ## Why does Set-AzFileAclRecursive display a warning non-standard inheritance rules?
 
 You may have seen Set-AzFileAclRecursive issue a warning like the following.
