@@ -17,7 +17,10 @@ function Write-LiveFilesAndFoldersProcessingStatus {
         [datetime]$StartTime,
 
         [Parameter(Mandatory = $false)]
-        [int]$RefreshRateHertz = 10
+        [int]$RefreshRateHertz = 10,
+
+        [Parameter(Mandatory = $false)]
+        [switch]$Silent = $false
     )
 
     begin {
@@ -29,6 +32,11 @@ function Write-LiveFilesAndFoldersProcessingStatus {
     }
 
     process {
+        # If silent mode is enabled, do not print anything, just forward to pipeline
+        if ($Silent) {
+            return $_
+        }
+
         $i++
         $timeSinceLastPrint = (Get-Date) - $lastPrint
 
@@ -923,6 +931,9 @@ function Set-AzFileAclRecursive {
         [switch]$SkipDirectories = $false,
 
         [Parameter(Mandatory = $false)]
+        [switch]$Silent = $false,
+
+        [Parameter(Mandatory = $false)]
         [switch]$PassThru = $false
     )
 
@@ -1061,7 +1072,7 @@ function Set-AzFileAclRecursive {
             $processedCount++
             Write-Output $_
         } `
-        | Write-LiveFilesAndFoldersProcessingStatus -RefreshRateHertz 10 -StartTime $startTime `
+        | Write-LiveFilesAndFoldersProcessingStatus -RefreshRateHertz 10 -StartTime $startTime -Silent:$Silent `
         | ForEach-Object { if ($PassThru) { Write-Output $_ } }
     }
     else {       
@@ -1105,15 +1116,17 @@ function Set-AzFileAclRecursive {
                 }
             }            
         } `
-        | Write-LiveFilesAndFoldersProcessingStatus -RefreshRateHertz 10 -StartTime $startTime `
+        | Write-LiveFilesAndFoldersProcessingStatus -RefreshRateHertz 10 -StartTime $startTime -Silent:$Silent `
         | ForEach-Object { if ($PassThru) { Write-Output $_ } }
     }
 
     $ProgressPreference = "Continue"
     
-    $totalTime = (Get-Date) - $startTime
-    Write-Host "`r" -NoNewline # Clear the line from the live progress reporting
-    Write-FinalFilesAndFoldersProcessed -ProcessedCount $processedCount -Errors $errors -TotalTime $totalTime
+    if (-not $Silent) {
+        $totalTime = (Get-Date) - $startTime
+        Write-Host "`r" -NoNewline # Clear the line from the live progress reporting
+        Write-FinalFilesAndFoldersProcessed -ProcessedCount $processedCount -Errors $errors -TotalTime $totalTime
+    }
 }
 
 function Restore-AzFileAclInheritance {
@@ -1149,6 +1162,10 @@ function Restore-AzFileAclInheritance {
     If specified, resets the ACL of the child file(s) or directory(ies) before restoring inheritance. Used in both
     single and recursive modes. This option is useful when you want child items to only have permissions obtained
     through inheritance, and want to discard any permissions that they currently hold.
+
+    .PARAMETER Silent
+    If specified, the commandlet will not output any progress or status messages. This is useful for scripting
+    scenarios where you want to suppress output.
 
     .OUTPUTS
     System.Security.AccessControl.GenericSecurityDescriptor
@@ -1189,7 +1206,11 @@ function Restore-AzFileAclInheritance {
 
         [Parameter(Mandatory = $false, ParameterSetName = "Single")]
         [Parameter(Mandatory = $false, ParameterSetName = "Recursive")]
-        [switch]$Reset = $false
+        [switch]$Reset = $false,
+
+        [Parameter(Mandatory = $false, ParameterSetName = "Single")]
+        [Parameter(Mandatory = $false, ParameterSetName = "Recursive")]
+        [switch]$Silent = $false
     )
 
     if ($PSCmdlet.ParameterSetName -eq "Recursive") {
@@ -1235,14 +1256,16 @@ function Restore-AzFileAclInheritance {
             $processedCount++
             Write-Output $_
         } `
-        | Write-LiveFilesAndFoldersProcessingStatus -RefreshRateHertz 10 -StartTime $startTime `
+        | Write-LiveFilesAndFoldersProcessingStatus -RefreshRateHertz 10 -StartTime $startTime -Silent:$Silent `
         | ForEach-Object { if ($PassThru) { Write-Output $_ } }
 
-        Write-Host "`r" -NoNewline # Clear the line from the live progress reporting
-        Write-FinalFilesAndFoldersProcessed `
-            -ProcessedCount $processedCount `
-            -Errors $errors `
-            -TotalTime ((Get-Date) - $startTime)
+        if (-not $Silent) {
+            Write-Host "`r" -NoNewline # Clear the line from the live progress reporting
+            Write-FinalFilesAndFoldersProcessed `
+                -ProcessedCount $processedCount `
+                -Errors $errors `
+                -TotalTime ((Get-Date) - $startTime)
+        }
     }
 }
 
