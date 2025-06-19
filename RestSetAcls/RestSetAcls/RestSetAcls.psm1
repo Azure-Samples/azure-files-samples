@@ -1167,6 +1167,9 @@ function Restore-AzFileAclInheritance {
     If specified, the commandlet will not output any progress or status messages. This is useful for scripting
     scenarios where you want to suppress output.
 
+    .PARAMETER PassThru
+    If specified, the cmdlet will output the objects processed, including their paths and success status.
+
     .OUTPUTS
     System.Security.AccessControl.GenericSecurityDescriptor
     In single mode, returns the updated ACL for the child file or directory.
@@ -1182,7 +1185,7 @@ function Restore-AzFileAclInheritance {
     Recursively restores ACL inheritance for all files and directories under 'folder1'.
 #>
     [CmdletBinding(SupportsShouldProcess = $true)]
-    [OutputType([System.Security.AccessControl.GenericSecurityDescriptor])]
+    [OutputType([System.Security.AccessControl.GenericSecurityDescriptor], [PSCustomObject])]
     param (
         [Parameter(Mandatory = $true, ParameterSetName = "Single")]
         [Parameter(Mandatory = $true, ParameterSetName = "Recursive")]
@@ -1210,7 +1213,11 @@ function Restore-AzFileAclInheritance {
 
         [Parameter(Mandatory = $false, ParameterSetName = "Single")]
         [Parameter(Mandatory = $false, ParameterSetName = "Recursive")]
-        [switch]$Silent = $false
+        [switch]$Silent = $false,
+
+        [Parameter(Mandatory = $false, ParameterSetName = "Single")]
+        [Parameter(Mandatory = $false, ParameterSetName = "Recursive")]
+        [switch]$PassThru = $false
     )
 
     if ($PSCmdlet.ParameterSetName -eq "Recursive") {
@@ -1237,6 +1244,7 @@ function Restore-AzFileAclInheritance {
             -ParentAcl $parentAcl `
             -ChildPath $ChildPath `
             -Reset:$Reset `
+            -PassThru:$PassThru `
             -WhatIf:$WhatIfPreference
     }
     elseif ($PSCmdlet.ParameterSetName -eq "Recursive" -and $Recursive) {  
@@ -1287,7 +1295,10 @@ function Restore-AzFileAclInheritanceSingle {
         [string]$ChildPath,
 
         [Parameter(Mandatory = $true)]
-        [switch]$Reset
+        [switch]$Reset,
+
+        [Parameter(Mandatory = $true)]
+        [switch]$PassThru
     )
 
     # Presupposition: the parent path exists and is a directory. It is the responsibility of the caller to check this.
@@ -1335,10 +1346,19 @@ function Restore-AzFileAclInheritanceSingle {
 
     # Update ACL according to inheritance
     if ($PSCmdlet.ShouldProcess("File share '$($FileShareName)'", "Apply inheritance from '$ParentPath' to '$ChildPath'")) {
-        Set-AzFileAcl -File $childFile -Acl $newChildAcl -AclFormat $childAclFormat -WhatIf:$WhatIfPreference
-    }
+        $aclKey = Set-AzFileAcl -File $childFile -Acl $newChildAcl -AclFormat $childAclFormat -WhatIf:$WhatIfPreference
 
-    return $newChildAcl
+        if ($PassThru) {
+            # Return the new ACL in the requested format
+            return @{
+                Path = $ChildPath
+                IsDirectory = $childIsFolder
+                NewPermission = $newChildAcl
+                PermissionKey = $aclKey
+                Success = $true
+            }
+        }
+    }
 }
 
 function Restore-AzFileAclInheritanceRecursive {
