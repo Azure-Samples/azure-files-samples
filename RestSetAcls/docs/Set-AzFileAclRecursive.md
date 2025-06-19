@@ -15,7 +15,7 @@ schema: 2.0.0
 ```
 Set-AzFileAclRecursive [-Context] <IStorageContext> [-FileShareName] <String> [-FilePath] <String>
  [-SddlPermission] <String> [[-Parallel] <Boolean>] [[-ThrottleLimit] <Int32>] [-SkipFiles] [-SkipDirectories]
- [-WriteToPipeline] [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
+ [-PassThru] [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
 ```
 
 ## DESCRIPTION
@@ -183,8 +183,8 @@ Accept pipeline input: False
 Accept wildcard characters: False
 ```
 
-### -WriteToPipeline
-{{ Fill WriteToPipeline Description }}
+### -PassThru
+{{ Fill PassThru Description }}
 
 ```yaml
 Type: SwitchParameter

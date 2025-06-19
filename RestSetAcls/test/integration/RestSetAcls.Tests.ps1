@@ -573,7 +573,7 @@ Describe "Set-AzFileAclRecursive" {
         Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath "$directoryName/testfile.txt" -OutputFormat Sddl | Should -Not -Be $sddl
         Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath "$directoryName/testfile2.txt" -OutputFormat Sddl | Should -Not -Be $sddl
 
-        $results = Set-AzFileAclRecursive -Context $global:context -FileShareName $global:fileShareName -FilePath $directoryName -SddlPermission $sddl -WriteToPipeline
+        $results = Set-AzFileAclRecursive -Context $global:context -FileShareName $global:fileShareName -FilePath $directoryName -SddlPermission $sddl -PassThru
 
         $results.Count | Should -Be 3
         $results[0].Success | Should -Be $true
