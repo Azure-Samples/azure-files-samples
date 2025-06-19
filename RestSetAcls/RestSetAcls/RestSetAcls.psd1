@@ -12,7 +12,7 @@
     RootModule        = 'RestSetAcls.psm1'
 
     # Version number of this module.
-    ModuleVersion     = '0.2.5'
+    ModuleVersion     = '0.2.6'
 
     # Supported PSEditions
     # CompatiblePSEditions = @()

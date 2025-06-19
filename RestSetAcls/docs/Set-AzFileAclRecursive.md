@@ -15,7 +15,7 @@ schema: 2.0.0
 ```
 Set-AzFileAclRecursive [-Context] <IStorageContext> [-FileShareName] <String> [-FilePath] <String>
  [-SddlPermission] <String> [[-Parallel] <Boolean>] [[-ThrottleLimit] <Int32>] [-SkipFiles] [-SkipDirectories]
- [-WriteToPipeline] [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
+ [-Silent] [-PassThru] [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
 ```
 
 ## DESCRIPTION
@@ -107,6 +107,21 @@ Accept pipeline input: False
 Accept wildcard characters: False
 ```
 
+### -PassThru
+{{ Fill PassThru Description }}
+
+```yaml
+Type: SwitchParameter
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
 ### -SddlPermission
 {{ Fill SddlPermission Description }}
 
@@ -117,6 +132,21 @@ Aliases:
 
 Required: True
 Position: 3
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -Silent
+{{ Fill Silent Description }}
+
+```yaml
+Type: SwitchParameter
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
 Default value: None
 Accept pipeline input: False
 Accept wildcard characters: False
@@ -175,21 +205,6 @@ The cmdlet is not run.
 Type: SwitchParameter
 Parameter Sets: (All)
 Aliases: wi
-
-Required: False
-Position: Named
-Default value: None
-Accept pipeline input: False
-Accept wildcard characters: False
-```
-
-### -WriteToPipeline
-{{ Fill WriteToPipeline Description }}
-
-```yaml
-Type: SwitchParameter
-Parameter Sets: (All)
-Aliases:
 
 Required: False
 Position: Named

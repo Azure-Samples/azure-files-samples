@@ -15,17 +15,18 @@ Applies ACL inheritance from parent folders to child files or folders.
 ### Recursive
 ```
 Restore-AzFileAclInheritance -Context <IStorageContext> -FileShareName <String> [-Recursive] -Path <String>
- [-Reset] [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
+ [-Reset] [-Silent] [-PassThru] [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
 ```
 
 ### Single
 ```
 Restore-AzFileAclInheritance -Context <IStorageContext> -FileShareName <String> -ParentPath <String>
- -ChildPath <String> [-Reset] [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
+ -ChildPath <String> [-Reset] [-Silent] [-PassThru] [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm]
+ [<CommonParameters>]
 ```
 
 ## DESCRIPTION
-The `Restore-AzFileAclInheritance` cmdlet applies the inheritance of ACLs from a parent directory to a child file
+The \`Restore-AzFileAclInheritance\` cmdlet applies the inheritance of ACLs from a parent directory to a child file
 or directory, or recursively to all items within a directory.
 This is useful to propagate inheritable permissions
 from a parent directory to its children, according to NTFS inheritance rules.
@@ -148,6 +149,38 @@ Used in both
 single and recursive modes.
 This option is useful when you want child items to only have permissions obtained
 through inheritance, and want to discard any permissions that they currently hold.
+
+```yaml
+Type: SwitchParameter
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: False
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -Silent
+If specified, the commandlet will not output any progress or status messages.
+This is useful for scripting
+scenarios where you want to suppress output.
+
+```yaml
+Type: SwitchParameter
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: False
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -PassThru
+If specified, the cmdlet will output the objects processed, including their paths and success status.
 
 ```yaml
 Type: SwitchParameter
