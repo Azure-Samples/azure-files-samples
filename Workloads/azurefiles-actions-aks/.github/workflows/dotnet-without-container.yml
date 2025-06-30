@@ -1,0 +1,40 @@
+name: .NET Build without container
+run-name: Run AKS .NET Build workflow on ${{ inputs.arc_runner_set_name}}
+on:
+  workflow_dispatch: {
+    inputs: {
+      arc_runner_set_name: {
+        description: 'The name of the self-hosted Arc Runner Set',
+        required: true,
+        default: 'arc-runner-set'
+      }
+    }
+  }
+
+jobs:
+  build-without-container:
+    runs-on: ${{ inputs.arc_runner_set_name}}
+    env:
+      DOTNET_INSTALL_DIR: "./.dotnet"
+    steps:
+        - name: Checkout code
+          uses: actions/checkout@v4
+
+        - name: Install cURL Headers
+          run: |
+            sudo apt-get update
+            sudo apt-get -y install curl   
+
+        - name: Setup .NET
+          uses: actions/setup-dotnet@v4
+          with:
+            dotnet-version: '8.0.x'
+
+        - name: Restore .NET app
+          run: dotnet restore
+
+        - name: Build .NET app
+          run: dotnet build --configuration Release --no-restore
+          
+        - name: Publish .NET app
+          run: dotnet publish --configuration Release --no-restore --output ~/publish  

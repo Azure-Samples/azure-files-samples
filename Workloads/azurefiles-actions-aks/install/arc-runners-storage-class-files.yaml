@@ -1,0 +1,41 @@
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: github-azurefile
+provisioner: file.csi.azure.com
+reclaimPolicy: Delete
+volumeBindingMode: Immediate
+allowVolumeExpansion: true
+mountOptions:
+  - dir_mode=0777
+  - file_mode=0777
+  - uid=1001
+  - gid=123
+  - mfsymlinks
+  - cache=strict # https://linux.die.net/man/8/mount.cifs
+  - nosharesock
+  - nobrl # disable sending byte range lock requests to the server and for applications which have challenges with posix locks
+  - actimeo=30  
+parameters:
+  skuName: Standard_LRS
+---
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: github-azurefile-premium
+provisioner: file.csi.azure.com
+reclaimPolicy: Delete
+volumeBindingMode: Immediate
+allowVolumeExpansion: true
+mountOptions:
+  - dir_mode=0777
+  - file_mode=0777
+  - uid=1001
+  - gid=123
+  - mfsymlinks
+  - cache=strict # https://linux.die.net/man/8/mount.cifs
+  - nosharesock
+  - nobrl # disable sending byte range lock requests to the server and for applications which have challenges with posix locks
+  - actimeo=30  
+parameters:
+  skuName: Premium_LRS

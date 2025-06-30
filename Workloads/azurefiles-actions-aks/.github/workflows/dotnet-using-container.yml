@@ -1,0 +1,32 @@
+name: .NET Build using containers
+run-name: Run AKS .NET Build - Containers workflow on ${{ inputs.arc_runner_set_name}}
+on:
+  workflow_dispatch: {
+    inputs: {
+      arc_runner_set_name: {
+        description: 'The name of the Arc Runner Set',
+        required: true,
+        default: 'arc-runner-set'
+      }
+    }
+  }
+env:
+  NUGET_PACKAGES: "/.nuget/packages"
+jobs:
+  build-using-container:
+    runs-on: ${{ inputs.arc_runner_set_name}}
+    container:
+      image: mcr.microsoft.com/dotnet/sdk:8.0
+
+    steps:
+        - name: Checkout code
+          uses: actions/checkout@v4
+
+        - name: Restore .NET app
+          run: dotnet restore
+
+        - name: Build .NET app
+          run: dotnet build --configuration Release --no-restore
+          
+        - name: Publish .NET app
+          run: dotnet publish --configuration Release --no-restore --output ./publish    

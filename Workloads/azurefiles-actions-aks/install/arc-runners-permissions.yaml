@@ -1,0 +1,36 @@
+## This file is a reference how Role and RoleBinding are created by the runner service account
+## Do not apply this file unless you know what you are doing
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: arc-runners
+  name: runner-kube-mode-role
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list", "create", "delete"]
+- apiGroups: [""]
+  resources: ["pods/exec"]
+  verbs: ["get", "create"]
+- apiGroups: [""]
+  resources: ["pods/log"]
+  verbs: ["get", "list", "watch",]
+- apiGroups: ["batch"]
+  resources: ["jobs"]
+  verbs: ["get", "list", "create", "delete"]
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get", "list", "create", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: runner-kube-mode-role-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: runner-role
+subjects:
+  - kind: ServiceAccount
+    name: arc-runner-set-gha-rs-kube-mode # try use this service accont if kube-mode account fails arc-runner-set-gha-rs-no-permission
+    namespace: arc-runners

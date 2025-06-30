@@ -1,0 +1,47 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  annotations:
+    pv.kubernetes.io/provisioned-by: file.csi.azure.com
+  name: azurefile
+#  namespace: arc-runners
+spec:
+  capacity:
+    storage: 100Gi
+  accessModes:
+    - ReadWriteMany
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: azurefile-csi-premium
+  csi:
+    driver: file.csi.azure.com
+    volumeHandle: buildartifactscaching  # make sure this volumeid is unique for every identical share in the cluster
+    volumeAttributes:
+      resourceGroup: metadata-agroves  # optional, only set this when storage account is not in the same resource group as node
+      shareName: metadatacaching
+    nodeStageSecretRef:
+      name: azure-storage-secret
+      namespace: arc-runners
+  mountOptions:
+    - dir_mode=0777
+    - file_mode=0777
+    - uid=1001
+    - gid=123
+    - mfsymlinks
+    - cache=strict
+    - nosharesock
+    - nobrl # disable sending byte range lock requests to the server and for applications which have challenges with posix locks
+    - actimeo=30
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: azurefile
+#  namespace: arc-runners
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: azurefile-csi-premium
+  volumeName: azurefile
+  resources:
+    requests:
+      storage: 100Gi    
