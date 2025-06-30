@@ -39,16 +39,16 @@ and these are optional, please keep these default values if possible :
 # please fill these env variables with your details
 AKS_AND_STORAGE_ACCOUNT_RG="aks-files-actions"
 AKS_CLUSTER_NAME="aks-actions"
-STORAGE_ACCOUNT_NAME="metadatacaching11"
+STORAGE_ACCOUNT_NAME="<Specify your unique storage account name here>"
 AKS_STORAGE_ACCOUNT_LOCATION="westus3"
 GITHUB_CONFIG_URL="https://github.com/jorgearteiro/azurefiles-actions-aks"
 
-# optional, changes maybe require aditional chnages on ./install/*.yaml files
+# optional, changes maybe require aditional changes on ./install/*.yaml files
 NAMESPACE_ARC_CONTROLLER="arc-systems"
 ARC_CONTROLLER_NAME="arc-controller"
 NAMESPACE_ARC_RUNNERS="arc-runners"
 ARC_RUNNER_SCALESET_NAME="arc-runner-set"
-ARC_RUNNER_GITHUB_SECRET_NAME="arc-runner-github-secret"
+ARC_RUNNER_GITHUB_SECRET_NAME="<specify your arc runner github secret>"
 ```
 
 ## Create AKS - Azure Kubernetes Services Cluster
@@ -67,7 +67,7 @@ az aks create -g "${AKS_AND_STORAGE_ACCOUNT_RG}" -n "${AKS_CLUSTER_NAME}" \
        --node-count 1 \
        --enable-cluster-autoscaler \
        --min-count 1 \
-       --max-count 3 \       
+       --max-count 3 \
        --node-vm-size standard_d4s_v5 \
        --max-pods=100 \
        --network-plugin azure \
@@ -75,7 +75,7 @@ az aks create -g "${AKS_AND_STORAGE_ACCOUNT_RG}" -n "${AKS_CLUSTER_NAME}" \
        --generate-ssh-keys
 ```
 
-To manage a Kubernetes cluster, use the Kubernetes command-line client, [kubectl][kubectl]. `kubectl` is already installed if you use Azure Cloud Shell. To install `kubectl` locally, use the `az aks install-cli` command.
+To manage a Kubernetes cluster, use the Kubernetes command-line client, [kubectl](https://kubernetes.io/docs/tasks/tools/install-kubectl-windows/#install-kubectl-binary-with-curl-on-windows). `kubectl` is already installed if you use Azure Cloud Shell. To install `kubectl` locally, use the `az aks install-cli` command.
 
 1. Configure `kubectl` to connect to your Kubernetes cluster using the `az aks get-credentials` command. This command downloads credentials and configures the Kubernetes CLI to use them.
 
@@ -83,7 +83,7 @@ To manage a Kubernetes cluster, use the Kubernetes command-line client, [kubectl
     az aks get-credentials -g "${AKS_AND_STORAGE_ACCOUNT_RG}" -n "${AKS_CLUSTER_NAME}"
     ```
 
-1. Verify the connection to your cluster using the `kubectl get` command. This command returns a list of the cluster nodes.
+2. Verify the connection to your cluster using the `kubectl get` command. This command returns a list of the cluster nodes.
 
     ```bash
     kubectl get nodes
@@ -137,7 +137,7 @@ kubectl create namespace "${NAMESPACE_ARC_RUNNERS}"
 kubectl create secret generic azure-storage-secret \
    --namespace "${NAMESPACE_ARC_RUNNERS}" \
    --from-literal=azurestorageaccountname=${STORAGE_ACCOUNT_NAME} \
-   --from-literal=azurestorageaccountkey=${STORAGE_KEY} 
+   --from-literal=azurestorageaccountkey=${STORAGE_KEY}
 ```
 
 ### GitHub App Secret
@@ -158,43 +158,16 @@ kubectl create secret generic ${ARC_RUNNER_GITHUB_SECRET_NAME} \
    --namespace=${NAMESPACE_ARC_RUNNERS} \
    --from-literal=github_app_id=${GITHUB_APP_ID} \
    --from-literal=github_app_installation_id=${GITHUB_APP_INSTALLATION_ID} \
-   --from-literal=github_app_private_key='-----BEGIN RSA PRIVATE KEY-----
-MIIEpAIBAAKCAQEA86Cfc3qBK0EiLtFMGVaTGydZc9NuBSir0I1G6iqRXV5bp40N
-1ya3v/PMWWnriq8uX2ThZodBBTbD9A8CA/GTuYdUVhWGluACMjJHiQXBB77okwWT
-cz7oUffPYGbwW9koA8h7yU2HR3yIvb82ZdNPrOAg/GPJLILZ4WvoWXq2DrmPb4+K
-pN3NxBN6DeuUE2NsdfCxXybRsbQr3sEuvpaffHkUIkjBwnMzFJjQV8H4QbNt+ut4
-eV1l368TxaPZMbx0YTuoBxCMhFj2NRLUNObDixK/xZFSpgvxT10wR17ak8WZNnLx
-cz7oUffPYGbwW9koA8h7yU2HR3yIvb82ZdNPrOAg/GPJLILZ4WvoWXq2DrmPb4+K
-pN3NxBN6DeuUE2NsdfCxXybRsbQr3sEuvpaffHkUIkjBwnMzFJjQV8H4QbNt+ut4
-eV1l368TxaPZMbx0YTuoBxCMhFj2NRLUNObDixK/xZFSpgvxT10wR17ak8WZNnLx
-cz7oUffPYGbwW9koA8h7yU2HR3yIvb82ZdNPrOAg/GPJLILZ4WvoWXq2DrmPb4+K
-pN3NxBN6DeuUE2NsdfCxXybRsbQr3sEuvpaffHkUIkjBwnMzFJjQV8H4QbNt+ut4
-eV1l368TxaPZMbx0YTuoBxCMhFj2NRLUNObDixK/xZFSpgvxT10wR17ak8WZNnLx
-cz7oUffPYGbwW9koA8h7yU2HR3yIvb82ZdNPrOAg/GPJLILZ4WvoWXq2DrmPb4+K
-pN3NxBN6DeuUE2NsdfCxXybRsbQr3sEuvpaffHkUIkjBwnMzFJjQV8H4QbNt+ut4
-eV1l368TxaPZMbx0YTuoBxCMhFj2NRLUNObDixK/xZFSpgvxT10wR17ak8WZNnLx
-cz7oUffPYGbwW9koA8h7yU2HR3yIvb82ZdNPrOAg/GPJLILZ4WvoWXq2DrmPb4+K
-pN3NxBN6DeuUE2NsdfCxXybRsbQr3sEuvpaffHkUIkjBwnMzFJjQV8H4QbNt+ut4
-eV1l368TxaPZMbx0YTuoBxCMhFj2NRLUNObDixK/xZFSpgvxT10wR17ak8WZNnLx
-cz7oUffPYGbwW9koA8h7yU2HR3yIvb82ZdNPrOAg/GPJLILZ4WvoWXq2DrmPb4+K
-pN3NxBN6DeuUE2NsdfCxXybRsbQr3sEuvpaffHkUIkjBwnMzFJjQV8H4QbNt+ut4
-eV1l368TxaPZMbx0YTuoBxCMhFj2NRLUNObDixK/xZFSpgvxT10wR17ak8WZNnLx
-cz7oUffPYGbwW9koA8h7yU2HR3yIvb82ZdNPrOAg/GPJLILZ4WvoWXq2DrmPb4+K
-pN3NxBN6DeuUE2NsdfCxXybRsbQr3sEuvpaffHkUIkjBwnMzFJjQV8H4QbNt+ut4
-eV1l368TxaPZMbx0YTuoBxCMhFj2NRLUNObDixK/xZFSpgvxT10wR17ak8WZNnLx
-pN3NxBN6DeuUE2NsdfCxXybRsbQr3sEuvpaffHkUIkjBwnMzFJjQV8H4QbNt+ut4
-s9uqYckJaMLIY6J2lRmodK9ybknmIJt/ji5R1ugBqF9hlW429tSnJg==
------END RSA PRIVATE KEY-----
-'
+   --from-literal=github_app_private_key='<Insert your RSA key here>'
 ```
 
 ## Azure File share configurations
 
-Azure Files fileshare can be mounted in multiple pods at same time. We can use this capability called AcccessMode: ReadWriteMany to mount the same fileshare in all pods created by the Arc kubernetes replicateset.
+Azure Files fileshare can be mounted in multiple pods at same time. We can use this capability called AccessMode: ReadWriteMany to mount the same fileshare in all pods created by the Arc kubernetes replicateset.
 
 We are going to use Azure Files share in 2 different ways:
 
-1. As a persistent SMB File share to cache Nuget packages used by our .NET example Application. The [`arc-runners-set-pv-pvc.yaml`](./install/arc-runners-set-pv.yaml) file will create the required PV and PVC for this File Share. We recomend Azure File Premium for this first option.
+1. As a persistent SMB File share to cache Nuget packages used by our .NET example Application. The [`arc-runners-set-pv-pvc.yaml`](./install/arc-runners-set-pv-pvc.yaml) file will create the required PV and PVC for this File Share. We recommend Azure File Premium for this first option.
 Please customize `volumeAttributes` and any `namespaces` parameter on both PV - Persistent Volume and PVC - Persistent volume claim manifests as showed here:
 
     ```yaml
@@ -203,7 +176,7 @@ Please customize `volumeAttributes` and any `namespaces` parameter on both PV - 
       shareName: metadatacaching
     nodeStageSecretRef:
       name: azure-storage-secret
-      namespace: arc-runners      
+      namespace: arc-runners
     ```
 
     ```bash
@@ -211,7 +184,7 @@ Please customize `volumeAttributes` and any `namespaces` parameter on both PV - 
     kubectl apply -f ./install/arc-runners-set-pv-pvc.yaml --namespace "${NAMESPACE_ARC_RUNNERS}" --wait
     ```
 
-2. As Ephemeral volume for the GitHub Runners _work folder. We are also going to create 2 storage classes - Azure Files Standard called `github-azurefile` and Azure File Premium called `github-azurefile-premium`. These classes will allow volumes to be created and deleted on demand. When a GitHub Jobs runs, a new runner pod will be created on Kubernetes and a new Azure File share will be created and mounted. The volume will live only during the job run. Standard class allows any volume size and Premium allows a minimum of 100GiB volume. Only one will be used and the decision is yours. Premium will give you a better performance.
+2. As Ephemeral volume for the GitHub Runners \_work folder. We are also going to create 2 storage classes - Azure Files Standard called `github-azurefile` and Azure File Premium called `github-azurefile-premium`. These classes will allow volumes to be created and deleted on demand. When a GitHub Jobs runs, a new runner pod will be created on Kubernetes and a new Azure File share will be created and mounted. The volume will live only during the job run. Standard class allows any volume size and Premium allows a minimum of 100GiB volume. Only one will be used and the decision is yours. Premium will give you a better performance.
 The [`arc-runners-storage-class-files.yaml`](./install/arc-runners-storage-class-files.yaml) file can be customized, but not required.
 
     ```bash
@@ -222,11 +195,11 @@ The [`arc-runners-storage-class-files.yaml`](./install/arc-runners-storage-class
 
 Install ARC Runner Scale Set using the official GitHub Helm chart and manually mount your Azure Files share on Kubernetes
 
-This is a code snippet from the [`arc-runners-set-values.yaml`](./install/arc-runners-set-values.yaml) file on the Install folder that can be customized before installing the Runner set Helm Chart. 
+This is a code snippet from the [`arc-runners-set-values.yaml`](./install/arc-runners-set-values.yaml) file on the Install folder that can be customized before installing the Runner set Helm Chart.
 
-We are using a customized version the `Kubernetes` containerMode, to include Azure File share volume mountings to Nuget packages and to ephemeral _work folder volume.
+We are using a customized version the `Kubernetes` containerMode, to include Azure File share volume mountings to Nuget packages and to ephemeral \_work folder volume.
 
-The only not mandantory changes are:
+The only not mandatory changes are:
 
 * `storageClassName` choose between "github-azurefile-premium" and "github-azurefile"
 * `storage` choose the size of the storage. 100GiB minimum to premium.
@@ -261,7 +234,7 @@ template:
       - name: "container-podspec-volume"
         mountPath: "/home/runner/container-config"
       - name: azurefile
-        mountPath: /home/runner/.nuget/             
+        mountPath: /home/runner/.nuget/
   volumes:
     - name: "container-podspec-volume"
       configMap:
@@ -274,12 +247,10 @@ template:
 For compatibility with GitHub Workflow container feature that allows you to run containers inside your pipeline, we are mounting a `container-podspec-volume` with the pod spec for the workflow pod created by ARC when running workflows with the container feature. This pod spec is mounted from a config map created on `arc-runners-set-container-pod-spec.yaml` file on the install folder. No changes are required.
 
 ```bash
-kubectl apply -f ./install/arc-runners-set-container-pod-spec.yaml
+kubectl apply -f ./install/arc-runners-set-container-pod-spec.yaml "${NAMESPACE_ARC_RUNNERS}"
 ```
 
 ### ARC Runner Scaleset Helm Chart Parameters
-
-kubectl apply -f ./install/arc-runners-set-container-pod-spec.yaml
 
 The Arc Runner Scaleset Helm Chart provides a few parameters, these are the most important ones to install a Scaleset with Azure File share volume mount on AKS - Azure Kubernetes Services.
 
@@ -313,7 +284,7 @@ Please remove the `--version "0.9.3"` parameter to install the latest version. T
 
 ### Upgrading a Runner scale set installation
 
-If you want to upgrade any configuration on the Arc Runner Scaleset, re-run the last helm install command onyl replacing the firt line to "helm upgrade --install".
+If you want to upgrade any configuration on the Arc Runner Scaleset, re-run the last helm install command only replacing the first line to "helm upgrade --install".
 
 ```bash
 helm upgrade --install "${ARC_RUNNER_SCALESET_NAME}" \
@@ -336,10 +307,10 @@ Please remove the `--version "0.9.3"` parameter to install the latest version. T
 I have created 3 workflows on this repository, under the default GitHub workflow folder `.github/workflows` for you to test the self-hosted ARC runners created on AKS.
 
 * `.NET Build using containers` install .NET SDK and restore/build/publish application on the runner itself. File name is `dotnet-using-container.yml`
-* `.NET Build without containers` use workflow container feature to run a .NET SDK container and build inside the application inside the container. NUGET Caching is mounted by default on this container. File name is `dotnet-wihout-container.yml`
+* `.NET Build without containers` use workflow container feature to run a .NET SDK container and build inside the application inside the container. NUGET Caching is mounted by default on this container. File name is `dotnet-without-container.yml`
 * `Container and Service Test` testing workflows also using containers feature to create a ubuntu container and a redis service. Both containers run on the same AKS Pod. NUGET Caching is also mounted by default on this container. File name is `container-service-test.yml`
 
-All 3 workflows have an input parameter for the Arc runner name to be used on the `runs-on:` field of your workflow. This is the `ARC_RUNNER_SCALESET_NAME="arc-runner-set"` variable defined before, called `arc-runner-set`. To facilitate testing, we are using `workflow_dispatch:` option on the 3 workflows to only run those workflows when it is requested manually. On GitHub Actions tab of your repository, select one of the workflows and click on `Run worflow` button.
+All 3 workflows have an input parameter for the Arc runner name to be used on the `runs-on:` field of your workflow. This is the `ARC_RUNNER_SCALESET_NAME="arc-runner-set"` variable defined before, called `arc-runner-set`. To facilitate testing, we are using `workflow_dispatch:` option on the 3 workflows to only run those workflows when it is requested manually. On GitHub Actions tab of your repository, select one of the workflows and click on `Run workflow` button.
 
 Once the workflow is running, it will request a runner to ARC running on AKS cluster. Once this runner, a pod on Kubernetes, is allocated for the job, the workflow will run in there to completion. As we are using the Ephemeral runner approach, the pod running your workflow will be destroyed at the end and a new one will be created for your next workflow run.
 
