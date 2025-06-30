@@ -3170,13 +3170,9 @@ function Test-Port445Connectivity
 
         if ($result.TcpTestSucceeded -eq $False)
         {
-            $message = "Unable to reach the storage account file endpoint." `
-                + "`n`tTo debug connectivity problems, please refer to the troubleshooting tool for Azure" `
-                + " Files mounting errors on Windows, " `
-                + " `n`t'AzFileDiagnostics.ps1'($($PSStyle.Foreground.BrightCyan)https://gallery.technet.microsoft.com/Troubleshooting-tool-for-a9fa1fe5$($PSStyle.Reset))." `
-                + " `n`tFor possible solutions please refer to" `
-                + " '$($PSStyle.Foreground.BrightCyan)https://aka.ms/azfiles/entra-port445$($PSStyle.Reset)'"
-            Write-Error -Message $message -ErrorAction Stop
+            $errMsg = "Unable to reach the storage account file endpoint." `
+            + "`n`tFor possible solutions please refer to '$($PSStyle.Foreground.BrightCyan)https://aka.ms/azfiles/entra-port445$($PSStyle.Reset)'"
+            Write-TestingFailed -Message $errMsg -ErrorAction Stop
         }
     }
 }
@@ -3670,8 +3666,8 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 $checks["CheckPort445Connectivity"].Result = "Passed"
                 Write-TestingPassed
             } catch {
-                Write-TestingFailed -Message $_
-                $checks["CheckPort445Connectivity"].Result = "Failed"
+                Write-TestingFailed -Message $_ -IsUnexpected $true
+                $checks["CheckPort445Connectivity"].Result = "Unexpected"
                 $checks["CheckPort445Connectivity"].Issue = $_
             }
         }
@@ -3699,8 +3695,8 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 }
                 
             } catch {
-                Write-TestingFailed -Message $_
-                $checks["CheckAADConnectivity"].Result = "Failed"
+                Write-TestingFailed -Message $_ -IsUnexpected $true
+                $checks["CheckAADConnectivity"].Result = "Unexpected"
                 $checks["CheckAADConnectivity"].Issue = $_
             }
         }
@@ -3766,8 +3762,8 @@ function Debug-AzStorageAccountEntraKerbAuth {
                     $checks["CheckEntraObject"].Result = "Passed"
                 }
             } catch {
-                Write-TestingFailed -Message $_
-                $checks["CheckEntraObject"].Result = "Failed"
+                Write-TestingFailed -Message $_ -IsUnexpected $true
+                $checks["CheckEntraObject"].Result = "Unexpected"
                 $checks["CheckEntraObject"].Issue = $_
             }
         }
@@ -3791,8 +3787,8 @@ function Debug-AzStorageAccountEntraKerbAuth {
                     $checks["CheckRegKey"].Issue = "The CloudKerberosTicketRetrievalEnabled need to be enabled to get kerberos ticket"
                 }               
             } catch {
-                Write-TestingFailed -Message $_
-                $checks["CheckRegKey"].Result = "Failed"
+                Write-TestingFailed -Message $_ -IsUnexpected $true
+                $checks["CheckRegKey"].Result = "Unexpected"
                 $checks["CheckRegKey"].Issue = $_
             }
         }
@@ -3843,8 +3839,8 @@ function Debug-AzStorageAccountEntraKerbAuth {
                     }
                 }
             } catch {
-                Write-TestingFailed -Message $_
-                $checks["CheckKerbRealmMapping"].Result = "Failed"
+                Write-TestingFailed -Message $_ -IsUnexpected $true
+                $checks["CheckKerbRealmMapping"].Result = "Unexpected"
                 $checks["CheckKerbRealmMapping"].Issue = $_
             }
         }
@@ -3918,9 +3914,9 @@ function Debug-AzStorageAccountEntraKerbAuth {
         #
         if (!$filterIsPresent -or $Filter -match "CheckWinHttpAutoProxySvc")
         {  
-           Write-Host "Checking WinHttpAutoProxySvc"
-           try 
-           {
+            Write-Host "Checking WinHttpAutoProxySvc"
+            try 
+            {
                 $checksExecuted += 1;
                 $service = Get-Service WinHttpAutoProxySvc
                 if (($service -eq $null) -or ($service.Status -ne "Running"))
@@ -3936,8 +3932,8 @@ function Debug-AzStorageAccountEntraKerbAuth {
             }
             catch 
             {
-                Write-TestingFailed -Message $_
-                $checks["CheckWinHttpAutoProxySvc"].Result = "Failed"
+                Write-TestingFailed -Message $_ -IsUnexpected $true
+                $checks["CheckWinHttpAutoProxySvc"].Result = "Unexpected"
                 $checks["CheckWinHttpAutoProxySvc"].Issue = $_ 
             }
         }
@@ -3946,9 +3942,9 @@ function Debug-AzStorageAccountEntraKerbAuth {
         #
         if (!$filterIsPresent -or $Filter -match "CheckIpHlpScv")
         {
-           Write-Host "Checking Iphplpsvc Service"
-           try
-           {
+            Write-Host "Checking Iphplpsvc Service"
+            try
+            {
                 $checksExecuted += 1;
                 $services = Get-Service iphlpsvc
                 if (($services -eq $null) -or ($services.Status -ne "Running"))
@@ -3965,8 +3961,8 @@ function Debug-AzStorageAccountEntraKerbAuth {
             }
             catch 
             {
-                Write-TestingFailed -Message $_
-                $checks["CheckIpHlpScv"].Result = "Failed"
+                Write-TestingFailed -Message $_ -IsUnexpected $true
+                $checks["CheckIpHlpScv"].Result = "Unexpected"
                 $checks["CheckIpHlpScv"].Issue = $_
             }
 
@@ -3976,9 +3972,9 @@ function Debug-AzStorageAccountEntraKerbAuth {
         #
         if (!$filterIsPresent -or $Filter -match "CheckFiddlerProxy")
         {
-           Write-Host "Checking Fiddler Proxy"
-           try
-           {
+            Write-Host "Checking Fiddler Proxy"
+            try
+            {
                 $checksExecuted += 1;
                 $ProxysubFolder = Get-ChildItem `
                     -Path Registry::HKLM\SYSTEM\CurrentControlSet\Services\iphlpsvc\Parameters\ProxyMgr `
@@ -4013,8 +4009,8 @@ function Debug-AzStorageAccountEntraKerbAuth {
              }
              catch 
              {
-                Write-TestingFailed -Message $_
-                $checks["CheckFiddlerProxy"].Result = "Failed"
+                Write-TestingFailed -Message $_ -IsUnexpected $true
+                $checks["CheckFiddlerProxy"].Result = "Unexpected"
                 $checks["CheckFiddlerProxy"].Issue = $_
              }
         }
@@ -4050,8 +4046,8 @@ function Debug-AzStorageAccountEntraKerbAuth {
             }
             catch 
             {
-                Write-TestingFailed -Message $_
-                $checks["CheckEntraJoinType"].Result = "Failed"
+                Write-TestingFailed -Message $_ -IsUnexpected $true
+                $checks["CheckEntraJoinType"].Result = "Unexpected"
                 $checks["CheckEntraJoinType"].Issue = $_
             }
         }
@@ -4197,9 +4193,9 @@ function Debug-RBACCheck {
         } 
         catch
         {
-            $checkResult.Result = "Failed"
+            $checkResult.Result = "Unexpected"
             $checkResult.Issue = $_
-            Write-TestingFailed -Message $_
+            Write-TestingFailed -Message $_ -IsUnexpected $true
         }
     } 
 }
@@ -4304,8 +4300,8 @@ function Debug-EntraKerbAdminConsent {
                 $checkResult.Issue = "Admin Consent is not granted"
             }
         } catch {
-            Write-TestingFailed -Message $_
-            $checkResult.Result = "Failed"
+            Write-TestingFailed -Message $_ -IsUnexpected $true
+            $checkResult.Result = "Unexpected"
             $checkResult.Issue = $_
         }
     }
@@ -4398,127 +4394,120 @@ function Debug-AzStorageAccountADDSAuth {
         
         if (!$filterIsPresent -or $Filter -match "CheckPort445Connectivity")
         {
+            Write-Host "Checking Port 445"
             try {
                 $checksExecuted += 1;
-                Write-Verbose "CheckPort445Connectivity - START"
-
                 Test-Port445Connectivity -StorageAccountFileEndPoint $fileEndpoint -ErrorAction Stop
 
                 $checks["CheckPort445Connectivity"].Result = "Passed"
-                Write-Verbose "CheckPort445Connectivity - SUCCESS"
+                Write-TestingPassed
             } catch {
                 $checks["CheckPort445Connectivity"].Result = "Failed"
                 $checks["CheckPort445Connectivity"].Issue = $_
-                Write-Error "CheckPort445Connectivity - FAILED"
-                Write-Error $_
+                Write-TestingFailed -Message $_ 
             }
         }
 
         #
         # Domain-Joined Check
         #
-
         if (!$filterIsPresent -or $Filter -match "CheckDomainJoined")
         {
+            Write-Host "Checking Domain Join"
             try {
                 $checksExecuted += 1;
-                Write-Verbose "CheckDomainJoined - START"
-        
                 if (!(Get-IsDomainJoined))
                 {
                     $message = "Machine is not domain-joined." `
                         + " Being domain-joined to an AD DS domain is a prerequisite for mounting" `
-                        + " Azure file shares without having to explicitly provide user credentials at every mount.See https://docs.microsoft.com/en-us/azure/storage/files/storage-files-identity-auth-active-directory-enable#prerequisites.\n\n" `
+                        + " Azure file shares without having to explicitly provide user credentials at every mount. See '$($PSStyle.Foreground.BrightCyan)https://aka.ms/azfiles/adds-domainjoin$($PSStyle.Reset)'\n\n" `
                         + " Mounting through a machine that isn't domain-joined is also supported," `
-                        + " but you must (1) have unimpeded network connectivity to the domain controller, and (2) explicitly provide AD DS user credentials when mounting. See https://learn.microsoft.com/en-us/azure/storage/files/storage-files-identity-ad-ds-mount-file-share#mount-the-file-share-from-a-non-domain-joined-vm-or-a-vm-joined-to-a-different-ad-domain "
-                    Write-Error -Message $message -ErrorAction Stop
+                        + " but you must (1) have unimpeded network connectivity to the domain controller, and (2) explicitly provide AD DS user credentials when mounting. See '$($PSStyle.Foreground.BrightCyan)https://aka.ms/azfiles/adds-mountfileshare$($PSStyle.Reset)'"
+                    Write-TestingFailed -Message $message -ErrorAction Stop
                 }
-
                 $checks["CheckDomainJoined"].Result = "Passed"
-                Write-Verbose "CheckDomainJoined - SUCCESS"
+                Write-TestingPassed
             } catch {
                 $checks["CheckDomainJoined"].Result = "Failed"
                 $checks["CheckDomainJoined"].Issue = $_
-                Write-Error "CheckDomainJoined - FAILED"
-                Write-Error $_
+                Write-TestingFailed -Message $_ -IsUnexpected $true
             }
         }
-
+        #
+        # AD Object Check
+        #
         if (!$filterIsPresent -or $Filter -match "CheckADObject")
         {
+            Write-Host "Checking AD Object"
             try {
                 $checksExecuted += 1;
-                Write-Verbose "CheckADObject - START"
-
                 Debug-AzStorageAccountADObject -StorageAccountName $StorageAccountName `
                     -ResourceGroupName $ResourceGroupName -ErrorAction Stop
 
-                $checks["CheckADObject"].Result = "Passed"
-                Write-Verbose "CheckADObject - SUCCESS"
+                $checks["CheckADObject"].Result = "Passed"                Write-Verbose "CheckADObject - SUCCESS"
+                Write-TestingPassed
             } catch {
                 $checks["CheckADObject"].Result = "Failed"
                 $checks["CheckADObject"].Issue = $_
-                Write-Error "CheckADObject - FAILED"
-                Write-Error $_
+                Write-TestingFailed -Message $_ -IsUnexpected $true
             }
         }
-
+        #
+        # Kerberos Ticket Check
+        #
         if (!$filterIsPresent -or $Filter -match "CheckGetKerberosTicket")
         {
+            Write-Host "Checking Kerberos Ticket"
             try {
                 $checksExecuted += 1;
-                Write-Verbose "CheckGetKerberosTicket - START"
-
                 Get-AzStorageKerberosTicketStatus -StorageaccountName $StorageAccountName `
                     -ResourceGroupName $ResourceGroupName -ErrorAction Stop
 
                 $checks["CheckGetKerberosTicket"].Result = "Passed"
-                Write-Verbose "CheckGetKerberosTicket - SUCCESS"
+                Write-TestingPassed
             } catch {
                 $checks["CheckGetKerberosTicket"].Result = "Failed"
                 $checks["CheckGetKerberosTicket"].Issue = $_
-                Write-Error "CheckGetKerberosTicket - FAILED"
-                Write-Error $_
+                Write-TestingFailed -Message $_ -IsUnexpected $true
             }
         }
-
+        #
+        # Kerberos Ticket Encryption Check
+        #
         if (!$filterIsPresent -or $Filter -match "CheckKerberosTicketEncryption")
         {
+            Write-Host "Checking Kerberos Ticket Encryption"
             try {
                 $checksExecuted += 1;
-                Write-Verbose "CheckKerberosTicketEncryption - START"
-
                 Debug-KerberosTicketEncryption -StorageAccountName $StorageAccountName `
                     -ResourceGroupName $ResourceGroupName -ErrorAction Stop
 
                 $checks["CheckKerberosTicketEncryption"].Result = "Passed"
-                Write-Verbose "CheckKerberosTicketEncryption - SUCCESS"
+                Write-TestingPassed
             } catch {
                 $checks["CheckKerberosTicketEncryption"].Result = "Failed"
                 $checks["CheckKerberosTicketEncryption"].Issue = $_
-                Write-Error "CheckKerberosTicketEncryption - FAILED"
-                Write-Error $_
+                Write-TestingFailed -Message $_ -IsUnexpected $true
             }
         }
-
+        #
+        # Channel Encryption Check
+        #
         if (!$filterIsPresent -or $Filter -match "CheckChannelEncryption")
         {
+            Write-Host "Checking Channel Encryption"
             try {
                 $checksExecuted += 1;
-                Write-Verbose "CheckChannelEncryption - START"
-
                 Assert-IsElevatedSession
-
                 $cmdletNeeded = "Get-SmbServerConfiguration"
                 if(!(Get-Command $cmdletNeeded -ErrorAction SilentlyContinue))
                 {
-                    Write-Verbose -Message "Your system does not have or support the command needed for the check '$cmdletNeeded'." -ErrorAction Stop
+                    Write-TestingWarning -Message "Your system does not have or support the command needed for the check '$cmdletNeeded'." -ErrorAction Stop
                     $checks["CheckChannelEncryption"].Result = "Skipped"
                 }
-
                 if(!((Get-SmbServerConfiguration).PSobject.Properties.Name -contains "EncryptionCiphers"))
                 {
-                    Write-Verbose -Message "Your operating system does not support the property 'EncryptionCiphers' of the cmdlet 'Get-SmbServerConfiguration'. Please refer to 'https://docs.microsoft.com/en-us/powershell/module/smbshare/set-smbserverconfiguration?view=windowsserver2022-ps'"
+                    Write-TestingWarning -Message "Your operating system does not support the property 'EncryptionCiphers' of the cmdlet 'Get-SmbServerConfiguration'. Please refer to '$($PSStyle.Foreground.BrightCyan)https://aka.ms/azfiles/adds-encryptionciphers$($PSStyle.Reset)'"
                     $checks["CheckChannelEncryption"].Result = "Skipped"
                 }
                 else 
@@ -4527,60 +4516,60 @@ function Debug-AzStorageAccountADDSAuth {
                     -ResourceGroupName $ResourceGroupName -ErrorAction Stop
 
                     $checks["CheckChannelEncryption"].Result = "Passed"
-                    Write-Verbose "CheckChannelEncryption - SUCCESS"
+                    Write-TestingPassed
                 }
             } catch {
                 $checks["CheckChannelEncryption"].Result = "Failed"
                 $checks["CheckChannelEncryption"].Issue = $_
-                Write-Error "CheckChannelEncryption - FAILED"
-                Write-Error $_
+                Write-TestingFailed -Message $_ -IsUnexpected $true
             }
-        }
-
+        }   
+        #
+        # Domain Line of Sight Check
+        #
         if (!$filterIsPresent -or $Filter -match "CheckDomainLineOfSight")
         {
+            Write-Host "Checking Domain Line of Sight"
             try {
                 $checksExecuted += 1;
-                Write-Verbose "CheckDomainLineOfSight - START"
-
                 Debug-DomainLineOfSight -StorageAccountName $StorageAccountName `
                     -ResourceGroupName $ResourceGroupName -ErrorAction Stop
 
                 $checks["CheckDomainLineOfSight"].Result = "Passed"
-                Write-Verbose "CheckDomainLineOfSight - SUCCESS"
+                Write-TestingPassed
             } catch {
                 $checks["CheckDomainLineOfSight"].Result = "Failed"
                 $checks["CheckDomainLineOfSight"].Issue = $_
-                Write-Error "CheckDomainLineOfSight - FAILED"
-                Write-Error $_
+                Write-TestingFailed -Message $_ -IsUnexpected $true
             }
         }
-
+        #
+        # AD Object Password Check
+        #
         if (!$filterIsPresent -or $Filter -match "CheckADObjectPasswordIsCorrect")
         {
+            Write-Host "Checking Ad Object Password"
             try {
                 $checksExecuted += 1;
-                Write-Verbose "CheckADObjectPasswordIsCorrect - START"
-
                 Test-AzStorageAccountADObjectPasswordIsKerbKey -StorageAccountName $StorageAccountName `
                     -ResourceGroupName $ResourceGroupName -ErrorIfNoMatch -ErrorAction Stop
 
                 $checks["CheckADObjectPasswordIsCorrect"].Result = "Passed"
-                Write-Verbose "CheckADObjectPasswordIsCorrect - SUCCESS"
+                Write-TestingPassed
             } catch {
                 $checks["CheckADObjectPasswordIsCorrect"].Result = "Failed"
                 $checks["CheckADObjectPasswordIsCorrect"].Issue = $_
-                Write-Error "CheckADObjectPasswordIsCorrect - FAILED"
-                Write-Error $_
+                Write-TestingFailed -Mesage $_ -IsUnexpected $true
             }
         }
-
+        #
+        # SID for AAD User Check
+        #   
         if (!$filterIsPresent -or $Filter -match "CheckSidHasAadUser")
         {
+            Write-Host "Checking SID for AAD User"
             try {
                 $checksExecuted += 1;
-                Write-Verbose "CheckSidHasAadUser - START"
-
                 $currentUser = Get-OnPremAdUser -Identity $UserName -Domain $Domain -ErrorAction Stop
 
                 Write-Verbose "User $UserName in domain $Domain has SID = $($currentUser.Sid)"
@@ -4592,29 +4581,29 @@ function Debug-AzStorageAccountADDSAuth {
                         + " user $UserName' in domain '$Domain'. Please ensure the domain '$Domain' is" `
                         + " synced to Azure Active Directory using Azure AD Connect" `
                         + " (https://docs.microsoft.com/en-us/azure/active-directory/hybrid/how-to-connect-install-roadmap)"
-                    Write-Error -Message $message -ErrorAction Stop
+                    Write-TestingFailed -Message $message -ErrorAction Stop
                 }
 
                 Write-Verbose "Found AAD user '$($aadUser.UserPrincipalName)' for SID $($currentUser.Sid)"
 
                 $checks["CheckSidHasAadUser"].Result = "Passed"
-                Write-Verbose "CheckSidHasAadUser - SUCCESS"
+                Write-TestingPassed
             } catch {
                 $checks["CheckSidHasAadUser"].Result = "Failed"
                 $checks["CheckSidHasAadUser"].Issue = $_
-                Write-Error "CheckSidHasAadUser - FAILED"
-                Write-Error $_
+                Write-TestingFailed -Message $_ -IsUnexpected $true
             }
         }
-
+        #
+        # AAD User has SID Check
+        #
         if (!$filterIsPresent -or $Filter -match "CheckAadUserHasSid")
         {
+            Write-Host "Checking AAD User has SID"
             try {
                 $checksExecuted += 1;
-                Write-Verbose "CheckAadUserHasSid - START"
-
                 if ([string]::IsNullOrEmpty($ObjectId)) {
-                    Write-Verbose -Message "Missing required parameter ObjectId for CheckAadUserHasSid requires ObjectId parameter to be present, skipping CheckAadUserHasSid"
+                    Write-TestingWarning -Message "Missing required parameter ObjectId for CheckAadUserHasSid requires ObjectId parameter to be present, skipping CheckAadUserHasSid"
                     $checks["CheckAadUserHasSid"].Result = "Skipped"
                 }
                 else {
@@ -4631,14 +4620,14 @@ function Debug-AzStorageAccountADDSAuth {
                     if ($null -eq $aadUser) {
                         $message = "Cannot find an Azure AD user with ObjectId $ObjectId. Please check" `
                             + " whether the provided ObjecId is correct or not."
-                        Write-Error -Message $message -ErrorAction Stop
+                        Write-TestingFailed -Message $message -ErrorAction Stop
                     }
 
                     if ([string]::IsNullOrEmpty($aadUser.OnPremisesSecurityIdentifier)) {
                         $message = "Azure AD user $ObjectId has no OnPremisesSecurityIdentifier. Please" `
                             + " ensure the domain '$Domain' is synced to Azure Active Directory using Azure AD Connect" `
-                            + " (https://docs.microsoft.com/en-us/azure/active-directory/hybrid/how-to-connect-install-roadmap)"
-                        Write-Error -Message $message -ErrorAction Stop
+                            + " '$($PSStyle.Foreground.BrightCyan)https://aka.ms/azfiles/adds-activedirectory-roadmap$($PSStyle.Reset)'"
+                        Write-TestingFailed -Message $message -ErrorAction Stop
                     }
 
                     $user = Get-ADUser -Identity $aadUser.OnPremisesSecurityIdentifier -Server $Domain
@@ -4646,49 +4635,49 @@ function Debug-AzStorageAccountADDSAuth {
                     if ($null -eq $user) {
                         $message = "Azure AD user $ObjectId's SID $($aadUser.OnPremisesSecurityIdentifier)" `
                             + " is not found in domain $Domain. Please check whether the provided SID is correct."
-                        Write-Error -Message $message -ErrorAction Stop
+                        Write-TestingFailed -Message $message -ErrorAction Stop
                     }
 
                     Write-Verbose "Azure AD user $ObjectId has SID $($aadUser.OnPremisesSecurityIdentifier) in domain $Domain"
 
                     $checks["CheckAadUserHasSid"].Result = "Passed"
-                    Write-Verbose "CheckAadUserHasSid - SUCCESS"
+                    Write-TestingPassed
                 }
 
             } catch {
                 $checks["CheckAadUserHasSid"].Result = "Failed"
                 $checks["CheckAadUserHasSid"].Issue = $_
-                Write-Error "CheckAadUserHasSid - FAILED"
-                Write-Error $_
+                Write-TestingFailed -Message $_ -IsUnexpected $true
             }
         }
-
+        #
+        # AAD User has SID Check
+        #
         if (!$filterIsPresent -or ($Filter -match "CheckStorageAccountDomainJoined"))
         {
+            Write-Host "Checking AAD User has SID"
             try {
                 $checksExecuted += 1
-                Write-Verbose "CheckStorageAccountDomainJoined - START"
-
                 $activeDirectoryProperties = Get-AzStorageAccountActiveDirectoryProperties `
                     -ResourceGroupName $ResourceGroupName -StorageAccountName $StorageAccountName -ErrorAction Stop
 
                 Write-Verbose -Message "Storage account $StorageAccountName is already joined in domain $($activeDirectoryProperties.DomainName)."
                 
                 $checks["CheckStorageAccountDomainJoined"].Result = "Passed"
-                Write-Verbose "CheckStorageAccountDomainJoined - SUCCESS"
+                Write-TestingPassed
             } catch {
                 $checks["CheckStorageAccountDomainJoined"].Result = "Failed"
                 $checks["CheckStorageAccountDomainJoined"].Issue = $_
-                Write-Error "CheckStorageAccountDomainJoined - FAILED"
-                Write-Error $_
+                Write-TestingFailed -Message $_ -IsUnexpected $true
             }
         }
-
+        #
+        # User RBAC Assignment Check
+        #
         if (!$filterIsPresent -or ($Filter -match "CheckUserRbacAssignment")) {
+            Write-Host "Checking User RBAC Assignment"
             try {
                 $checksExecuted += 1
-                Write-Verbose "CheckUserRbacAssignment - START"
-
                 Request-ConnectMsGraph -Scopes "User.Read.All", "GroupMember.Read.All"
 
                 $sidNames = @{}
@@ -4750,10 +4739,10 @@ function Debug-AzStorageAccountADDSAuth {
 
                 if ($roleDefinitions.Count -eq 0) {
                     $message = "User '$($user.UserPrincipalName)' is not assigned any SMB share-level permission to" `
-                        + " storage account '$StorageAccountName' in resource group '$ResourceGroupName'. Please" `
+                        + " storage account '$StorageAccountName' in resource group '$ResourceGroupName'.`n`tPlease" `
                         + " configure proper share-level permission following the guidance at" `
-                        + " https://docs.microsoft.com/en-us/azure/storage/files/storage-files-identity-ad-ds-assign-permissions"
-                    Write-Error -Message $message -ErrorAction Stop
+                        + " '$($PSStyle.Foreground.BrightCyan)`n`thttps://aka.ms/azfiles/adds-assignpermissions$($PSStyle.Reset)'"
+                    Write-TestingFailed -Message $message -ErrorAction Stop
                 }
 
                 Write-Host "------------------------------------------"
@@ -4770,29 +4759,28 @@ function Debug-AzStorageAccountADDSAuth {
                 Write-Host "------------------------------------------"
 
                 $checks["CheckUserRbacAssignment"].Result = "Passed"
-                Write-Verbose "CheckUserRbacAssignment - SUCCESS"
+                Write-TestingPassed
             } catch {
                 $checks["CheckUserRbacAssignment"].Result = "Failed"
                 $checks["CheckUserRbacAssignment"].Issue = $_
-                Write-Error "CheckUserRbacAssignment - FAILED"
-                Write-Error $_
+                Write-TestingFailed -Message $_ -IsUnexpected $true
             }
         }
-
+        #
+        # User RBAC Assignment Check
+        #
         if (!$filterIsPresent -or $Filter -match "CheckUserFileAccess")
         {
+            Write-Host "Checking User RBAC Assignment"
             try {
                 $checksExecuted += 1;
-                Write-Verbose "CheckUserFileAccess - START"
-
                 if ([string]::IsNullOrEmpty($FilePath)) {
                     Write-Verbose -Message "Missing required parameter FilePath for CheckUserFileAccess, skipping CheckUserFileAccess"
                     $checks["CheckUserFileAccess"].Result = "Skipped"
                 } else {
                     $fileAcl = Get-Acl -Path $FilePath
                     if ($null -eq $fileAcl) {
-                        $message = "Unable to get the ACL of '$FilePath'. Please check if the provided file path is correct."
-                        Write-Error -Message $message -ErrorAction Stop
+                        Write-TestingFailed -Message "Unable to get the ACL of '$FilePath'. Please check if the provided file path is correct." -ErrorAction Stop
                     }
 
                     # Get the access rules explicitly assigned to and inherited by the file
@@ -4800,7 +4788,7 @@ function Debug-AzStorageAccountADDSAuth {
                     if ($fileAccessRules.Count -eq 0) {
                         $message = "There is no access rule granted to '$FilePath'. Please consider setting up proper access rules" `
                             + " for the file (for example, using https://docs.microsoft.com/en-us/windows-server/administration/windows-commands/icacls)"
-                        Write-Error -Message $message -ErrorAction Stop
+                        Write-TestingFailed -Message $message -ErrorAction Stop
                     }
                 
                     $user = Get-OnPremAdUser -Identity $UserName -Domain $Domain -ErrorAction Stop
@@ -4822,7 +4810,6 @@ function Debug-AzStorageAccountADDSAuth {
                                     if (-not $sidRules.ContainsKey($accessRule.IdentityReference)) {
                                         $sidRules[$accessRule.IdentityReference] = @()
                                     }
-        
                                     $sidRules[$accessRule.IdentityReference] += $accessRule                
                                 }
                             }
@@ -4833,7 +4820,7 @@ function Debug-AzStorageAccountADDSAuth {
                         $message = "User '$($user.UserPrincipalName)' is not assigned any permission to '$FilePath'." `
                             + " Please configure proper permission for the user to access the file (for example," `
                             + " using https://docs.microsoft.com/en-us/windows-server/administration/windows-commands/icacls)"
-                        Write-Error -Message $message -ErrorAction Stop
+                        Write-TestingFailed -Message $message -ErrorAction Stop
                     }
     
                     Write-Host "------------------------------------------"
@@ -4846,23 +4833,23 @@ function Debug-AzStorageAccountADDSAuth {
                     Write-Host "------------------------------------------"
 
                     $checks["CheckUserFileAccess"].Result = "Passed"
-                    Write-Verbose "CheckUserFileAccess - SUCCESS"
+                    Write-TestingPassed
                 }
 
             } catch {
                 $checks["CheckUserFileAccess"].Result = "Failed"
                 $checks["CheckUserFileAccess"].Issue = $_
-                Write-Error "CheckUserFileAccess - FAILED"
-                Write-Error $_
+                Write-TestingFailed -Messages $_ -IsUnexpected $true
             }
         }
-
+        #
+        # Default Share Permissions Check
+        #
         if (!$filterIsPresent -or $Filter -match "CheckDefaultSharePermission")
         {
+            Write-Host "Checking Default Share Permission"
             try {
                 $checksExecuted += 1
-                Write-Verbose "CheckDefaultSharePermission - START"
-
                 $StorageAccountObject = Validate-StorageAccount `
                     -ResourceGroupName $ResourceGroupName `
                     -StorageAccountName $StorageAccountName `
@@ -4875,13 +4862,12 @@ function Debug-AzStorageAccountADDSAuth {
                     $DefaultSharePermission = "Not Configured. Please visit https://docs.microsoft.com/en-us/azure/storage/files/storage-files-identity-ad-ds-assign-permissions?tabs=azure-portal for more information if needed."
                 }
                 Write-Verbose "DefaultSharePermission: $DefaultSharePermission"
-                Write-Verbose "CheckDefaultSharePermission - SUCCESS"
                 $checks["CheckDefaultSharePermission"].Result = "Passed"
+                Write-TestingPassed
             } catch {
                 $checks["CheckDefaultSharePermission"].Result = "Failed"
                 $checks["CheckDefaultSharePermission"].Issue = $_
-                Write-Error "CheckDefaultSharePermission - FAILED"
-                Write-Error $_
+                Write-TestingFailed -Message $_ -IsUnexpected $true
             }
         }
         #
@@ -4889,52 +4875,30 @@ function Debug-AzStorageAccountADDSAuth {
         #
         if (!$filterIsPresent -or $Filter -match "CheckAadKerberosRegistryKeyIsOff")
         {
+            Write-Host "Checking AAD Kerberos Registry Key"
             try {
                 $checksExecuted += 1;
-                Write-Verbose "CheckAadKerberosRegistryKeyIsOff - START"
-
                 if (-not (Test-IsCloudKerberosTicketRetrievalEnabled))
                 {
                     $checks["CheckAadKerberosRegistryKeyIsOff"].Result = "Passed"
-                    Write-Verbose "CheckAadKerberosRegistryKeyIsOff - SUCCESS"
+                    Write-TestingPassed
                 }
                 else 
                 {
                     $checks["CheckAadKerberosRegistryKeyIsOff"].Result = "Failed"
                     $checks["CheckAadKerberosRegistryKeyIsOff"].Issue = "CloudKerberosTicketRetrievalEnabled registry key is enabled. Disable it to retrieve Kerberos tickets from AD DS."
 
-                    Write-Error "CheckAadKerberosRegistryKeyIsOff - FAILED"
-                    Write-Error "For AD DS authentication, you must disable the registry key for retrieving Kerberos tickets from AAD. See https://learn.microsoft.com/en-us/azure/storage/files/storage-files-identity-auth-hybrid-identities-enable?tabs=azure-portal#undo-the-client-configuration-to-retrieve-kerberos-tickets"
+                    Write-TestingFailed -Message "For AD DS authentication, you must disable the registry key for retrieving Kerberos tickets from AAD.`n`tSee '$($PSStyle.Foreground.BrightCyan)https://aka.ms/azfiles/adds-disableregkey$($PSStyle.Reset)'"
                 }
                 
             } catch {
                 $checks["CheckAadKerberosRegistryKeyIsOff"].Result = "Failed"
                 $checks["CheckAadKerberosRegistryKeyIsOff"].Issue = $_
-                Write-Error "CheckAadKerberosRegistryKeyIsOff - FAILED"
-                Write-Error $_
+                Write-TestingFailed -Message $_ -IsUnexpected $true
             }
         }
 
-
-        if ($filterIsPresent -and $checksExecuted -eq 0)
-        {
-            $message = "Filter '$Filter' provided does not match any options. No checks were executed." `
-                + " Available filters are {$($checks.Keys -join ', ')}"
-            Write-Error -Message $message -ErrorAction Stop
-        }
-        else
-        {
-            Write-Host "Summary of checks:"
-            $checks.Values | Format-Table -Property Name,Result
-            
-            $issues = $checks.Values | Where-Object { $_.Result -ieq "Failed" }
-
-            if ($issues.Length -gt 0) {
-                Write-Host "Issues found:"
-                $issues | ForEach-Object { Write-Host -ForegroundColor Red "---- $($_.Name) ----`n$($_.Issue)" }
-            }
-        }
-
+        SummaryOfChecks -checks $checks -filterIsPresent $filterIsPresent -checksExecuted $checksExecuted
         $message = "********************`r`n" `
                 + "If above checks are not helpful and further investigation/debugging is needed from the Azure Files team.`r`n" `
                 + "Please prepare the full console log from the cmdlet and Wireshark traces for any mount or access errors to`r`n" `
@@ -4944,7 +4908,6 @@ function Debug-AzStorageAccountADDSAuth {
                 + "********************`r`n" 
 
         Write-Host $message
-
     }
 
 }
