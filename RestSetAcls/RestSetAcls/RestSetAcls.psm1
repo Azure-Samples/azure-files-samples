@@ -1756,32 +1756,6 @@ function Set-AzFileOwner {
     }
 }
 
-function Get-AceFlags {
-    [OutputType([System.Security.AccessControl.AceFlags])]
-    param (
-        [Parameter(Mandatory = $true)]
-        [System.Security.AccessControl.InheritanceFlags]$InheritanceFlags,
-
-        [Parameter(Mandatory = $true)]
-        [System.Security.AccessControl.PropagationFlags]$PropagationFlags
-    )
-
-    $aceFlags = [System.Security.AccessControl.AceFlags]::None
-    if ($InheritanceFlags -band [System.Security.AccessControl.InheritanceFlags]::ContainerInherit) {
-        $aceFlags = ([int]$aceFlags -bor [int][System.Security.AccessControl.AceFlags]::ContainerInherit)
-    }
-    if ($InheritanceFlags -band [System.Security.AccessControl.InheritanceFlags]::ObjectInherit) {
-        $aceFlags = ([int]$aceFlags -bor [int][System.Security.AccessControl.AceFlags]::ObjectInherit)
-    }
-    if ($PropagationFlags -band [System.Security.AccessControl.PropagationFlags]::InheritOnly) {
-        $aceFlags = ([int]$aceFlags -bor [int][System.Security.AccessControl.AceFlags]::InheritOnly)
-    }
-    if ($PropagationFlags -band [System.Security.AccessControl.PropagationFlags]::NoPropagateInherit) {
-        $aceFlags = ([int]$aceFlags -bor [int][System.Security.AccessControl.AceFlags]::NoPropagateInherit)
-    }
-    return $aceFlags
-}
-
 function Add-AzFileAce {
     [CmdletBinding(SupportsShouldProcess = $true)]
     [OutputType([string])]
@@ -1869,7 +1843,7 @@ function Add-AzFileAce {
 
             # Build ACE
             $accessMask = [int]$AccessRights
-            $aceFlags = Get-AceFlags -InheritanceFlags $InheritanceFlags -PropagationFlags $PropagationFlags
+            $aceFlags = Get-AceFlagsFromInheritanceAndPropagation -InheritanceFlags $InheritanceFlags -PropagationFlags $PropagationFlags
             $aceQualifier = if ($Type -eq [System.Security.AccessControl.AccessControlType]::Allow) {
                 [System.Security.AccessControl.AceQualifier]::AccessAllowed
             } else {
