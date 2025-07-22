@@ -1757,6 +1757,74 @@ function Set-AzFileOwner {
 }
 
 function Add-AzFileAce {
+<#
+    .SYNOPSIS
+    Adds an Access Control Entry (ACE) to an Azure file or directory's ACL.
+
+    .DESCRIPTION
+    The `Add-AzFileAce` cmdlet adds a new Access Control Entry (ACE) to the Access Control List (ACL) of a specified
+    Azure file or directory. This function supports adding both Allow and Deny ACEs with various access rights and
+    inheritance settings. The function can work with SIDs, UPNs (User Principal Names), object IDs, and display names
+    for specifying the principal.
+
+    .PARAMETER File
+    Specifies the Azure storage file or directory to which the ACE will be added.
+
+    .PARAMETER Context
+    Specifies the Azure storage context. This is required to authenticate and interact with the Azure storage account.
+
+    .PARAMETER FileShareName
+    Specifies the name of the Azure file share containing the file or directory.
+
+    .PARAMETER FilePath
+    Specifies the path to the file or directory within the share to which the ACE will be added.
+
+    .PARAMETER Client
+    Specifies the Azure storage file or directory client with which to add the ACE.
+
+    .PARAMETER Type
+    Specifies the type of access control. Valid values are 'Allow' and 'Deny'.
+
+    .PARAMETER Principal
+    Specifies the principal (user or group) for which the ACE is being added. This can be a SID, UPN, object ID, or display name.
+
+    .PARAMETER AccessRights
+    Specifies the file system rights to grant or deny. Valid values include standard .NET FileSystemRights such as
+    'FullControl', 'ReadAndExecute', 'Write', 'Read', 'Synchronize', etc.
+
+    .PARAMETER InheritanceFlags
+    Specifies how the ACE is inherited by child objects. Valid values are 'None', 'ContainerInherit', 'ObjectInherit',
+    or a combination. For directories, defaults to 'ContainerInherit, ObjectInherit' if not specified.
+
+    .PARAMETER PropagationFlags
+    Specifies how inheritance is propagated to child objects. Valid values are 'None', 'InheritOnly', and 'NoPropagateInherit'.
+    Defaults to 'None'.
+
+    .OUTPUTS
+    System.String
+    Returns the file permission key associated with the updated ACL.
+
+    .EXAMPLE
+    PS> Add-AzFileAce -Context $context -FileShareName "myshare" -FilePath "folder1/file.txt" -Type Allow -Principal "user@domain.com" -AccessRights Read
+
+    Adds an Allow ACE granting Read access to the specified user for the file 'folder1/file.txt'.
+
+    .EXAMPLE
+    PS> Add-AzFileAce -Context $context -FileShareName "myshare" -FilePath "folder1" -Type Allow -Principal "S-1-5-21-123456789-987654321-111111111-1001" -AccessRights FullControl
+
+    Adds an Allow ACE granting FullControl access to the user with the specified SID for the directory 'folder1'.
+    Since this is a directory, inheritance flags will default to 'ContainerInherit, ObjectInherit'.
+
+    .EXAMPLE
+    PS> Add-AzFileAce -Context $context -FileShareName "myshare" -FilePath "folder1" -Type Deny -Principal "Domain Users" -AccessRights Write
+
+    Adds a Deny ACE that prevents Write access for the "Domain Users" group on the directory 'folder1'.
+
+    .EXAMPLE
+    PS> Add-AzFileAce -Context $context -FileShareName "myshare" -FilePath "folder1/subfolder" -Type Allow -Principal "user@domain.com" -AccessRights ReadAndExecute -InheritanceFlags ObjectInherit -PropagationFlags InheritOnly
+
+    Adds an Allow ACE with custom inheritance settings that will only apply to files (not subdirectories) within 'folder1/subfolder'.
+#>
     [CmdletBinding(SupportsShouldProcess = $true)]
     [OutputType([string])]
     param (
