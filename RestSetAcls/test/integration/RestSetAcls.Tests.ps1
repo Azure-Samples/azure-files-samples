@@ -1089,18 +1089,64 @@ Describe "Add-AzFileAce" -Tag "Ace" {
         $sddl = "O:SYG:SYD:(A;;0x1200a9;;;AU)"
         Set-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $filePath -Acl $sddl
 
+        # Add allow ACE
         Add-AzFileAce `
             -Context $global:context `
             -FileShareName $global:fileShareName `
             -FilePath $filePath `
             -Type Allow `
-            -Principal "S-1-12-1-123456789-1234567890-1234567890-1234567890" `
-            -AccessRights Synchronize `
-            -InheritanceFlags None `
-            -PropagationFlags None
+            -Principal "S-1-12-1-1-2-3-4" `
+            -AccessRights Synchronize
+        
+        $result = Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $filePath -OutputFormat Sddl
+        $expected = "O:SYG:SYD:(A;;0x1200a9;;;AU)(A;;0x100000;;;S-1-12-1-1-2-3-4)S:NO_ACCESS_CONTROL"
+        $result | Should -Be $expected
+
+        # Add deny ACE
+        Add-AzFileAce `
+            -Context $global:context `
+            -FileShareName $global:fileShareName `
+            -FilePath $filePath `
+            -Type Deny `
+            -Principal "S-1-12-1-5-6-7-8" `
+            -AccessRights Synchronize
 
         $result = Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $filePath -OutputFormat Sddl
-        $expected = "O:SYG:SYD:(A;;0x1200a9;;;AU)(A;;0x100000;;;S-1-12-1-123456789-1234567890-1234567890-1234567890)S:NO_ACCESS_CONTROL"
+        $expected = "O:SYG:SYD:(D;;0x100000;;;S-1-12-1-5-6-7-8)(A;;0x1200a9;;;AU)(A;;0x100000;;;S-1-12-1-1-2-3-4)S:NO_ACCESS_CONTROL"
+        $result | Should -Be $expected
+    }
+
+    It "Adds an ACE to a directory" {
+        $directoryName = New-RandomString -Length 8
+        New-Directory -Path $directoryName
+
+        $sddl = "O:SYG:SYD:(A;;0x1200a9;;;AU)"
+        Set-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $directoryName -Acl $sddl
+
+        # Add allow ACE
+        Add-AzFileAce `
+            -Context $global:context `
+            -FileShareName $global:fileShareName `
+            -FilePath $directoryName `
+            -Type Allow `
+            -Principal "S-1-12-1-1-2-3-4" `
+            -AccessRights Synchronize
+        
+        $result = Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $directoryName -OutputFormat Sddl
+        $expected = "O:SYG:SYD:(A;;0x1200a9;;;AU)(A;OICI;0x100000;;;S-1-12-1-1-2-3-4)S:NO_ACCESS_CONTROL"
+        $result | Should -Be $expected
+
+        # Add deny ACE
+        Add-AzFileAce `
+            -Context $global:context `
+            -FileShareName $global:fileShareName `
+            -FilePath $directoryName `
+            -Type Deny `
+            -Principal "S-1-12-1-5-6-7-8" `
+            -AccessRights Synchronize
+
+        $result = Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $directoryName -OutputFormat Sddl
+        $expected = "O:SYG:SYD:(D;OICI;0x100000;;;S-1-12-1-5-6-7-8)(A;;0x1200a9;;;AU)(A;OICI;0x100000;;;S-1-12-1-1-2-3-4)S:NO_ACCESS_CONTROL"
         $result | Should -Be $expected
     }
 }

@@ -1790,15 +1790,15 @@ function Add-AzFileAce {
         [Parameter(Mandatory = $true, ParameterSetName = "Client")]
         [System.Security.AccessControl.FileSystemRights]$AccessRights,
 
-        [Parameter(Mandatory = $true, ParameterSetName = "File")]
-        [Parameter(Mandatory = $true, ParameterSetName = "FilePath")]
-        [Parameter(Mandatory = $true, ParameterSetName = "Client")]
-        [System.Security.AccessControl.InheritanceFlags]$InheritanceFlags = 3, # ObjectInherit | ContainerInherit
+        [Parameter(Mandatory = $false, ParameterSetName = "File")]
+        [Parameter(Mandatory = $false, ParameterSetName = "FilePath")]
+        [Parameter(Mandatory = $false, ParameterSetName = "Client")]
+        [System.Security.AccessControl.InheritanceFlags]$InheritanceFlags = [System.Security.AccessControl.InheritanceFlags]::None,
 
-        [Parameter(Mandatory = $true, ParameterSetName = "File")]
-        [Parameter(Mandatory = $true, ParameterSetName = "FilePath")]
-        [Parameter(Mandatory = $true, ParameterSetName = "Client")]
-        [System.Security.AccessControl.PropagationFlags]$PropagationFlags = 0
+        [Parameter(Mandatory = $false, ParameterSetName = "File")]
+        [Parameter(Mandatory = $false, ParameterSetName = "FilePath")]
+        [Parameter(Mandatory = $false, ParameterSetName = "Client")]
+        [System.Security.AccessControl.PropagationFlags]$PropagationFlags = [System.Security.AccessControl.PropagationFlags]::None
     )
 
     begin {
@@ -1814,6 +1814,13 @@ function Add-AzFileAce {
         # Determine if this is a file or directory
         $isDirectory = Get-IsDirectoryClient $Client
         $aclFormat = if ($isDirectory) { [SecurityDescriptorFormat]::FolderAcl } else { [SecurityDescriptorFormat]::FileAcl }
+
+        # Set default inheritance flags if not specified
+        if (-not $PSBoundParameters.ContainsKey("InheritanceFlags") -and $isDirectory) {
+            Write-Verbose "The item is a directory, and no InheritanceFlags were specified. Defaulting to 'ContainerInherit, ObjectInherit'."
+            $InheritanceFlags = [System.Security.AccessControl.InheritanceFlags]::ContainerInherit `
+                -bor [System.Security.AccessControl.InheritanceFlags]::ObjectInherit
+        }
     }
 
     process {
