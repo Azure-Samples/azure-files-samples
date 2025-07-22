@@ -1756,6 +1756,32 @@ function Set-AzFileOwner {
     }
 }
 
+function Get-AceFlags {
+    [OutputType([System.Security.AccessControl.AceFlags])]
+    param (
+        [Parameter(Mandatory = $true)]
+        [System.Security.AccessControl.InheritanceFlags]$InheritanceFlags,
+
+        [Parameter(Mandatory = $true)]
+        [System.Security.AccessControl.PropagationFlags]$PropagationFlags
+    )
+
+    $aceFlags = [System.Security.AccessControl.AceFlags]::None
+    if ($InheritanceFlags -band [System.Security.AccessControl.InheritanceFlags]::ContainerInherit) {
+        $aceFlags = ([int]$aceFlags -bor [int][System.Security.AccessControl.AceFlags]::ContainerInherit)
+    }
+    if ($InheritanceFlags -band [System.Security.AccessControl.InheritanceFlags]::ObjectInherit) {
+        $aceFlags = ([int]$aceFlags -bor [int][System.Security.AccessControl.AceFlags]::ObjectInherit)
+    }
+    if ($PropagationFlags -band [System.Security.AccessControl.PropagationFlags]::InheritOnly) {
+        $aceFlags = ([int]$aceFlags -bor [int][System.Security.AccessControl.AceFlags]::InheritOnly)
+    }
+    if ($PropagationFlags -band [System.Security.AccessControl.PropagationFlags]::NoPropagateInherit) {
+        $aceFlags = ([int]$aceFlags -bor [int][System.Security.AccessControl.AceFlags]::NoPropagateInherit)
+    }
+    return $aceFlags
+}
+
 function Add-AzFileAce {
     [CmdletBinding(SupportsShouldProcess = $true)]
     [OutputType([string])]
@@ -1828,22 +1854,60 @@ function Add-AzFileAce {
         $sid = Get-Sid -Identity $Principal -Verbose:$VerbosePreference -WhatIf:$WhatIfPreference
 
         # Get ACL from file
-        [System.Security.AccessControl.CommonSecurityDescriptor]$acl = Get-AzFileAcl -Client $Client -OutputFormat $aclFormat
+        $acl = Get-AzFileAcl -Client $Client -OutputFormat Raw
 
-        # Update ACL with new ACE
         if ($null -eq $acl.DiscretionaryAcl) {
-            $revision = 1
-            $trusted = 1
-            $acl.AddDiscretionaryAcl($revision, $trusted)
-        }
+            # If there is no DACL, we need to create a new one.
+            #
+            # The C# APIs make this difficult, because creating an empty DACL automatically inserts an ACE giving full control to everyone
+            # (because null DACL means no one has access, while empty DACL means everyone has full control -- so the .NET SDK decides to canonicalize,
+            # and make explicit that everyone has full control, by inserting an ACE for WD).
+            #
+            # To work around this, we create a RawAcl with a single ACE, and then convert it to a DiscretionaryAcl.
+            # This does require a bit of conversion between the various types that the .NET SDK uses to represent ACL and ACE fields...
+            Write-Verbose "No DACL found for the item. Will create a new DACL with the specified ACE."
 
-        $acl.DiscretionaryAcl.AddAccess(
-            $Type, # accessType
-            $sid, # sid
-            $AccessRights, # accessMask
-            $InheritanceFlags, # inheritanceFlags
-            $PropagationFlags # propagationFlags
-        )
+            # Build ACE
+            $accessMask = [int]$AccessRights
+            $aceFlags = Get-AceFlags -InheritanceFlags $InheritanceFlags -PropagationFlags $PropagationFlags
+            $aceQualifier = if ($Type -eq [System.Security.AccessControl.AccessControlType]::Allow) {
+                [System.Security.AccessControl.AceQualifier]::AccessAllowed
+            } else {
+                [System.Security.AccessControl.AceQualifier]::AccessDenied
+            }
+
+            $ace = [System.Security.AccessControl.CommonAce]::new(
+                $aceFlags,
+                $aceQualifier,
+                $accessMask,
+                $sid,
+                $false, # isCallback
+                $null # opaque
+            )
+
+            # Create a RawAcl with the ACE
+            $daclRevision = 2
+            $daclCapacity = 1 # We will insert one ACE
+            $dacl = [System.Security.AccessControl.RawAcl]::new($daclRevision, $daclCapacity)
+            $dacl.InsertAce(0, $ace) # Insert the ACE at index 0
+
+            # Convert RawAcl to DiscretionaryAcl
+            $dacl = [System.Security.AccessControl.DiscretionaryAcl]::new($isDirectory, $false, $dacl)
+
+            # Set the DiscretionaryAcl on the CommonSecurityDescriptor
+            $acl = Convert-SecurityDescriptor $acl -From Raw -To $aclFormat
+            $acl.DiscretionaryAcl = $dacl
+        } else {
+            # If there is a DACL already, we can use the DiscretionaryAcl.AddAccess method to add the new ACE directly.
+            $acl = Convert-SecurityDescriptor $acl -From Raw -To $aclFormat            
+            $acl.DiscretionaryAcl.AddAccess(
+                $Type,
+                $sid,
+                $AccessRights,
+                $InheritanceFlags,
+                $PropagationFlags
+            )
+        }
 
         # Upload new ACL
         if ($PSCmdlet.ShouldProcess($Client.Path, "Add ACE for '$Principal'")) {
