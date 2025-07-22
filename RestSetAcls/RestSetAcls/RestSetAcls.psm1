@@ -1755,3 +1755,92 @@ function Set-AzFileOwner {
         }
     }
 }
+
+function Add-AzFileAce {
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    [OutputType([string])]
+    param (
+        [Parameter(Mandatory = $true, ParameterSetName = "File", HelpMessage = "Azure storage file or directory")]
+        [Microsoft.WindowsAzure.Commands.Common.Storage.ResourceModel.AzureStorageBase]$File,
+
+        [Parameter(Mandatory = $true, ParameterSetName = "FilePath", HelpMessage = "Azure storage context")]
+        [Microsoft.Azure.Commands.Common.Authentication.Abstractions.IStorageContext]$Context,
+        
+        [Parameter(Mandatory = $true, ParameterSetName = "FilePath", HelpMessage = "Name of the file share")]
+        [string]$FileShareName,
+
+        [Parameter(Mandatory = $true, ParameterSetName = "FilePath", HelpMessage = "Path to the file or directory within the share")]
+        [string]$FilePath,
+
+        [Parameter(Mandatory = $false, ParameterSetName = "Client")]
+        [object]$Client,
+
+        [Parameter(Mandatory = $true, ParameterSetName = "File")]
+        [Parameter(Mandatory = $true, ParameterSetName = "FilePath")]
+        [Parameter(Mandatory = $true, ParameterSetName = "Client")]
+        [System.Security.AccessControl.AccessControlType]$Type,
+        
+        [Parameter(Mandatory = $true, ParameterSetName = "File")]
+        [Parameter(Mandatory = $true, ParameterSetName = "FilePath")]
+        [Parameter(Mandatory = $true, ParameterSetName = "Client")]
+        [string]$Principal,
+
+        [Parameter(Mandatory = $true, ParameterSetName = "File")]
+        [Parameter(Mandatory = $true, ParameterSetName = "FilePath")]
+        [Parameter(Mandatory = $true, ParameterSetName = "Client")]
+        [System.Security.AccessControl.FileSystemRights]$AccessRights,
+
+        [Parameter(Mandatory = $true, ParameterSetName = "File")]
+        [Parameter(Mandatory = $true, ParameterSetName = "FilePath")]
+        [Parameter(Mandatory = $true, ParameterSetName = "Client")]
+        [System.Security.AccessControl.InheritanceFlags]$InheritanceFlags = 3, # ObjectInherit | ContainerInherit
+
+        [Parameter(Mandatory = $true, ParameterSetName = "File")]
+        [Parameter(Mandatory = $true, ParameterSetName = "FilePath")]
+        [Parameter(Mandatory = $true, ParameterSetName = "Client")]
+        [System.Security.AccessControl.PropagationFlags]$PropagationFlags = 0
+    )
+
+    begin {
+        # Get a $Client from the parameters
+        if ($PSCmdlet.ParameterSetName -eq "FilePath") {
+            $File = Get-AzStorageFile -Context $Context -ShareName $FileShareName -Path $FilePath
+            $Client = Get-ClientFromFile $File
+        }
+        elseif ($PSCmdlet.ParameterSetName -eq "File") {
+            $Client = Get-ClientFromFile $File
+        }
+
+        # Determine if this is a file or directory
+        $isDirectory = Get-IsDirectoryClient $Client
+        $aclFormat = if ($isDirectory) { [SecurityDescriptorFormat]::FolderAcl } else { [SecurityDescriptorFormat]::FileAcl }
+    }
+
+    process {
+        # Convert the principal to a SID
+        $sid = Get-Sid -Identity $Principal -Verbose:$VerbosePreference -WhatIf:$WhatIfPreference
+
+        # Get ACL from file
+        [System.Security.AccessControl.CommonSecurityDescriptor]$acl = Get-AzFileAcl -Client $Client -OutputFormat $aclFormat
+
+        # Update ACL with new ACE
+        if ($null -eq $acl.DiscretionaryAcl) {
+            $revision = 1
+            $trusted = 1
+            $acl.AddDiscretionaryAcl($revision, $trusted)
+        }
+
+        $acl.DiscretionaryAcl.AddAccess(
+            $Type, # accessType
+            $sid, # sid
+            $AccessRights, # accessMask
+            $InheritanceFlags, # inheritanceFlags
+            $PropagationFlags # propagationFlags
+        )
+
+        # Upload new ACL
+        if ($PSCmdlet.ShouldProcess($Client.Path, "Add ACE for '$Principal'")) {
+            return Set-AzFileAcl -Client $Client -Acl $acl -AclFormat $aclFormat -WhatIf:$WhatIfPreference
+        }
+    }
+}

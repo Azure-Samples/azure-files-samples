@@ -1077,3 +1077,30 @@ Describe "Restore-AzFileAclInheritance" -Tag "Inheritance" {
         }
     }
 }
+
+Describe "Add-AzFileAce" -Tag "Ace" {
+    It "Adds an ACE to a file" {
+        $directoryName = New-RandomString -Length 8
+        New-Directory -Path $directoryName
+
+        $filePath = "$directoryName/testfile.txt"
+        New-File -Path $filePath
+
+        $sddl = "O:SYG:SYD:(A;;0x1200a9;;;AU)"
+        Set-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $filePath -Acl $sddl
+
+        Add-AzFileAce `
+            -Context $global:context `
+            -FileShareName $global:fileShareName `
+            -FilePath $filePath `
+            -Type Allow `
+            -Principal "S-1-12-1-123456789-1234567890-1234567890-1234567890" `
+            -AccessRights Synchronize `
+            -InheritanceFlags None `
+            -PropagationFlags None
+
+        $result = Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $filePath -OutputFormat Sddl
+        $expected = "O:SYG:SYD:(A;;0x1200a9;;;AU)(A;;0x100000;;;S-1-12-1-123456789-1234567890-1234567890-1234567890)S:NO_ACCESS_CONTROL"
+        $result | Should -Be $expected
+    }
+}
