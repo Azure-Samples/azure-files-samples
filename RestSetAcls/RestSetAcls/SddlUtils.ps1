@@ -1,3 +1,29 @@
+function Get-AceFlagsFromInheritanceAndPropagation {
+    [OutputType([System.Security.AccessControl.AceFlags])]
+    param (
+        [Parameter(Mandatory = $true)]
+        [System.Security.AccessControl.InheritanceFlags]$InheritanceFlags,
+
+        [Parameter(Mandatory = $true)]
+        [System.Security.AccessControl.PropagationFlags]$PropagationFlags
+    )
+
+    $aceFlags = [System.Security.AccessControl.AceFlags]::None
+    if ($InheritanceFlags -band [System.Security.AccessControl.InheritanceFlags]::ContainerInherit) {
+        $aceFlags = ([int]$aceFlags -bor [int][System.Security.AccessControl.AceFlags]::ContainerInherit)
+    }
+    if ($InheritanceFlags -band [System.Security.AccessControl.InheritanceFlags]::ObjectInherit) {
+        $aceFlags = ([int]$aceFlags -bor [int][System.Security.AccessControl.AceFlags]::ObjectInherit)
+    }
+    if ($PropagationFlags -band [System.Security.AccessControl.PropagationFlags]::InheritOnly) {
+        $aceFlags = ([int]$aceFlags -bor [int][System.Security.AccessControl.AceFlags]::InheritOnly)
+    }
+    if ($PropagationFlags -band [System.Security.AccessControl.PropagationFlags]::NoPropagateInherit) {
+        $aceFlags = ([int]$aceFlags -bor [int][System.Security.AccessControl.AceFlags]::NoPropagateInherit)
+    }
+    return $aceFlags
+}
+
 function Get-AllAceFlagsMatch {
     param (
         [Parameter(Mandatory = $true, ValueFromPipeline = $true)]

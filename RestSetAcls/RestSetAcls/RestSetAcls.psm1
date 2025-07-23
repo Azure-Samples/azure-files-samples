@@ -1755,3 +1755,205 @@ function Set-AzFileOwner {
         }
     }
 }
+
+function Add-AzFileAce {
+<#
+    .SYNOPSIS
+    Adds an Access Control Entry (ACE) to an Azure file or directory's ACL.
+
+    .DESCRIPTION
+    The `Add-AzFileAce` cmdlet adds a new Access Control Entry (ACE) to the Access Control List (ACL) of a specified
+    Azure file or directory. This function supports adding both Allow and Deny ACEs with various access rights and
+    inheritance settings. The function can work with SIDs, UPNs (User Principal Names), object IDs, and display names
+    for specifying the principal.
+
+    .PARAMETER File
+    Specifies the Azure storage file or directory to which the ACE will be added.
+
+    .PARAMETER Context
+    Specifies the Azure storage context. This is required to authenticate and interact with the Azure storage account.
+
+    .PARAMETER FileShareName
+    Specifies the name of the Azure file share containing the file or directory.
+
+    .PARAMETER FilePath
+    Specifies the path to the file or directory within the share to which the ACE will be added.
+
+    .PARAMETER Client
+    Specifies the Azure storage file or directory client with which to add the ACE.
+
+    .PARAMETER Type
+    Specifies the type of access control. Valid values are 'Allow' and 'Deny'.
+
+    .PARAMETER Principal
+    Specifies the principal (user or group) for which the ACE is being added. This can be a SID, UPN, object ID, or display name.
+
+    .PARAMETER AccessRights
+    Specifies the file system rights to grant or deny. Valid values include standard .NET FileSystemRights such as
+    'FullControl', 'ReadAndExecute', 'Write', 'Read', 'Synchronize', etc.
+
+    .PARAMETER InheritanceFlags
+    Specifies how the ACE is inherited by child objects. Valid values are 'None', 'ContainerInherit', 'ObjectInherit',
+    or a combination. For directories, defaults to 'ContainerInherit, ObjectInherit' if not specified.
+
+    .PARAMETER PropagationFlags
+    Specifies how inheritance is propagated to child objects. Valid values are 'None', 'InheritOnly', and 'NoPropagateInherit'.
+    Defaults to 'None'.
+
+    .OUTPUTS
+    System.String
+    Returns the file permission key associated with the updated ACL.
+
+    .EXAMPLE
+    PS> Add-AzFileAce -Context $context -FileShareName "myshare" -FilePath "folder1/file.txt" -Type Allow -Principal "user@domain.com" -AccessRights Read
+
+    Adds an Allow ACE granting Read access to the specified user for the file 'folder1/file.txt'.
+
+    .EXAMPLE
+    PS> Add-AzFileAce -Context $context -FileShareName "myshare" -FilePath "folder1" -Type Allow -Principal "S-1-5-21-123456789-987654321-111111111-1001" -AccessRights FullControl
+
+    Adds an Allow ACE granting FullControl access to the user with the specified SID for the directory 'folder1'.
+    Since this is a directory, inheritance flags will default to 'ContainerInherit, ObjectInherit'.
+
+    .EXAMPLE
+    PS> Add-AzFileAce -Context $context -FileShareName "myshare" -FilePath "folder1" -Type Deny -Principal "Domain Users" -AccessRights Write
+
+    Adds a Deny ACE that prevents Write access for the "Domain Users" group on the directory 'folder1'.
+
+    .EXAMPLE
+    PS> Add-AzFileAce -Context $context -FileShareName "myshare" -FilePath "folder1/subfolder" -Type Allow -Principal "user@domain.com" -AccessRights ReadAndExecute -InheritanceFlags ObjectInherit -PropagationFlags InheritOnly
+
+    Adds an Allow ACE with custom inheritance settings that will only apply to files (not subdirectories) within 'folder1/subfolder'.
+#>
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    [OutputType([string])]
+    param (
+        [Parameter(Mandatory = $true, ParameterSetName = "File", HelpMessage = "Azure storage file or directory")]
+        [Microsoft.WindowsAzure.Commands.Common.Storage.ResourceModel.AzureStorageBase]$File,
+
+        [Parameter(Mandatory = $true, ParameterSetName = "FilePath", HelpMessage = "Azure storage context")]
+        [Microsoft.Azure.Commands.Common.Authentication.Abstractions.IStorageContext]$Context,
+        
+        [Parameter(Mandatory = $true, ParameterSetName = "FilePath", HelpMessage = "Name of the file share")]
+        [string]$FileShareName,
+
+        [Parameter(Mandatory = $true, ParameterSetName = "FilePath", HelpMessage = "Path to the file or directory within the share")]
+        [string]$FilePath,
+
+        [Parameter(Mandatory = $false, ParameterSetName = "Client")]
+        [object]$Client,
+
+        [Parameter(Mandatory = $true, ParameterSetName = "File")]
+        [Parameter(Mandatory = $true, ParameterSetName = "FilePath")]
+        [Parameter(Mandatory = $true, ParameterSetName = "Client")]
+        [System.Security.AccessControl.AccessControlType]$Type,
+        
+        [Parameter(Mandatory = $true, ParameterSetName = "File")]
+        [Parameter(Mandatory = $true, ParameterSetName = "FilePath")]
+        [Parameter(Mandatory = $true, ParameterSetName = "Client")]
+        [string]$Principal,
+
+        [Parameter(Mandatory = $true, ParameterSetName = "File")]
+        [Parameter(Mandatory = $true, ParameterSetName = "FilePath")]
+        [Parameter(Mandatory = $true, ParameterSetName = "Client")]
+        [System.Security.AccessControl.FileSystemRights]$AccessRights,
+
+        [Parameter(Mandatory = $false, ParameterSetName = "File")]
+        [Parameter(Mandatory = $false, ParameterSetName = "FilePath")]
+        [Parameter(Mandatory = $false, ParameterSetName = "Client")]
+        [System.Security.AccessControl.InheritanceFlags]$InheritanceFlags = [System.Security.AccessControl.InheritanceFlags]::None,
+
+        [Parameter(Mandatory = $false, ParameterSetName = "File")]
+        [Parameter(Mandatory = $false, ParameterSetName = "FilePath")]
+        [Parameter(Mandatory = $false, ParameterSetName = "Client")]
+        [System.Security.AccessControl.PropagationFlags]$PropagationFlags = [System.Security.AccessControl.PropagationFlags]::None
+    )
+
+    begin {
+        # Get a $Client from the parameters
+        if ($PSCmdlet.ParameterSetName -eq "FilePath") {
+            $File = Get-AzStorageFile -Context $Context -ShareName $FileShareName -Path $FilePath
+            $Client = Get-ClientFromFile $File
+        }
+        elseif ($PSCmdlet.ParameterSetName -eq "File") {
+            $Client = Get-ClientFromFile $File
+        }
+
+        # Determine if this is a file or directory
+        $isDirectory = Get-IsDirectoryClient $Client
+        $aclFormat = if ($isDirectory) { [SecurityDescriptorFormat]::FolderAcl } else { [SecurityDescriptorFormat]::FileAcl }
+
+        # Set default inheritance flags if not specified
+        if (-not $PSBoundParameters.ContainsKey("InheritanceFlags") -and $isDirectory) {
+            Write-Verbose "The item is a directory, and no InheritanceFlags were specified. Defaulting to 'ContainerInherit, ObjectInherit'."
+            $InheritanceFlags = [System.Security.AccessControl.InheritanceFlags]::ContainerInherit `
+                -bor [System.Security.AccessControl.InheritanceFlags]::ObjectInherit
+        }
+    }
+
+    process {
+        # Convert the principal to a SID
+        $sid = Get-Sid -Identity $Principal -Verbose:$VerbosePreference -WhatIf:$WhatIfPreference
+
+        # Get ACL from file
+        $acl = Get-AzFileAcl -Client $Client -OutputFormat Raw
+
+        if ($null -eq $acl.DiscretionaryAcl) {
+            # If there is no DACL, we need to create a new one.
+            #
+            # The C# APIs make this difficult, because creating an empty DACL automatically inserts an ACE giving full control to everyone
+            # (because null DACL means no one has access, while empty DACL means everyone has full control -- so the .NET SDK decides to canonicalize,
+            # and make explicit that everyone has full control, by inserting an ACE for WD).
+            #
+            # To work around this, we create a RawAcl with a single ACE, and then convert it to a DiscretionaryAcl.
+            # This does require a bit of conversion between the various types that the .NET SDK uses to represent ACL and ACE fields...
+            Write-Verbose "No DACL found for the item. Will create a new DACL with the specified ACE."
+
+            # Build ACE
+            $accessMask = [int]$AccessRights
+            $aceFlags = Get-AceFlagsFromInheritanceAndPropagation -InheritanceFlags $InheritanceFlags -PropagationFlags $PropagationFlags
+            $aceQualifier = if ($Type -eq [System.Security.AccessControl.AccessControlType]::Allow) {
+                [System.Security.AccessControl.AceQualifier]::AccessAllowed
+            } else {
+                [System.Security.AccessControl.AceQualifier]::AccessDenied
+            }
+
+            $ace = [System.Security.AccessControl.CommonAce]::new(
+                $aceFlags,
+                $aceQualifier,
+                $accessMask,
+                $sid,
+                $false, # isCallback
+                $null # opaque
+            )
+
+            # Create a RawAcl with the ACE
+            $daclRevision = 2
+            $daclCapacity = 1 # We will insert one ACE
+            $dacl = [System.Security.AccessControl.RawAcl]::new($daclRevision, $daclCapacity)
+            $dacl.InsertAce(0, $ace) # Insert the ACE at index 0
+
+            # Convert RawAcl to DiscretionaryAcl
+            $dacl = [System.Security.AccessControl.DiscretionaryAcl]::new($isDirectory, $false, $dacl)
+
+            # Set the DiscretionaryAcl on the CommonSecurityDescriptor
+            $acl = Convert-SecurityDescriptor $acl -From Raw -To $aclFormat
+            $acl.DiscretionaryAcl = $dacl
+        } else {
+            # If there is a DACL already, we can use the DiscretionaryAcl.AddAccess method to add the new ACE directly.
+            $acl = Convert-SecurityDescriptor $acl -From Raw -To $aclFormat            
+            $acl.DiscretionaryAcl.AddAccess(
+                $Type,
+                $sid,
+                $AccessRights,
+                $InheritanceFlags,
+                $PropagationFlags
+            )
+        }
+
+        # Upload new ACL
+        if ($PSCmdlet.ShouldProcess($Client.Path, "Add ACE for '$Principal'")) {
+            return Set-AzFileAcl -Client $Client -Acl $acl -AclFormat $aclFormat -WhatIf:$WhatIfPreference
+        }
+    }
+}

@@ -7,6 +7,66 @@ BeforeAll {
     . $PSScriptRoot/../../RestSetAcls/SddlUtils.ps1
 }
 
+Describe "Get-AceFlagsFromInheritanceAndPropagation" {
+    It "Should return None when both flags are None" {
+        $result = Get-AceFlagsFromInheritanceAndPropagation -InheritanceFlags "None" -PropagationFlags "None"
+        $result | Should -Be ([System.Security.AccessControl.AceFlags]::None)
+    }
+
+    It "Should return ContainerInherit when InheritanceFlags is ContainerInherit" {
+        $result = Get-AceFlagsFromInheritanceAndPropagation -InheritanceFlags "ContainerInherit" -PropagationFlags "None"
+        $result | Should -Be ([System.Security.AccessControl.AceFlags]::ContainerInherit)
+    }
+
+    It "Should return ObjectInherit when InheritanceFlags is ObjectInherit" {
+        $result = Get-AceFlagsFromInheritanceAndPropagation -InheritanceFlags "ObjectInherit" -PropagationFlags "None"
+        $result | Should -Be ([System.Security.AccessControl.AceFlags]::ObjectInherit)
+    }
+
+    It "Should return ContainerInherit and ObjectInherit when InheritanceFlags has both" {
+        $result = Get-AceFlagsFromInheritanceAndPropagation -InheritanceFlags "ContainerInherit, ObjectInherit" -PropagationFlags "None"
+        $expected = [int][System.Security.AccessControl.AceFlags]::ContainerInherit -bor [int][System.Security.AccessControl.AceFlags]::ObjectInherit
+        $result | Should -Be $expected
+    }
+
+    It "Should return InheritOnly when PropagationFlags is InheritOnly" {
+        $result = Get-AceFlagsFromInheritanceAndPropagation -InheritanceFlags "None" -PropagationFlags "InheritOnly"
+        $result | Should -Be ([System.Security.AccessControl.AceFlags]::InheritOnly)
+    }
+
+    It "Should return NoPropagateInherit when PropagationFlags is NoPropagateInherit" {
+        $result = Get-AceFlagsFromInheritanceAndPropagation -InheritanceFlags "None" -PropagationFlags "NoPropagateInherit"
+        $result | Should -Be ([System.Security.AccessControl.AceFlags]::NoPropagateInherit)
+    }
+
+    It "Should return InheritOnly and NoPropagateInherit when PropagationFlags has both" {
+        $result = Get-AceFlagsFromInheritanceAndPropagation -InheritanceFlags "None" -PropagationFlags "InheritOnly, NoPropagateInherit"
+        $expected = [int][System.Security.AccessControl.AceFlags]::InheritOnly -bor [int][System.Security.AccessControl.AceFlags]::NoPropagateInherit
+        $result | Should -Be $expected
+    }
+
+    It "Should combine all flags when both InheritanceFlags and PropagationFlags are set" {
+        $result = Get-AceFlagsFromInheritanceAndPropagation -InheritanceFlags "ContainerInherit, ObjectInherit" -PropagationFlags "InheritOnly, NoPropagateInherit"
+        $expected = [int][System.Security.AccessControl.AceFlags]::ContainerInherit -bor 
+                   [int][System.Security.AccessControl.AceFlags]::ObjectInherit -bor 
+                   [int][System.Security.AccessControl.AceFlags]::InheritOnly -bor 
+                   [int][System.Security.AccessControl.AceFlags]::NoPropagateInherit
+        $result | Should -Be $expected
+    }
+
+    It "Should handle mixed combinations correctly" {
+        $result = Get-AceFlagsFromInheritanceAndPropagation -InheritanceFlags "ContainerInherit" -PropagationFlags "InheritOnly"
+        $expected = [int][System.Security.AccessControl.AceFlags]::ContainerInherit -bor [int][System.Security.AccessControl.AceFlags]::InheritOnly
+        $result | Should -Be $expected
+    }
+
+    It "Should handle another mixed combination correctly" {
+        $result = Get-AceFlagsFromInheritanceAndPropagation -InheritanceFlags "ObjectInherit" -PropagationFlags "NoPropagateInherit"
+        $expected = [int][System.Security.AccessControl.AceFlags]::ObjectInherit -bor [int][System.Security.AccessControl.AceFlags]::NoPropagateInherit
+        $result | Should -Be $expected
+    }
+}
+
 Describe "Get-AllAceFlagsMatch" {
     It "Should return true when all -EnabledFlags are present" {
         $descriptor = ConvertTo-SecurityDescriptor "O:SYG:SYD:AI(A;OICINP;0x1301bf;;;WD)(A;OICIID;0x1201bf;;;WD)"
@@ -171,3 +231,4 @@ Describe "Reset-SecurityDescriptor" {
         $descriptor.Group | Should -Be $groupBefore
     }
 }
+
