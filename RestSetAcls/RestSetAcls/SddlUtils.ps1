@@ -455,7 +455,7 @@ function Write-AccessMask {
         Write-Host "${spaces}$($PSStyle.Foreground.Green)$checkmark$($PSStyle.Reset) SPECIAL_PERMISSIONS ($remainingString)"
     }
     else {
-        Write-Host "${spaces}$($PSStyle.Foreground.Red)$cross$($PSStyle.Reset) $key SPECIAL_PERMISSIONS"
+        Write-Host "${spaces}$($PSStyle.Foreground.Red)$cross$($PSStyle.Reset) SPECIAL_PERMISSIONS"
     }
 
     # Optionally write the full list of permissions bits
