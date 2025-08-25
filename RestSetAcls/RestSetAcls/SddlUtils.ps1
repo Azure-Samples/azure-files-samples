@@ -158,18 +158,18 @@ function Reset-SecurityDescriptor {
 Object-specific rights for files and folders.
 #>
 enum SpecificRights {
-    FILE_READ_DATA = 0x1
-    FILE_LIST_DIRECTORY = 0x1
-    FILE_WRITE_DATA = 0x2
-    FILE_ADD_FILE = 0x2
-    FILE_APPEND_DATA = 0x4
+    FILE_READ_DATA        = 0x1
+    FILE_LIST_DIRECTORY   = 0x1
+    FILE_WRITE_DATA       = 0x2
+    FILE_ADD_FILE         = 0x2
+    FILE_APPEND_DATA      = 0x4
     FILE_ADD_SUBDIRECTORY = 0x4
-    FILE_READ_EA = 0x8
-    FILE_WRITE_EA = 0x10
-    FILE_EXECUTE = 0x20
-    FILE_TRAVERSE = 0x20
-    FILE_DELETE_CHILD = 0x40
-    FILE_READ_ATTRIBUTES = 0x80
+    FILE_READ_EA          = 0x8
+    FILE_WRITE_EA         = 0x10
+    FILE_EXECUTE          = 0x20
+    FILE_TRAVERSE         = 0x20
+    FILE_DELETE_CHILD     = 0x40
+    FILE_READ_ATTRIBUTES  = 0x80
     FILE_WRITE_ATTRIBUTES = 0x100
 }
 
@@ -178,11 +178,11 @@ enum SpecificRights {
 Standard rights for any type of securable object (including files and folders).
 #>
 enum StandardRights {
-    DELETE = 0x00010000
+    DELETE       = 0x00010000
     READ_CONTROL = 0x00020000
-    WRITE_DAC = 0x00040000
-    WRITE_OWNER = 0x00080000
-    SYNCHRONIZE = 0x00100000
+    WRITE_DAC    = 0x00040000
+    WRITE_OWNER  = 0x00080000
+    SYNCHRONIZE  = 0x00100000
 }
 
 <#
@@ -190,10 +190,10 @@ enum StandardRights {
 Standard rights for any type of securable object (including files and folders).
 #>
 enum GenericRights {
-    GENERIC_READ = 0x80000000
-    GENERIC_WRITE = 0x40000000
+    GENERIC_READ    = 0x80000000
+    GENERIC_WRITE   = 0x40000000
     GENERIC_EXECUTE = 0x20000000
-    GENERIC_ALL = 0x10000000
+    GENERIC_ALL     = 0x10000000
 }
 
 <#
