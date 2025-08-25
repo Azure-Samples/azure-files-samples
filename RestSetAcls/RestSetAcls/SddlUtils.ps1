@@ -414,6 +414,9 @@ function Write-AccessMask {
         [switch]$ShowFullList = $false
     )
 
+    # Convert generics to specifics
+    $accessMask = Get-MappedAccessMask -AccessMask $accessMask
+
     $spaces = " " * $indent
     $mask = [AccessMask]::new($accessMask)
 
