@@ -100,16 +100,23 @@ function Get-FileGenericMapping {
 
 function Get-MappedAccessMask {
     [CmdletBinding()]
-    [OutputType([uint32])]
+    [OutputType([int])]
     param (
         [Parameter(Mandatory = $true)]
-        [uint32]$AccessMask
+        [int]$AccessMask
     )
+
+    # Believe it or not, this is the only way of converting negative ints to uint in powershell...
+    $bytes = [BitConverter]::GetBytes($AccessMask)
+    $accessMaskUint = [BitConverter]::ToUInt32($bytes, 0)
 
     $genericMapping = Get-FileGenericMapping
 
-    [NativeMethods]::MapGenericMask([ref] $AccessMask, [ref] $genericMapping)
-    return $AccessMask
+    [NativeMethods]::MapGenericMask([ref] $accessMaskUint, [ref] $genericMapping)
+
+    # Convert back from uint to int
+    $bytes = [BitConverter]::GetBytes($accessMaskUint)
+    return [BitConverter]::ToInt32($bytes, 0)
 }
 
 [Flags()]
