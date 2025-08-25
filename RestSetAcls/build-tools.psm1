@@ -61,9 +61,25 @@ function Format {
 function Test {
     param (
         [Parameter(Mandatory = $false)]
-        [string]$Path = "$PSScriptRoot\test\unit"
+        [string]$Path = "$PSScriptRoot\test\unit",
+
+        [Parameter(ValueFromRemainingArguments = $true)]
+        [psobject[]]$RemainingArgs
     )
-    Invoke-Pester -Path $Path -Output Detailed
+
+    $container = New-PesterContainer -Path $Path
+
+    # Build object we can splat into Invoke-Pester
+    # See https://stackoverflow.com/a/71073148/918389
+    $params = foreach ($arg in $RemainingArgs) {
+        if ($arg.StartsWith('-')) {
+            $prop = [psnoteproperty]::new('<CommandParameterName>', $arg)
+            $arg.PSObject.Properties.Add($prop)
+        }
+        $arg
+    }
+
+    Invoke-Pester -Container $container -Output Detailed @params
 }
 
 # https://stackoverflow.com/a/34383413
