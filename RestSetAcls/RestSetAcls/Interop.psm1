@@ -26,6 +26,11 @@ public static class NativeMethods {
         uint AutoInheritFlags,
         System.IntPtr Token,
         ref GENERIC_MAPPING GenericMapping);
+    
+    [DllImport("advapi32.dll", SetLastError = false)]
+    public static extern void MapGenericMask(
+        ref uint accessMask,
+        ref GENERIC_MAPPING genericMapping);
 
     [DllImport("advapi32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
@@ -76,6 +81,35 @@ function UnmarshalSecurityDescriptor {
     [System.Runtime.InteropServices.Marshal]::Copy($IntPtr, $bytes, 0, $length)
 
     return [System.Security.AccessControl.CommonSecurityDescriptor]::new($IsDirectory, $false, $bytes, 0)
+}
+
+function Get-FileGenericMapping {
+    [CmdletBinding()]
+    param ()
+
+    # Build generic mapping object. Since this module only deals with file system objects,
+    # we can hard-code the file generic rights mapping.
+    # https://learn.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-generic_mapping
+    $genericMapping = New-Object GENERIC_MAPPING
+    $genericMapping.GenericRead = [FileGenericRightsMapping]::FILE_GENERIC_READ
+    $genericMapping.GenericWrite = [FileGenericRightsMapping]::FILE_GENERIC_WRITE
+    $genericMapping.GenericExecute = [FileGenericRightsMapping]::FILE_GENERIC_EXECUTE
+    $genericMapping.GenericAll = [FileGenericRightsMapping]::FILE_ALL_ACCESS
+    return $genericMapping
+}
+
+function Get-MappedAccessMask {
+    [CmdletBinding()]
+    [OutputType([uint32])]
+    param (
+        [Parameter(Mandatory = $true)]
+        [uint32]$AccessMask
+    )
+
+    $genericMapping = Get-FileGenericMapping
+
+    [NativeMethods]::MapGenericMask([ref] $AccessMask, [ref] $genericMapping)
+    return $AccessMask
 }
 
 [Flags()]
@@ -195,14 +229,7 @@ function CreatePrivateObjectSecurityEx {
         # https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-dtyp/0f0c6ffc-f57d-47f8-a6c8-63889e874e24
         $token = [System.IntPtr]::Zero
 
-        # Build generic mapping object. Since this module only deals with file system objects,
-        # we can hard-code the file generic rights mapping.
-        # https://learn.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-generic_mapping        
-        $genericMapping = New-Object GENERIC_MAPPING
-        $genericMapping.GenericRead = [FileGenericRightsMapping]::FILE_GENERIC_READ
-        $genericMapping.GenericWrite = [FileGenericRightsMapping]::FILE_GENERIC_WRITE
-        $genericMapping.GenericExecute = [FileGenericRightsMapping]::FILE_GENERIC_EXECUTE
-        $genericMapping.GenericAll = [FileGenericRightsMapping]::FILE_ALL_ACCESS
+        $genericMapping = Get-FileGenericMapping
 
         $success = [NativeMethods]::CreatePrivateObjectSecurityEx(
             $parentSdIntPtr, 

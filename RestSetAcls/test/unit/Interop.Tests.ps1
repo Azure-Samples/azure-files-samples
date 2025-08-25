@@ -1,5 +1,6 @@
 BeforeAll {
     Import-Module $PSScriptRoot/../../RestSetAcls/Interop.psm1 -Force
+    . $PSScriptRoot/../../RestSetAcls/SddlUtils.ps1
 }
 
 Describe "Interop" {
@@ -274,6 +275,57 @@ Describe "Interop" {
                     -ChildSddl "O:SYG:SYD:NO_ACCESS_CONTROL" `
                     -ExpectedSddl "O:SYG:SYD:AI(A;ID;FA;;;BA)"
             }
+        }
+    }
+
+    Describe "Get-MappedAccessMask" {
+        It "Maps GENERIC_READ to specific file rights" {
+            $genericRead = [uint32]'0x80000000'  # GENERIC_READ
+            $result = Get-MappedAccessMask -AccessMask $genericRead
+            $result | Should -Be ([uint32][FileGenericRightsMapping]::FILE_GENERIC_READ)
+        }
+
+        It "Maps GENERIC_WRITE to specific file rights" {
+            $genericWrite = [uint32]'0x40000000'  # GENERIC_WRITE
+            $result = Get-MappedAccessMask -AccessMask $genericWrite
+            $result | Should -Be ([uint32][FileGenericRightsMapping]::FILE_GENERIC_WRITE)
+        }
+
+        It "Maps GENERIC_EXECUTE to specific file rights" {
+            $genericExecute = [uint32]'0x20000000'  # GENERIC_EXECUTE
+            $result = Get-MappedAccessMask -AccessMask $genericExecute
+            $result | Should -Be ([uint32][FileGenericRightsMapping]::FILE_GENERIC_EXECUTE)
+        }
+
+        It "Maps GENERIC_ALL to specific file rights" {
+            $genericAll = [uint32]'0x10000000'  # GENERIC_ALL
+            $result = Get-MappedAccessMask -AccessMask $genericAll
+            $result | Should -Be ([uint32][FileGenericRightsMapping]::FILE_ALL_ACCESS)
+        }
+
+        It "Maps combination of generic rights correctly" {
+            $genericReadWrite = [uint32]'0xC0000000'  # GENERIC_READ | GENERIC_WRITE
+            $result = Get-MappedAccessMask -AccessMask $genericReadWrite
+            $expected = [uint32]'0x12019F'
+            $result | Should -Be $expected
+        }
+
+        It "Leaves non-generic rights unchanged" {
+            $specificRight = [uint32]'0x00000001'  # FILE_READ_DATA
+            $result = Get-MappedAccessMask -AccessMask $specificRight
+            $result | Should -Be $specificRight
+        }
+
+        It "Maps mixed generic and specific rights correctly" {
+            $mixed = [uint32]'0x80000004'  # GENERIC_READ | FILE_APPEND_DATA
+            $result = Get-MappedAccessMask -AccessMask $mixed
+            $expected = ([uint32][FileGenericRightsMapping]::FILE_GENERIC_READ) -bor ([uint32][SpecificRights]::FILE_APPEND_DATA)
+            $result | Should -Be $expected
+        }
+
+        It "Handles zero access mask" {
+            $result = Get-MappedAccessMask -AccessMask 0
+            $result | Should -Be 0
         }
     }
 }
