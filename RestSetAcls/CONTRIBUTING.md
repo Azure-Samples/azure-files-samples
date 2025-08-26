@@ -101,8 +101,6 @@ Lint
 This is a useful test before publishing to the PSGallery.
 
 ```powershell
-Import-Module .\publish-tools.psm1
-
 Publish-Local
 
 Install-Module RestSetAcls -Repository LocalRepo
@@ -118,8 +116,6 @@ Unpublish-Local
 1. Run the following command:
 
     ```powershell
-    Import-Module .\publish-tools.psm1
-
     Publish-PSGallery -apiKey "<api-key>"
     ```
 
