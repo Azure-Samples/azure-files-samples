@@ -94,10 +94,12 @@
     # Functions to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no functions to export.
     FunctionsToExport = @(
         "Convert-SecurityDescriptor",
+        "Write-SecurityDescriptor",
+        "Write-AccessMask",
         "Set-AzFileAclRecursive",
         "New-AzFileAcl",
         "Set-AzFileAclKey",
-        "Get-AzFileAclKey"
+        "Get-AzFileAclKey",
         "Get-AzFileAclFromKey",
         "Set-AzFileAcl",
         "Get-AzFileAcl",

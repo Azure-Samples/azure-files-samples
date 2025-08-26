@@ -326,11 +326,21 @@ class AccessMask {
 
 function Write-SecurityDescriptor {
     param (
-        [Parameter(Mandatory = $true, ValueFromPipeline = $true)]
-        [System.Security.AccessControl.RawSecurityDescriptor]$descriptor
+        [Parameter(Mandatory = $true, Position = 0, ValueFromPipeline = $true)]
+        [object]$Acl,
+
+        [Parameter(Mandatory = $false)]
+        [SecurityDescriptorFormat]$AclFormat
     )
 
     process {
+        if ($null -eq $AclFormat) {
+            $AclFormat = Get-InferredAclFormat $Acl
+            Write-Verbose "Inferred ACL format: $AclFormat. To override, use -AclFormat."
+        }
+
+        $descriptor = Convert-SecurityDescriptor $Acl -From $AclFormat -To Raw
+        
         $controlFlagsHex = "0x{0:X}" -f [int]$descriptor.ControlFlags
         
         Write-Host "Owner: $($PSStyle.Foreground.Cyan)$($descriptor.Owner)$($PSStyle.Reset)"
