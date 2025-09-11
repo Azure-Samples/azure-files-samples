@@ -147,9 +147,9 @@ try {
     if ($AppId) {
         # Update specific app by App ID
         Write-Host "Searching for app with App ID: $AppId" -ForegroundColor Yellow
-        $apps = Get-MgApplication -Filter "appId eq '$AppId'"
+        $apps = @(Get-MgApplication -Filter "appId eq '$AppId'")
 
-        if (-not $apps) {
+        if ($apps.Count -eq 0) {
             Write-Warning "No application found with App ID: $AppId"
             exit 1
         }
@@ -249,6 +249,7 @@ try {
 
     for ($i = 0; $i -lt $apps.Count; $i++) {
         $app = $apps[$i]
+        
         Write-Progress -Activity "Updating Applications" -Status "Processing app $($i + 1) of $($apps.Count): $($app.DisplayName)" -PercentComplete ((($i + 1) / $apps.Count) * 100)
 
         # Track original counts before update
@@ -374,5 +375,5 @@ catch {
 }
 finally {
     # Disconnect from Microsoft Graph
-    Disconnect-MgGraph -ErrorAction SilentlyContinue
+    Disconnect-MgGraph -ErrorAction SilentlyContinue | Out-Null
 }
