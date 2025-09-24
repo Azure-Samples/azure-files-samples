@@ -24,60 +24,97 @@ RestSetAcls.psm1 is a PowerShell module that provides functions to set Access Co
 Install-Module RestSetAcls
 ```
 
-## Usage
+## Authenticate
 
-1. Make sure you meet the prerequisites above.
-1. Open a PowerShell session. PowerShell 7 is preferred, but PowerShell 5 (aka Windows PowerShell) is also acceptable.
-1. Define how to connect your storage account with storage account key:
+Before you begin, make sure you meet the prerequisites above. Then, open a PowerShell session. PowerShell 7 is preferred, but PowerShell 5 (aka Windows PowerShell) is also acceptable.
 
-   ```powershell
-   $AccountName = "<storage-account-name>" # replace with the storage account name
-   $AccountKey = "<storage-account-key>" # replace with the storage account key
+In order to use RestSetAcls on an Azure Storage account, you need to define how to authenticate to the account. You should do this using [New-AzStorageContext](https://learn.microsoft.com/en-us/powershell/module/az.storage/new-azstoragecontext). The sections below describe a few common ways to authenticate to Azure Files.
 
-   $context = New-AzStorageContext -StorageAccountName $AccountName -StorageAccountKey $AccountKey
-   ```
+### Option 1: Account key authentication
 
-   If your storage account is on another Azure environment than the public Azure cloud, you can use the `-Environment` or `-FileEndpoint` flags of `New-AzStorageContext` to configure the address at which the storage account is reachable. See the documentation of [New-AzStorageContext](https://learn.microsoft.com/en-us/powershell/module/az.storage/new-azstoragecontext).
-   
-1. Determine the SDDL string for the desired permissions.
+The simplest way to authenticate is to use your storage account name and key. This will use [Shared Key authentication](https://learn.microsoft.com/en-us/rest/api/storageservices/authorize-with-shared-key).
 
-   If you already know what SDDL string you want, you can define it directly:
+> [!WARNING]
+> Storage account keys provide full admin access to all resources in a storage account. For this reason, using the account key is not recommended for production scenarios. Consider using a SAS token or OAuth authentication instead.
 
-   ```powershell
-   $sddl = "<sddl-string>" # replace with the SDDL string
-   ```
-
-   If you do not know the SDDL string for the permission you want to set, the easiest approach is to get it from another file. In other words, the idea is to use the permissions of another file as a template of what permissions should be set recursively on your file share. To do so, we either need a file that has the right permissions already, or we need to create it. To create it, you can create a file (anywhere you want, for instance on your Desktop), right click on it, click on Properties, go to the Security tab, click Edit, and then add, remove or edit permissions until you get the permissions you want. Press OK to save and OK to close the Properties window. You can then get the SDDL of your sample file as follows:
-
-   ```powershell
-   $filepath = "<path-to-file-or-folder>" # replace with the path to your file or folder
-   $sddl = (Get-Acl -Path $filepath).Sddl
-   ```
-   
-1. Call `Set-AzFileAclRecursive` as follows. This will recursively find all files and folders on your file share, and set the SDDL permission on each one of them.
-
-   ```powershell
-   $FileShareName = "<file-share-name>" # replace with the name of your file share
-   
-   Set-AzFileAclRecursive -Context $context -FileShareName $FileShareName -FilePath "/" -SddlPermission $sddl
-   ```
-
-## Advanced usage
-
-### Export CSV logs of changes made
-
-You can export a CSV file that logs the changes made by `Set-AzFileAclRecursive`. This can be useful to keep track of the changes made, or to review them later.
-
-To do this, use the `-PassThru` flag, and pass the output to `Export-Csv`:
 
 ```powershell
-Set-AzFileAclRecursive `
-   -Context $context `
-   -FileShareName $FileShareName `
-   -FilePath "/" `
-   -SddlPermission $sddl `
-   -PassThru `
-   | Export-Csv -Path "C:\path\to\log.csv"
+$AccountName = "<storage-account-name>" # replace with the storage account name
+$AccountKey = "<storage-account-key>" # replace with the storage account key
+
+$context = New-AzStorageContext -StorageAccountName $AccountName -StorageAccountKey $AccountKey
 ```
 
-To customize the CSV output, see the documentation of [Export-Csv](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.utility/export-csv).
+### Option 2: Account SAS authentication
+
+You can also use an [account Shared Access Signature (SAS) token](https://learn.microsoft.com/en-us/rest/api/storageservices/create-account-sas) to authenticate.
+
+SAS tokens are derived from the account key, but they can be scoped to specific services, resource types, and permissions, and they can have a limited lifetime. This makes them more secure than using the account key directly. To create an account SAS token, you can use [New-AzStorageAccountSASToken](https://learn.microsoft.com/en-us/powershell/module/az.storage/new-azstorageaccountsastoken) cmdlet as follows:
+
+```powershell
+$AccountName = "<storage-account-name>" # replace with the storage account name
+$AccountKey = "<storage-account-key>" # replace with the storage account key
+
+$context = New-AzStorageContext -StorageAccountName $AccountName -StorageAccountKey $AccountKey
+$sasToken = New-AzStorageAccountSASToken -Context $context -Service File -ResourceType Container,Object  -Permission "rwl" -ExpiryTime (Get-Date).AddDays(1)
+```
+
+Then, you can create a new context using the SAS token:
+
+```powershell
+$context = New-AzStorageContext -StorageAccountName $AccountName -SasToken $sasToken
+```
+
+### Option 3: Service SAS authentication
+
+Account SAS tokens provide access to all resources in a storage account. If you want to limit access to a specific file share, or even to a specific sub-path in a file share, you can use a [service Shared Access Signature (SAS) token](https://learn.microsoft.com/en-us/rest/api/storageservices/create-service-sas) instead.
+
+To create a service SAS token, you can use the [New-AzStorageFileSASToken](https://learn.microsoft.com/en-us/powershell/module/az.storage/new-azstoragefilesastoken) cmdlet as follows:
+
+```powershell
+$AccountName = "<storage-account-name>" # replace with the storage account name
+$AccountKey = "<storage-account-key>" # replace with the storage account key
+$FileShareName = "<file-share-name>" # replace with the name of your file share
+
+$context = New-AzStorageContext -StorageAccountName $AccountName -StorageAccountKey $AccountKey
+$sasToken = New-AzStorageFileSASToken -Context $context -ShareName $FileShareName -Path "/" -Permission "rwl" -Protocol HttpsOnly -ExpiryTime (Get-Date).AddDays(1)
+```
+
+#### Option 4: OAuth authentication
+
+Account SAS and service SAS tokens are derived from the account key. If you want to avoid using the account key altogether, you can use [OAuth authentication](https://learn.microsoft.com/en-us/azure/storage/files/authorize-oauth-rest). 
+
+To use OAuth authentication, you will need to grant your principal the `Storage File Data Privileged Reader` (read-only) or `Storage File Data Privileged Contributor` (read-write) role on the storage account or file share. Then you should log in using [Connect-AzAccount](https://learn.microsoft.com/en-us/powershell/module/az.accounts/connect-azaccount) and create a context as follows:
+
+```powershell
+$AccountName = "<storage-account-name>" # replace with the storage account name
+
+Connect-AzAccount # If you have multiple tenants or subscriptions, you may need to add -TenantId or -Subscription parameters
+$context = New-AzStorageContext -StorageAccountName $AccountName -EnableFileBackupRequestIntent -UseConnectedAccount
+```
+
+## Usage
+
+This section assumes you have already created a `$context` using one of the methods above. You can then use the functions in this module to get or set ACLs on files and folders in your Azure file share. An overview of the available functions is provided below.
+
+| Function                       | Description                                                            | Documentation                                 |
+|--------------------------------|------------------------------------------------------------------------|-----------------------------------------------|
+| `Convert-SecurityDescriptor`   | Utility function to convert between different permissions formats      | [docs](./docs/Convert-SecurityDescriptor.md)   |
+| `Write-SecurityDescriptor`     | Utility function to pretty-print a permission                          | [docs](./docs/Write-SecurityDescriptor.md)     |
+| `Write-AccessMask`             | Utility function to pretty-print a permission access mask              | [docs](./docs/Write-AccessMask.md)             |
+| `Set-AzFileAclRecursive`       | Set the same ACL recursively on all files and folders under a path     | [docs](./docs/Set-AzFileAclRecursive.md)       |
+| `New-AzFileAcl`                | Create a new ACL (but do not apply it), and get its ACL key back       | [docs](./docs/New-AzFileAcl.md)                |
+| `Set-AzFileAclKey`             | Set the ACL key of a file or folder                                    | [docs](./docs/Set-AzFileAclKey.md)             |
+| `Get-AzFileAclKey`             | Get the ACL key of a file or folder                                    | [docs](./docs/Get-AzFileAclKey.md)             |
+| `Get-AzFileAclFromKey`         | Get the ACL value of a key                                             | [docs](./docs/Get-AzFileAclFromKey.md)         |
+| `Set-AzFileAcl`                | Set the ACL value of a file or folder                                  | [docs](./docs/Set-AzFileAcl.md)                |
+| `Get-AzFileAcl`                | Get the ACL value of a file or folder                                  | [docs](./docs/Get-AzFileAcl.md)                |
+| `Set-AzFileOwner`              | Update the owner field of the ACL of a file or a folder                | [docs](./docs/Set-AzFileOwner.md)              |
+| `Restore-AzFileAclInheritance` | Apply inheritance rules (recursively) on file and folders under a path | [docs](./docs/Restore-AzFileAclInheritance.md) |
+| `Add-AzFileAce`                | Add an Access Control Entry (ACE) to a file or folder                  | [docs](./docs/Add-AzFileAce.md)                |
+
+The terminology used in this module is explained below:
+
+- **Security Descriptor**: A structure that encodes the owner, group, and permissions of a file or folder.
+- **Access Control List (ACL)**: The part of the security descriptor that encodes the permissions of a file or folder. Since the ACL is the most important part of the security descriptor, we often use "ACL" to refer to the entire security descriptor, including owner and group.
+- **Access Control Entry (ACE)**: An entry in the ACL that encodes the permissions for a specific user or group.

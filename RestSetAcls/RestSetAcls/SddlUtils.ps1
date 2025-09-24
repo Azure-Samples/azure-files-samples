@@ -325,6 +325,46 @@ class AccessMask {
 
 
 function Write-SecurityDescriptor {
+<#
+    .SYNOPSIS
+    Displays a detailed, formatted view of a security descriptor including owner, group, control flags, and ACLs.
+
+    .DESCRIPTION
+    The Write-SecurityDescriptor function provides a comprehensive, human-readable display of a security descriptor's 
+    components It displays the owner, group, control flags, discretionary ACL (DACL), and system ACL (SACL) with
+    color-coded formatting for enhanced readability. This function is particularly useful for debugging, auditing, and
+    understanding the structure of Windows security descriptors.
+
+    .PARAMETER Acl
+    Specifies the security descriptor or ACL to display. This can be in various formats including SDDL (Security 
+    Descriptor Definition Language) string, base64-encoded binary, array of bytes, CommonSecurityDescriptor or
+    RawSecurityDescriptor objects.
+
+    .PARAMETER AclFormat
+    Specifies the format of the input ACL. If not provided, the function will automatically infer the format. 
+    Supported formats include SDDL, Base64, Binary, and Raw.
+
+    .OUTPUTS
+    System.Void
+    This function outputs formatted text to the console and does not return any objects.
+
+    .EXAMPLE
+    PS> $acl = "O:BAG:SYD:(A;;FA;;;SY)(A;;0x1200a9;;;BU)"
+    PS> Write-SecurityDescriptor -Acl $acl -AclFormat Sddl
+
+    Displays a formatted view of the SDDL security descriptor, showing owner, group, control flags, and both 
+    discretionary and system ACLs with detailed access mask information.
+
+    .EXAMPLE
+    PS> $context = Get-AzStorageContext -StorageAccountName "mystorageaccount" -StorageAccountKey "mykey"
+    PS> Get-AzFileAcl -Context $context -FileShareName "myshare" -FilePath "folder/file.txt" | Write-SecurityDescriptor
+
+    .LINK
+    Get-AzFileAcl
+
+    .LINK
+    Convert-SecurityDescriptor
+#>
     param (
         [Parameter(Mandatory = $true, Position = 0, ValueFromPipeline = $true)]
         [object]$Acl,
@@ -413,6 +453,27 @@ function Write-Ace {
 }
 
 function Write-AccessMask {
+<#
+    .SYNOPSIS
+    Displays a detailed, formatted view of a ACE's access mask.
+
+    .DESCRIPTION
+    The Write-AccessMask function provides a comprehensive, human-readable display of an ACE's access mask.
+
+    .PARAMETER AccessMask
+    Specifies the access mask to display.
+
+    .PARAMETER ShowFullList
+    If specified, the function will display the full list of individual permission bits in addition to the basic
+    permissions.
+
+    .OUTPUTS
+    System.Void
+    This function outputs formatted text to the console and does not return any objects.
+
+    .EXAMPLE
+    PS> Write-AccessMask 0x1200a9
+#>
     param (
         [Parameter(Mandatory = $true, Position = 0)]
         [int]$accessMask,
