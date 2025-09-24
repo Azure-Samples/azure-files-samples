@@ -440,7 +440,7 @@ function Set-AzFileAclKey {
     begin {
         # Ensure $Client and $isDirectory are initialized for all parameter sets
         if ($PSCmdlet.ParameterSetName -eq "FilePath") {
-            $File = Get-AzStorageFile -Context $Context -ShareName $FileShareName -Path $FilePath
+            $File = Get-AzStorageFile -Context $Context -ShareName $FileShareName -Path $FilePath -ErrorAction Stop
             $Client = Get-ClientFromFile $File
         }
         elseif ($PSCmdlet.ParameterSetName -eq "File") {
@@ -560,7 +560,7 @@ function Set-AzFileAcl {
     begin {
         # Convert parameters to a $Client, and determine if $isDirectory
         if ($PSCmdlet.ParameterSetName -eq "FilePath") {
-            $File = Get-AzStorageFile -Context $Context -ShareName $FileShareName -Path $FilePath
+            $File = Get-AzStorageFile -Context $Context -ShareName $FileShareName -Path $FilePath -ErrorAction Stop
             $Client = Get-ClientFromFile $File
         }
         elseif ($PSCmdlet.ParameterSetName -eq "File") {
@@ -689,7 +689,7 @@ function Get-AzFileAclKey {
     begin {
         # Get a $Client from the parameters
         if ($PSCmdlet.ParameterSetName -eq "FilePath") {
-            $File = Get-AzStorageFile -Context $Context -ShareName $FileShareName -Path $FilePath
+            $File = Get-AzStorageFile -Context $Context -ShareName $FileShareName -Path $FilePath -ErrorAction Stop
             $Client = Get-ClientFromFile $File
         }
         elseif ($PSCmdlet.ParameterSetName -eq "File") {
@@ -874,7 +874,7 @@ function Get-AzFileAcl {
     begin {
         # Get a $Client from the parameters
         if ($PSCmdlet.ParameterSetName -eq "FilePath") {
-            $File = Get-AzStorageFile -Context $Context -ShareName $FileShareName -Path $FilePath
+            $File = Get-AzStorageFile -Context $Context -ShareName $FileShareName -Path $FilePath -ErrorAction Stop
             $Client = Get-ClientFromFile $File
         }
         elseif ($PSCmdlet.ParameterSetName -eq "File") {
@@ -1729,7 +1729,7 @@ function Set-AzFileOwner {
     begin {
         # Get a $Client from the parameters
         if ($PSCmdlet.ParameterSetName -eq "FilePath") {
-            $File = Get-AzStorageFile -Context $Context -ShareName $FileShareName -Path $FilePath
+            $File = Get-AzStorageFile -Context $Context -ShareName $FileShareName -Path $FilePath -ErrorAction Stop
             $Client = Get-ClientFromFile $File
         }
         elseif ($PSCmdlet.ParameterSetName -eq "File") {
@@ -1872,7 +1872,7 @@ function Add-AzFileAce {
     begin {
         # Get a $Client from the parameters
         if ($PSCmdlet.ParameterSetName -eq "FilePath") {
-            $File = Get-AzStorageFile -Context $Context -ShareName $FileShareName -Path $FilePath
+            $File = Get-AzStorageFile -Context $Context -ShareName $FileShareName -Path $FilePath -ErrorAction Stop
             $Client = Get-ClientFromFile $File
         }
         elseif ($PSCmdlet.ParameterSetName -eq "File") {
