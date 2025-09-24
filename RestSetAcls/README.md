@@ -99,19 +99,19 @@ This section assumes you have already created a `$context` using one of the meth
 
 | Function                       | Description                                                            | Documentation                                 |
 |--------------------------------|------------------------------------------------------------------------|-----------------------------------------------|
-| `Convert-SecurityDescriptor`   | Utility function to convert between different permissions formats      | [docs](/docs/Convert-SecurityDescriptor.md)   |
-| `Write-SecurityDescriptor`     | Utility function to pretty-print a permission                          | [docs](/docs/Write-SecurityDescriptor.md)     |
-| `Write-AccessMask`             | Utility function to pretty-print a permission access mask              | [docs](/docs/Write-AccessMask.md)             |
-| `Set-AzFileAclRecursive`       | Set the same ACL recursively on all files and folders under a path     | [docs](/docs/Set-AzFileAclRecursive.md)       |
-| `New-AzFileAcl`                | Create a new ACL (but do not apply it), and get its ACL key back       | [docs](/docs/New-AzFileAcl.md)                |
-| `Set-AzFileAclKey`             | Set the ACL key of a file or folder                                    | [docs](/docs/Set-AzFileAclKey.md)             |
-| `Get-AzFileAclKey`             | Get the ACL key of a file or folder                                    | [docs](/docs/Get-AzFileAclKey.md)             |
-| `Get-AzFileAclFromKey`         | Get the ACL value of a key                                             | [docs](/docs/Get-AzFileAclFromKey.md)         |
-| `Set-AzFileAcl`                | Set the ACL value of a file or folder                                  | [docs](/docs/Set-AzFileAcl.md)                |
-| `Get-AzFileAcl`                | Get the ACL value of a file or folder                                  | [docs](/docs/Get-AzFileAcl.md)                |
-| `Set-AzFileOwner`              | Update the owner field of the ACL of a file or a folder                | [docs](/docs/Set-AzFileOwner.md)              |
-| `Restore-AzFileAclInheritance` | Apply inheritance rules (recursively) on file and folders under a path | [docs](/docs/Restore-AzFileAclInheritance.md) |
-| `Add-AzFileAce`                | Add an Access Control Entry (ACE) to a file or folder                  | [docs](/docs/Add-AzFileAce.md)                |
+| `Convert-SecurityDescriptor`   | Utility function to convert between different permissions formats      | [docs](./docs/Convert-SecurityDescriptor.md)   |
+| `Write-SecurityDescriptor`     | Utility function to pretty-print a permission                          | [docs](./docs/Write-SecurityDescriptor.md)     |
+| `Write-AccessMask`             | Utility function to pretty-print a permission access mask              | [docs](./docs/Write-AccessMask.md)             |
+| `Set-AzFileAclRecursive`       | Set the same ACL recursively on all files and folders under a path     | [docs](./docs/Set-AzFileAclRecursive.md)       |
+| `New-AzFileAcl`                | Create a new ACL (but do not apply it), and get its ACL key back       | [docs](./docs/New-AzFileAcl.md)                |
+| `Set-AzFileAclKey`             | Set the ACL key of a file or folder                                    | [docs](./docs/Set-AzFileAclKey.md)             |
+| `Get-AzFileAclKey`             | Get the ACL key of a file or folder                                    | [docs](./docs/Get-AzFileAclKey.md)             |
+| `Get-AzFileAclFromKey`         | Get the ACL value of a key                                             | [docs](./docs/Get-AzFileAclFromKey.md)         |
+| `Set-AzFileAcl`                | Set the ACL value of a file or folder                                  | [docs](./docs/Set-AzFileAcl.md)                |
+| `Get-AzFileAcl`                | Get the ACL value of a file or folder                                  | [docs](./docs/Get-AzFileAcl.md)                |
+| `Set-AzFileOwner`              | Update the owner field of the ACL of a file or a folder                | [docs](./docs/Set-AzFileOwner.md)              |
+| `Restore-AzFileAclInheritance` | Apply inheritance rules (recursively) on file and folders under a path | [docs](./docs/Restore-AzFileAclInheritance.md) |
+| `Add-AzFileAce`                | Add an Access Control Entry (ACE) to a file or folder                  | [docs](./docs/Add-AzFileAce.md)                |
 
 The terminology used in this module is explained below:
 
