@@ -1799,21 +1799,26 @@ else {
 }
 Write-Log -level success "[OK]: Azure File Share path is $FileSharePath " 
 
-###Validate the name-ip mapping
+### Validate the name-IP mapping
 Write-Log -level info "`n======Validate Storage Account Name resolution"
 $option = [System.StringSplitOptions]::RemoveEmptyEntries
 $DestHost = ($FileSharePath.split("\", $option))[0]
+
 try {
-    #resolve the name to IPv4 address only for now, IPV6 may be added in future.    
+    # Resolve the name to IPv4 addresses only
     $result = [System.Net.Dns]::GetHostEntry($DestHost).AddressList | Where-Object {$_.AddressFamily -eq 'InterNetwork'}
 
-    Write-Log -level success "`n[OK]: Storage Account Name $DestHost is resolved to $($result.IPAddressToString)" 
-    $destIP = $result.IPAddressToString
+    for ($i = 0; $i -lt [Math]::Min(3, $result.Count); $i++) {
+        Write-Log -level success "`n[OK]: Storage Account Name $DestHost is resolved to $($result[$i].IPAddressToString)"
+    }
+
+    $destIP = $result[0].IPAddressToString
 }
 catch {
     Write-Log -level verbose "$($_.Exception.Message) - Line Number: $($_.InvocationInfo.ScriptLineNumber)" 
     $Script:ValidationPass = $false
 }
+
 if ($Script:ValidationPass -eq $false) {
     Write-Log -level error "`n[ERROR]: Storage Account Name $DestHost cannot be resolved. Please make sure client DNS server is set properly"  
     Write-Log -level warning "==========================================[END]==============================================="
