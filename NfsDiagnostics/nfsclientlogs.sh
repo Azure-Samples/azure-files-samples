@@ -6,6 +6,16 @@ NFS_PORT=2049
 TRACE_NFSBPF_ABS_PATH="$(cd "$(dirname "trace-nfsbpf")" && pwd)/$(basename "trace-nfsbpf")"
 PYTHON_PROG='python'
 STDLOG_FILE='/dev/null'
+TRACE_RPCDEBUG_ENABLED=0  # Tracks whether rpcdebug was enabled so we can clean it up conditionally
+
+# Default ring buffer settings for tcpdump (can be overridden by env vars before invoking script)
+# Limit disk usage to (size * count) MB total. Example override:
+#   TCPDUMP_ROTATE_FILE_SIZE_MB=100 TCPDUMP_ROTATE_FILE_COUNT=20 ./nfsclientlogs.sh v4 start CaptureNetwork
+TCPDUMP_ROTATE_FILE_SIZE_MB=${TCPDUMP_ROTATE_FILE_SIZE_MB:-100}  # Per-file size in MB (default 100MB)
+TCPDUMP_ROTATE_FILE_COUNT=${TCPDUMP_ROTATE_FILE_COUNT:-10}       # Number of files in circular buffer
+# Snapshot length (bytes) for tcpdump captures; 512 captures all protocol headers for NFS while limiting payload size.
+# Override with: TCPDUMP_SNAPLEN=1024 ./nfsclientlogs.sh v4 start CaptureNetwork
+TCPDUMP_SNAPLEN=${TCPDUMP_SNAPLEN:-512}
 
 am_i_root() {
     local euid=$(id -u)
@@ -32,7 +42,7 @@ main() {
   then
     stop
   else
-    echo "Usage: ./nfsclientlogs.sh <v3b | v4> <> <start | stop> <CaptureNetwork> <OnAnomaly>"
+    echo "Usage: ./nfsclientlogs.sh <v3b | v4> <> <start | stop> <CaptureNetwork> <OnAnomaly> <VerboseLogs>"
     exit 1
   fi
 
@@ -41,7 +51,7 @@ main() {
 
 start() {
   init
-  start_trace
+  start_trace "$@"
   dump_os_information
 
   echo "======= Dumping NFS Debug Stats at start =======" > nfs_diag.txt
@@ -108,10 +118,30 @@ check_utils() {
   fi
 }
 
-start_trace() {
-  rpcdebug -m rpc -s all
-  rpcdebug -m nfs -s all
+# Validate rotation parameters (simple integer & >0 checks)
+validate_tcpdump_rotation() {
+  case "$TCPDUMP_ROTATE_FILE_SIZE_MB" in
+    ''|*[!0-9]*) echo "Invalid TCPDUMP_ROTATE_FILE_SIZE_MB=$TCPDUMP_ROTATE_FILE_SIZE_MB (must be integer >0)"; return 1;;
+  esac
+  case "$TCPDUMP_ROTATE_FILE_COUNT" in
+    ''|*[!0-9]*) echo "Invalid TCPDUMP_ROTATE_FILE_COUNT=$TCPDUMP_ROTATE_FILE_COUNT (must be integer >0)"; return 1;;
+  esac
+  if [ "$TCPDUMP_ROTATE_FILE_SIZE_MB" -le 0 ] || [ "$TCPDUMP_ROTATE_FILE_COUNT" -le 0 ]; then
+    echo "Rotation parameters must be > 0"; return 1
+  fi
+  return 0
+}
 
+start_trace() {
+  # Enable rpcdebug only if explicitly requested via "VerboseLogs" argument
+  if [[ "$*" =~ "VerboseLogs" ]]; then
+    echo "Enabling rpcdebug for rpc and nfs modules" >&2
+    rpcdebug -m rpc -s all
+    rpcdebug -m nfs -s all
+    TRACE_RPCDEBUG_ENABLED=1
+  else
+    TRACE_RPCDEBUG_ENABLED=0
+  fi
   trace-cmd start -e nfs
 }
 
@@ -142,8 +172,22 @@ dump_debug_stats() {
 }
 
 capture_network() {
-  nohup tcpdump -p -s 0 port ${NFS_PORT} -w "${DIRNAME}/nfs_traffic.pcap" &
-  echo $! > "${PIDFILE}"
+  # Use tcpdump ring buffer (-C size MB, -W file count) to avoid filling disk.
+  # Files will be named nfs_traffic.pcap0, nfs_traffic.pcap1, ... and reuse cyclically.
+  if validate_tcpdump_rotation; then
+    local total=$((TCPDUMP_ROTATE_FILE_SIZE_MB * TCPDUMP_ROTATE_FILE_COUNT))
+    echo "Starting circular tcpdump (${TCPDUMP_ROTATE_FILE_COUNT} files x ${TCPDUMP_ROTATE_FILE_SIZE_MB}MB ~= ${total}MB max)" >&2
+    nohup tcpdump -p -n -s "${TCPDUMP_SNAPLEN}" \
+      -C "${TCPDUMP_ROTATE_FILE_SIZE_MB}" \
+      -W "${TCPDUMP_ROTATE_FILE_COUNT}" \
+      -w "${DIRNAME}/nfs_traffic.pcap" \
+      port ${NFS_PORT} &
+    echo $! > "${PIDFILE}"
+  else
+    echo "Falling back to single-file tcpdump capture (no rotation)." >&2
+    nohup tcpdump -p -s "${TCPDUMP_SNAPLEN}" port ${NFS_PORT} -w "${DIRNAME}/nfs_traffic.pcap" &
+    echo $! > "${PIDFILE}"
+  fi
 }
 
 trace_nfsbpf() {
@@ -168,8 +212,11 @@ stop_trace() {
   trace-cmd report > "${DIRNAME}/nfs_trace"
   trace-cmd stop
   trace-cmd reset
-  rpcdebug -m rpc -c all
-  rpcdebug -m nfs -c all
+  if [ ${TRACE_RPCDEBUG_ENABLED} -eq 1 ]; then
+    echo "Clearing rpcdebug settings" >&2
+    rpcdebug -m rpc -c all
+    rpcdebug -m nfs -c all
+  fi
   rm -rf trace.dat*
 }
 
