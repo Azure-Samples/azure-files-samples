@@ -1,11 +1,18 @@
 #!/bin/bash
 
+# Simplified NFS diagnostics: capture tcpdump directly into output directory
 PIDFILE="/tmp/nfsclientlog.pid"
 DIRNAME="./output"
 NFS_PORT=2049
 TRACE_NFSBPF_ABS_PATH="$(cd "$(dirname "trace-nfsbpf")" && pwd)/$(basename "trace-nfsbpf")"
 PYTHON_PROG='python'
 STDLOG_FILE='/dev/null'
+TRACE_RPCDEBUG_ENABLED=0
+
+# Ring buffer defaults (override via env before invoking)
+TCPDUMP_ROTATE_FILE_SIZE_MB=${TCPDUMP_ROTATE_FILE_SIZE_MB:-100}
+TCPDUMP_ROTATE_FILE_COUNT=${TCPDUMP_ROTATE_FILE_COUNT:-10}
+TCPDUMP_SNAPLEN=${TCPDUMP_SNAPLEN:-1024}
 
 am_i_root() {
     local euid=$(id -u)
@@ -32,7 +39,7 @@ main() {
   then
     stop
   else
-    echo "Usage: ./nfsclientlogs.sh <v3b | v4> <> <start | stop> <CaptureNetwork> <OnAnomaly>"
+    echo "Usage: ./nfsclientlogs.sh <v3b | v4> <> <start | stop> <CaptureNetwork> <OnAnomaly> <VerboseLogs>"
     exit 1
   fi
 
@@ -40,36 +47,29 @@ main() {
 }
 
 start() {
+  if [ -f "${PIDFILE}" ] && read -r _running_pid < "${PIDFILE}" 2>/dev/null && ps -p "$_running_pid" >/dev/null 2>&1; then
+    echo "Warning: A network capture is already in progress (pid $_running_pid). Stop it before starting a new capture." >&2
+    return 1
+  fi
   init
-  start_trace
+  start_trace "$@"
   dump_os_information
-
   echo "======= Dumping NFS Debug Stats at start =======" > nfs_diag.txt
   dump_debug_stats
   echo "=================================================" >> nfs_diag.txt
-
-  if [[ "$*" =~ "CaptureNetwork" ]]; then
-    capture_network
-  fi
-
-  if [[ "$*" =~ "OnAnomaly" ]]; then
-    trace_nfsbpf
-  fi
+  [[ "$*" =~ "CaptureNetwork" ]] && capture_network
+  [[ "$*" =~ "OnAnomaly" ]] && trace_nfsbpf
 }
 
 init() {
   check_utils
-
-  if [[ -f $DIRNAME ]];
-  then
-    rm -rf "$DIRNAME"
-  fi
+  if [[ -f $DIRNAME ]]; then rm -rf "$DIRNAME"; fi
   mkdir -p "$DIRNAME"
-
+  if id -u tcpdump >/dev/null 2>&1; then
+    chown tcpdump:tcpdump "$DIRNAME" 2>/dev/null || true
+    chmod 750 "$DIRNAME" 2>/dev/null || true
+  fi
   dmesg -Tc > /dev/null
-  # rm -f "${DIRNAME}/nfs_dmesg"
-  # rm -f "${DIRNAME}/nfs_trace"
-  # rm -f "${DIRNAME}/nfs_traffic.pcap"
 }
 
 check_utils() {
@@ -108,10 +108,30 @@ check_utils() {
   fi
 }
 
-start_trace() {
-  rpcdebug -m rpc -s all
-  rpcdebug -m nfs -s all
+# Validate rotation parameters (simple integer & >0 checks)
+validate_tcpdump_rotation() {
+  case "$TCPDUMP_ROTATE_FILE_SIZE_MB" in
+    ''|*[!0-9]*) echo "Invalid TCPDUMP_ROTATE_FILE_SIZE_MB=$TCPDUMP_ROTATE_FILE_SIZE_MB (must be integer >0)"; return 1;;
+  esac
+  case "$TCPDUMP_ROTATE_FILE_COUNT" in
+    ''|*[!0-9]*) echo "Invalid TCPDUMP_ROTATE_FILE_COUNT=$TCPDUMP_ROTATE_FILE_COUNT (must be integer >0)"; return 1;;
+  esac
+  if [ "$TCPDUMP_ROTATE_FILE_SIZE_MB" -le 0 ] || [ "$TCPDUMP_ROTATE_FILE_COUNT" -le 0 ]; then
+    echo "Rotation parameters must be > 0"; return 1
+  fi
+  return 0
+}
 
+start_trace() {
+  # Enable rpcdebug only if explicitly requested via "VerboseLogs" argument
+  if [[ "$*" =~ "VerboseLogs" ]]; then
+    echo "Enabling rpcdebug for rpc and nfs modules" >&2
+    rpcdebug -m rpc -s all
+    rpcdebug -m nfs -s all
+    TRACE_RPCDEBUG_ENABLED=1
+  else
+    TRACE_RPCDEBUG_ENABLED=0
+  fi
   trace-cmd start -e nfs
 }
 
@@ -142,8 +162,16 @@ dump_debug_stats() {
 }
 
 capture_network() {
-  nohup tcpdump -p -s 0 port ${NFS_PORT} -w "${DIRNAME}/nfs_traffic.pcap" &
-  echo $! > "${PIDFILE}"
+  if validate_tcpdump_rotation; then
+    local total=$((TCPDUMP_ROTATE_FILE_SIZE_MB * TCPDUMP_ROTATE_FILE_COUNT))
+    echo "Starting circular tcpdump in ${DIRNAME} (${TCPDUMP_ROTATE_FILE_COUNT} files x ${TCPDUMP_ROTATE_FILE_SIZE_MB}MB ~= ${total}MB max)" >&2
+    nohup tcpdump -p -n -s "${TCPDUMP_SNAPLEN}" -C "${TCPDUMP_ROTATE_FILE_SIZE_MB}" -W "${TCPDUMP_ROTATE_FILE_COUNT}" -w "${DIRNAME}/nfs_traffic.pcap" port ${NFS_PORT} &
+    echo $! > "${PIDFILE}"
+  else
+    echo "Falling back to single-file tcpdump capture in ${DIRNAME} (no rotation)." >&2
+    nohup tcpdump -p -s "${TCPDUMP_SNAPLEN}" port ${NFS_PORT} -w "${DIRNAME}/nfs_traffic.pcap" &
+    echo $! > "${PIDFILE}"
+  fi
 }
 
 trace_nfsbpf() {
@@ -159,7 +187,7 @@ stop() {
   mv nfs_diag.txt "${DIRNAME}"
   mv os_details.txt "${DIRNAME}"
   zip -r "$(basename ${DIRNAME}).zip" "${DIRNAME}"
-  return 0;
+  return 0
 }
 
 stop_trace() {
@@ -168,8 +196,11 @@ stop_trace() {
   trace-cmd report > "${DIRNAME}/nfs_trace"
   trace-cmd stop
   trace-cmd reset
-  rpcdebug -m rpc -c all
-  rpcdebug -m nfs -c all
+  if [ ${TRACE_RPCDEBUG_ENABLED} -eq 1 ]; then
+    echo "Clearing rpcdebug settings" >&2
+    rpcdebug -m rpc -c all
+    rpcdebug -m nfs -c all
+  fi
   rm -rf trace.dat*
 }
 
