@@ -1,42 +1,18 @@
 #!/bin/bash
 
+# Simplified NFS diagnostics: capture tcpdump directly into output directory
 PIDFILE="/tmp/nfsclientlog.pid"
 DIRNAME="./output"
 NFS_PORT=2049
 TRACE_NFSBPF_ABS_PATH="$(cd "$(dirname "trace-nfsbpf")" && pwd)/$(basename "trace-nfsbpf")"
 PYTHON_PROG='python'
 STDLOG_FILE='/dev/null'
-TRACE_RPCDEBUG_ENABLED=0  # Tracks whether rpcdebug was enabled so we can clean it up conditionally
-CAPTURE_DIR_STATE_FILE="/tmp/nfsclientlogs_capture_dir"
+TRACE_RPCDEBUG_ENABLED=0
 
-# Default ring buffer settings for tcpdump (can be overridden by env vars before invoking script)
-# Limit disk usage to (size * count) MB total. Example override:
-#   TCPDUMP_ROTATE_FILE_SIZE_MB=100 TCPDUMP_ROTATE_FILE_COUNT=20 ./nfsclientlogs.sh v4 start CaptureNetwork
-TCPDUMP_ROTATE_FILE_SIZE_MB=${TCPDUMP_ROTATE_FILE_SIZE_MB:-100}  # Per-file size in MB (default 100MB)
-TCPDUMP_ROTATE_FILE_COUNT=${TCPDUMP_ROTATE_FILE_COUNT:-10}       # Number of files in circular buffer
-# Snapshot length (bytes) for tcpdump captures; 512 captures all protocol headers for NFS while limiting payload size.
-# Override with: TCPDUMP_SNAPLEN=1024 ./nfsclientlogs.sh v4 start CaptureNetwork
+# Ring buffer defaults (override via env before invoking)
+TCPDUMP_ROTATE_FILE_SIZE_MB=${TCPDUMP_ROTATE_FILE_SIZE_MB:-100}
+TCPDUMP_ROTATE_FILE_COUNT=${TCPDUMP_ROTATE_FILE_COUNT:-10}
 TCPDUMP_SNAPLEN=${TCPDUMP_SNAPLEN:-1024}
-
-# Determine (or reuse) tcpdump capture directory. For a running capture we reuse the
-# directory recorded in CAPTURE_DIR_STATE_FILE so that a separate "stop" invocation
-# can find the files. For a new start (no running tcpdump PID) we create a unique dir
-# unless the user explicitly supplied TCPDUMP_CAPTURE_DIR.
-if [ -f "$CAPTURE_DIR_STATE_FILE" ] && [ -f "/tmp/nfsclientlog.pid" ]; then
-  # Potential existing capture
-  if read -r _existing_pid < "/tmp/nfsclientlog.pid" 2>/dev/null && ps -p "$_existing_pid" >/dev/null 2>&1; then
-    if [ -z "${TCPDUMP_CAPTURE_DIR+x}" ]; then
-      if read -r _prev_dir < "$CAPTURE_DIR_STATE_FILE" 2>/dev/null && [ -d "$_prev_dir" ]; then
-        TCPDUMP_CAPTURE_DIR="$_prev_dir"
-      fi
-    fi
-  fi
-fi
-if [ -z "${TCPDUMP_CAPTURE_DIR+x}" ]; then
-  _CAP_BASE="/tmp/tcpdump"
-  _RUN_ID="$(date +%Y%m%d-%H%M%S)-$$"
-  TCPDUMP_CAPTURE_DIR="${_CAP_BASE}-${_RUN_ID}"
-fi
 
 am_i_root() {
     local euid=$(id -u)
@@ -71,55 +47,29 @@ main() {
 }
 
 start() {
-  # Detect existing capture to avoid overwriting PID/state and spawning duplicates
-  if [ -f "${PIDFILE}" ]; then
-    if read -r _running_pid < "${PIDFILE}" 2>/dev/null && ps -p "$_running_pid" >/dev/null 2>&1; then
-      _running_dir="(unknown)"
-      if [ -f "${CAPTURE_DIR_STATE_FILE}" ]; then
-        if read -r _d < "${CAPTURE_DIR_STATE_FILE}" 2>/dev/null; then
-          _running_dir="${_d}"
-        fi
-      fi
-      echo "Warning: A network capture is already in progress (pid $_running_pid) using directory ${_running_dir}. Stop it before starting a new capture." >&2
-      return 1
-    fi
+  if [ -f "${PIDFILE}" ] && read -r _running_pid < "${PIDFILE}" 2>/dev/null && ps -p "$_running_pid" >/dev/null 2>&1; then
+    echo "Warning: A network capture is already in progress (pid $_running_pid). Stop it before starting a new capture." >&2
+    return 1
   fi
   init
   start_trace "$@"
   dump_os_information
-
   echo "======= Dumping NFS Debug Stats at start =======" > nfs_diag.txt
   dump_debug_stats
   echo "=================================================" >> nfs_diag.txt
-
-  if [[ "$*" =~ "CaptureNetwork" ]]; then
-    capture_network
-  fi
-
-  if [[ "$*" =~ "OnAnomaly" ]]; then
-    trace_nfsbpf
-  fi
+  [[ "$*" =~ "CaptureNetwork" ]] && capture_network
+  [[ "$*" =~ "OnAnomaly" ]] && trace_nfsbpf
 }
 
 init() {
   check_utils
-
-  if [[ -f $DIRNAME ]];
-  then
-    rm -rf "$DIRNAME"
-  fi
+  if [[ -f $DIRNAME ]]; then rm -rf "$DIRNAME"; fi
   mkdir -p "$DIRNAME"
-  mkdir -p "$TCPDUMP_CAPTURE_DIR"
-  # Make capture dir writable by tcpdump drop user (some distros auto-drop privileges)
   if id -u tcpdump >/dev/null 2>&1; then
-    chown tcpdump:tcpdump "$TCPDUMP_CAPTURE_DIR" 2>/dev/null || true
-    chmod 750 "$TCPDUMP_CAPTURE_DIR" 2>/dev/null || true
+    chown tcpdump:tcpdump "$DIRNAME" 2>/dev/null || true
+    chmod 750 "$DIRNAME" 2>/dev/null || true
   fi
-
   dmesg -Tc > /dev/null
-  # rm -f "${DIRNAME}/nfs_dmesg"
-  # rm -f "${DIRNAME}/nfs_trace"
-  # rm -f "${DIRNAME}/nfs_traffic.pcap"
 }
 
 check_utils() {
@@ -212,23 +162,15 @@ dump_debug_stats() {
 }
 
 capture_network() {
-  # Use tcpdump ring buffer (-C size MB, -W file count) in temporary directory to avoid filling working dir.
-  # Files will be named nfs_traffic.pcap, nfs_traffic.pcap1, ...
   if validate_tcpdump_rotation; then
     local total=$((TCPDUMP_ROTATE_FILE_SIZE_MB * TCPDUMP_ROTATE_FILE_COUNT))
-    echo "Starting circular tcpdump in ${TCPDUMP_CAPTURE_DIR} (${TCPDUMP_ROTATE_FILE_COUNT} files x ${TCPDUMP_ROTATE_FILE_SIZE_MB}MB ~= ${total}MB max)" >&2
-    nohup tcpdump -p -n -s "${TCPDUMP_SNAPLEN}" \
-      -C "${TCPDUMP_ROTATE_FILE_SIZE_MB}" \
-      -W "${TCPDUMP_ROTATE_FILE_COUNT}" \
-      -w "${TCPDUMP_CAPTURE_DIR}/nfs_traffic.pcap" \
-      port ${NFS_PORT} &
+    echo "Starting circular tcpdump in ${DIRNAME} (${TCPDUMP_ROTATE_FILE_COUNT} files x ${TCPDUMP_ROTATE_FILE_SIZE_MB}MB ~= ${total}MB max)" >&2
+    nohup tcpdump -p -n -s "${TCPDUMP_SNAPLEN}" -C "${TCPDUMP_ROTATE_FILE_SIZE_MB}" -W "${TCPDUMP_ROTATE_FILE_COUNT}" -w "${DIRNAME}/nfs_traffic.pcap" port ${NFS_PORT} &
     echo $! > "${PIDFILE}"
-    echo "${TCPDUMP_CAPTURE_DIR}" > "${CAPTURE_DIR_STATE_FILE}" 2>/dev/null || true
   else
-    echo "Falling back to single-file tcpdump capture in ${TCPDUMP_CAPTURE_DIR} (no rotation)." >&2
-    nohup tcpdump -p -s "${TCPDUMP_SNAPLEN}" port ${NFS_PORT} -w "${TCPDUMP_CAPTURE_DIR}/nfs_traffic.pcap" &
+    echo "Falling back to single-file tcpdump capture in ${DIRNAME} (no rotation)." >&2
+    nohup tcpdump -p -s "${TCPDUMP_SNAPLEN}" port ${NFS_PORT} -w "${DIRNAME}/nfs_traffic.pcap" &
     echo $! > "${PIDFILE}"
-    echo "${TCPDUMP_CAPTURE_DIR}" > "${CAPTURE_DIR_STATE_FILE}" 2>/dev/null || true
   fi
 }
 
@@ -240,35 +182,12 @@ stop() {
   dmesg -T > "${DIRNAME}/nfs_dmesg"
   stop_trace
   stop_capture_network
-  # Move pcaps from capture directory into output directory
-  if ls "${TCPDUMP_CAPTURE_DIR}"/nfs_traffic.pcap* >/dev/null 2>&1; then
-    for pcap in "${TCPDUMP_CAPTURE_DIR}"/nfs_traffic.pcap*; do
-      [ -f "$pcap" ] || continue
-      mv "$pcap" "${DIRNAME}" 2>/dev/null || { cp -p "$pcap" "${DIRNAME}" 2>/dev/null && rm -f "$pcap"; }
-    done
-  fi
-  # Attempt cleanup of auto-generated temporary capture directory if empty and pattern matches
-  if [ -d "${TCPDUMP_CAPTURE_DIR}" ]; then
-    # Directory considered auto-generated if it starts with /tmp/tcpdump-
-    case "${TCPDUMP_CAPTURE_DIR}" in
-      /tmp/tcpdump-*)
-        # If no remaining pcaps, remove directory
-        if ! ls -A "${TCPDUMP_CAPTURE_DIR}" >/dev/null 2>&1; then
-          rmdir "${TCPDUMP_CAPTURE_DIR}" 2>/dev/null || rm -rf "${TCPDUMP_CAPTURE_DIR}" 2>/dev/null || true
-        else
-          echo "Leaving non-empty capture dir ${TCPDUMP_CAPTURE_DIR}" >&2
-        fi
-        ;;
-    esac
-  fi
-  # Remove state file after stop (safe even if file not present)
-  rm -f "${CAPTURE_DIR_STATE_FILE}" 2>/dev/null || true
   echo -e "\n\n======= Dumping CIFS Debug Stats at the end =======" >> nfs_diag.txt
   dump_debug_stats
   mv nfs_diag.txt "${DIRNAME}"
   mv os_details.txt "${DIRNAME}"
   zip -r "$(basename ${DIRNAME}).zip" "${DIRNAME}"
-  return 0;
+  return 0
 }
 
 stop_trace() {
