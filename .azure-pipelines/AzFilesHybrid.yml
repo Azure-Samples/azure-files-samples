@@ -39,8 +39,8 @@ stages:
         displayName: 'Sign AzFilesHybrid'
         steps:
           - checkout: none
-          - task: EsrpCodeSigning@6
-            displayName: 'ESRP Code Signing'
+          - task: EsrpCodeSigning@5
+            displayName: 'Sign PowerShell code'
             inputs:
               ConnectedServiceName: 'AzFilesHybrid-Sign'
               AppRegistrationClientId: $(AppRegistrationClientId)
@@ -49,11 +49,34 @@ stages:
               AuthAKVName: $(AuthAKVName)
               AuthSignCertName: $(AuthSignCertName)
               FolderPath: 'AzFilesHybrid\AzFilesHybrid'
-              signConfigType: inlineSignParams
               Pattern: '*.ps1,*.psm1,*.psd1'
               SessionTimeout: 90
               ServiceEndpointUrl: 'https://api.esrp.microsoft.com/api/v2'
               MaxConcurrency: 25
               MaxRetryAttempts: 3
               PendingAnalysisWaitTimeoutMinutes: 5
+              signConfigType: inlineSignParams
               VerboseLogin: true
+              inlineOperation: |
+                [
+                  {
+                    "KeyCode": "CP-230012",
+                    "OperationCode": "SigntoolSign",
+                    "Parameters": {
+                      "OpusName": "Microsoft",
+                      "OpusInfo": "http://www.microsoft.com",
+                      "FileDigest": "/fd \"SHA256\"",
+                      "PageHash": "/NPH",
+                      "TimeStamp": "/tr \"http://rfc3161.gtm.corp.microsoft.com/TSS/HttpTspServer\" /td sha256"
+                    },
+                    "ToolName": "sign",
+                    "ToolVersion": "1.0"
+                  },
+                  {
+                    "KeyCode": "CP-230012",
+                    "OperationCode": "SigntoolVerify",
+                    "Parameters": {},
+                    "ToolName": "sign",
+                    "ToolVersion": "1.0"
+                  }
+                ]
