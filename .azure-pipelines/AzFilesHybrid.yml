@@ -48,6 +48,7 @@ stages:
               UseMSIAuthentication: true
               AuthAKVName: $(AuthAKVName)
               AuthSignCertName: $(AuthSignCertName)
+              AuthCertName: $(AuthCertName)
               FolderPath: 'AzFilesHybrid\AzFilesHybrid'
               Pattern: '*.ps1,*.psm1,*.psd1'
               SessionTimeout: 90
