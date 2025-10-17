@@ -1,0 +1,43 @@
+trigger:
+  branches:
+    include:
+      - '*'
+  paths:
+    include:
+      - .azure-pipelines/AzFilesHybrid.yml
+      - AzFilesHybrid/**
+
+pr:
+  branches:
+    include:
+      - '*'
+  paths:
+    include:
+      - .azure-pipelines/AzFilesHybrid.yml
+      - AzFilesHybrid/**
+
+pool:
+  vmImage: 'windows-latest'
+
+stages:
+  - stage: Test
+    displayName: 'Test AzFilesHybrid'
+    jobs:
+      - job: TestPowerShell5
+        displayName: 'Test with PowerShell 5.1'
+        steps:
+          - checkout: self
+          - powershell: |
+              Set-Location -Path .\AzFilesHybrid
+              .\init.ps1
+              Test-Manifest
+            displayName: 'Check .psd1 file with Test-ModuleManifest'
+      - job: TestPowerShell7
+        displayName: 'Test with PowerShell 7'
+        steps:
+          - checkout: self
+          - pwsh: |
+              Set-Location -Path .\AzFilesHybrid
+              .\init.ps1
+              Test-Manifest
+            displayName: 'Check .psd1 file with Test-ModuleManifest'
