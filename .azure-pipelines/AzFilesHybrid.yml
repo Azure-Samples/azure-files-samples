@@ -1,16 +1,7 @@
 trigger:
   branches:
     include:
-      - '*'
-  paths:
-    include:
-      - .azure-pipelines/AzFilesHybrid.yml
-      - AzFilesHybrid/**
-
-pr:
-  branches:
-    include:
-      - '*'
+      - 'main'
   paths:
     include:
       - .azure-pipelines/AzFilesHybrid.yml
@@ -41,3 +32,28 @@ stages:
               .\init.ps1
               Test-Manifest
             displayName: 'Check .psd1 file with Test-ModuleManifest'
+  - stage: Release
+    displayName: 'Release AzFilesHybrid'
+    jobs:
+      - job: CodeSign
+        displayName: 'Sign AzFilesHybrid'
+        steps:
+          - checkout: none
+          - task: EsrpCodeSigning@6
+            displayName: 'ESRP Code Signing'
+            inputs:
+              ConnectedServiceName: 'AzFilesHybrid-CodeSign'
+              AppRegistrationClientId: $(AppRegistrationClientId)
+              AppRegistrationTenantId: $(AppRegistrationTenantId)
+              UseMSIAuthentication: true
+              AuthAKVName: $(AuthAKVName)
+              AuthSignCertName: $(AuthSignCertName)
+              FolderPath: 'AzFilesHybrid\AzFilesHybrid'
+              signConfigType: inlineSignParams
+              Pattern: '*.ps1,*.psm1,*.psd1'
+              SessionTimeout: 90
+              ServiceEndpointUrl: 'https://api.esrp.microsoft.com/api/v2'
+              MaxConcurrency: 25
+              MaxRetryAttempts: 3
+              PendingAnalysisWaitTimeoutMinutes: 5
+              VerboseLogin: true
