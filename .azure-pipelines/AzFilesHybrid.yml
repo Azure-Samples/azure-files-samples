@@ -42,7 +42,7 @@ stages:
           - task: EsrpCodeSigning@6
             displayName: 'ESRP Code Signing'
             inputs:
-              ConnectedServiceName: 'AzFilesHybrid-CodeSign'
+              ConnectedServiceName: 'AzFilesHybrid-Sign'
               AppRegistrationClientId: $(AppRegistrationClientId)
               AppRegistrationTenantId: $(AppRegistrationTenantId)
               UseMSIAuthentication: true
