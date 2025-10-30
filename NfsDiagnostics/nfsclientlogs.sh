@@ -112,7 +112,7 @@ start_trace() {
   rpcdebug -m rpc -s all
   rpcdebug -m nfs -s all
 
-  trace-cmd start -e nfs
+  trace-cmd start -e nfs -e nfs4
 }
 
 dump_os_information() {
