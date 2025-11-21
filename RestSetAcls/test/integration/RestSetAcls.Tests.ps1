@@ -32,8 +32,8 @@ BeforeDiscovery {
 }
 
 BeforeAll {
-    Import-Module $PSScriptRoot/utils.psm1 -Force
     Import-Module $PSScriptRoot/../../RestSetAcls/RestSetAcls.psd1 -Force
+    . $PSScriptRoot/utils.ps1 -Force
 
     # Check that the session has an Azure context
     $azContext = Get-AzContext -ErrorAction SilentlyContinue
