@@ -1,7 +1,8 @@
-. $PSScriptRoot/Convert.ps1
-. $PSScriptRoot/SddlUtils.ps1
-. $PSScriptRoot/PrintUtils.ps1
-Import-Module $PSScriptRoot/Interop.psm1
+# Dot-source types and classes first (enums must exist before functions).
+Get-ChildItem -Path "$PSScriptRoot/Types/*.ps1" | ForEach-Object { . $_.FullName }
+
+# Dot-source helper functions next. Some of these are also exported in psd1.
+Get-ChildItem -Path "$PSScriptRoot/Helpers/*.ps1" | ForEach-Object { . $_.FullName }
 
 function Write-LiveFilesAndFoldersProcessingStatus {
     [OutputType([int])]
