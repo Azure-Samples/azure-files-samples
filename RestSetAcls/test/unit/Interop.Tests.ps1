@@ -1,6 +1,9 @@
 BeforeAll {
-    Import-Module $PSScriptRoot/../../RestSetAcls/Interop.psm1 -Force
-    . $PSScriptRoot/../../RestSetAcls/SddlUtils.ps1
+    # A bit of a hacky way to import the module being tested and its dependencies. Maybe InModuleScope
+    # could be used instead in the future.
+    Import-Module $PSScriptRoot/../../RestSetAcls/RestSetAcls.psd1 -Force
+    Get-ChildItem -Path "$PSScriptRoot/../../RestSetAcls/Types/*.ps1" | ForEach-Object { . $_.FullName }
+    . $PSScriptRoot/../../RestSetAcls/Helpers/Interop.ps1
 }
 
 Describe "Interop" {

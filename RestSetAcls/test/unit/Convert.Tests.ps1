@@ -1,7 +1,5 @@
 BeforeAll {
-    . $PSScriptRoot/../../RestSetAcls/Enumerations.ps1 -Force
-    . $PSScriptRoot/../../RestSetAcls/Convert.ps1
-    . $PSScriptRoot/../../RestSetAcls/SddlUtils.ps1
+    Import-Module $PSScriptRoot/../../RestSetAcls/RestSetAcls.psd1 -Force
 }
 
 Describe "Convert-SecurityDescriptor" {
@@ -192,19 +190,17 @@ Describe "Convert-SecurityDescriptor" {
             $results.Count | Should -Be 2
         }
     }
-}
 
-Describe "ConvertTo-SecurityDescriptor" {
     Describe "Sddl" {
         It "Should be able to parse valid SDDL" {
             $sddl = "O:SYG:SYD:AI(A;;0x1301bf;;;WD)(A;ID;0x1201bf;;;WD)(A;;0x1301ff;;;AU)"
-            $descriptor = ConvertTo-SecurityDescriptor $sddl
+            $descriptor = Convert-SecurityDescriptor $sddl -From Sddl -To Raw
             $descriptor.DiscretionaryAcl.Count | Should -Be 3
         }
 
         It "Should be able to parse complex but valid SDDL" {
             $sddl = "O:BAG:BAD:(A;;RPWPCCDCLCRCWOWDSDSW;;;SY)(A;;RPWPCCDCLCRCWOWDSDSW;;;BA)(OA;;CCDC;bf967aba-0de6-11d0-a285-00aa003049e2;;AO)(OA;;CCDC;bf967a9c-0de6-11d0-a285-00aa003049e2;;AO)(OA;;CCDC;6da8a4ff-0e52-11d0-a286-00aa003049e2;;AO)(OA;;CCDC;bf967aa8-0de6-11d0-a285-00aa003049e2;;PO)(A;;RPLCRC;;;AU)S:(AU;SAFA;WDWOSDWPCCDCSW;;;WD)"
-            $descriptor = ConvertTo-SecurityDescriptor $sddl
+            $descriptor = Convert-SecurityDescriptor $sddl -From Sddl -To Raw
             $descriptor.Owner | Should -Be "S-1-5-32-544"
             $descriptor.Group | Should -Be "S-1-5-32-544"
             $descriptor.DiscretionaryAcl.Count | Should -Be 7
@@ -213,7 +209,7 @@ Describe "ConvertTo-SecurityDescriptor" {
     
         It "Should parse inheritance and propagation flags" {
             $sddl = "O:SYG:SYD:AI(A;OICI;0x1301bf;;;WD)(A;NPIO;0x1201bf;;;WD)"
-            $descriptor = ConvertTo-SecurityDescriptor $sddl
+            $descriptor = Convert-SecurityDescriptor $sddl -From Sddl -To Raw
             $descriptor.DiscretionaryAcl.Count | Should -Be 2
             $descriptor.DiscretionaryAcl[0].InheritanceFlags | Should -Be "ContainerInherit, ObjectInherit"
             $descriptor.DiscretionaryAcl[0].PropagationFlags | Should -Be "None"
@@ -223,12 +219,12 @@ Describe "ConvertTo-SecurityDescriptor" {
     
         It "Should be able to parse SDDL with D:NO_ACCESS_CONTROL" {
             $sddl = "O:SYG:SYD:NO_ACCESS_CONTROL"
-            $descriptor = ConvertTo-SecurityDescriptor $sddl
+            $descriptor = Convert-SecurityDescriptor $sddl -From Sddl -To Raw
             $descriptor.DiscretionaryAcl.Count | Should -Be 0
         }
     
         It "Should be able to parse SDDL without a DACL" {
-            $descriptor = ConvertTo-SecurityDescriptor "O:SYG:SY"
+            $descriptor = Convert-SecurityDescriptor "O:SYG:SY" -From Sddl -To Raw
             $descriptor.DiscretionaryAcl.Count | Should -Be 0
         }
 
@@ -247,7 +243,7 @@ Describe "ConvertTo-SecurityDescriptor" {
             @{ Sid = "SA" } # SCHEMA_ADMINISTRATORS, S-1-5-21-<domain>-518
         ) {
             $sddl = "O:${Sid}G:BAD:NO_ACCESS_CONTROL"
-            { ConvertTo-SecurityDescriptor $sddl } | Should -Throw
+            { Convert-SecurityDescriptor $sddl -From Sddl -To Raw } | Should -Throw
         }
 
         It "Should be able to parse SDDL with well-known machine-relative SID <Sid>" -ForEach @(
@@ -257,7 +253,7 @@ Describe "ConvertTo-SecurityDescriptor" {
             @{ Sid = "LG"; SidMatches = "S-1-5-21-.*-501" } # GUEST
         ) {
             $sddl = "O:${Sid}G:BAD:NO_ACCESS_CONTROL"
-            $descriptor = ConvertTo-SecurityDescriptor $sddl
+            $descriptor = Convert-SecurityDescriptor $sddl -From Sddl -To Raw
             $descriptor.Owner | Should -Match $SidMatches
         }
 
@@ -313,7 +309,7 @@ Describe "ConvertTo-SecurityDescriptor" {
             @{ Sid = "WR"; SidValue = "S-1-5-33" } # WRITE_RESTRICTED_CODE
         ) {
             $sddl = "O:${Sid}G:BAD:NO_ACCESS_CONTROL"
-            $descriptor = ConvertTo-SecurityDescriptor $sddl
+            $descriptor = Convert-SecurityDescriptor $sddl -From Sddl -To Raw
             [string]$descriptor.Owner | Should -Be $SidValue
         }
 
@@ -359,7 +355,7 @@ Describe "ConvertTo-SecurityDescriptor" {
             # [3]: https://github.com/dotnet/runtime/blob/main/src/libraries/System.Security.AccessControl/src/System/Security/AccessControl/SecurityDescriptor.cs
             #
             $sddl = "O:SYG:SYD:(A;;${AccessRight};;;WD)"
-            $descriptor = ConvertTo-SecurityDescriptor $sddl
+            $descriptor = Convert-SecurityDescriptor $sddl -From Sddl -To Raw
             
             $descriptor.DiscretionaryAcl.Count | Should -Be 1
             $mask = [int]$descriptor.DiscretionaryAcl[0].AccessMask
@@ -367,11 +363,11 @@ Describe "ConvertTo-SecurityDescriptor" {
         }
         
         It "Should throw an error when the SDDL contains domain-relative SIDs" {
-            { ConvertTo-SecurityDescriptor "O:DAB:SYD:NO_ACCESS_CONTROL" } | Should -Throw
+            { Convert-SecurityDescriptor "O:DAB:SYD:NO_ACCESS_CONTROL" -From Sddl -To Raw } | Should -Throw
         }
 
         It "Should throw an error when parsing invalid SDDL" {
-            { ConvertTo-SecurityDescriptor "not valid SDDL :)" } | Should -Throw
+            { Convert-SecurityDescriptor "not valid SDDL :)" -From Sddl -To Raw } | Should -Throw
         }
     }
 
@@ -402,7 +398,7 @@ Describe "ConvertTo-SecurityDescriptor" {
                 0x20, 0x02, 0x00, 0x00  # SubAuthority 1 (544)
             )
 
-            $descriptor = ConvertTo-SecurityDescriptor $binary -InputFormat Binary
+            $descriptor = Convert-SecurityDescriptor $binary -From Binary -To Raw
             $descriptor.Owner | Should -Be "S-1-5-32-544"
             $descriptor.Group | Should -Be "S-1-5-32-544"
             $descriptor.ControlFlags | Should -Be (
@@ -465,7 +461,7 @@ Describe "ConvertTo-SecurityDescriptor" {
                 0x12, 0x00, 0x00, 0x00 # ACE 1 SID SubAuthority 0 (18)
             )
 
-            $descriptor = ConvertTo-SecurityDescriptor $binary -InputFormat Binary
+            $descriptor = Convert-SecurityDescriptor $binary -From Binary -To Raw
             $descriptor.Owner | Should -Be "S-1-5-32-544"
             $descriptor.Group | Should -Be "S-1-5-32-544"
             $descriptor.ControlFlags | Should -Be (
@@ -475,12 +471,12 @@ Describe "ConvertTo-SecurityDescriptor" {
             )
             $descriptor.DiscretionaryAcl.Count | Should -Be 2
             $descriptor.DiscretionaryAcl[0].AceType | Should -Be ([System.Security.AccessControl.AceType]::AccessAllowed)
-            $descriptor.DiscretionaryAcl[0].AccessMask | Should -Be ([BasicPermissions]::FULL_CONTROL)
+            $descriptor.DiscretionaryAcl[0].AccessMask | Should -Be 0x1F01FF
             $descriptor.DiscretionaryAcl[0].SecurityIdentifier | Should -Be "S-1-5-32-544"
 
             $descriptor.DiscretionaryAcl[1].AceType | Should -Be ([System.Security.AccessControl.AceType]::AccessAllowed)
             $descriptor.DiscretionaryAcl[1].AceFlags | Should -Be ([System.Security.AccessControl.AceFlags]::Inherited)
-            $descriptor.DiscretionaryAcl[1].AccessMask | Should -Be ([BasicPermissions]::FULL_CONTROL)
+            $descriptor.DiscretionaryAcl[1].AccessMask | Should -Be 0x1F01FF
             $descriptor.DiscretionaryAcl[1].SecurityIdentifier | Should -Be "S-1-5-18"
 
             $descriptor.SystemAcl | Should -BeNullOrEmpty
@@ -539,9 +535,7 @@ Describe "ConvertTo-SecurityDescriptor" {
                 0x20, 0x02, 0x00, 0x00 #  ACE 1 SID SubAuthority 1 (544)
             )
 
-            ConvertTo-SecurityDescriptor $binary -InputFormat Binary `
-            | ConvertFrom-SecurityDescriptor -OutputFormat Sddl `
-            | Should -Be "O:BAG:BAD:(A;;FW;;;BA)(A;;FR;;;BA)"
+            Convert-SecurityDescriptor $binary -From Binary -To Sddl | Should -Be "O:BAG:BAD:(A;;FW;;;BA)(A;;FR;;;BA)"
         }
 
         It "Should throw an error when parsing binary with invalid revision" {
@@ -569,7 +563,7 @@ Describe "ConvertTo-SecurityDescriptor" {
                 0x20, 0x02, 0x00, 0x00  # SubAuthority 1 (544)
             )
 
-            { ConvertTo-SecurityDescriptor $binary -From Binary } | Should -Throw 
+            { Convert-SecurityDescriptor $binary -From Binary -To Raw } | Should -Throw 
         }
     }
 
@@ -601,7 +595,7 @@ Describe "ConvertTo-SecurityDescriptor" {
             )
 
             $base64 = [System.Convert]::ToBase64String($binary)
-            $descriptor = ConvertTo-SecurityDescriptor $base64 -InputFormat Base64
+            $descriptor = Convert-SecurityDescriptor $base64 -From Base64 -To Raw
             $descriptor.Owner | Should -Be "S-1-5-32-544"
             $descriptor.Group | Should -Be "S-1-5-32-544"
             $descriptor.ControlFlags | Should -Be (
@@ -613,95 +607,65 @@ Describe "ConvertTo-SecurityDescriptor" {
         }
 
         It "Should throw an error when parsing invalid Base64" {
-            { ConvertTo-SecurityDescriptor "not valid Base64 :)" -From Base64 } | Should -Throw
+            { Convert-SecurityDescriptor "not valid Base64 :)" -From Base64 -To Raw } | Should -Throw
         }
-    }
-}
-
-Describe "ConvertFrom-SecurityDescriptor" {
-    It "Should return the same SDDL" {
-        $sddl = "O:SYG:SYD:AI(A;;0x1301bf;;;WD)(A;ID;0x1201bf;;;WD)(A;;0x1301ff;;;AU)"
-        $descriptor = ConvertTo-SecurityDescriptor $sddl
-        $newSddl = ConvertFrom-SecurityDescriptor $descriptor -OutputFormat Sddl
-        $newSddl | Should -Be $sddl
-    }
-
-    It "Should be able to convert SDDL to base64 and back with pipelines" {
-        $sddl = "O:SYG:SYD:AI(A;;0x1301bf;;;WD)(A;ID;0x1201bf;;;WD)(A;;0x1301ff;;;AU)"
-        $base64 = ConvertTo-SecurityDescriptor $sddl | ConvertFrom-SecurityDescriptor -OutputFormat Base64
-        { [System.Convert]::FromBase64String($base64) } | Should -Not -Throw
-        $newSddl = ConvertTo-SecurityDescriptor $base64 -InputFormat Base64 | ConvertFrom-SecurityDescriptor -OutputFormat Sddl
-        $newSddl | Should -Be $sddl
-    }
-
-    It "Should be able to return binary" {
-        $sddl = "O:SYG:SYD:AI(A;;0x1301bf;;;WD)(A;ID;0x1201bf;;;WD)(A;;0x1301ff;;;AU)"
-        $descriptor = ConvertTo-SecurityDescriptor $sddl
-        $binary = ConvertFrom-SecurityDescriptor $descriptor -OutputFormat Binary
-        Should -ActualValue $binary -BeOfType [System.Object[]] # should be an array
-        $binary | Should -BeOfType [byte] # each element should be a byte
-    }
-
-    It "Should be able to return valid base64" {
-        $sddl = "O:SYG:SYD:AI(A;;0x1301bf;;;WD)(A;ID;0x1201bf;;;WD)(A;;0x1301ff;;;AU)"
-        $descriptor = ConvertTo-SecurityDescriptor $sddl
-        $base64 = ConvertFrom-SecurityDescriptor $descriptor -OutputFormat Base64
-        $base64 | Should -BeOfType [string]
-        { [System.Convert]::FromBase64String($base64) } | Should -Not -Throw
-    }
-
-    It "Should return equivalent base64 and binary" {
-        $sddl = "O:SYG:SYD:AI(A;;0x1301bf;;;WD)(A;ID;0x1201bf;;;WD)(A;;0x1301ff;;;AU)"
-        $descriptor = ConvertTo-SecurityDescriptor $sddl
-        $binary = ConvertFrom-SecurityDescriptor $descriptor -OutputFormat Binary
-        $base64 = ConvertFrom-SecurityDescriptor $descriptor -OutputFormat Base64
-        $binaryFromBase64 = [System.Convert]::FromBase64String($base64)
-        $binary | Should -Be $binaryFromBase64
     }
 }
 
 Describe "Get-InferredAclFormat" {
     It "Should return Sddl for valid SDDL strings" {
-        $sddl = "O:SYG:SYD:AI(A;;0x1301bf;;;WD)(A;ID;0x1201bf;;;WD)(A;;0x1301ff;;;AU)"
-        $format = Get-InferredAclFormat $sddl
-        $format | Should -Be Sddl
+        InModuleScope RestSetAcls {
+            $sddl = "O:SYG:SYD:AI(A;;0x1301bf;;;WD)(A;ID;0x1201bf;;;WD)(A;;0x1301ff;;;AU)"
+            $format = Get-InferredAclFormat $sddl
+            $format | Should -Be Sddl
+        }
     }
 
     It "Should return Base64 for valid Base64 strings" {
-        $base64 = "AQAEhBQAAAAgAAAAAAAAACwAAAABAQAAAAAABRIAAAABAQAAAAAABRIAAAACAEQAAwAAAAAAFAC/ARMAAQEAAAAAAAEAAAAAABAUAL8BEgABAQAAAAAAAQAAAAAAABQA/wETAAEBAAAAAAAFCwAAAA=="
-        $format = Get-InferredAclFormat $base64
-        $format | Should -Be Base64
+        InModuleScope RestSetAcls {
+            $base64 = "AQAEhBQAAAAgAAAAAAAAACwAAAABAQAAAAAABRIAAAABAQAAAAAABRIAAAACAEQAAwAAAAAAFAC/ARMAAQEAAAAAAAEAAAAAABAUAL8BEgABAQAAAAAAAQAAAAAAABQA/wETAAEBAAAAAAAFCwAAAA=="
+            $format = Get-InferredAclFormat $base64
+            $format | Should -Be Base64
+        }
     }
 
     It "Should return Binary for valid binary arrays" {
-        [byte[]]$binary = @(
-            1, 0, 4, 132, 20, 0, 0, 0, 32, 0, 0, 0, 0, 0, 0, 0, 44, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 5, 18, 0, 0, 0, 1, 1,
-            0, 0, 0, 0, 0, 5, 18, 0, 0, 0, 2, 0, 68, 0, 3, 0, 0, 0, 0, 0, 20, 0, 191, 1, 19, 0, 1, 1, 0, 0, 0, 0, 0, 1,
-            0, 0, 0, 0, 0, 16, 20, 0, 191, 1, 18, 0, 1, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 20, 0, 255, 1, 19, 0, 1,
-            1, 0, 0, 0, 0, 0, 5, 11, 0, 0, 0
-        )
-        $format = Get-InferredAclFormat $binary
-        $format | Should -Be Binary
+        InModuleScope RestSetAcls {
+            [byte[]]$binary = @(
+                1, 0, 4, 132, 20, 0, 0, 0, 32, 0, 0, 0, 0, 0, 0, 0, 44, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 5, 18, 0, 0, 0, 1, 1,
+                0, 0, 0, 0, 0, 5, 18, 0, 0, 0, 2, 0, 68, 0, 3, 0, 0, 0, 0, 0, 20, 0, 191, 1, 19, 0, 1, 1, 0, 0, 0, 0, 0, 1,
+                0, 0, 0, 0, 0, 16, 20, 0, 191, 1, 18, 0, 1, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 20, 0, 255, 1, 19, 0, 1,
+                1, 0, 0, 0, 0, 0, 5, 11, 0, 0, 0
+            )
+            $format = Get-InferredAclFormat $binary
+            $format | Should -Be Binary
+        }
     }
 
     It "Should return Raw for valid RawSecurityDescriptor objects" {
-        $sddl = "O:SYG:SYD:AI(A;;0x1301bf;;;WD)(A;ID;0x1201bf;;;WD)(A;;0x1301ff;;;AU)"
-        $rawSecurityDescriptor = [System.Security.AccessControl.RawSecurityDescriptor]::new($sddl)
-        $format = Get-InferredAclFormat $rawSecurityDescriptor
-        $format | Should -Be Raw
+        InModuleScope RestSetAcls {
+            $sddl = "O:SYG:SYD:AI(A;;0x1301bf;;;WD)(A;ID;0x1201bf;;;WD)(A;;0x1301ff;;;AU)"
+            $rawSecurityDescriptor = [System.Security.AccessControl.RawSecurityDescriptor]::new($sddl)
+            $format = Get-InferredAclFormat $rawSecurityDescriptor
+            $format | Should -Be Raw
+        }
     }
 
     It "Should return FileAcl for valid CommonSecurityDescriptor objects with IsContainer false" {
-        $sddl = "O:SYG:SYD:AI(A;;0x1301bf;;;WD)(A;ID;0x1201bf;;;WD)(A;;0x1301ff;;;AU)"
-        $rawSecurityDescriptor = [System.Security.AccessControl.CommonSecurityDescriptor]::new($false, $false, $sddl)
-        $format = Get-InferredAclFormat $rawSecurityDescriptor
-        $format | Should -Be FileAcl
+        InModuleScope RestSetAcls {
+            $sddl = "O:SYG:SYD:AI(A;;0x1301bf;;;WD)(A;ID;0x1201bf;;;WD)(A;;0x1301ff;;;AU)"
+            $rawSecurityDescriptor = [System.Security.AccessControl.CommonSecurityDescriptor]::new($false, $false, $sddl)
+            $format = Get-InferredAclFormat $rawSecurityDescriptor
+            $format | Should -Be FileAcl
+        }
     }
 
     It "Should return FolderAcl for valid CommonSecurityDescriptor objects with IsContainer true" {
-        $sddl = "O:SYG:SYD:AI(A;;0x1301bf;;;WD)(A;ID;0x1201bf;;;WD)(A;;0x1301ff;;;AU)"
-        $rawSecurityDescriptor = [System.Security.AccessControl.CommonSecurityDescriptor]::new($true, $false, $sddl)
-        $format = Get-InferredAclFormat $rawSecurityDescriptor
-        $format | Should -Be FolderAcl
+        InModuleScope RestSetAcls {
+            $sddl = "O:SYG:SYD:AI(A;;0x1301bf;;;WD)(A;ID;0x1201bf;;;WD)(A;;0x1301ff;;;AU)"
+            $rawSecurityDescriptor = [System.Security.AccessControl.CommonSecurityDescriptor]::new($true, $false, $sddl)
+            $format = Get-InferredAclFormat $rawSecurityDescriptor
+            $format | Should -Be FolderAcl
+        }
     }
 }
