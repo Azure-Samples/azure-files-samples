@@ -1,28 +1,24 @@
-# RestSetAcls.psm1
+# RestSetAcls
 
 ## Description
 
-RestSetAcls.psm1 is a PowerShell module that provides functions to set Access Control Lists (ACLs) for Azure file shares, using the Azure Files REST API.
+RestSetAcls is a PowerShell module that provides functions to set Access Control Lists (ACLs) for Azure file shares, using the Azure Files REST API. 
 
-> [!NOTE]  
-> RestSetAcls.psm1 currently only supports setting the same owner, group and permissions on all files within a share or subdirectory.
-> It does not yet support:
->
-> - Updates to one field without updating others (e.g., updating the owner without updating the group and permissions)
-> - Adding or removing a permission, without otherwise changing the permissions
+It's built as a wrapper of [Az.Storage](https://learn.microsoft.com/en-us/powershell/module/az.storage/?view=azps-15.0.0) and [Microsoft.Graph](https://learn.microsoft.com/en-us/powershell/microsoftgraph/get-started?view=graph-powershell-1.0) PowerShell modules, adding functionality for Azure Files ACLs on top of these.
 
 ## Prerequisites
 
-- PowerShell 5.1 or later. For the best performance, PowerShell 7+ is recommended ([installation instructions](https://learn.microsoft.com/en-us/powershell/scripting/install/installing-powershell))
-- `Az.Storage` module v4.1.1 or later ([installation instructions](https://learn.microsoft.com/en-us/powershell/azure/install-azure-powershell))
+- PowerShell 5.1 or later. For the best performance and experience, PowerShell 7+ is recommended ([installation instructions](https://learn.microsoft.com/en-us/powershell/scripting/install/installing-powershell))
 - Azure Storage account with a file share
-- Azure Storage account key ([instructions on how to find the key](https://learn.microsoft.com/en-us/azure/storage/common/storage-account-keys-manage?tabs=azure-portal#view-account-access-keys))
+- Access to the [storage account's key](https://learn.microsoft.com/en-us/azure/storage/common/storage-account-keys-manage?tabs=azure-portal), or ability to [acquire an OAuth token](https://learn.microsoft.com/en-us/azure/storage/files/authorize-oauth-rest?tabs=portal) to the account
 
 ## Installation
 
 ```powershell
 Install-Module RestSetAcls
 ```
+
+This step will also install all dependencies, such as [Az.Storage](https://learn.microsoft.com/en-us/powershell/module/az.storage/?view=azps-15.0.0) and the required [Microsoft.Graph](https://learn.microsoft.com/en-us/powershell/microsoftgraph/get-started?view=graph-powershell-1.0) PowerShell modules, if not already installed.
 
 ## Authenticate
 
@@ -80,7 +76,7 @@ $context = New-AzStorageContext -StorageAccountName $AccountName -StorageAccount
 $sasToken = New-AzStorageFileSASToken -Context $context -ShareName $FileShareName -Path "/" -Permission "rwl" -Protocol HttpsOnly -ExpiryTime (Get-Date).AddDays(1)
 ```
 
-#### Option 4: OAuth authentication
+### Option 4: OAuth authentication
 
 Account SAS and service SAS tokens are derived from the account key. If you want to avoid using the account key altogether, you can use [OAuth authentication](https://learn.microsoft.com/en-us/azure/storage/files/authorize-oauth-rest). 
 
