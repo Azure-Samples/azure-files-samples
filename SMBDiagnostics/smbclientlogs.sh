@@ -4,9 +4,15 @@ PIDFILE="/tmp/smbclientlog.pid"
 DIRNAME="./output"
 CIFS_PORT=445
 TRACE_CIFSBPF_ABS_PATH="$(cd "$(dirname "trace-cifsbpf")" && pwd)/$(basename "trace-cifsbpf")"
+TRACE_CMD_PIDFILE="/tmp/smb_trace_cmd.pid"
+TRACE_CMD_OUTPUT="${DIRNAME}/trace.dat"
 PYTHON_PROG='python'
 STDLOG_FILE='/dev/null'
 CIFS_FYI_ENABLED=0
+TCPDUMP_CAPTURE_DIR=${TCPDUMP_CAPTURE_DIR:-/tmp/tcpdump}
+TCPDUMP_ROTATE_FILE_SIZE_MB=${TCPDUMP_ROTATE_FILE_SIZE_MB:-100}
+TCPDUMP_ROTATE_FILE_COUNT=${TCPDUMP_ROTATE_FILE_COUNT:-10}
+TCPDUMP_SNAPLEN=${TCPDUMP_SNAPLEN:-512}
 
 am_i_root() {
     local euid=$(id -u)
@@ -41,6 +47,7 @@ init() {
     rm -rf "$DIRNAME"
   fi
   mkdir -p "$DIRNAME"
+  mkdir -p "$TCPDUMP_CAPTURE_DIR"
 }
 
 check_utils() {
@@ -92,7 +99,9 @@ start_trace() {
     echo 7 > /proc/fs/cifs/cifsFYI
     CIFS_FYI_ENABLED=1
   fi
-  trace-cmd start -e cifs
+  local log_file="${DIRNAME}/tracecmd.log"
+  trace-cmd record -e cifs -o "${TRACE_CMD_OUTPUT}" > "${log_file}" 2>&1 &
+  echo $! > "${TRACE_CMD_PIDFILE}"
 }
 
 dump_system_logs() {
@@ -139,7 +148,12 @@ dump_os_information() {
   modinfo cifs >> os_details.txt
   echo -e "\nMount.cifs version: `mount.cifs -V`" >> os_details.txt
   echo -e "\nLast reboot:" >> os_details.txt
-  last reboot -5 >> os_details.txt
+  LAST_BIN="$(command -v last 2>/dev/null || true)"
+  if [ -n "${LAST_BIN}" ]; then
+    "${LAST_BIN}" reboot -5 >> os_details.txt
+  else
+    echo "  'last' command not available on this system" >> os_details.txt
+  fi
   echo -e "\nSystem Uptime:" >> os_details.txt
   cat /proc/uptime >> os_details.txt
   echo -e "\npackage install details:" >> os_details.txt
@@ -187,7 +201,13 @@ dump_process_callstacks() {
 }
 
 capture_network() {
-  nohup tcpdump -p -s 0 port ${CIFS_PORT} -w "${DIRNAME}/cifs_traffic.pcap" &
+  # Capture to temporary directory with ring buffer to avoid filling working directory
+  echo "Starting tcpdump capture in ${TCPDUMP_CAPTURE_DIR} (snaplen=${TCPDUMP_SNAPLEN}, rotate ${TCPDUMP_ROTATE_FILE_COUNT} x ${TCPDUMP_ROTATE_FILE_SIZE_MB}MB)" >&2
+  nohup tcpdump -p -n -s "${TCPDUMP_SNAPLEN}" \
+    -C "${TCPDUMP_ROTATE_FILE_SIZE_MB}" \
+    -W "${TCPDUMP_ROTATE_FILE_COUNT}" \
+    -w "${TCPDUMP_CAPTURE_DIR}/cifs_traffic.pcap" \
+    port ${CIFS_PORT} &
   echo $! > "${PIDFILE}"
 }
 
@@ -222,6 +242,10 @@ stop() {
   dmesg -T > "${DIRNAME}/cifs_dmesg"
   stop_trace
   stop_capture_network
+  # Move any pcaps from temp capture directory into output (preserve order)
+  if ls "${TCPDUMP_CAPTURE_DIR}"/cifs_traffic.pcap* >/dev/null 2>&1; then
+    mv "${TCPDUMP_CAPTURE_DIR}"/cifs_traffic.pcap* "${DIRNAME}" 2>/dev/null || echo "Warning: could not move pcap files" >&2
+  fi
   echo -e "\n\n======= Dumping CIFS Debug Stats at the end =======" >> cifs_diag.txt
   dump_debug_stats
 
@@ -244,15 +268,33 @@ stop() {
 }
 
 stop_trace() {
-  trace-cmd extract
-  sleep 1
-  trace-cmd report > "${DIRNAME}/cifs_trace"
-  trace-cmd stop
-  trace-cmd reset
+  local trace_pid
+  if [ -f "${TRACE_CMD_PIDFILE}" ]; then
+    read -r trace_pid < "${TRACE_CMD_PIDFILE}"
+    if [ -n "${trace_pid}" ] && ps -p "${trace_pid}" > /dev/null 2>&1; then
+      kill -INT "${trace_pid}" 2>/dev/null || true
+      local retries=0
+      while ps -p "${trace_pid}" > /dev/null 2>&1 && [ $retries -lt 10 ]; do
+        sleep 1
+        retries=$((retries + 1))
+      done
+      if ps -p "${trace_pid}" > /dev/null 2>&1; then
+        kill -TERM "${trace_pid}" 2>/dev/null || true
+      fi
+    fi
+    rm -f "${TRACE_CMD_PIDFILE}"
+  fi
+
+  if [ -f "${TRACE_CMD_OUTPUT}" ]; then
+    trace-cmd report "${TRACE_CMD_OUTPUT}" > "${DIRNAME}/cifs_trace"
+  else
+    echo "Warning: trace data not found; skipping trace-cmd report." >&2
+  fi
+
   if [ $CIFS_FYI_ENABLED -ne 0 ]; then
     echo 0 > /proc/fs/cifs/cifsFYI
+    CIFS_FYI_ENABLED=0
   fi
-  rm -rf trace.dat*
 }
 
 stop_capture_network() {
