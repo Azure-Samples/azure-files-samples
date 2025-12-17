@@ -5,14 +5,10 @@ Get-ChildItem -Path "$PSScriptRoot/Types/*.ps1" | ForEach-Object { . $_.FullName
 Get-ChildItem -Path "$PSScriptRoot/Helpers/*.ps1" | ForEach-Object { . $_.FullName }
 
 function Write-LiveFilesAndFoldersProcessingStatus {
-    [OutputType([int])]
-    [Diagnostics.CodeAnalysis.SuppressMessageAttribute(
-        "PSReviewUnusedParameter",
-        "FileOrFolder",
-        Justification = "We don't print `$FileOrFolder but we do want to iterate over it")]
+    [OutputType([hashtable])]
     param (
         [Parameter(Mandatory = $true, ValueFromPipeline = $true)]
-        [Object[]]$FileOrFolder,
+        [hashtable]$Item,
 
         [Parameter(Mandatory = $true)]
         [datetime]$StartTime,
@@ -35,13 +31,13 @@ function Write-LiveFilesAndFoldersProcessingStatus {
     process {
         # If silent mode is enabled, do not print anything, just forward to pipeline
         if ($Silent) {
-            return $_
+            return $Item
         }
 
         $i++
         $timeSinceLastPrint = (Get-Date) - $lastPrint
 
-        if (-not $_.Success) {
+        if (-not $Item["Success"]) {
             $failures++
         }
         
@@ -73,7 +69,7 @@ function Write-LiveFilesAndFoldersProcessingStatus {
             $lastPrint = Get-Date
         }
 
-        Write-Output $_
+        Write-Output $Item
     }
 }
 
@@ -1089,7 +1085,7 @@ function Set-AzFileAclRecursive {
             
             # Set the ACL
             try {
-                Set-AzFileAclKey -File $_.File -Key $filePermissionKey -WhatIf:$WhatIfPreference
+                Set-AzFileAclKey -File $_.File -Key $filePermissionKey -WhatIf:$WhatIfPreference | Out-Null
             }
             catch {
                 $success = $false
@@ -1115,7 +1111,7 @@ function Set-AzFileAclRecursive {
                     Success      = $success
                     ErrorMessage = $errorMessage
                 }
-            }            
+            }
         } `
         | Write-LiveFilesAndFoldersProcessingStatus -RefreshRateHertz 10 -StartTime $startTime -Silent:$Silent `
         | ForEach-Object { if ($PassThru) { Write-Output $_ } }
