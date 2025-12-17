@@ -114,3 +114,16 @@ The terminology used in this module is explained below:
 - **Security Descriptor**: A structure that encodes the owner, group, and permissions of a file or folder.
 - **Access Control List (ACL)**: The part of the security descriptor that encodes the permissions of a file or folder. Since the ACL is the most important part of the security descriptor, we often use "ACL" to refer to the entire security descriptor, including owner and group.
 - **Access Control Entry (ACE)**: An entry in the ACL that encodes the permissions for a specific user or group.
+
+## Uninstall
+
+To uninstall, run:
+
+```powershell
+Uninstall-Module RestSetAcls
+```
+
+To uninstall dependencies that were installed along with RestSetAcls, see:
+
+- [Uninstall Az PowerShell](https://learn.microsoft.com/en-us/powershell/azure/uninstall-az-ps?view=azps-15.1.0)
+- [Uninstall Microsoft Graph PowerShell](https://learn.microsoft.com/en-us/powershell/microsoftgraph/installation?view=graph-powershell-1.0#uninstalling-the-sdk)
