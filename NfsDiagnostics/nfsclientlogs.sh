@@ -232,8 +232,9 @@ dump_debug_stats() {
   mount -t nfs4 >> nfs_diag.txt
   echo -e "\n======= NFS TCP Connections =======" >> nfs_diag.txt
   ss -t | grep nfs >> nfs_diag.txt
-  echo -e "\n======= List of processes in system =======" >> nfs_diag.txt
-  ps -ef >> nfs_diag.txt
+  echo -e "\n======= Process state snapshot (STAT/ETIME/WCHAN) =======" >> nfs_diag.txt
+  echo "PID PPID USER STAT ETIME %CPU %MEM WCHAN CMD" >> nfs_diag.txt
+  ps --cols 2000 -eo pid,ppid,user,stat,etime,pcpu,pmem,wchan:32,cmd --sort=-etime >> nfs_diag.txt
 }
 
 dump_process_callstacks() {
