@@ -96,6 +96,9 @@ init() {
     chmod 750 "$DIRNAME" 2>/dev/null || true
   fi
 
+  echo "======= dmesg at start =======" > "${DIRNAME}/nfs_dmesg"
+  dmesg -T >> "${DIRNAME}/nfs_dmesg" 2>&1 || true
+
   dmesg -Tc > /dev/null
   # rm -f "${DIRNAME}/nfs_dmesg"
   # rm -f "${DIRNAME}/nfs_trace"
@@ -299,7 +302,8 @@ collect_aznfs_logs() {
 }
 
 stop() {
-  dmesg -T > "${DIRNAME}/nfs_dmesg"
+  echo -e "\n\n======= dmesg at end =======" >> "${DIRNAME}/nfs_dmesg"
+  dmesg -T >> "${DIRNAME}/nfs_dmesg" 2>&1 || true
   stop_trace "$@"
   stop_capture_network
 
