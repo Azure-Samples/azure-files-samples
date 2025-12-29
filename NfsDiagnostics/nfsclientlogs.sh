@@ -11,6 +11,7 @@ DEFAULT_TRACE_EVENTS_CSV="nfs,nfs4"
 
 AZNFS_STUNNEL_SHARE_DIR="/etc/stunnel/microsoft/aznfs/nfsv4_fileShare"
 AZNFS_DATA_DIR="/opt/microsoft/aznfs/data"
+AZNFS_PROXY_SERVICE="azurefile-proxy.service"
 
 am_i_root() {
     local euid=$(id -u)
@@ -209,6 +210,16 @@ collect_aznfs_logs() {
   if [ -d "${AZNFS_DATA_DIR}" ]; then
     mkdir -p "${dest_dir}"
     cp -a "${AZNFS_DATA_DIR}" "${dest_dir}/" 2>/dev/null || true
+  fi
+
+  if command -v journalctl >/dev/null 2>&1; then
+    mkdir -p "${dest_dir}"
+    journalctl -u "${AZNFS_PROXY_SERVICE}" --no-pager --all > "${dest_dir}/azurefile-proxy.journalctl.txt" 2>&1 || true
+  fi
+
+  if command -v systemctl >/dev/null 2>&1; then
+    mkdir -p "${dest_dir}"
+    systemctl status "${AZNFS_PROXY_SERVICE}" --no-pager --full > "${dest_dir}/azurefile-proxy.systemctl-status.txt" 2>&1 || true
   fi
 }
 
