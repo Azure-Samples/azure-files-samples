@@ -32,9 +32,9 @@ main() {
     start "$@"
   elif [[  "$*" =~ "stop" ]]
   then
-    stop
+    stop "$@"
   else
-    echo "Usage: ./nfsclientlogs.sh <v3b | v4> <> <start | stop> <CaptureNetwork> <OnAnomaly> [TraceEvents=<comma-separated trace events]"
+    echo "Usage: ./nfsclientlogs.sh <v3b | v4> <> <start | stop> <CaptureNetwork> <OnAnomaly> <VerboseLogs> [TraceEvents=<comma-separated trace events>]"
     exit 1
   fi
 
@@ -117,8 +117,10 @@ check_utils() {
 }
 
 start_trace() {
-  rpcdebug -m rpc -s all
-  rpcdebug -m nfs -s all
+  if [[ "$*" =~ "VerboseLogs" ]]; then
+    rpcdebug -m rpc -s all
+    rpcdebug -m nfs -s all
+  fi
 
   local trace_events_csv="${DEFAULT_TRACE_EVENTS_CSV}"
   local arg
@@ -195,7 +197,7 @@ trace_nfsbpf() {
 
 stop() {
   dmesg -T > "${DIRNAME}/nfs_dmesg"
-  stop_trace
+  stop_trace "$@"
   stop_capture_network
 
   echo -e "\n\n======= Dumping Process callstacks at end  ========" >> process_callstack.txt
@@ -216,8 +218,10 @@ stop_trace() {
   trace-cmd report > "${DIRNAME}/nfs_trace"
   trace-cmd stop
   trace-cmd reset
-  rpcdebug -m rpc -c all
-  rpcdebug -m nfs -c all
+  if [[ "$*" =~ "VerboseLogs" ]]; then
+    rpcdebug -m rpc -c all
+    rpcdebug -m nfs -c all
+  fi
   rm -rf trace.dat*
 }
 
