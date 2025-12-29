@@ -9,6 +9,9 @@ STDLOG_FILE='/dev/null'
 
 DEFAULT_TRACE_EVENTS_CSV="nfs,nfs4"
 
+AZNFS_STUNNEL_SHARE_DIR="/etc/stunnel/microsoft/aznfs/nfsv4_fileShare"
+AZNFS_DATA_DIR="/opt/microsoft/aznfs/data"
+
 am_i_root() {
     local euid=$(id -u)
     if (( $euid != 0 ));
@@ -195,10 +198,26 @@ trace_nfsbpf() {
   nohup "${PYTHON_PROG}" "${TRACE_NFSBPF_ABS_PATH}" "${DIRNAME}" 0<&- 2>&1 &
 }
 
+collect_aznfs_logs() {
+  local dest_dir="${DIRNAME}/aznfs"
+
+  if [ -d "${AZNFS_STUNNEL_SHARE_DIR}" ]; then
+    mkdir -p "${dest_dir}"
+    cp -a "${AZNFS_STUNNEL_SHARE_DIR}" "${dest_dir}/" 2>/dev/null || true
+  fi
+
+  if [ -d "${AZNFS_DATA_DIR}" ]; then
+    mkdir -p "${dest_dir}"
+    cp -a "${AZNFS_DATA_DIR}" "${dest_dir}/" 2>/dev/null || true
+  fi
+}
+
 stop() {
   dmesg -T > "${DIRNAME}/nfs_dmesg"
   stop_trace "$@"
   stop_capture_network
+
+  collect_aznfs_logs
 
   echo -e "\n\n======= Dumping Process callstacks at end  ========" >> process_callstack.txt
   dump_process_callstacks
