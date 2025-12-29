@@ -9,6 +9,11 @@ STDLOG_FILE='/dev/null'
 
 DEFAULT_TRACE_EVENTS_CSV="nfs,nfs4"
 
+# Ring buffer defaults (override via env before invoking)
+TCPDUMP_ROTATE_FILE_SIZE_MB=${TCPDUMP_ROTATE_FILE_SIZE_MB:-100}
+TCPDUMP_ROTATE_FILE_COUNT=${TCPDUMP_ROTATE_FILE_COUNT:-10}
+TCPDUMP_SNAPLEN=${TCPDUMP_SNAPLEN:-0}
+
 AZNFS_STUNNEL_SHARE_DIR="/etc/stunnel/microsoft/aznfs/nfsv4_fileShare"
 AZNFS_DATA_DIR="/opt/microsoft/aznfs/data"
 AZNFS_PROXY_SERVICE="azurefile-proxy.service"
@@ -46,6 +51,11 @@ main() {
 }
 
 start() {
+  if [ -f "${PIDFILE}" ] && read -r _running_pid < "${PIDFILE}" 2>/dev/null && ps -p "$_running_pid" >/dev/null 2>&1; then
+    echo "Warning: A network capture is already in progress (pid $_running_pid). Stop it before starting a new capture." >&2
+    return 1
+  fi
+
   init
   start_trace "$@" || return 1
   dump_os_information
@@ -77,6 +87,11 @@ init() {
     rm -rf "$DIRNAME"
   fi
   mkdir -p "$DIRNAME"
+
+  if id -u tcpdump >/dev/null 2>&1; then
+    chown tcpdump:tcpdump "$DIRNAME" 2>/dev/null || true
+    chmod 750 "$DIRNAME" 2>/dev/null || true
+  fi
 
   dmesg -Tc > /dev/null
   # rm -f "${DIRNAME}/nfs_dmesg"
@@ -118,6 +133,24 @@ check_utils() {
     else PYTHON_PROG='python3'
     fi
   fi
+}
+
+# Validate rotation parameters (simple integer & >0 checks)
+validate_tcpdump_rotation() {
+  case "$TCPDUMP_ROTATE_FILE_SIZE_MB" in
+    ''|*[!0-9]*) echo "Invalid TCPDUMP_ROTATE_FILE_SIZE_MB=$TCPDUMP_ROTATE_FILE_SIZE_MB (must be integer >0)"; return 1;;
+  esac
+
+  case "$TCPDUMP_ROTATE_FILE_COUNT" in
+    ''|*[!0-9]*) echo "Invalid TCPDUMP_ROTATE_FILE_COUNT=$TCPDUMP_ROTATE_FILE_COUNT (must be integer >0)"; return 1;;
+  esac
+
+  if [ "$TCPDUMP_ROTATE_FILE_SIZE_MB" -le 0 ] || [ "$TCPDUMP_ROTATE_FILE_COUNT" -le 0 ]; then
+    echo "Rotation parameters must be > 0"
+    return 1
+  fi
+
+  return 0
 }
 
 start_trace() {
@@ -191,8 +224,16 @@ dump_process_callstacks() {
 }
 
 capture_network() {
-  nohup tcpdump -p -s 0 port ${NFS_PORT} -w "${DIRNAME}/nfs_traffic.pcap" &
-  echo $! > "${PIDFILE}"
+  if validate_tcpdump_rotation; then
+    local total=$((TCPDUMP_ROTATE_FILE_SIZE_MB * TCPDUMP_ROTATE_FILE_COUNT))
+    echo "Starting circular tcpdump in ${DIRNAME} (${TCPDUMP_ROTATE_FILE_COUNT} files x ${TCPDUMP_ROTATE_FILE_SIZE_MB}MB ~= ${total}MB max)" >&2
+    nohup tcpdump -p -n -s "${TCPDUMP_SNAPLEN}" -C "${TCPDUMP_ROTATE_FILE_SIZE_MB}" -W "${TCPDUMP_ROTATE_FILE_COUNT}" -w "${DIRNAME}/nfs_traffic.pcap" port ${NFS_PORT} &
+    echo $! > "${PIDFILE}"
+  else
+    echo "Falling back to single-file tcpdump capture in ${DIRNAME} (no rotation)." >&2
+    nohup tcpdump -p -s "${TCPDUMP_SNAPLEN}" port ${NFS_PORT} -w "${DIRNAME}/nfs_traffic.pcap" &
+    echo $! > "${PIDFILE}"
+  fi
 }
 
 trace_nfsbpf() {
