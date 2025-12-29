@@ -7,6 +7,8 @@ TRACE_NFSBPF_ABS_PATH="$(cd "$(dirname "trace-nfsbpf")" && pwd)/$(basename "trac
 PYTHON_PROG='python'
 STDLOG_FILE='/dev/null'
 
+DEFAULT_TRACE_EVENTS_CSV="nfs,nfs4"
+
 am_i_root() {
     local euid=$(id -u)
     if (( $euid != 0 ));
@@ -32,7 +34,7 @@ main() {
   then
     stop
   else
-    echo "Usage: ./nfsclientlogs.sh <v3b | v4> <> <start | stop> <CaptureNetwork> <OnAnomaly>"
+    echo "Usage: ./nfsclientlogs.sh <v3b | v4> <> <start | stop> <CaptureNetwork> <OnAnomaly> [TraceEvents=<comma-separated trace events]"
     exit 1
   fi
 
@@ -41,7 +43,7 @@ main() {
 
 start() {
   init
-  start_trace
+  start_trace "$@" || return 1
   dump_os_information
 
   echo "======= Dumping NFS Debug Stats at start =======" > nfs_diag.txt
@@ -118,7 +120,26 @@ start_trace() {
   rpcdebug -m rpc -s all
   rpcdebug -m nfs -s all
 
-  trace-cmd start -e nfs -e nfs4
+  local trace_events_csv="${DEFAULT_TRACE_EVENTS_CSV}"
+  local arg
+  for arg in "$@"; do
+    case "$arg" in
+      TraceEvents=*) trace_events_csv="${arg#TraceEvents=}" ;;
+    esac
+  done
+
+  local -a trace_args=(start)
+  local -a specs
+  IFS=',' read -r -a specs <<< "$trace_events_csv"
+
+  local spec
+  for spec in "${specs[@]}"; do
+    spec="${spec//[[:space:]]/}"
+    [ -z "$spec" ] && continue
+    trace_args+=( -e "$spec" )
+  done
+
+  trace-cmd "${trace_args[@]}"
 }
 
 dump_os_information() {
@@ -127,8 +148,10 @@ dump_os_information() {
   echo -e "\nKernel version: `uname -a`" >> os_details.txt
   echo -e "\nNFS Kernel Module information:" >> os_details.txt
   modinfo nfs >> os_details.txt
-  echo -e "\nLast reboot:" >> os_details.txt
-  last reboot -5 >> os_details.txt
+  if command -v last >/dev/null 2>&1; then
+    echo -e "\nLast reboot:" >> os_details.txt
+    last reboot -5 >> os_details.txt
+  fi
   echo -e "\nSystem Uptime:" >> os_details.txt
   cat /proc/uptime >> os_details.txt
 }
