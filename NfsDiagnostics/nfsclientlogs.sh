@@ -48,6 +48,12 @@ start() {
   dump_debug_stats
   echo "=================================================" >> nfs_diag.txt
 
+  echo "======= Dumping Process callstacks at start =====" > process_callstack.txt
+  date >> process_callstack.txt
+  dump_process_callstacks
+  echo "=================================================" >> process_callstack.txt
+  date >> process_callstack.txt
+
   if [[ "$*" =~ "CaptureNetwork" ]]; then
     capture_network
   fi
@@ -141,6 +147,20 @@ dump_debug_stats() {
   ps -ef >> nfs_diag.txt
 }
 
+dump_process_callstacks() {
+  local stack_file
+  # Iterate through all stack files in /proc/*/stack
+  for stack_file in /proc/*/stack; do
+    if [ -r "$stack_file" ]; then
+      echo "Process: $stack_file" >> process_callstack.txt
+      cat "$stack_file" >> process_callstack.txt 2>/dev/null
+      echo -e "\n\n" >> process_callstack.txt
+    else
+      echo "Skipping $stack_file (unreadable or disappeared)" >> process_callstack.txt
+    fi
+  done
+}
+
 capture_network() {
   nohup tcpdump -p -s 0 port ${NFS_PORT} -w "${DIRNAME}/nfs_traffic.pcap" &
   echo $! > "${PIDFILE}"
@@ -154,10 +174,15 @@ stop() {
   dmesg -T > "${DIRNAME}/nfs_dmesg"
   stop_trace
   stop_capture_network
-  echo -e "\n\n======= Dumping CIFS Debug Stats at the end =======" >> nfs_diag.txt
+
+  echo -e "\n\n======= Dumping Process callstacks at end  ========" >> process_callstack.txt
+  dump_process_callstacks
+
+  echo -e "\n\n======= Dumping NFS Debug Stats at the end =======" >> nfs_diag.txt
   dump_debug_stats
   mv nfs_diag.txt "${DIRNAME}"
   mv os_details.txt "${DIRNAME}"
+  mv process_callstack.txt "${DIRNAME}"
   zip -r "$(basename ${DIRNAME}).zip" "${DIRNAME}"
   return 0;
 }
