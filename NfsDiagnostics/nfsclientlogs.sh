@@ -14,6 +14,9 @@ TCPDUMP_ROTATE_FILE_SIZE_MB=${TCPDUMP_ROTATE_FILE_SIZE_MB:-100}
 TCPDUMP_ROTATE_FILE_COUNT=${TCPDUMP_ROTATE_FILE_COUNT:-10}
 TCPDUMP_SNAPLEN=${TCPDUMP_SNAPLEN:-0}
 
+# Additional port range to capture (override via env before invoking)
+TCPDUMP_EXTRA_PORTRANGE=${TCPDUMP_EXTRA_PORTRANGE:-20049-20099}
+
 AZNFS_STUNNEL_SHARE_DIR="/etc/stunnel/microsoft/aznfs/nfsv4_fileShare"
 AZNFS_DATA_DIR="/opt/microsoft/aznfs/data"
 AZNFS_PROXY_SERVICE="azurefile-proxy.service"
@@ -153,6 +156,27 @@ validate_tcpdump_rotation() {
   return 0
 }
 
+validate_tcpdump_portrange() {
+  [ -z "${TCPDUMP_EXTRA_PORTRANGE}" ] && return 0
+
+  case "${TCPDUMP_EXTRA_PORTRANGE}" in
+    *-*) ;;
+    *) return 1 ;;
+  esac
+
+  local start_port="${TCPDUMP_EXTRA_PORTRANGE%%-*}"
+  local end_port="${TCPDUMP_EXTRA_PORTRANGE##*-}"
+
+  case "${start_port}" in ''|*[!0-9]*) return 1;; esac
+  case "${end_port}" in ''|*[!0-9]*) return 1;; esac
+
+  if [ "${start_port}" -gt "${end_port}" ]; then
+    return 1
+  fi
+
+  return 0
+}
+
 start_trace() {
   if [[ "$*" =~ "VerboseLogs" ]]; then
     rpcdebug -m rpc -s all
@@ -224,14 +248,24 @@ dump_process_callstacks() {
 }
 
 capture_network() {
+  local -a tcpdump_filter=( "(" port "${NFS_PORT}" ")" )
+
+  if validate_tcpdump_portrange; then
+    if [ -n "${TCPDUMP_EXTRA_PORTRANGE}" ]; then
+      tcpdump_filter+=( or "(" portrange "${TCPDUMP_EXTRA_PORTRANGE}" ")" )
+    fi
+  else
+    echo "Warning: ignoring invalid TCPDUMP_EXTRA_PORTRANGE=${TCPDUMP_EXTRA_PORTRANGE} (expected like 20049-20099)" >&2
+  fi
+
   if validate_tcpdump_rotation; then
     local total=$((TCPDUMP_ROTATE_FILE_SIZE_MB * TCPDUMP_ROTATE_FILE_COUNT))
     echo "Starting circular tcpdump in ${DIRNAME} (${TCPDUMP_ROTATE_FILE_COUNT} files x ${TCPDUMP_ROTATE_FILE_SIZE_MB}MB ~= ${total}MB max)" >&2
-    nohup tcpdump -p -n -s "${TCPDUMP_SNAPLEN}" -C "${TCPDUMP_ROTATE_FILE_SIZE_MB}" -W "${TCPDUMP_ROTATE_FILE_COUNT}" -w "${DIRNAME}/nfs_traffic.pcap" port ${NFS_PORT} &
+    nohup tcpdump -i any -p -n -s "${TCPDUMP_SNAPLEN}" -C "${TCPDUMP_ROTATE_FILE_SIZE_MB}" -W "${TCPDUMP_ROTATE_FILE_COUNT}" -w "${DIRNAME}/nfs_traffic.pcap" "${tcpdump_filter[@]}" &
     echo $! > "${PIDFILE}"
   else
     echo "Falling back to single-file tcpdump capture in ${DIRNAME} (no rotation)." >&2
-    nohup tcpdump -p -s "${TCPDUMP_SNAPLEN}" port ${NFS_PORT} -w "${DIRNAME}/nfs_traffic.pcap" &
+    nohup tcpdump -i any -p -s "${TCPDUMP_SNAPLEN}" "${tcpdump_filter[@]}" -w "${DIRNAME}/nfs_traffic.pcap" &
     echo $! > "${PIDFILE}"
   fi
 }
