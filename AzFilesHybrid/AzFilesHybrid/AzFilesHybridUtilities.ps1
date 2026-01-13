@@ -9,10 +9,13 @@ function Write-TestingPassed(
 
 function Write-TestingFailed(
     [Parameter(Mandatory=$true, Position=0)]
-    [string]$Message
+    [string]$Message,
+    [Parameter(Mandatory=$false)]
+    [switch]$Unexpected
 ) {
+    [string] $eType = $IsUnexpected ? "Unexpected" : "Failed";
     $cross = [System.Char]::ConvertFromUtf32([System.Convert]::ToInt32("2715", 16))
-    Write-Host "$($PSStyle.Foreground.BrightRed)`t($cross) Failed$($PSStyle.Reset)"
+    Write-Host "$($PSStyle.Foreground.BrightRed)`t($cross) $eType$($PSStyle.Reset)"
     Write-Host "`t$($PSStyle.Foreground.BrightRed)ERROR$($PSStyle.Reset): $Message"
 }
 
