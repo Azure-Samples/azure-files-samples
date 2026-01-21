@@ -34,7 +34,7 @@ main() {
 }
 
 init() {
-  check_utils
+  check_utils "$@"
   if [[ -f $DIRNAME ]];
   then
     rm -rf "$DIRNAME"
@@ -68,11 +68,13 @@ check_utils() {
     exit 1
   fi
 
-  if command -v python3 >/dev/null 2>&1; then
-    PYTHON_PROG='python3'
-  elif ! command -v python >/dev/null 2>&1; then
-    echo "python is not installed, please install python to continue"
-    exit 1
+  if [[ "$*" =~ "OnAnomaly" ]]; then
+    if command -v python3 >/dev/null 2>&1; then
+      PYTHON_PROG='python3'
+    elif ! command -v python >/dev/null 2>&1; then
+      echo "python is not installed, please install python to continue"
+      exit 1
+    fi
   fi
 }
 
@@ -190,8 +192,8 @@ trace_cifsbpf() {
 }
 
 start() {
-  init
-  start_trace $@
+  init "$@"
+  start_trace "$@"
   dump_os_information
   echo "======= Dumping CIFS Debug Stats at start =======" > cifs_diag.txt
   dump_debug_stats
@@ -210,6 +212,8 @@ start() {
   if [[ "$*" =~ "OnAnomaly" ]]; then
     trace_cifsbpf
   fi
+
+  echo "started collecting smb client logs"
 }
 
 stop() {

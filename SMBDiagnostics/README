@@ -3,7 +3,7 @@
 Copy smbclientlogs.sh (Shell script) and trace-cifsbpf (eBPF script) to linux machine where we need to collect logs.
 
 ## Dependencies:
-- Install packages **trace-cmd**, **zip** and **ss**.
+- Install packages **iproute2** (iproute for some distributions), **trace-cmd** and **zip**.
 - If using CaptureNetwork option (see below), install **tcpdump**.
 - If using OnAnomaly mode (see below), install **bpfcc-tools**.
 
