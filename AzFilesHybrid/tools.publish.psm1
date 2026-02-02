@@ -1,7 +1,7 @@
 $checkmark = [System.Char]::ConvertFromUtf32([System.Convert]::ToInt32("2713", 16))
 
 function Get-Hashes {
-    Get-ChildItem $PSScriptRoot\AzFilesHybrid -Recurse -File | Get-FileHash -Algorithm SHA256 | Select-Object -Property Path, Hash    
+    Get-ChildItem $PSScriptRoot\AzFilesHybrid -Recurse -File | Get-FileHash -Algorithm SHA256 | Select-Object -Property Path, Hash
 }
 
 function Get-SignedHashes {
