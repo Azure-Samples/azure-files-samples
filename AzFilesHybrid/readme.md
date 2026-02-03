@@ -1,6 +1,6 @@
 # AzFilesHybrid
 ## Overview
-The AzFilesHybrid PowerShell module provides cmdlets for deploying and configuring Azure Files. It offers cmdlets for domain joining storage accounts to your on-premises Active Directory, configuring your DNS servers, and troubleshooting  authentication issues. 
+The AzFilesHybrid PowerShell module provides cmdlets for deploying and configuring Azure Files. It offers cmdlets for domain joining storage accounts to your on-premises Active Directory, configuring your DNS servers, and troubleshooting  authentication issues.
 
 ## Installation
 ### Prerequisites
@@ -45,9 +45,9 @@ Uninstall-Module AzFilesHybrid
 
 ### If Installed From Zip File
 1. Find the directory where the zip file was extracted by running the following in a PowerShell window:
-   
+
    ```powershell
    Write-Host "$($env:PSModulePath.Split(";")[0])\AzFilesHybrid\"
    ```
-   
+
 2. Delete the folder(s) corresponding to the version(s) you want to uninstall.
