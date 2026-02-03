@@ -3357,8 +3357,8 @@ function Get-ClientSupportedEncryptionTypes {
     - Bit 0 (0x1): DES-CBC-CRC
     - Bit 1 (0x2): DES-CBC-MD5
     - Bit 2 (0x4): RC4-HMAC
-    - Bit 3 (0x8): AES128-CTS-HMAC-SHA1-96 (AES128)
-    - Bit 4 (0x10): AES256-CTS-HMAC-SHA1-96 (AES256)
+    - Bit 3 (0x8): AES128-CTS-HMAC-SHA1-96 (AES-128)
+    - Bit 4 (0x10): AES256-CTS-HMAC-SHA1-96 (AES-256)
 
     If the registry key doesn't exist, Windows defaults to RC4-HMAC and AES encryption types.
 
@@ -3366,15 +3366,15 @@ function Get-ClientSupportedEncryptionTypes {
     PSCustomObject with the following properties:
     - RawValue: The raw DWORD value from registry (or $null if not set)
     - EncryptionTypes: Array of encryption type names enabled
-    - SupportsAES256: Boolean indicating if AES256 is supported
-    - SupportsAES128: Boolean indicating if AES128 is supported
+    - SupportsAES256: Boolean indicating if AES-256 is supported
+    - SupportsAES128: Boolean indicating if AES-128 is supported
     - SupportsRC4: Boolean indicating if RC4-HMAC is supported
 
     .EXAMPLE
     PS> Get-ClientSupportedEncryptionTypes
 
     RawValue        : 28
-    EncryptionTypes : {RC4-HMAC, AES128, AES256}
+    EncryptionTypes : {RC4-HMAC, AES-128, AES-256}
     SupportsAES256  : True
     SupportsAES128  : True
     SupportsRC4     : True
@@ -3394,8 +3394,8 @@ function Get-ClientSupportedEncryptionTypes {
             0x1  = "DES-CBC-CRC"
             0x2  = "DES-CBC-MD5"
             0x4  = "RC4-HMAC"
-            0x8  = "AES128"
-            0x10 = "AES256"
+            0x8  = "AES-128"
+            0x10 = "AES-256"
         }
 
         $rawValue = $null
@@ -3418,17 +3418,73 @@ function Get-ClientSupportedEncryptionTypes {
             Write-Verbose "Raw Value: $($rawValue) (0x$($rawValue.ToString('X')))"
             Write-Verbose "Supported Types: $($encryptionTypes -join ', ')"
         } else {
-            # Registry key not set - Windows defaults to RC4-HMAC, AES128, and AES256
-            Write-Verbose "SupportedEncryptionTypes registry value not found. Using Windows defaults (RC4-HMAC, AESS128, AESS256)."
-            $encryptionTypes = @("RC4-HMAC", "AES128", "AES256")
+            # Registry key not set - Windows defaults to RC4-HMAC, AES-128, and AES-256
+            Write-Verbose "SupportedEncryptionTypes registry value not found. Using Windows defaults (RC4-HMAC, AES-128, AES-256)."
+            $encryptionTypes = @("RC4-HMAC", "AES-128", "AES-256")
         }
 
         return [PSCustomObject]@{
             RawValue       = $rawValue
             EncryptionTypes = $encryptionTypes
-            SupportsAES256 = $encryptionTypes -contains "AES256"
-            SupportsAES128 = $encryptionTypes -contains "AES128"
+            SupportsAES256 = $encryptionTypes -contains "AES-256"
+            SupportsAES128 = $encryptionTypes -contains "AES-128"
             SupportsRC4    = $encryptionTypes -contains "RC4-HMAC"
+        }
+    }
+}
+
+function Get-ServerSupportedEncryptionTypes {
+    <#
+    .SYNOPSIS
+    Get the Kerberos supported encryption types enabled on storage account.
+
+    .DESCRIPTION
+    This cmdlet retrieves the supported encryption types for a storage account.
+
+    .OUTPUTS
+    PSCustomObject with the following properties:
+    - EncryptionTypes: Array of encryption type names enabled
+    - SupportsAES256: Boolean indicating if AES-256 is supported
+    - SupportsAES128: Boolean indicating if AES-128 is supported
+    - SupportsRC4: Boolean indicating if RC4-HMAC is supported
+
+    .EXAMPLE
+    PS> Get-ServerSupportedEncryptionTypes -StorageAccountName "mystorageaccount" -ResourceGroupName "myresourcegroup"
+
+    EncryptionTypes : {RC4-HMAC, AES-128, AES-256}
+    SupportsAES256  : True
+    SupportsAES128  : True
+    SupportsRC4     : True
+    #>
+
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory=$True, Position=0, HelpMessage="Storage account name")]
+        [string]$StorageAccountName,
+
+        [Parameter(Mandatory=$True, Position=1, HelpMessage="Resource group name")]
+        [string]$ResourceGroupName
+    )
+
+    process {
+        $storageAccount = Validate-StorageAccount -ResourceGroupName $ResourceGroupName `
+            -StorageAccountName $StorageAccountName -ErrorAction Stop
+
+        $protocolSettings = (Get-AzStorageFileServiceProperty -StorageAccount $storageAccount -ErrorAction Stop).ProtocolSettings.Smb
+
+        $kerberosTicketEncryptionServer = $protocolSettings.KerberosTicketEncryption
+        if($null -eq $kerberosTicketEncryptionServer)
+        {
+            Write-Verbose "Kerberos Ticket Encryption is not set on the storage account. Default all types are supported."
+            $kerberosTicketEncryptionServer = "RC4-HMAC", "AES-128", "AES-256" # null(default): all values are accepted on the server
+        }
+        Write-Verbose "Kerberos Ticket Encryption Types supported on the server side: $($kerberosTicketEncryptionServer -join ', ')"
+
+        return [PSCustomObject]@{
+            EncryptionTypes = $kerberosTicketEncryptionServer
+            SupportsAES256  = $kerberosTicketEncryptionServer -contains "AES-256"
+            SupportsAES128  = $kerberosTicketEncryptionServer -contains "AES-128"
+            SupportsRC4     = $kerberosTicketEncryptionServer -contains "RC4-HMAC"
         }
     }
 }
@@ -3751,6 +3807,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
             "CheckFiddlerProxy" = [CheckResult]::new("CheckFiddlerProxy");
             "CheckEntraJoinType" = [CheckResult]::new("CheckEntraJoinType")
             "CheckClientSupportedEncryptionTypes" = [CheckResult]::new("CheckClientSupportedEncryptionTypes");
+            "CheckServerSupportedEncryptionTypes" = [CheckResult]::new("CheckServerSupportedEncryptionTypes");
         }
         #
         # Port 445 check
@@ -4182,6 +4239,37 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 Write-TestingFailed -Message $_
             }
         }
+
+        #
+        # Check Server Supported Encryption Types
+        #
+
+        if (!$filterIsPresent -or $Filter -match "CheckServerSupportedEncryptionTypes")
+        {
+            try {
+                $checksExecuted += 1;
+                Write-Host "Checking Server Supported Encryption Types"
+
+                $serverEncryption = Get-ServerSupportedEncryptionTypes -StorageAccountName $StorageAccountName -ResourceGroupName $ResourceGroupName
+
+                if ($serverEncryption.SupportsAES256) {
+                    $checks["CheckServerSupportedEncryptionTypes"].Result = "Passed"
+                    Write-TestingPassed
+                }
+                else {
+                    $message = "Entra Kerberos requires AES-256 encryption to be enabled on the storage account."
+
+                    $checks["CheckServerSupportedEncryptionTypes"].Result = "Failed"
+                    $checks["CheckServerSupportedEncryptionTypes"].Issue = "AES256 encryption type is not enabled."
+                    Write-TestingFailed -Message $message
+                }
+            } catch {
+                $checks["CheckServerSupportedEncryptionTypes"].Result = "Failed"
+                $checks["CheckServerSupportedEncryptionTypes"].Issue = $_
+                Write-TestingFailed -Message $_
+            }
+        }
+
 
         SummaryOfChecks -checks $checks -filterIsPresent $filterIsPresent -checksExecuted $checksExecuted
     }
