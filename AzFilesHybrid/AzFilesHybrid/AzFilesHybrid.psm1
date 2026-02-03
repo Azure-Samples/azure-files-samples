@@ -3401,26 +3401,25 @@ function Get-ClientSupportedEncryptionTypes {
         $rawValue = $null
         $encryptionTypes = @()
 
-        try {
-            $regValue = Get-ItemProperty -Path $registryPath -Name $registryValueName -ErrorAction SilentlyContinue
+        Write-Verbose "Registry Path: $registryPath"
+        Write-Verbose "Registry Value Name: $registryValueName"
+        $regValue = Get-ItemProperty -Path $registryPath -Name $registryValueName -ErrorAction SilentlyContinue
 
-            if ($null -ne $regValue -and $null -ne $regValue.$registryValueName) {
-                $rawValue = $regValue.$registryValueName
+        if ($null -ne $regValue -and $null -ne $regValue.$registryValueName) {
+            $rawValue = $regValue.$registryValueName
 
-                # Decode the bitmask
-                foreach ($flag in $encryptionTypeFlags.Keys) {
-                    if (($rawValue -band $flag) -eq $flag) {
-                        $encryptionTypes += $encryptionTypeFlags[$flag]
-                    }
+            # Decode the bitmask
+            foreach ($flag in $encryptionTypeFlags.Keys) {
+                if (($rawValue -band $flag) -eq $flag) {
+                    $encryptionTypes += $encryptionTypeFlags[$flag]
                 }
-            } else {
-                # Registry key not set - Windows defaults to RC4-HMAC, AES128, and AES256
-                Write-Verbose "SupportedEncryptionTypes registry value not found. Using Windows defaults (RC4-HMAC, AESS128, AESS256)."
-                $encryptionTypes = @("RC4-HMAC", "AES128", "AES256")
             }
-        }
-        catch {
-            Write-Verbose "Error reading registry: $_. Using Windows defaults."
+
+            Write-Verbose "Raw Value: $($rawValue) (0x$($rawValue.ToString('X')))"
+            Write-Verbose "Supported Types: $($encryptionTypes -join ', ')"
+        } else {
+            # Registry key not set - Windows defaults to RC4-HMAC, AES128, and AES256
+            Write-Verbose "SupportedEncryptionTypes registry value not found. Using Windows defaults (RC4-HMAC, AESS128, AESS256)."
             $encryptionTypes = @("RC4-HMAC", "AES128", "AES256")
         }
 
@@ -3751,7 +3750,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
             "CheckIpHlpScv" = [CheckResult]::new("CheckIpHlpScv");
             "CheckFiddlerProxy" = [CheckResult]::new("CheckFiddlerProxy");
             "CheckEntraJoinType" = [CheckResult]::new("CheckEntraJoinType")
-            "CheckSupportedEncryptionTypes" = [CheckResult]::new("CheckSupportedEncryptionTypes");
+            "CheckClientSupportedEncryptionTypes" = [CheckResult]::new("CheckClientSupportedEncryptionTypes");
         }
         #
         # Port 445 check
@@ -4152,42 +4151,34 @@ function Debug-AzStorageAccountEntraKerbAuth {
         }
 
         #
-        # Check Supported Encryption Types
+        # Check Client Supported Encryption Types
         #
 
-        if (!$filterIsPresent -or $Filter -match "CheckSupportedEncryptionTypes")
+        if (!$filterIsPresent -or $Filter -match "CheckClientSupportedEncryptionTypes")
         {
             try {
                 $checksExecuted += 1;
-                Write-Host "Checking Supported Encryption Types"
+                Write-Host "Checking Client Supported Encryption Types"
 
                 $clientEncryption = Get-ClientSupportedEncryptionTypes
 
-                Write-Verbose "Registry Path: HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System\Kerberos\Parameters"
-                if ($null -ne $clientEncryption.RawValue) {
-                    Write-Verbose "Raw Value: $($clientEncryption.RawValue) (0x$($clientEncryption.RawValue.ToString('X')))"
-                } else {
-                    Write-Verbose "Raw Value: (not set - using Windows defaults)"
-                }
-                Write-Verbose "Supported Types: $($clientEncryption.EncryptionTypes -join ', ')"
-
                 if ($clientEncryption.SupportsAES256) {
-                    $checks["CheckSupportedEncryptionTypes"].Result = "Passed"
+                    $checks["CheckClientSupportedEncryptionTypes"].Result = "Passed"
                     Write-TestingPassed
                 }
                 else {
                     $message = "Entra Kerberos requires AES256 encryption to be enabled." `
-                        + " To enable AES256 encryption, edit Local Group Policy:" `
+                        + " To enable AES256 encryption, open Local Group Policy Editor and edit the following policy:" `
                         + " '$($PSStyle.Foreground.BrightCyan)Computer Configuration -> Windows Settings -> Security Settings -> Local Policies -> Security Options -> Network security: Configure encryption types allowed for Kerberos$($PSStyle.Reset)'" `
                         + " and ensure that 'AES256_HMAC_SHA1' is checked."
 
-                    $checks["CheckSupportedEncryptionTypes"].Result = "Failed"
-                    $checks["CheckSupportedEncryptionTypes"].Issue = "AES256 encryption type is not enabled."
+                    $checks["CheckClientSupportedEncryptionTypes"].Result = "Failed"
+                    $checks["CheckClientSupportedEncryptionTypes"].Issue = "AES256 encryption type is not enabled."
                     Write-TestingFailed -Message $message
                 }
             } catch {
-                $checks["CheckSupportedEncryptionTypes"].Result = "Failed"
-                $checks["CheckSupportedEncryptionTypes"].Issue = $_
+                $checks["CheckClientSupportedEncryptionTypes"].Result = "Failed"
+                $checks["CheckClientSupportedEncryptionTypes"].Issue = $_
                 Write-TestingFailed -Message $_
             }
         }
