@@ -3885,51 +3885,51 @@ function Debug-AzStorageAccountEntraKerbAuth {
                     -Scopes "Application.Read.All" `
                     -TenantId $TenantId
 
+                $spn = "api://${TenantId}/cifs/${fileEndpoint}"
+
                 # Requires Microsoft.Graph.Applications
                 $Application = Get-MgApplication `
-                    -Filter "identifierUris/any (uri:uri eq 'api://${TenantId}/CIFS/${fileEndpoint}')" `
+                    -Filter "identifierUris/any (uri:uri eq '${spn}')" `
                     -ConsistencyLevel eventual
 
-                if($null -eq $Application)
+                if ($null -eq $Application)
                 {
-                    Write-TestingFailed -Message "Could not find the application with SPN '$($PSStyle.Foreground.BrightCyan)api://${TenantId}/CIFS/${fileEndpoint}$($PSStyle.Reset)'"
+                    Write-TestingFailed -Message "Could not find the application with SPN '$($PSStyle.Foreground.BrightCyan)${spn}$($PSStyle.Reset)'"
                     $checks["CheckEntraObject"].Result = "Failed"
-                    $checks["CheckEntraObject"].Issue = "Could not find the application with SPN ' api://${TenantId}/CIFS/${fileEndpoint}'."
+                    $checks["CheckEntraObject"].Issue = "Could not find Entra application with SPN '$spn'."
                 }
-
-                # Requires Microsoft.Graph.Applications
-                $ServicePrincipal = Get-MgServicePrincipal -Filter "servicePrincipalNames/any (name:name eq 'api://$TenantId/CIFS/${fileEndpoint}')" -ConsistencyLevel eventual
-
-                [string]$aadServicePrincipalError = "SPN Value is not set correctly, It should be '$($PSStyle.Foreground.BrightCyan)CIFS/${fileEndpoint}$($PSStyle.Reset)'"
-                if($null -eq $ServicePrincipal)
+                else
                 {
-                    Write-TestingFailed -Message $aadServicePrincipalError
-                    $checks["CheckEntraObject"].Result = "Failed"
-                    $checks["CheckEntraObject"].Issue = "Service Principal is missing SPN 'CIFS/${fileEndpoint}'."
-                }
-                if(-not $ServicePrincipal.AccountEnabled)
-                {
-                    Write-TestingFailed -Message "Service Principal should have AccountEnabled set to true"
-                    $checks["CheckEntraObject"].Result = "Failed"
-                    $checks["CheckEntraObject"].Issue = "Expected AccountEnabled set to true"
-                }
-                elseif(-not $ServicePrincipal.ServicePrincipalNames.Contains("CIFS/${fileEndpoint}"))
-                {
-                    Write-TestingFailed -Message $aadServicePrincipalError
-                    $checks["CheckEntraObject"].Result = "Failed"
-                    $checks["CheckEntraObject"].Issue = "Service Principal is missing SPN ' CIFS/${fileEndpoint}'."
-                }
-
-                elseif (-not $ServicePrincipal.ServicePrincipalNames.Contains("api://${TenantId}/CIFS/${fileEndpoint}"))
-                {
-                    Write-TestingWarning -Message "Service Principal is missing SPN '$($PSStyle.Foreground.BrightCyan)api://${TenantId}/CIFS/${fileEndpoint}$($PSStyle.Reset)'."
-                    Write-Host "`tIt is okay to not have this value for now, but it is good to have this configured in future if you want to continue getting kerberos tickets."
-                    $checks["CheckEntraObject"].Result = "Partial"
-                }
-                else {
-                    Write-TestingPassed
-                    $checks["CheckEntraObject"].Result = "Passed"
-                }
+                    # Requires Microsoft.Graph.Applications
+                    $ServicePrincipal = Get-MgServicePrincipal -Filter "servicePrincipalNames/any (name:name eq '$spn')" -ConsistencyLevel eventual
+                    
+                    if ($null -eq $ServicePrincipal)
+                    {
+                        Write-TestingFailed -Message "SPN Value is not set correctly, It should be '$($PSStyle.Foreground.BrightCyan)${spn}$($PSStyle.Reset)'"
+                        $checks["CheckEntraObject"].Result = "Failed"
+                        $checks["CheckEntraObject"].Issue = "Could not find Entra service principal with SPN '$spn'."
+                    }
+                    elseif (-not $ServicePrincipal.AccountEnabled)
+                    {
+                        Write-TestingFailed -Message "Service Principal should have AccountEnabled set to true"
+                        $checks["CheckEntraObject"].Result = "Failed"
+                        $checks["CheckEntraObject"].Issue = "Expected AccountEnabled set to true"
+                    }
+                    elseif(-not $ServicePrincipal.ServicePrincipalNames.Contains("CIFS/${fileEndpoint}") -and
+                           -not $ServicePrincipal.ServicePrincipalNames.Contains("cifs/${fileEndpoint}") -and
+                           -not $ServicePrincipal.ServicePrincipalNames.Contains("api://${TenantId}/CIFS/${fileEndpoint}") -and
+                           -not $ServicePrincipal.ServicePrincipalNames.Contains("api://${TenantId}/cifs/${fileEndpoint}"))
+                    {
+                        Write-TestingFailed -Message $aadServicePrincipalError
+                        $checks["CheckEntraObject"].Result = "Failed"
+                        $checks["CheckEntraObject"].Issue = "Service Principal does not have the required SPNs."
+                    }
+                    else
+                    {
+                        Write-TestingPassed
+                        $checks["CheckEntraObject"].Result = "Passed"
+                    }
+                }                
             } catch {
                 Write-TestingFailed -Message $_
                 $checks["CheckEntraObject"].Result = "Failed"
