@@ -3436,25 +3436,29 @@ function Get-ClientSupportedEncryptionTypes {
 function Get-ServerSupportedEncryptionTypes {
     <#
     .SYNOPSIS
-    Get the Kerberos supported encryption types enabled on storage account.
+    Get the supported Authentication Methods and Kerberos supported encryption types enabled on storage account.
 
     .DESCRIPTION
-    This cmdlet retrieves the supported encryption types for a storage account.
+    This cmdlet retrieves the supported Authentication Methods and Kerberos encryption types for a storage account.
 
     .OUTPUTS
     PSCustomObject with the following properties:
+    - AuthenticationMethods : Array of authentication methods supported
+    - SupportsKerberos : Boolean indicating if Kerberos is supported
+    - SupportsNTLMv2 : Boolean indicating if NTLMv2 is supported
     - EncryptionTypes: Array of encryption type names enabled
     - SupportsAES256: Boolean indicating if AES-256 is supported
-    - SupportsAES128: Boolean indicating if AES-128 is supported
     - SupportsRC4: Boolean indicating if RC4-HMAC is supported
 
     .EXAMPLE
     PS> Get-ServerSupportedEncryptionTypes -StorageAccountName "mystorageaccount" -ResourceGroupName "myresourcegroup"
 
-    EncryptionTypes : {RC4-HMAC, AES-128, AES-256}
-    SupportsAES256  : True
-    SupportsAES128  : True
-    SupportsRC4     : True
+    AuthenticationMethods : {Kerberos}
+    SupportsKerberos      : True
+    SupportsNTLMv2        : False
+    EncryptionTypes       : {RC4-HMAC, AES-128, AES-256}
+    SupportsAES256        : True
+    SupportsRC4           : True
     #>
 
     [CmdletBinding()]
@@ -3472,19 +3476,29 @@ function Get-ServerSupportedEncryptionTypes {
 
         $protocolSettings = (Get-AzStorageFileServiceProperty -StorageAccount $storageAccount -ErrorAction Stop).ProtocolSettings.Smb
 
+        $authenticationMethods = $protocolSettings.AuthenticationMethods
+        if ($null -eq $authenticationMethods)
+        {
+            Write-Verbose "Authentication methods are not set on the storage account. Default all types are supported."
+            $authenticationMethods = "NTLMv2", "Kerberos"
+        }
+        Write-Verbose "Authentication Methods supported on the server side: $($authenticationMethods -join ', ')"
+
         $kerberosTicketEncryptionServer = $protocolSettings.KerberosTicketEncryption
         if($null -eq $kerberosTicketEncryptionServer)
         {
             Write-Verbose "Kerberos Ticket Encryption is not set on the storage account. Default all types are supported."
-            $kerberosTicketEncryptionServer = "RC4-HMAC", "AES-128", "AES-256" # null(default): all values are accepted on the server
+            $kerberosTicketEncryptionServer = "RC4-HMAC", "AES-256" # null(default): all values are accepted on the server
         }
         Write-Verbose "Kerberos Ticket Encryption Types supported on the server side: $($kerberosTicketEncryptionServer -join ', ')"
 
         return [PSCustomObject]@{
-            EncryptionTypes = $kerberosTicketEncryptionServer
-            SupportsAES256  = $kerberosTicketEncryptionServer -contains "AES-256"
-            SupportsAES128  = $kerberosTicketEncryptionServer -contains "AES-128"
-            SupportsRC4     = $kerberosTicketEncryptionServer -contains "RC4-HMAC"
+            AuthenticationMethods = $authenticationMethods
+            SupportsKerberos      = $authenticationMethods -contains "Kerberos"
+            SupportsNTLMv2        = $authenticationMethods -contains "NTLMv2"
+            EncryptionTypes       = $kerberosTicketEncryptionServer
+            SupportsAES256        = $kerberosTicketEncryptionServer -contains "AES-256"
+            SupportsRC4           = $kerberosTicketEncryptionServer -contains "RC4-HMAC"
         }
     }
 }
@@ -4252,15 +4266,16 @@ function Debug-AzStorageAccountEntraKerbAuth {
 
                 $serverEncryption = Get-ServerSupportedEncryptionTypes -StorageAccountName $StorageAccountName -ResourceGroupName $ResourceGroupName
 
-                if ($serverEncryption.SupportsAES256) {
+                if ($serverEncryption.SupportsKerberos -and $serverEncryption.SupportsAES256) {
                     $checks["CheckServerSupportedEncryptionTypes"].Result = "Passed"
                     Write-TestingPassed
                 }
                 else {
-                    $message = "Entra Kerberos requires AES-256 encryption to be enabled on the storage account."
+                    $disabledConfiguration = (-not $serverEncryption.SupportsKerberos) ? "Kerberos Authentication" : "AES-256 encryption"
+                    $message = "Entra Kerberos requires $disabledConfiguration to be enabled on the storage account."
 
                     $checks["CheckServerSupportedEncryptionTypes"].Result = "Failed"
-                    $checks["CheckServerSupportedEncryptionTypes"].Issue = "AES256 encryption type is not enabled."
+                    $checks["CheckServerSupportedEncryptionTypes"].Issue = "$disabledConfiguration is not enabled."
                     Write-TestingFailed -Message $message
                 }
             } catch {
