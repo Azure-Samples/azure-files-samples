@@ -4459,15 +4459,25 @@ function Get-DsRegStatus {
 }
 
 function Test-IsCloudKerberosTicketRetrievalEnabled {
+    $path = "HKLM:\Software\Microsoft\Windows\CurrentVersion\Policies\System\Kerberos\Parameters\CloudKerberosTicketRetrievalEnabled"
     $regKeyFolder = Get-ItemProperty -Path Registry::HKLM\Software\Microsoft\Windows\CurrentVersion\Policies\System\Kerberos\Parameters -ErrorAction SilentlyContinue
 
-    if ($null -eq $regKeyFolder) {
-        $regKeyFolder = Get-ItemProperty -Path Registry::HKLM\SYSTEM\CurrentControlSet\Control\Lsa\Kerberos\Parameters -ErrorAction SilentlyContinue
-    }
+    if ($null -eq $regKeyFolder -or
+        $null -eq $regKeyFolder.CloudKerberosTicketRetrievalEnabled)
+    {
+        Write-Verbose "$path not found."
 
-    if ($null -eq $regKeyFolder) {
-        return $false
+        $path = "HKLM:\SYSTEM\CurrentControlSet\Control\Lsa\Kerberos\Parameters\CloudKerberosTicketRetrievalEnabled"
+        $regKeyFolder = Get-ItemProperty -Path Registry::HKLM\SYSTEM\CurrentControlSet\Control\Lsa\Kerberos\Parameters -ErrorAction SilentlyContinue
+
+        if ($null -eq $regKeyFolder -or
+            $null -eq $regKeyFolder.CloudKerberosTicketRetrievalEnabled)
+        {
+            Write-Verbose "$path not found."
+        }
     }
+    
+    Write-Verbose "Found $path = $($regKeyFolder.CloudKerberosTicketRetrievalEnabled)"
 
     return $regKeyFolder.CloudKerberosTicketRetrievalEnabled -eq "1"
 }
