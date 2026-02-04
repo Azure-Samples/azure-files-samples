@@ -4141,47 +4141,44 @@ function Debug-AzStorageAccountEntraKerbAuth {
         #
         if (!$filterIsPresent -or $Filter -match "CheckFiddlerProxy")
         {
-           Write-Host "Checking Fiddler Proxy"
-           try
-           {
+            Write-Host "Checking Fiddler Proxy"
+            try
+            {
                 $checksExecuted += 1;
                 $ProxysubFolder = Get-ChildItem `
                     -Path Registry::HKLM\SYSTEM\CurrentControlSet\Services\iphlpsvc\Parameters\ProxyMgr `
                     -ErrorAction SilentlyContinue
+                
                 $success = $true
                 foreach ($folder in $ProxysubFolder)
                 {
                     $properties = $folder | Get-ItemProperty
                     if (($null -ne $properties.StaticProxy) -and ($properties.StaticProxy.Contains("https=127.0.0.1:")))
                     {
-                        # If this is the first failure detected, print "FAILED"
-                        if ($success)
-                        {
-                            Write-TestingFailed -Message "Fiddler proxy detected"
-                            $checks["CheckFiddlerProxy"].Result = "Failed"
-                            $success = $false
-                        }
-
                         # Report the registry path every time a failure is detected
-                        Write-Host "`tFiddler Proxy is set, you need to delete any registry nodes under $($PSStyle.Foreground.BrightCyan)'$($folder.Name)'$($PSStyle.Reset)."
+                        $success = $false
+                        Write-Host "`Fiddler proxy detected in $($PSStyle.Foreground.BrightCyan)'$($folder.Name)'$($PSStyle.Reset)."
                     }
                 }
+
                 if ($success)
                 {
-                    Write-TestingPassed
                     $checks["CheckFiddlerProxy"].Result = "Passed"
+                    Write-TestingPassed
                 }
                 else
                 {
-                    Write-TestingFailed -Message "To prevent this issue from re-appearing in the future, you should also uninstall Fiddler."
+                    $checks["CheckFiddlerProxy"].Result = "Failed"
+                    $checks["CheckFiddlerProxy"].Issue = "Fiddler Proxy detected"
+                    Write-TestingFailed -Message "Fiddler Proxy detected. Uninstall Fiddler and remove all registry entries listed above."
                 }
-             }
-             catch
-             {
-                Write-TestingFailed -Message $_
-                $checks["CheckFiddlerProxy"].Result = "Failed"
-                $checks["CheckFiddlerProxy"].Issue = $_
-             }
+            }
+            catch
+            {
+               Write-TestingFailed -Message $_
+               $checks["CheckFiddlerProxy"].Result = "Failed"
+               $checks["CheckFiddlerProxy"].Issue = $_
+            }
         }
 
         #
