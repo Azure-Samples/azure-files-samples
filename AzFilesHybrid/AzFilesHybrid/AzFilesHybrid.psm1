@@ -4268,7 +4268,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
                     Write-TestingPassed
                 }
                 else {
-                    $disabledConfiguration = (-not $serverEncryption.SupportsKerberos) ? "Kerberos Authentication" : "AES-256 encryption"
+                    $disabledConfiguration = if (-not $serverEncryption.SupportsKerberos) { "Kerberos Authentication" } else { "AES-256 encryption" }
 
                     $message = "Entra Kerberos requires $disabledConfiguration to be enabled on the storage account."
                     if (-not $serverEncryption.SupportsKerberos) {
