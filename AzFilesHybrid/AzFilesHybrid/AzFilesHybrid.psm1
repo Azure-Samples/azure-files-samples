@@ -4463,27 +4463,31 @@ function Get-DsRegStatus {
 }
 
 function Test-IsCloudKerberosTicketRetrievalEnabled {
-    $path = "HKLM:\Software\Microsoft\Windows\CurrentVersion\Policies\System\Kerberos\Parameters\CloudKerberosTicketRetrievalEnabled"
-    $regKeyFolder = Get-ItemProperty -Path Registry::HKLM\Software\Microsoft\Windows\CurrentVersion\Policies\System\Kerberos\Parameters -ErrorAction SilentlyContinue
+    [CmdletBinding()]
+    param ()
 
-    if ($null -eq $regKeyFolder -or
-        $null -eq $regKeyFolder.CloudKerberosTicketRetrievalEnabled)
+    $path = "HKLM:\Software\Microsoft\Windows\CurrentVersion\Policies\System\Kerberos\Parameters"
+    $folder = Get-ItemProperty -Path $path -ErrorAction SilentlyContinue
+
+    if ($null -eq $folder -or
+        $null -eq $folder.CloudKerberosTicketRetrievalEnabled)
     {
-        Write-Verbose "$path not found."
+        Write-Verbose "CloudKerberosTicketRetrievalEnabled not found in ${path}."
 
-        $path = "HKLM:\SYSTEM\CurrentControlSet\Control\Lsa\Kerberos\Parameters\CloudKerberosTicketRetrievalEnabled"
-        $regKeyFolder = Get-ItemProperty -Path Registry::HKLM\SYSTEM\CurrentControlSet\Control\Lsa\Kerberos\Parameters -ErrorAction SilentlyContinue
+        $path = "HKLM:\SYSTEM\CurrentControlSet\Control\Lsa\Kerberos\Parameters"
+        $folder = Get-ItemProperty -Path $path -ErrorAction SilentlyContinue
 
-        if ($null -eq $regKeyFolder -or
-            $null -eq $regKeyFolder.CloudKerberosTicketRetrievalEnabled)
+        if ($null -eq $folder -or
+            $null -eq $folder.CloudKerberosTicketRetrievalEnabled)
         {
             Write-Verbose "$path not found."
+            return $false
         }
     }
     
-    Write-Verbose "Found $path = $($regKeyFolder.CloudKerberosTicketRetrievalEnabled)"
+    Write-Verbose "Found ${path}\CloudKerberosTicketRetrievalEnabled = $($folder.CloudKerberosTicketRetrievalEnabled)"
 
-    return $regKeyFolder.CloudKerberosTicketRetrievalEnabled -eq "1"
+    return $folder.CloudKerberosTicketRetrievalEnabled -eq "1"
 }
 
 function Debug-EntraKerbAdminConsent {
