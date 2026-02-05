@@ -4157,7 +4157,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
                     {
                         # Report the registry path every time a failure is detected
                         $success = $false
-                        Write-Host "`Fiddler proxy detected in '$($PSStyle.Foreground.BrightCyan)$($folder.Name)$($PSStyle.Reset)'."
+                        Write-Host "`tFiddler proxy detected in '$($PSStyle.Foreground.BrightCyan)$($folder.Name)$($PSStyle.Reset)'."
                     }
                 }
 
