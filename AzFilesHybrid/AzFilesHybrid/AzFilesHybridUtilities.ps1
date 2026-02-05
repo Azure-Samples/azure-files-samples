@@ -1,10 +1,18 @@
 function Write-TestingPassed(
     [Parameter(Mandatory=$false, Position=0)]
+    [string]$Message = "",
+
+    [Parameter(Mandatory=$false)]
     [int]$Indents = 1
 ) {
     $indentation = "`t" * $Indents
     $checkmark = [System.Char]::ConvertFromUtf32([System.Convert]::ToInt32("2713", 16))
-    Write-Host "$($PSStyle.Foreground.BrightGreen)${indentation}($checkmark) Passed$($PSStyle.Reset)"
+
+    if ($Message) {
+        Write-Host "$($PSStyle.Foreground.BrightGreen)${indentation}($checkmark) Passed:$($PSStyle.Reset) $Message"
+    } else {
+        Write-Host "$($PSStyle.Foreground.BrightGreen)${indentation}($checkmark) Passed$($PSStyle.Reset)"
+    }
 }
 
 function Write-TestingFailed(

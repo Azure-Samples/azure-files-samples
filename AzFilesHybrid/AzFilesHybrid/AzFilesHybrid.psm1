@@ -3885,51 +3885,51 @@ function Debug-AzStorageAccountEntraKerbAuth {
                     -Scopes "Application.Read.All" `
                     -TenantId $TenantId
 
+                $spn = "api://${TenantId}/cifs/${fileEndpoint}"
+
                 # Requires Microsoft.Graph.Applications
                 $Application = Get-MgApplication `
-                    -Filter "identifierUris/any (uri:uri eq 'api://${TenantId}/CIFS/${fileEndpoint}')" `
+                    -Filter "identifierUris/any (uri:uri eq '${spn}')" `
                     -ConsistencyLevel eventual
 
-                if($null -eq $Application)
+                if ($null -eq $Application)
                 {
-                    Write-TestingFailed -Message "Could not find the application with SPN '$($PSStyle.Foreground.BrightCyan)api://${TenantId}/CIFS/${fileEndpoint}$($PSStyle.Reset)'"
+                    Write-TestingFailed -Message "Could not find the application with SPN '$($PSStyle.Foreground.BrightCyan)${spn}$($PSStyle.Reset)'"
                     $checks["CheckEntraObject"].Result = "Failed"
-                    $checks["CheckEntraObject"].Issue = "Could not find the application with SPN ' api://${TenantId}/CIFS/${fileEndpoint}'."
+                    $checks["CheckEntraObject"].Issue = "Could not find Entra application with SPN '$spn'."
                 }
-
-                # Requires Microsoft.Graph.Applications
-                $ServicePrincipal = Get-MgServicePrincipal -Filter "servicePrincipalNames/any (name:name eq 'api://$TenantId/CIFS/${fileEndpoint}')" -ConsistencyLevel eventual
-
-                [string]$aadServicePrincipalError = "SPN Value is not set correctly, It should be '$($PSStyle.Foreground.BrightCyan)CIFS/${fileEndpoint}$($PSStyle.Reset)'"
-                if($null -eq $ServicePrincipal)
+                else
                 {
-                    Write-TestingFailed -Message $aadServicePrincipalError
-                    $checks["CheckEntraObject"].Result = "Failed"
-                    $checks["CheckEntraObject"].Issue = "Service Principal is missing SPN 'CIFS/${fileEndpoint}'."
-                }
-                if(-not $ServicePrincipal.AccountEnabled)
-                {
-                    Write-TestingFailed -Message "Service Principal should have AccountEnabled set to true"
-                    $checks["CheckEntraObject"].Result = "Failed"
-                    $checks["CheckEntraObject"].Issue = "Expected AccountEnabled set to true"
-                }
-                elseif(-not $ServicePrincipal.ServicePrincipalNames.Contains("CIFS/${fileEndpoint}"))
-                {
-                    Write-TestingFailed -Message $aadServicePrincipalError
-                    $checks["CheckEntraObject"].Result = "Failed"
-                    $checks["CheckEntraObject"].Issue = "Service Principal is missing SPN ' CIFS/${fileEndpoint}'."
-                }
-
-                elseif (-not $ServicePrincipal.ServicePrincipalNames.Contains("api://${TenantId}/CIFS/${fileEndpoint}"))
-                {
-                    Write-TestingWarning -Message "Service Principal is missing SPN '$($PSStyle.Foreground.BrightCyan)api://${TenantId}/CIFS/${fileEndpoint}$($PSStyle.Reset)'."
-                    Write-Host "`tIt is okay to not have this value for now, but it is good to have this configured in future if you want to continue getting kerberos tickets."
-                    $checks["CheckEntraObject"].Result = "Partial"
-                }
-                else {
-                    Write-TestingPassed
-                    $checks["CheckEntraObject"].Result = "Passed"
-                }
+                    # Requires Microsoft.Graph.Applications
+                    $ServicePrincipal = Get-MgServicePrincipal -Filter "servicePrincipalNames/any (name:name eq '$spn')" -ConsistencyLevel eventual
+                    
+                    if ($null -eq $ServicePrincipal)
+                    {
+                        Write-TestingFailed -Message "SPN Value is not set correctly, It should be '$($PSStyle.Foreground.BrightCyan)${spn}$($PSStyle.Reset)'"
+                        $checks["CheckEntraObject"].Result = "Failed"
+                        $checks["CheckEntraObject"].Issue = "Could not find Entra service principal with SPN '$spn'."
+                    }
+                    elseif (-not $ServicePrincipal.AccountEnabled)
+                    {
+                        Write-TestingFailed -Message "Service Principal should have AccountEnabled set to true"
+                        $checks["CheckEntraObject"].Result = "Failed"
+                        $checks["CheckEntraObject"].Issue = "Expected AccountEnabled set to true"
+                    }
+                    elseif(-not $ServicePrincipal.ServicePrincipalNames.Contains("CIFS/${fileEndpoint}") -and
+                           -not $ServicePrincipal.ServicePrincipalNames.Contains("cifs/${fileEndpoint}") -and
+                           -not $ServicePrincipal.ServicePrincipalNames.Contains("api://${TenantId}/CIFS/${fileEndpoint}") -and
+                           -not $ServicePrincipal.ServicePrincipalNames.Contains("api://${TenantId}/cifs/${fileEndpoint}"))
+                    {
+                        Write-TestingFailed -Message $aadServicePrincipalError
+                        $checks["CheckEntraObject"].Result = "Failed"
+                        $checks["CheckEntraObject"].Issue = "Service Principal does not have the required SPNs."
+                    }
+                    else
+                    {
+                        Write-TestingPassed
+                        $checks["CheckEntraObject"].Result = "Passed"
+                    }
+                }                
             } catch {
                 Write-TestingFailed -Message $_
                 $checks["CheckEntraObject"].Result = "Failed"
@@ -4045,9 +4045,8 @@ function Debug-AzStorageAccountEntraKerbAuth {
 
                     if ($DefaultSharePermission -and $DefaultSharePermission -ne "None")
                     {
-                        Write-TestingPassed
+                        Write-TestingPassed "Access is granted via the default share permission"
                         $checks["CheckRBAC"].Result = "Passed"
-                        Write-Host "`tAccess is granted via the default share permission"
                     }
                     elseif (-not $UserName)
                     {
@@ -4070,7 +4069,8 @@ function Debug-AzStorageAccountEntraKerbAuth {
                             -checkResult $checks["CheckRBAC"]
                     }
                 }
-            } catch
+            }
+            catch
             {
                 Write-TestingFailed -Message $_
                 $checks["CheckRBAC"].Result = "Failed"
@@ -4141,47 +4141,44 @@ function Debug-AzStorageAccountEntraKerbAuth {
         #
         if (!$filterIsPresent -or $Filter -match "CheckFiddlerProxy")
         {
-           Write-Host "Checking Fiddler Proxy"
-           try
-           {
+            Write-Host "Checking Fiddler Proxy"
+            try
+            {
                 $checksExecuted += 1;
                 $ProxysubFolder = Get-ChildItem `
                     -Path Registry::HKLM\SYSTEM\CurrentControlSet\Services\iphlpsvc\Parameters\ProxyMgr `
                     -ErrorAction SilentlyContinue
+                
                 $success = $true
                 foreach ($folder in $ProxysubFolder)
                 {
                     $properties = $folder | Get-ItemProperty
                     if (($null -ne $properties.StaticProxy) -and ($properties.StaticProxy.Contains("https=127.0.0.1:")))
                     {
-                        # If this is the first failure detected, print "FAILED"
-                        if ($success)
-                        {
-                            Write-TestingFailed -Message "Fiddler proxy detected"
-                            $checks["CheckFiddlerProxy"].Result = "Failed"
-                            $success = $false
-                        }
-
                         # Report the registry path every time a failure is detected
-                        Write-Host "`tFiddler Proxy is set, you need to delete any registry nodes under $($PSStyle.Foreground.BrightCyan)'$($folder.Name)'$($PSStyle.Reset)."
+                        $success = $false
+                        Write-Host "`tFiddler proxy detected in '$($PSStyle.Foreground.BrightCyan)$($folder.Name)$($PSStyle.Reset)'."
                     }
                 }
+
                 if ($success)
                 {
-                    Write-TestingPassed
                     $checks["CheckFiddlerProxy"].Result = "Passed"
+                    Write-TestingPassed
                 }
                 else
                 {
-                    Write-TestingFailed -Message "To prevent this issue from re-appearing in the future, you should also uninstall Fiddler."
+                    $checks["CheckFiddlerProxy"].Result = "Failed"
+                    $checks["CheckFiddlerProxy"].Issue = "Fiddler Proxy detected"
+                    Write-TestingFailed -Message "Fiddler Proxy detected. Uninstall Fiddler and remove all registry entries listed above."
                 }
-             }
-             catch
-             {
-                Write-TestingFailed -Message $_
-                $checks["CheckFiddlerProxy"].Result = "Failed"
-                $checks["CheckFiddlerProxy"].Issue = $_
-             }
+            }
+            catch
+            {
+               Write-TestingFailed -Message $_
+               $checks["CheckFiddlerProxy"].Result = "Failed"
+               $checks["CheckFiddlerProxy"].Issue = $_
+            }
         }
 
         #
@@ -4196,14 +4193,18 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 $status = Get-DsRegStatus
                 if ($status.AzureAdJoined -eq "YES")
                 {
-                    Write-TestingPassed
+                    
                     if ($status.DomainJoined -eq "NO")
                     {
-                        Write-Host "`tEntra Join confirmed"
+                        Write-TestingPassed "Entra Join confirmed"
                     }
                     elseif ($status.DomainJoined -eq "YES")
                     {
-                        Write-Host "`tHybrid Entra Join confirmed"
+                        Write-TestingPassed "Hybrid Entra Join confirmed"
+                    }
+                    else
+                    {
+                        Write-TestingPassed "Unknown kind of Entra Join confirmed"
                     }
                     $checks["CheckEntraJoinType"].Result = "Passed"
                 }
@@ -4271,7 +4272,7 @@ function Debug-AzStorageAccountEntraKerbAuth {
                     Write-TestingPassed
                 }
                 else {
-                    $disabledConfiguration = (-not $serverEncryption.SupportsKerberos) ? "Kerberos Authentication" : "AES-256 encryption"
+                    $disabledConfiguration = if (-not $serverEncryption.SupportsKerberos) { "Kerberos Authentication" } else { "AES-256 encryption" }
 
                     $message = "Entra Kerberos requires $disabledConfiguration to be enabled on the storage account."
                     if (-not $serverEncryption.SupportsKerberos) {
@@ -4462,17 +4463,31 @@ function Get-DsRegStatus {
 }
 
 function Test-IsCloudKerberosTicketRetrievalEnabled {
-    $regKeyFolder = Get-ItemProperty -Path Registry::HKLM\Software\Microsoft\Windows\CurrentVersion\Policies\System\Kerberos\Parameters -ErrorAction SilentlyContinue
+    [CmdletBinding()]
+    param ()
 
-    if ($null -eq $regKeyFolder) {
-        $regKeyFolder = Get-ItemProperty -Path Registry::HKLM\SYSTEM\CurrentControlSet\Control\Lsa\Kerberos\Parameters -ErrorAction SilentlyContinue
+    $path = "HKLM:\Software\Microsoft\Windows\CurrentVersion\Policies\System\Kerberos\Parameters"
+    $folder = Get-ItemProperty -Path $path -ErrorAction SilentlyContinue
+
+    if ($null -eq $folder -or
+        $null -eq $folder.CloudKerberosTicketRetrievalEnabled)
+    {
+        Write-Verbose "CloudKerberosTicketRetrievalEnabled not found in ${path}."
+
+        $path = "HKLM:\SYSTEM\CurrentControlSet\Control\Lsa\Kerberos\Parameters"
+        $folder = Get-ItemProperty -Path $path -ErrorAction SilentlyContinue
+
+        if ($null -eq $folder -or
+            $null -eq $folder.CloudKerberosTicketRetrievalEnabled)
+        {
+            Write-Verbose "$path not found."
+            return $false
+        }
     }
+    
+    Write-Verbose "Found ${path}\CloudKerberosTicketRetrievalEnabled = $($folder.CloudKerberosTicketRetrievalEnabled)"
 
-    if ($null -eq $regKeyFolder) {
-        return $false
-    }
-
-    return $regKeyFolder.CloudKerberosTicketRetrievalEnabled -eq "1"
+    return $folder.CloudKerberosTicketRetrievalEnabled -eq "1"
 }
 
 function Debug-EntraKerbAdminConsent {
