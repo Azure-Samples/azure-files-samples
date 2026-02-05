@@ -4045,9 +4045,8 @@ function Debug-AzStorageAccountEntraKerbAuth {
 
                     if ($DefaultSharePermission -and $DefaultSharePermission -ne "None")
                     {
-                        Write-TestingPassed
+                        Write-TestingPassed "Access is granted via the default share permission"
                         $checks["CheckRBAC"].Result = "Passed"
-                        Write-Host "`tAccess is granted via the default share permission"
                     }
                     elseif (-not $UserName)
                     {
@@ -4070,7 +4069,8 @@ function Debug-AzStorageAccountEntraKerbAuth {
                             -checkResult $checks["CheckRBAC"]
                     }
                 }
-            } catch
+            }
+            catch
             {
                 Write-TestingFailed -Message $_
                 $checks["CheckRBAC"].Result = "Failed"
@@ -4193,14 +4193,18 @@ function Debug-AzStorageAccountEntraKerbAuth {
                 $status = Get-DsRegStatus
                 if ($status.AzureAdJoined -eq "YES")
                 {
-                    Write-TestingPassed
+                    
                     if ($status.DomainJoined -eq "NO")
                     {
-                        Write-Host "`tEntra Join confirmed"
+                        Write-TestingPassed "Entra Join confirmed"
                     }
                     elseif ($status.DomainJoined -eq "YES")
                     {
-                        Write-Host "`tHybrid Entra Join confirmed"
+                        Write-TestingPassed "Hybrid Entra Join confirmed"
+                    }
+                    else
+                    {
+                        Write-TestingPassed "Unknown kind of Entra Join confirmed"
                     }
                     $checks["CheckEntraJoinType"].Result = "Passed"
                 }
