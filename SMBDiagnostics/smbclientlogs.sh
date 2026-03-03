@@ -48,8 +48,8 @@ check_utils() {
     exit 1
   fi
 
-  if ! command -v zgrep >/dev/null 2>&1; then
-    echo "zgrep is not installed, please install zgrep"
+  if (command -v apt >/dev/null 2>&1) &&  (! command -v zgrep >/dev/null 2>&1); then
+    echo "apt-based package management is in use, but zgrep is not installed, please install zgrep"
     exit 1
   fi
 
@@ -74,6 +74,7 @@ check_utils() {
     elif ! command -v python >/dev/null 2>&1; then
       echo "python is not installed, please install python to continue"
       exit 1
+    else PYTHON_PROG='python'
     fi
   fi
 }
@@ -89,7 +90,7 @@ start_trace() {
   rc=$?
 
   if [ $rc -ne 0 ]; then
-    echo "trace-cmd failed to start. cifs-trace would not be captured."
+    echo "trace-cmd failed to start. cifs-trace will not be captured."
   fi
 }
 
