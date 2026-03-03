@@ -6,7 +6,7 @@ CIFS_PORT=445
 TRACE_CIFSBPF_ABS_PATH="$(cd "$(dirname "trace-cifsbpf")" && pwd)/$(basename "trace-cifsbpf")"
 PYTHON_PROG='python'
 STDLOG_FILE='/dev/null'
-CIFS_FYI_ENABLED=0
+VERBOSE_FLAG=".smbclientlogs_verbose.flag"
 
 am_i_root() {
     local euid=$(id -u)
@@ -81,10 +81,11 @@ check_utils() {
 
 start_trace() {
   if [[ "$*" =~ "VerboseLogs" ]]; then
+    echo "setting verbose logging for cifs module"
+    cat /proc/fs/cifs/cifsFYI 2>/dev/null > "${VERBOSE_FLAG}"
     echo 'module cifs +p' > /sys/kernel/debug/dynamic_debug/control
     echo 'file fs/cifs/* +p' > /sys/kernel/debug/dynamic_debug/control
     echo 7 > /proc/fs/cifs/cifsFYI
-    CIFS_FYI_ENABLED=1
   fi
   trace-cmd start -e cifs
   rc=$?
@@ -248,8 +249,10 @@ stop_trace() {
   trace-cmd report > "${DIRNAME}/cifs_trace"
   trace-cmd stop
   trace-cmd reset
-  if [ $CIFS_FYI_ENABLED -ne 0 ]; then
-    echo 0 > /proc/fs/cifs/cifsFYI
+  if [ -f "${VERBOSE_FLAG}" ]; then
+    prev_value=$(cat "${VERBOSE_FLAG}")
+    echo "${prev_value:-0}" > /proc/fs/cifs/cifsFYI
+    rm -f "${VERBOSE_FLAG}"
   fi
   rm -rf trace.dat*
 }
