@@ -1,11 +1,10 @@
 Steps to collect the logs:
 --------------------------
-Copy smbclientlogs.sh (Shell script) and trace-cifsbpf (eBPF script) to linux machine where we need to collect logs.
+Copy smbclientlogs.sh (Shell script) to linux machine where we need to collect logs.
 
 Dependencies:
 Install packages trace-cmd, zip and ss.
 If using CaptureNetwork option (see below), install tcpdump.
-If using OnAnomaly mode (see below), install bpfcc-tools.
 
 If issue can be easily reproduced:
 1) Open linux terminal or ssh to linux machine or the AKS node.
@@ -20,18 +19,6 @@ If issue can be easily reproduced:
 6) Run "./smbclientlogs.sh stop"
 7) Above command generates output.zip
 8) Send the output.zip file to Microsoft support against your support case.
-
-If issue is sporadic in nature and want script to auto detect the issue, use below steps:
-1) Open linux terminal or ssh to linux machine or the AKS node.
-2) Run the command "sudo bash" to gain root privileges.
-3) Cd to script location and run the command
-   "chmod +x ./smbclientlogs.sh"
-4) Run the command
-   "./smbclientlogs.sh start OnAnomaly"
-   (or)
-   "./smbclientlogs.sh start CaptureNetwork OnAnomaly" (in case Microsoft instructs you to use this option)
-5) When issue occurs, the eBPF script (trace-cifsbpf) will auto detect and collect the traces and generate output.zip automatically. No action needed here.
-6) Send the output.zip file to Microsoft support against your support case.
 
 Contents of Zip file:
 1) cifs_diag.txt - Internal debug data and stats from the SMB client.
