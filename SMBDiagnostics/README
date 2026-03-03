@@ -3,7 +3,7 @@ Steps to collect the logs:
 Copy smbclientlogs.sh (Shell script) to linux machine where we need to collect logs.
 
 Dependencies:
-Install packages trace-cmd, zip and ss.
+Install packages trace-cmd, zip and ss. If debian-based distro, please install zgrep.
 If using CaptureNetwork option (see below), install tcpdump.
 
 If issue can be easily reproduced:
