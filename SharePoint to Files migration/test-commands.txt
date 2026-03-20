@@ -1,0 +1,107 @@
+# SharePoint to Azure Files Migration - Test Environment Commands
+# ================================================================
+# Commands are single-line for easy copy-paste into cmd.exe or PowerShell
+
+# Test Environment Configuration:
+#   SharePoint Site: https://microsoft.sharepoint.com/teams/sharepointtofiles
+#   Document Library: Documents
+#   Storage Account: keyrotatetest01
+#   File Share: sptest
+#   Resource Group: shsorot-passrotate
+#   Subscription: dd80b94e-0463-4a65-8d04-c94f403879dc
+
+# ================================================================
+# PREREQUISITES
+# ================================================================
+
+# 1. Login to Azure CLI
+az login
+
+# 2. Set subscription (optional if you have multiple subscriptions)
+az account set --subscription "dd80b94e-0463-4a65-8d04-c94f403879dc"
+
+# 3. Install Python dependencies
+cd c:\github\SP-to-files\python
+pip install -r requirements.txt
+
+# ================================================================
+# BASIC COMMANDS
+# ================================================================
+
+# Show help
+python migrate_sp_to_azure_files.py --help
+
+# Interactive mode (guided wizard)
+python migrate_sp_to_azure_files.py --interactive
+
+# ================================================================
+# TEST MIGRATIONS
+# ================================================================
+
+# Dry run - see what would be migrated without actually migrating
+python migrate_sp_to_azure_files.py --site-url "https://microsoft.sharepoint.com/teams/sharepointtofiles" --library "Documents" --storage-account "keyrotatetest01" --file-share "sptest" --resource-group "shsorot-passrotate" --subscription "dd80b94e-0463-4a65-8d04-c94f403879dc" --dry-run
+
+# Migrate first 10 files (quick test)
+python migrate_sp_to_azure_files.py --site-url "https://microsoft.sharepoint.com/teams/sharepointtofiles" --library "Documents" --storage-account "keyrotatetest01" --file-share "sptest" --resource-group "shsorot-passrotate" --subscription "dd80b94e-0463-4a65-8d04-c94f403879dc" --max-files 10
+
+# Migrate first 100 files
+python migrate_sp_to_azure_files.py --site-url "https://microsoft.sharepoint.com/teams/sharepointtofiles" --library "Documents" --storage-account "keyrotatetest01" --file-share "sptest" --resource-group "shsorot-passrotate" --subscription "dd80b94e-0463-4a65-8d04-c94f403879dc" --max-files 100
+
+# ================================================================
+# FULL MIGRATION
+# ================================================================
+
+# Full migration with all files
+python migrate_sp_to_azure_files.py --site-url "https://microsoft.sharepoint.com/teams/sharepointtofiles" --library "Documents" --storage-account "keyrotatetest01" --file-share "sptest" --resource-group "shsorot-passrotate" --subscription "dd80b94e-0463-4a65-8d04-c94f403879dc"
+
+# Full migration with permissions export
+python migrate_sp_to_azure_files.py --site-url "https://microsoft.sharepoint.com/teams/sharepointtofiles" --library "Documents" --storage-account "keyrotatetest01" --file-share "sptest" --resource-group "shsorot-passrotate" --subscription "dd80b94e-0463-4a65-8d04-c94f403879dc" --export-permissions
+
+# ================================================================
+# ADVANCED OPTIONS
+# ================================================================
+
+# Migration with custom concurrency (16 parallel downloads)
+python migrate_sp_to_azure_files.py --site-url "https://microsoft.sharepoint.com/teams/sharepointtofiles" --library "Documents" --storage-account "keyrotatetest01" --file-share "sptest" --resource-group "shsorot-passrotate" --subscription "dd80b94e-0463-4a65-8d04-c94f403879dc" --concurrent-downloads 16
+
+# Migration with checkpoint file for resume support
+python migrate_sp_to_azure_files.py --site-url "https://microsoft.sharepoint.com/teams/sharepointtofiles" --library "Documents" --storage-account "keyrotatetest01" --file-share "sptest" --resource-group "shsorot-passrotate" --subscription "dd80b94e-0463-4a65-8d04-c94f403879dc" --checkpoint-file "migration_checkpoint.json"
+
+# Migration to a specific target folder in Azure Files
+python migrate_sp_to_azure_files.py --site-url "https://microsoft.sharepoint.com/teams/sharepointtofiles" --library "Documents" --storage-account "keyrotatetest01" --file-share "sptest" --resource-group "shsorot-passrotate" --subscription "dd80b94e-0463-4a65-8d04-c94f403879dc" --target-folder "migrated/sharepoint"
+
+# ================================================================
+# OVERWRITE MODE
+# ================================================================
+
+# Re-migrate all files, ignoring checkpoint (overwrite target)
+python migrate_sp_to_azure_files.py --site-url "https://microsoft.sharepoint.com/teams/sharepointtofiles" --library "Documents" --storage-account "keyrotatetest01" --file-share "sptest" --resource-group "shsorot-passrotate" --subscription "dd80b94e-0463-4a65-8d04-c94f403879dc" --overwrite
+
+# Overwrite with concurrent downloads bumped to 16
+python migrate_sp_to_azure_files.py --site-url "https://microsoft.sharepoint.com/teams/sharepointtofiles" --library "Documents" --storage-account "keyrotatetest01" --file-share "sptest" --resource-group "shsorot-passrotate" --subscription "dd80b94e-0463-4a65-8d04-c94f403879dc" --overwrite --concurrent-downloads 16
+
+# Overwrite a small test batch (first 10 files)
+python migrate_sp_to_azure_files.py --site-url "https://microsoft.sharepoint.com/teams/sharepointtofiles" --library "Documents" --storage-account "keyrotatetest01" --file-share "sptest" --resource-group "shsorot-passrotate" --subscription "dd80b94e-0463-4a65-8d04-c94f403879dc" --overwrite --max-files 10
+
+# ================================================================
+# MONITORING
+# ================================================================
+
+# Monitor logs in real-time (run in separate terminal)
+Get-Content "c:\github\SP-to-files\python\logs\migration_*.log" -Tail 50 -Wait
+
+# Check batch completion summary
+Select-String -Path "c:\github\SP-to-files\python\logs\migration_*.log" -Pattern "Batch upload complete"
+
+# Check for errors
+Select-String -Path "c:\github\SP-to-files\python\logs\migration_*.log" -Pattern "ERROR"
+
+# ================================================================
+# NOTES
+# ================================================================
+# - Resource Group: shsorot-passrotate
+# - Subscription: dd80b94e-0463-4a65-8d04-c94f403879dc (XIO PM AungOo)
+# - Logs are stored in: c:\github\SP-to-files\python\logs\
+# - Performance metrics CSV files are also saved in the logs folder
+# - Use --dry-run first to verify configuration before actual migration
+# - Use --overwrite to force re-migration of all files (ignores checkpoint)
