@@ -1,0 +1,23 @@
+# SharePoint to Azure Files Migration Tool
+# Python 3.10+ required
+
+# Microsoft Graph SDK for async SharePoint access
+msgraph-sdk>=1.0.0
+
+# Azure Identity for authentication
+azure-identity>=1.15.0
+
+# Azure Storage SDK for Azure Files operations
+azure-storage-file-share>=12.15.0
+
+# Rich library for beautiful terminal UI
+rich>=13.7.0
+
+# Async file I/O
+aiofiles>=23.2.0
+
+# HTTP client with better async support
+aiohttp>=3.9.0
+
+# For running AzCopy subprocess
+# (No additional package needed - uses subprocess)
