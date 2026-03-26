@@ -6,12 +6,11 @@ CIFS_PORT=445
 TRACE_CIFSBPF_ABS_PATH="$(cd "$(dirname "trace-cifsbpf")" && pwd)/$(basename "trace-cifsbpf")"
 PYTHON_PROG='python'
 STDLOG_FILE='/dev/null'
-CIFS_FYI_ENABLED=0
+VERBOSE_FLAG=".smbclientlogs_verbose.flag"
 
 am_i_root() {
     local euid=$(id -u)
-    if (( $euid != 0 ));
-    then
+    if (( $euid != 0 )); then
         echo "Please run $0 as root";
         exit
     fi
@@ -35,7 +34,7 @@ main() {
 }
 
 init() {
-  check_utils
+  check_utils "$@"
   if [[ -f $DIRNAME ]];
   then
     rm -rf "$DIRNAME"
@@ -44,55 +43,56 @@ init() {
 }
 
 check_utils() {
-  which trace-cmd > /dev/null
-  if [ $? == 1 ]; then
+  if ! command -v trace-cmd >/dev/null 2>&1; then
     echo "trace-cmd is not installed, please install trace-cmd"
     exit 1
   fi
 
-  if (( ($(which apt |egrep -c apt) > 0) && ($(which zgrep |egrep -c zgrep) == 0) ));
-  then
-    echo "zgrep is not installed, please install zgrep"
+  if (command -v apt >/dev/null 2>&1) &&  (! command -v zgrep >/dev/null 2>&1); then
+    echo "apt-based package management is in use, but zgrep is not installed, please install zgrep"
     exit 1
   fi
 
-  which tcpdump > /dev/null
-  if [ $? != 0 ]; then
+  if ! command -v tcpdump >/dev/null 2>&1; then
     echo "tcpdump is not installed. Please install tcpdump if you intend to capture network traces."
     #Not exiting since packet capture is optional
   fi
 
-  which zip > /dev/null
-  if [ $? == 1 ]; then
+  if ! command -v zip >/dev/null 2>&1; then
     echo "zip is not installed, please install zip to continue"
     exit 1
   fi
 
-  which ss > /dev/null
-  if [ $? == 1 ]; then
+  if ! command -v ss >/dev/null 2>&1; then
     echo "ss is not installed, please install ss to continue"
     exit 1
   fi
 
-  which python > /dev/null
-  if [ $? == 1 ]; then
-    which python3 > /dev/null
-    if [ $? == 1 ]; then
+  if [[ "$*" =~ "OnAnomaly" ]]; then
+    if command -v python3 >/dev/null 2>&1; then
+      PYTHON_PROG='python3'
+    elif ! command -v python >/dev/null 2>&1; then
       echo "python is not installed, please install python to continue"
       exit 1
-    else PYTHON_PROG='python3'
+    else PYTHON_PROG='python'
     fi
   fi
 }
 
 start_trace() {
   if [[ "$*" =~ "VerboseLogs" ]]; then
+    echo "setting verbose logging for cifs module"
+    cat /proc/fs/cifs/cifsFYI 2>/dev/null > "${VERBOSE_FLAG}"
     echo 'module cifs +p' > /sys/kernel/debug/dynamic_debug/control
     echo 'file fs/cifs/* +p' > /sys/kernel/debug/dynamic_debug/control
     echo 7 > /proc/fs/cifs/cifsFYI
-    CIFS_FYI_ENABLED=1
   fi
   trace-cmd start -e cifs
+  rc=$?
+
+  if [ $rc -ne 0 ]; then
+    echo "trace-cmd failed to start. cifs-trace will not be captured."
+  fi
 }
 
 dump_system_logs() {
@@ -115,7 +115,7 @@ dump_system_logs() {
 
 dump_azfileauth_logs() {
   local output_file=$1
-  if which azfilesauthmanager >/dev/null 2>&1; then
+  if command -v azfilesauthmanager >/dev/null 2>&1; then
     echo -e "\nDumping azfileauth tickets" >> "$output_file"
     azfilesauthmanager list >> "$output_file" 2>&1
   else
@@ -143,14 +143,12 @@ dump_os_information() {
   echo -e "\nSystem Uptime:" >> os_details.txt
   cat /proc/uptime >> os_details.txt
   echo -e "\npackage install details:" >> os_details.txt
-  if (( $(which rpm |egrep -c rpm) > 0));
-  then
+  if command -v rpm >/dev/null 2>&1; then
     rpm -qa --last |grep keyutils >> os_details.txt
     rpm -qa --last |grep cifs-utils >> os_details.txt
     rpm -qi keyutils >> os_details.txt
     rpm -qi cifs-utils >> os_details.txt
-  elif (( $(which apt |egrep -c apt) > 0 ));
-  then
+  elif command -v apt >/dev/null 2>&1; then
     zgrep -B5 -A5 keyutils /var/log/apt/history.log* >> os_details.txt
     zgrep -B5 -A5 cifs-utils /var/log/apt/history.log* >> os_details.txt
     dpkg -s keyutils cifs-utils >> os_details.txt 
@@ -196,8 +194,8 @@ trace_cifsbpf() {
 }
 
 start() {
-  init
-  start_trace $@
+  init "$@"
+  start_trace "$@"
   dump_os_information
   echo "======= Dumping CIFS Debug Stats at start =======" > cifs_diag.txt
   dump_debug_stats
@@ -216,6 +214,8 @@ start() {
   if [[ "$*" =~ "OnAnomaly" ]]; then
     trace_cifsbpf
   fi
+
+  echo "started collecting smb client logs"
 }
 
 stop() {
@@ -249,8 +249,10 @@ stop_trace() {
   trace-cmd report > "${DIRNAME}/cifs_trace"
   trace-cmd stop
   trace-cmd reset
-  if [ $CIFS_FYI_ENABLED -ne 0 ]; then
-    echo 0 > /proc/fs/cifs/cifsFYI
+  if [ -f "${VERBOSE_FLAG}" ]; then
+    prev_value=$(cat "${VERBOSE_FLAG}")
+    echo "${prev_value:-0}" > /proc/fs/cifs/cifsFYI
+    rm -f "${VERBOSE_FLAG}"
   fi
   rm -rf trace.dat*
 }
