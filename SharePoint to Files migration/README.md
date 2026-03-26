@@ -131,21 +131,26 @@ Key capabilities:
 ### Azure Resources Setup
 
 1. **Create Storage Account** (if not exists):
+   This creates a storage account using the Provisioned v2 billing model with HDD tier.
+   
+   Note: Provisioned v2 billing model uses FileStorage kind with StandardV2_* SKUs. - StandardV2_LRS - HDD with locally redundant storage - StandardV2_ZRS - HDD with zone-redundant storage - StandardV2_GRS - HDD with geo-redundant storage - StandardV2_GZRS - HDD with geo-zone-redundant storage. For SSD tier, use PremiumV2_LRS or PremiumV2_ZRS.
+
    ```bash
-   az storage account create \
+     az storage account create \
        --name mystorageaccount \
        --resource-group my-rg \
        --location eastus \
-       --sku Standard_LRS \
-       --kind StorageV2
+       --sku StandardV2_LRS \
+       --kind FileStorage
    ```
-
+  
 2. **Create File Share**:
    ```bash
-   az storage share create \
-       --name myfileshare \
-       --account-name mystorageaccount \
-       --quota 100
+   az storage share-rm create \
+     --storage-account mystorageaccount \
+     --resource-group my-rg \
+     --name myfileshare \
+     --quota 100
    ```
 
 3. **Enable Entra ID Kerberos** (optional, for identity-based access):
