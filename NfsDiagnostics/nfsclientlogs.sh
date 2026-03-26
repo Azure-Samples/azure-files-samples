@@ -47,9 +47,14 @@ main() {
 }
 
 start() {
-  if [ -f "${PIDFILE}" ] && read -r _running_pid < "${PIDFILE}" 2>/dev/null && ps -p "$_running_pid" >/dev/null 2>&1; then
-    echo "Warning: A network capture is already in progress (pid $_running_pid). Stop it before starting a new capture." >&2
-    return 1
+  if [ -f "${PIDFILE}" ]; then
+    read -r _running_pid < "${PIDFILE}" 2>/dev/null
+    if [ -n "$_running_pid" ] && ps -p "$_running_pid" -o comm= 2>/dev/null | grep -q '^tcpdump$'; then
+      echo "Warning: A network capture is already in progress (pid $_running_pid). Stop it before starting a new capture." >&2
+      return 1
+    fi
+    # Stale PID file — process gone or not tcpdump
+    rm -f "${PIDFILE}"
   fi
   init
   start_trace "$@"
@@ -70,7 +75,7 @@ start() {
 
 init() {
   check_utils
-  if [[ -f $DIRNAME ]]; then rm -rf "$DIRNAME"; fi
+  if [[ -n "$DIRNAME" && -e "$DIRNAME" ]]; then rm -rf "$DIRNAME"; fi
   mkdir -p "$DIRNAME"
   if id -u tcpdump >/dev/null 2>&1; then
     chown tcpdump:tcpdump "$DIRNAME" 2>/dev/null || true
