@@ -1,13 +1,13 @@
 #!/bin/bash
 
 # Simplified NFS diagnostics: capture tcpdump directly into output directory
-PIDFILE="/tmp/nfsclientlog.pid"
+PIDFILE="/run/nfsclientlog.pid"
+RPCDEBUG_STATEFILE="/run/nfsclientlog.rpcdebug"
 DIRNAME="./output"
 NFS_PORT=2049
 TRACE_NFSBPF_ABS_PATH="$(cd "$(dirname "trace-nfsbpf")" && pwd)/$(basename "trace-nfsbpf")"
 PYTHON_PROG='python'
 STDLOG_FILE='/dev/null'
-TRACE_RPCDEBUG_ENABLED=0
 
 # Ring buffer defaults (override via env before invoking)
 TCPDUMP_ROTATE_FILE_SIZE_MB=${TCPDUMP_ROTATE_FILE_SIZE_MB:-100}
@@ -19,7 +19,7 @@ am_i_root() {
     if (( $euid != 0 ));
     then
         echo "Please run $0 as root";
-        exit
+        exit 1
     fi
 }
 
@@ -57,6 +57,13 @@ start() {
   echo "======= Dumping NFS Debug Stats at start =======" > nfs_diag.txt
   dump_debug_stats
   echo "=================================================" >> nfs_diag.txt
+
+  echo "======= Dumping Process callstacks at start =====" > process_callstack.txt
+  date >> process_callstack.txt
+  dump_process_callstacks
+  echo "=================================================" >> process_callstack.txt
+  date >> process_callstack.txt
+
   [[ "$*" =~ "CaptureNetwork" ]] && capture_network
   [[ "$*" =~ "OnAnomaly" ]] && trace_nfsbpf
 }
@@ -74,7 +81,7 @@ init() {
 
 check_utils() {
   which trace-cmd > /dev/null
-  if [ $? == 1 ]; then
+  if [ $? != 0 ]; then
     echo "trace-cmd is not installed, please install trace-cmd"
     exit 1
   fi
@@ -86,21 +93,21 @@ check_utils() {
   fi
 
   which zip > /dev/null
-  if [ $? == 1 ]; then
+  if [ $? != 0 ]; then
     echo "zip is not installed, please install zip to continue"
     exit 1
   fi
 
   which ss > /dev/null
-  if [ $? == 1 ]; then
+  if [ $? != 0 ]; then
     echo "ss is not installed, please install ss to continue"
     exit 1
   fi
 
   which python > /dev/null
-  if [ $? == 1 ]; then
+  if [ $? != 0 ]; then
     which python3 > /dev/null
-    if [ $? == 1 ]; then
+    if [ $? != 0 ]; then
       echo "python is not installed, please install python to continue"
       exit 1
     else PYTHON_PROG='python3'
@@ -128,9 +135,9 @@ start_trace() {
     echo "Enabling rpcdebug for rpc and nfs modules" >&2
     rpcdebug -m rpc -s all
     rpcdebug -m nfs -s all
-    TRACE_RPCDEBUG_ENABLED=1
+    echo 1 > "${RPCDEBUG_STATEFILE}"
   else
-    TRACE_RPCDEBUG_ENABLED=0
+    rm -f "${RPCDEBUG_STATEFILE}"
   fi
   trace-cmd start -e nfs -e nfs4
 }
@@ -161,15 +168,29 @@ dump_debug_stats() {
   ps -ef >> nfs_diag.txt
 }
 
+dump_process_callstacks() {
+  local stack_file
+  # Iterate through all stack files in /proc/*/stack
+  for stack_file in /proc/*/stack; do
+    if [ -r "$stack_file" ]; then
+      echo "Process: $stack_file" >> process_callstack.txt
+      cat "$stack_file" >> process_callstack.txt 2>/dev/null
+      echo -e "\n\n" >> process_callstack.txt
+    else
+      echo "Skipping $stack_file (unreadable or disappeared)" >> process_callstack.txt
+    fi
+  done
+}
+
 capture_network() {
   if validate_tcpdump_rotation; then
     local total=$((TCPDUMP_ROTATE_FILE_SIZE_MB * TCPDUMP_ROTATE_FILE_COUNT))
     echo "Starting circular tcpdump in ${DIRNAME} (${TCPDUMP_ROTATE_FILE_COUNT} files x ${TCPDUMP_ROTATE_FILE_SIZE_MB}MB ~= ${total}MB max)" >&2
-    nohup tcpdump -p -n -s "${TCPDUMP_SNAPLEN}" -C "${TCPDUMP_ROTATE_FILE_SIZE_MB}" -W "${TCPDUMP_ROTATE_FILE_COUNT}" -w "${DIRNAME}/nfs_traffic.pcap" port ${NFS_PORT} &
+    nohup tcpdump -p -n -Z root -s "${TCPDUMP_SNAPLEN}" -C "${TCPDUMP_ROTATE_FILE_SIZE_MB}" -W "${TCPDUMP_ROTATE_FILE_COUNT}" -w "${DIRNAME}/nfs_traffic.pcap" port ${NFS_PORT} &
     echo $! > "${PIDFILE}"
   else
     echo "Falling back to single-file tcpdump capture in ${DIRNAME} (no rotation)." >&2
-    nohup tcpdump -p -s "${TCPDUMP_SNAPLEN}" port ${NFS_PORT} -w "${DIRNAME}/nfs_traffic.pcap" &
+    nohup tcpdump -p -s -Z root "${TCPDUMP_SNAPLEN}" port ${NFS_PORT} -w "${DIRNAME}/nfs_traffic.pcap" &
     echo $! > "${PIDFILE}"
   fi
 }
@@ -182,10 +203,13 @@ stop() {
   dmesg -T > "${DIRNAME}/nfs_dmesg"
   stop_trace
   stop_capture_network
-  echo -e "\n\n======= Dumping CIFS Debug Stats at the end =======" >> nfs_diag.txt
+  echo -e "\n\n======= Dumping NFS Debug Stats at the end =======" >> nfs_diag.txt
   dump_debug_stats
+  echo -e "\n\n======= Dumping Process callstacks at end  ========" >> process_callstack.txt
+  dump_process_callstacks
   mv nfs_diag.txt "${DIRNAME}"
   mv os_details.txt "${DIRNAME}"
+  mv process_callstack.txt "${DIRNAME}"
   zip -r "$(basename ${DIRNAME}).zip" "${DIRNAME}"
   return 0
 }
@@ -196,24 +220,31 @@ stop_trace() {
   trace-cmd report > "${DIRNAME}/nfs_trace"
   trace-cmd stop
   trace-cmd reset
-  if [ ${TRACE_RPCDEBUG_ENABLED} -eq 1 ]; then
+  if [ -f "${RPCDEBUG_STATEFILE}" ]; then
     echo "Clearing rpcdebug settings" >&2
     rpcdebug -m rpc -c all
     rpcdebug -m nfs -c all
+    rm -f "${RPCDEBUG_STATEFILE}"
   fi
   rm -rf trace.dat*
 }
 
 stop_capture_network() {
-  [ ! -f "${PIDFILE}" ]  && return 1
+  [ ! -f "${PIDFILE}" ] && return 1
   read -r pid < "${PIDFILE}"
-  [ ! "${pid}" ] && return 1
-  ps -p "${pid}" > /dev/null
-  [ $? != 0 ] && return 1
+  if [ ! "${pid}" ]; then
+    rm -f "${PIDFILE}"
+    return 1
+  fi
+  if ! ps -p "${pid}" >/dev/null 2>&1; then
+    echo "tcpdump (pid ${pid}) already exited, cleaning up PID file." >&2
+    rm -f "${PIDFILE}"
+    return 0
+  fi
 
-  kill -INT ${pid}
+  kill -INT "${pid}"
   retry=0
-  while [ $? == 0 ] && [ $retry -lt 10 ]
+  while ps -p "${pid}" >/dev/null 2>&1 && [ $retry -lt 10 ]
   do
     retry=$((retry + 1))
     sleep 1
@@ -221,7 +252,7 @@ stop_capture_network() {
   done
   ps -p "${pid}" > /dev/null
   [ $? == 0 ] && echo "Error closing tcpdump" >&2
-  rm -f ${PIDFILE}
+  rm -f "${PIDFILE}"
 }
 
 
