@@ -7,7 +7,6 @@ DIRNAME="./output"
 NFS_PORT=2049
 TRACE_NFSBPF_ABS_PATH="$(cd "$(dirname "trace-nfsbpf")" && pwd)/$(basename "trace-nfsbpf")"
 PYTHON_PROG='python'
-STDLOG_FILE='/dev/null'
 
 # Ring buffer defaults (override via env before invoking)
 TCPDUMP_ROTATE_FILE_SIZE_MB=${TCPDUMP_ROTATE_FILE_SIZE_MB:-100}
@@ -39,7 +38,7 @@ main() {
   then
     stop
   else
-    echo "Usage: ./nfsclientlogs.sh <v3b | v4> <> <start | stop> <CaptureNetwork> <OnAnomaly> <VerboseLogs>"
+    echo "Usage: ./nfsclientlogs.sh <v3b | v4> <start | stop> <CaptureNetwork> <OnAnomaly> <VerboseLogs>"
     exit 1
   fi
 
@@ -81,7 +80,6 @@ init() {
     chown tcpdump:tcpdump "$DIRNAME" 2>/dev/null || true
     chmod 750 "$DIRNAME" 2>/dev/null || true
   fi
-  dmesg -Tc > /dev/null
 }
 
 check_utils() {
@@ -195,7 +193,7 @@ capture_network() {
     echo $! > "${PIDFILE}"
   else
     echo "Falling back to single-file tcpdump capture in ${DIRNAME} (no rotation)." >&2
-    nohup tcpdump -p -s -Z root "${TCPDUMP_SNAPLEN}" port ${NFS_PORT} -w "${DIRNAME}/nfs_traffic.pcap" &
+    nohup tcpdump -p -Z root -s "${TCPDUMP_SNAPLEN}" port ${NFS_PORT} -w "${DIRNAME}/nfs_traffic.pcap" &
     echo $! > "${PIDFILE}"
   fi
 }
