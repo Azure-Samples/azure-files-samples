@@ -426,7 +426,7 @@ print_log "Client running with $DISTNAME version $DISTVER, kernel version is $KE
 case $DISTNAME  in
 	*Redhat* )
 		if ( ver_lt $DISTVER '8' ); then
-			print_log "We recommend running following Linux Distributions: Ubuntu Server 18.04+ | RHEL 8+ | CentOS 7.6+ | Debian 9 | openSUSE 15+ | SUSE Linux Enterprise Server 15, please refer to https://docs.microsoft.com/en-us/azure/storage/files/storage-how-to-use-files-linux for more information" "warning"
+			print_log "We recommend running following Linux Distributions: Ubuntu Server 18.04+ | RHEL 8+ | CentOS 7.6+ | Debian 10+ | openSUSE 15+ | SUSE Linux Enterprise Server 15, please refer to https://docs.microsoft.com/en-us/azure/storage/files/storage-how-to-use-files-linux for more information" "warning"
 		fi
 		#kernel version check
 		if ( ! ver_lt $DISTVER '8' ); then
@@ -438,7 +438,7 @@ case $DISTNAME  in
 
 	*CentOS* )
 		if ( ver_lt $DISTVER '7.6' ); then
-			print_log "We recommend running following Linux Distributions: Ubuntu Server 18.04+ | RHEL 8+ | CentOS 7.6+ | Debian 9 | openSUSE 15+ | SUSE Linux Enterprise Server 15, please refer to https://docs.microsoft.com/en-us/azure/storage/files/storage-how-to-use-files-linux for more information" "warning"
+			print_log "We recommend running following Linux Distributions: Ubuntu Server 18.04+ | RHEL 8+ | CentOS 7.6+ | Debian 10+ | openSUSE 15+ | SUSE Linux Enterprise Server 15, please refer to https://docs.microsoft.com/en-us/azure/storage/files/storage-how-to-use-files-linux for more information" "warning"
 		fi
 
 		#kernel version check
@@ -454,7 +454,7 @@ case $DISTNAME  in
 	*Ubuntu* )
 		echo "Current Ubuntu distribution version is:  $DISTVER"
 		if ( ver_lt $DISTVER '18.04' ); then
-			print_log "We recommend running following Linux Distributions: Ubuntu Server 18.04+ | RHEL 8+ | CentOS 7.6+ | Debian 9 | openSUSE 15+ | SUSE Linux Enterprise Server 15, please refer to https://docs.microsoft.com/en-us/azure/storage/files/storage-how-to-use-files-linux for more information" "warning"
+			print_log "We recommend running following Linux Distributions: Ubuntu Server 18.04+ | RHEL 8+ | CentOS 7.6+ | Debian 10+ | openSUSE 15+ | SUSE Linux Enterprise Server 15, please refer to https://docs.microsoft.com/en-us/azure/storage/files/storage-how-to-use-files-linux for more information" "warning"
 		fi
 
 		# kernel version check for ubuntu 18.04
@@ -479,7 +479,7 @@ case $DISTNAME  in
 
 	*openSUSE* )
 		if ( ver_lt $DISTVER '15' ); then
-			print_log "We recommend running following Linux Distributions: Ubuntu Server 18.04+ | RHEL 8+ | CentOS 7.6+ | Debian 9 | openSUSE 15+ | SUSE Linux Enterprise Server 15, please refer to https://docs.microsoft.com/en-us/azure/storage/files/storage-how-to-use-files-linux for more information" "warning"
+			print_log "We recommend running following Linux Distributions: Ubuntu Server 18.04+ | RHEL 8+ | CentOS 7.6+ | Debian 10+ | openSUSE 15+ | SUSE Linux Enterprise Server 15, please refer to https://docs.microsoft.com/en-us/azure/storage/files/storage-how-to-use-files-linux for more information" "warning"
 		fi
 
 		#kernel version check
@@ -491,21 +491,21 @@ case $DISTNAME  in
 		;;
 	*SLES* )
 		if ( ver_lt $DISTVER '12' ); then
-			print_log "We recommend running following Linux Distributions: Ubuntu Server 14.04+ | RHEL 7+ | CentOS 7+ | Debian 8 | openSUSE 13.2+ | SUSE Linux Enterprise Server 12, please refer to https://docs.microsoft.com/en-us/azure/storage/files/storage-how-to-use-files-linux for more information" "warning"
+			print_log "We recommend running following Linux Distributions: Ubuntu Server 14.04+ | RHEL 7+ | CentOS 7+ | Debian 10+ | openSUSE 13.2+ | SUSE Linux Enterprise Server 12, please refer to https://docs.microsoft.com/en-us/azure/storage/files/storage-how-to-use-files-linux for more information" "warning"
 
 		fi
 		;;
 
 	*Debian* )
 		if ( ver_lt $DISTVER '9' ); then
-			print_log "We recommend running following Linux Distributions: Ubuntu Server 18.04+ | RHEL 8+ | CentOS 7.6+ | Debian 9 | openSUSE 15+ | SUSE Linux Enterprise Server 15, please refer to https://docs.microsoft.com/en-us/azure/storage/files/storage-how-to-use-files-linux for more information" "warning"
+			print_log "We recommend running following Linux Distributions: Ubuntu Server 18.04+ | RHEL 8+ | CentOS 7.6+ | Debian 10+ | openSUSE 15+ | SUSE Linux Enterprise Server 15, please refer to https://docs.microsoft.com/en-us/azure/storage/files/storage-how-to-use-files-linux for more information" "warning"
 		fi
 
 		#kernel version check
 		if ( ver_gt $DISTVER '8' ); then
 			if ( ver_lt $DISTVER '10' ); then
 				if ( ver_lt $KERVER '4.19.0'); then
-					print_log "For Debian 9, we recommend running Debian Kernel with version 4.19.0+" "warning"
+					print_log "Debian 9 is EOL, Please update to Debian 10+" "warning"
 				fi
 			fi
 		fi
