@@ -17,8 +17,12 @@ If issue can be easily reproduced:
    "./smbclientlogs.sh start CaptureNetwork" (in case Microsoft instructs you to use this option)
 5) Repro the issue.
 6) Run "./smbclientlogs.sh stop"
-7) Above command generates output.zip
-8) Send the output.zip file to Microsoft support against your support case.
+7) Above command generates output_TIMESTAMP.zip
+8) Send the output_TIMESTAMP.zip file to Microsoft support against your support case.
+
+Important Note:
+1) Please make sure to run the "start" and "stop" commands from the same CWD (current working directory).
+2) Every time "stop" is run a new log bundle will be created, irrespective of whether a matching "start" was performed or not. Please make sure that you provide us the correct log bundle.
 
 Contents of Zip file:
 1) cifs_diag.txt - Internal debug data and stats from the SMB client.

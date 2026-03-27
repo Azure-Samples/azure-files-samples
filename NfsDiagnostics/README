@@ -19,12 +19,16 @@ If issue can be easily reproduced:
    In case the service is Azure NFSv3 blob service, replace v4 above with v3b.
 5) Repro the issue.
 6) Run "./nfsclientlogs.sh stop"
-7) Above command generates output.zip
-8) Send the output.zip file to Microsoft support against your support case.
+7) Above command generates output_TIMESTAMP.zip
+8) Send the output_TIMESTAMP.zip file to Microsoft support against your support case.
+
+Important Note:
+1) Please make sure to run the "start" and "stop" commands from the same CWD (current working directory).
+2) Every time "stop" is run a new log bundle will be created, irrespective of whether a matching "start" was performed or not. Please make sure that you provide us the correct log bundle.
 
 Contents of Zip file:
 1) nfs_dmesg - System logs since the last reboot.
-2) cifs_trace - Output of trace-cmd, which contain the kernel event logs.
+2) nfs_trace - Output of trace-cmd, which contain the kernel event logs.
 3) os_details.txt - Info about the operating system, which will help developers to understand which features/fixes are missing. 
 4) nfs_traffic.pcap - network capture of NFS traffic in case CaptureNetwork option was used.
 
