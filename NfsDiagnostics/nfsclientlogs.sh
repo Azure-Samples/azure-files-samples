@@ -2,6 +2,7 @@
 
 # Simplified NFS diagnostics: capture tcpdump directly into output directory
 PIDFILE="/run/nfsclientlog.pid"
+STATEFILE="/run/nfsclientlog.state"
 RPCDEBUG_STATEFILE="/run/nfsclientlog.rpcdebug"
 DIRNAME="./output"
 NFS_PORT=2049
@@ -46,6 +47,10 @@ main() {
 }
 
 start() {
+  if [[ -f "${STATEFILE}" ]]; then
+    echo "Error: a previous 'start' session is already in progress. Run 'stop' first."
+    exit 1
+  fi
   if [ -f "${PIDFILE}" ]; then
     read -r _running_pid < "${PIDFILE}" 2>/dev/null
     if [ -n "$_running_pid" ] && ps -p "$_running_pid" -o comm= 2>/dev/null | grep -q '^tcpdump$'; then
@@ -55,6 +60,7 @@ start() {
     # Stale PID file — process gone or not tcpdump
     rm -f "${PIDFILE}"
   fi
+  touch "${STATEFILE}"
   init
   start_trace "$@"
   dump_os_information
@@ -203,6 +209,10 @@ trace_nfsbpf() {
 }
 
 stop() {
+  if [[ ! -f "${STATEFILE}" ]]; then
+    echo "Warning: 'stop' called without a matching 'start'. The log bundle may be incomplete."
+  fi
+  mkdir -p "${DIRNAME}"
   dmesg -T > "${DIRNAME}/nfs_dmesg"
   stop_trace
   stop_capture_network
@@ -213,7 +223,14 @@ stop() {
   mv nfs_diag.txt "${DIRNAME}"
   mv os_details.txt "${DIRNAME}"
   mv process_callstack.txt "${DIRNAME}"
-  zip -r "$(basename ${DIRNAME}).zip" "${DIRNAME}"
+
+  timestamp=$(date +"%Y%m%d_%H%M%S_%N")
+  archive_name="$(basename "${DIRNAME}")_${timestamp}.zip"
+  zip -r "${archive_name}" "${DIRNAME}"
+
+  echo "Logs collected in ${DIRNAME} and archived as ${archive_name}"
+
+  rm -f "${STATEFILE}"
   return 0
 }
 
