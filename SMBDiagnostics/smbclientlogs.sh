@@ -1,6 +1,7 @@
 #!/bin/bash
 
-PIDFILE="/tmp/smbclientlog.pid"
+PIDFILE="/run/smbclientlog.pid"
+STATEFILE="/run/smbclientlog.state"
 DIRNAME="./output"
 CIFS_PORT=445
 TRACE_CIFSBPF_ABS_PATH="$(cd "$(dirname "trace-cifsbpf")" && pwd)/$(basename "trace-cifsbpf")"
@@ -196,6 +197,11 @@ trace_cifsbpf() {
 }
 
 start() {
+  if [[ -f "${STATEFILE}" ]]; then
+    echo "Error: a previous 'start' session is already in progress. Run 'stop' first."
+    exit 1
+  fi
+  touch "${STATEFILE}"
   init
   start_trace $@
   dump_os_information
@@ -219,6 +225,10 @@ start() {
 }
 
 stop() {
+  if [[ ! -f "${STATEFILE}" ]]; then
+    echo "Warning: 'stop' called without a matching 'start'. The log bundle may be incomplete."
+  fi
+  mkdir -p "${DIRNAME}"
   dmesg -T > "${DIRNAME}/cifs_dmesg"
   stop_trace
   stop_capture_network
@@ -234,12 +244,20 @@ stop() {
   echo -e "======= Dumping AzFileAuth diagnostics  ========" > azfileauth.txt
   dump_azfileauth_logs "azfileauth.txt"
 
+  timestamp=$(date +"%Y%m%d_%H%M%S_%N")
+  archive_name="$(basename "${DIRNAME}")_${timestamp}.zip"
+
   mv system_logs.txt "${DIRNAME}"
   mv azfileauth.txt "${DIRNAME}"
   mv cifs_diag.txt "${DIRNAME}"
   mv os_details.txt "${DIRNAME}"
   mv process_callstack.txt "${DIRNAME}"
-  zip -r "$(basename ${DIRNAME}).zip" "${DIRNAME}"
+  zip -r "${archive_name}" "${DIRNAME}"
+
+  echo "Logs collected in ${DIRNAME} and archived as ${archive_name}"
+
+  rm -f "${STATEFILE}"
+
   return 0;
 }
 
