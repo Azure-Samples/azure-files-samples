@@ -75,7 +75,7 @@ start() {
 
 init() {
   check_utils
-  if [[ -n "$DIRNAME" && -e "$DIRNAME" ]]; then rm -rf "$DIRNAME"; fi
+  if [[ -n "$DIRNAME" && "$DIRNAME" != "/" && -e "$DIRNAME" ]]; then rm -rf -- "$DIRNAME"; fi
   mkdir -p "$DIRNAME"
   if id -u tcpdump >/dev/null 2>&1; then
     chown tcpdump:tcpdump "$DIRNAME" 2>/dev/null || true
@@ -231,7 +231,7 @@ stop_trace() {
     rpcdebug -m nfs -c all
     rm -f "${RPCDEBUG_STATEFILE}"
   fi
-  rm -rf trace.dat*
+  rm -f trace.dat*
 }
 
 stop_capture_network() {
