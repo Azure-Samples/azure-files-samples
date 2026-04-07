@@ -1,0 +1,18 @@
+﻿Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "CustomFileDownloader", "CustomFileDownloader.csproj", "{70EB2128-0D07-4026-99FD-32A2976E1D09}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Release|x64 = Release|x64
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{70EB2128-0D07-4026-99FD-32A2976E1D09}.Release|x64.ActiveCfg = Release|Any CPU
+		{70EB2128-0D07-4026-99FD-32A2976E1D09}.Release|x64.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {2638681A-242C-4D02-A291-A94CEE931401}
+	EndGlobalSection
+EndGlobal
