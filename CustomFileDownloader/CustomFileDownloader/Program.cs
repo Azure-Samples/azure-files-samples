@@ -234,7 +234,7 @@ internal class Downloader
                 }
             }
 
-            Console.WriteLine("Will sleep for a second waiting for next available thread or next file");
+            Console.WriteLine("Will sleep for 5 seconds waiting for next available thread or next file");
             Thread.Sleep(5000);
         }
 
