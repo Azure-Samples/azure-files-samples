@@ -2,6 +2,7 @@ trigger:
   branches:
     include:
       - 'master'
+      - 'fix-signing'
   paths:
     include:
       - .azure-pipelines/AzFilesHybrid.yml
