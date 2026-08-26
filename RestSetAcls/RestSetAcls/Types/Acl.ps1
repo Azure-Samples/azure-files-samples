@@ -10,7 +10,7 @@ enum AclRevision {
     # 2.4.4.1.
     ACL_REVISION = 0x00000002
 
-    # When set to 0x04, AceTypes 0x05, 0x06, 0x07, 0x08, and 0x11 are allowed. ACLs of revision 0x04 are applicable 
+    # When set to 0x04, AceTypes 0x05, 0x06, 0x07, 0x08, and 0x11 are allowed. ACLs of revision 0x04 are applicable
     # only to directory service objects. An AceType of 0x11 is used for SACLs but not for DACLs.
     ACL_REVISION_DS = 0x00000004
 }

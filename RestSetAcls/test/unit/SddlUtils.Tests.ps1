@@ -60,9 +60,9 @@ Describe "Get-AceFlagsFromInheritanceAndPropagation" {
     It "Should combine all flags when both InheritanceFlags and PropagationFlags are set" {
         InModuleScope RestSetAcls {
             $result = Get-AceFlagsFromInheritanceAndPropagation -InheritanceFlags "ContainerInherit, ObjectInherit" -PropagationFlags "InheritOnly, NoPropagateInherit"
-            $expected = [int][System.Security.AccessControl.AceFlags]::ContainerInherit -bor 
-                    [int][System.Security.AccessControl.AceFlags]::ObjectInherit -bor 
-                    [int][System.Security.AccessControl.AceFlags]::InheritOnly -bor 
+            $expected = [int][System.Security.AccessControl.AceFlags]::ContainerInherit -bor
+                    [int][System.Security.AccessControl.AceFlags]::ObjectInherit -bor
+                    [int][System.Security.AccessControl.AceFlags]::InheritOnly -bor
                     [int][System.Security.AccessControl.AceFlags]::NoPropagateInherit
             $result | Should -Be $expected
         }
@@ -99,7 +99,7 @@ Describe "Get-AllAceFlagsMatch" {
             $descriptor1 = ConvertTo-SecurityDescriptor "O:SYG:SYD:AI(A;OICINP;0x1301bf;;;WD)(A;OICIID;0x1201bf;;;WD)"
             $descriptor2 = ConvertTo-SecurityDescriptor "O:SYG:SYD:AI(D;OICINP;0x1301bf;;;WD)(D;OICIID;0x1201bf;;;WD)"
             $descriptors = @($descriptor1, $descriptor2)
-            
+
             $results = $descriptors | Get-AllAceFlagsMatch -EnabledFlags "ContainerInherit, ObjectInherit" -DisabledFlags "None"
 
             $results | Should -Be @($true, $true)
@@ -182,10 +182,10 @@ Describe "Set-AceFlags" {
         InModuleScope RestSetAcls {
             $descriptor1 = ConvertTo-SecurityDescriptor "O:SYG:SYD:AI(A;NPIO;0x1301bf;;;WD)(A;NPIO;0x1201bf;;;WD)"
             $descriptor2 = ConvertTo-SecurityDescriptor "O:SYG:SYD:AI(A;;0x1301bf;;;WD)(A;IO;0x1201bf;;;WD)"
-            
+
             $descriptors = @($descriptor1, $descriptor2)
             $descriptors | Set-AceFlags -EnableFlags "ContainerInherit, ObjectInherit" -DisableFlags "NoPropagateInherit" `
-            
+
             $results = $descriptors | ConvertFrom-SecurityDescriptor -OutputFormat Sddl
             $results | Should -Be $( "O:SYG:SYD:AI(A;OICIIO;0x1301bf;;;WD)(A;OICIIO;0x1201bf;;;WD)", "O:SYG:SYD:AI(A;OICI;0x1301bf;;;WD)(A;OICIIO;0x1201bf;;;WD)" )
         }
@@ -214,9 +214,9 @@ Describe "Reset-SecurityDescriptor" {
             $descriptor = ConvertTo-SecurityDescriptor "O:SYG:SYD:AI(A;NPIO;0x1301bf;;;WD)"
             # Verify the descriptor has non-zero ControlFlags initially
             $descriptor.ControlFlags | Should -Not -Be 0
-            
+
             Reset-SecurityDescriptor -SecurityDescriptor $descriptor
-            
+
             # Verify ControlFlags was reset to 0
             $expected = [System.Security.AccessControl.ControlFlags]::SelfRelative
             $descriptor.ControlFlags | Should -Be $expected
@@ -228,9 +228,9 @@ Describe "Reset-SecurityDescriptor" {
             $descriptor = ConvertTo-SecurityDescriptor "O:SYG:SYD:AI(A;NPIO;0x1301bf;;;WD)(A;;0x1201bf;;;WD)"
             # Verify the descriptor has non-empty DiscretionaryAcl initially
             $descriptor.DiscretionaryAcl.Count | Should -Be 2
-            
+
             Reset-SecurityDescriptor -SecurityDescriptor $descriptor
-            
+
             # Verify DiscretionaryAcl was reset to empty
             $descriptor.DiscretionaryAcl.Count | Should -Be 0
         }
@@ -242,9 +242,9 @@ Describe "Reset-SecurityDescriptor" {
             $descriptor = ConvertTo-SecurityDescriptor "O:SYG:SYD:AIS:(AU;SAIO;0x1301bf;;;WD)"
             # Verify the descriptor has a non-empty SystemAcl initially
             $descriptor.SystemAcl.Count | Should -Not -Be 0
-            
+
             Reset-SecurityDescriptor -SecurityDescriptor $descriptor
-            
+
             # Verify SystemAcl was reset to empty
             $descriptor.SystemAcl.Count | Should -Be 0
         }
@@ -255,30 +255,30 @@ Describe "Reset-SecurityDescriptor" {
             $descriptor1 = ConvertTo-SecurityDescriptor "O:SYG:SYD:AI(A;NPIO;0x1301bf;;;WD)(A;NPIO;0x1201bf;;;WD)"
             $descriptor2 = ConvertTo-SecurityDescriptor "O:SYG:SYD:AI(A;;0x1301bf;;;WD)(A;IO;0x1201bf;;;WD)"
             $descriptors = @($descriptor1, $descriptor2)
-            
+
             $descriptors | Reset-SecurityDescriptor
-            
+
             # Verify all descriptors were reset
             $expected = [System.Security.AccessControl.ControlFlags]::SelfRelative
 
             $descriptor1.ControlFlags | Should -Be $expected
             $descriptor1.DiscretionaryAcl.Count | Should -Be 0
             $descriptor1.SystemAcl.Count | Should -Be 0
-            
+
             $descriptor2.ControlFlags | Should -Be $expected
             $descriptor2.DiscretionaryAcl.Count | Should -Be 0
             $descriptor2.SystemAcl.Count | Should -Be 0
         }
     }
-    
+
     It "Should maintain owner and group information" {
         InModuleScope RestSetAcls {
             $descriptor = ConvertTo-SecurityDescriptor "O:SYG:SYD:AI(A;NPIO;0x1301bf;;;WD)"
             $ownerBefore = $descriptor.Owner
             $groupBefore = $descriptor.Group
-            
+
             Reset-SecurityDescriptor -SecurityDescriptor $descriptor
-            
+
             # Verify owner and group weren't changed
             $descriptor.Owner | Should -Be $ownerBefore
             $descriptor.Group | Should -Be $groupBefore

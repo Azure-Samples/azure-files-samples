@@ -28,7 +28,7 @@ function Get-AllAceFlagsMatch {
     param (
         [Parameter(Mandatory = $true, ValueFromPipeline = $true)]
         [System.Security.AccessControl.RawSecurityDescriptor]$SecurityDescriptor,
-        
+
         [Parameter(Mandatory = $true)]
         [System.Security.AccessControl.AceFlags]$EnabledFlags,
 
@@ -58,7 +58,7 @@ function Set-AceFlags {
     param (
         [Parameter(Mandatory = $true, ValueFromPipeline = $true)]
         [System.Security.AccessControl.RawSecurityDescriptor]$SecurityDescriptor,
-        
+
         [Parameter(Mandatory = $true)]
         [System.Security.AccessControl.AceFlags]$EnableFlags,
 
@@ -90,12 +90,12 @@ function Set-AceFlags {
                 throw "Unsupported ACE type: $($_.GetType().Name)"
             }
         }
-        
+
         # Remove all old ACEs
         for ($i = $SecurityDescriptor.DiscretionaryAcl.Count - 1; $i -ge 0; $i--) {
             $SecurityDescriptor.DiscretionaryAcl.RemoveAce($i) | Out-Null
         }
-        
+
         # Add all new ACEs
         for ($i = 0; $i -lt $newAces.Count; $i++) {
             $SecurityDescriptor.DiscretionaryAcl.InsertAce($i, $newAces[$i]) | Out-Null
@@ -125,7 +125,7 @@ function Reset-SecurityDescriptor {
                          [System.Security.AccessControl.ControlFlags]::SystemAclProtected -bor `
                          [System.Security.AccessControl.ControlFlags]::DiscretionaryAclPresent -bor `
                          [System.Security.AccessControl.ControlFlags]::SystemAclPresent
-        
+
         $controlFlags = [int]$SecurityDescriptor.ControlFlags -band (-bnot [int]$flagsToRemove)
 
         if ($PSCmdlet.ShouldProcess("SecurityDescriptor", "Reset ControlFlags, DACL and SACL")) {
@@ -167,18 +167,18 @@ function Write-SecurityDescriptor {
     Displays a detailed, formatted view of a security descriptor including owner, group, control flags, and ACLs.
 
     .DESCRIPTION
-    The Write-SecurityDescriptor function provides a comprehensive, human-readable display of a security descriptor's 
+    The Write-SecurityDescriptor function provides a comprehensive, human-readable display of a security descriptor's
     components It displays the owner, group, control flags, discretionary ACL (DACL), and system ACL (SACL) with
     color-coded formatting for enhanced readability. This function is particularly useful for debugging, auditing, and
     understanding the structure of Windows security descriptors.
 
     .PARAMETER Acl
-    Specifies the security descriptor or ACL to display. This can be in various formats including SDDL (Security 
+    Specifies the security descriptor or ACL to display. This can be in various formats including SDDL (Security
     Descriptor Definition Language) string, base64-encoded binary, array of bytes, CommonSecurityDescriptor or
     RawSecurityDescriptor objects.
 
     .PARAMETER AclFormat
-    Specifies the format of the input ACL. If not provided, the function will automatically infer the format. 
+    Specifies the format of the input ACL. If not provided, the function will automatically infer the format.
     Supported formats include SDDL, Base64, Binary, and Raw.
 
     .OUTPUTS
@@ -189,7 +189,7 @@ function Write-SecurityDescriptor {
     PS> $acl = "O:BAG:SYD:(A;;FA;;;SY)(A;;0x1200a9;;;BU)"
     PS> Write-SecurityDescriptor -Acl $acl -AclFormat Sddl
 
-    Displays a formatted view of the SDDL security descriptor, showing owner, group, control flags, and both 
+    Displays a formatted view of the SDDL security descriptor, showing owner, group, control flags, and both
     discretionary and system ACLs with detailed access mask information.
 
     .EXAMPLE
@@ -217,9 +217,9 @@ function Write-SecurityDescriptor {
         }
 
         $descriptor = Convert-SecurityDescriptor $Acl -From $AclFormat -To Raw
-        
+
         $controlFlagsHex = "0x{0:X}" -f [int]$descriptor.ControlFlags
-        
+
         Write-Host "Owner: $($PSStyle.Foreground.Cyan)$($descriptor.Owner)$($PSStyle.Reset)"
         Write-Host "Group: $($PSStyle.Foreground.Cyan)$($descriptor.Group)$($PSStyle.Reset)"
         Write-Host "ControlFlags: $($PSStyle.Foreground.Cyan)$controlFlagsHex$($PSStyle.Reset) ($($descriptor.ControlFlags))"
@@ -330,11 +330,11 @@ function Write-AccessMask {
 
     $checkmark = [System.Char]::ConvertFromUtf32([System.Convert]::ToInt32("2713", 16))
     $cross = [System.Char]::ConvertFromUtf32([System.Convert]::ToInt32("2717", 16))
-    
+
     if ($ShowFullList) {
         Write-Host "${spaces}simplified list:"
     }
-    
+
     # Write "basic permissions" first (e.g. composite rights like "Read", "Write", "Modify", etc.)
     $checkedValues = 0
     foreach ($key in [Enum]::GetValues([BasicPermissions])) {
@@ -347,7 +347,7 @@ function Write-AccessMask {
             Write-Host "${spaces}$($PSStyle.Foreground.Red)$cross$($PSStyle.Reset) $key"
         }
     }
-    
+
     # Write if there are any permissions not covered by basic
     $remaining = [AccessMask]::new($accessMask)
     $remaining.Remove($checkedValues)
@@ -355,7 +355,7 @@ function Write-AccessMask {
         # Check what known values remain, in addition to the values already checked above
         $allValues = [Enum]::GetValues([SpecificRights]) + [Enum]::GetValues([StandardRights]) + [Enum]::GetValues([GenericRights])
         $remainingValueList = $allValues | Where-Object { $remaining.Has($_.value__) }
-        
+
         # If there are any bits not covered by the known permissions, add it to the list
         $remainingValueList | ForEach-Object { $remaining.Remove($_.value__) }
         if ($remaining.Value -ne 0) {

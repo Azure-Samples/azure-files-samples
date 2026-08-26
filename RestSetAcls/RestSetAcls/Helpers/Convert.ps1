@@ -13,7 +13,7 @@ function Get-InferredAclFormat {
             if ($Acl -match "^[A-Za-z0-9+/=]+$") {
                 return [SecurityDescriptorFormat]::Base64
             }
-            
+
             if ($Acl.StartsWith("O:")) {
                 return [SecurityDescriptorFormat]::Sddl
             }
@@ -38,9 +38,9 @@ function Get-InferredAclFormat {
                 return [SecurityDescriptorFormat]::FileAcl
             }
         }
-        
+
         throw (
-            "Could not infer the format of the input. Got a value of type $($Acl.GetType().FullName). " + 
+            "Could not infer the format of the input. Got a value of type $($Acl.GetType().FullName). " +
             "Expected SDDL string, Base64 string, byte array, RawSecurityDescriptor or CommonSecurityDescriptor."
         )
     }
@@ -65,7 +65,7 @@ function ConvertTo-SecurityDescriptor {
                 }
 
                 # There are multiple ways to parse SDDL, but RawSecurityDescriptor is the most complete.
-                # 
+                #
                 # ConvertFrom-SddlString builds a SecurityDescriptorInfo, where the raw view is a CommonSecurityDescriptor (which is a subclass of RawSecurityDescriptor).
                 # However, CommonSecurityDescriptor drops the inheritance and propagation flags, which are important for our use case.
                 # (see https://github.com/PowerShell/PowerShell/blob/master/src/Microsoft.PowerShell.Commands.Utility/commands/utility/ConvertFrom-SddlString.cs)
@@ -82,7 +82,7 @@ function ConvertTo-SecurityDescriptor {
                     if ($_ -match "The SDDL string contains an invalid sid or a sid that cannot be translated") {
                         throw (
                             "Failed to convert SDDL to RawSecurityDescriptor.`n" +
-                            "This may be due to the presence of domain-relative SIDs, such as " + 
+                            "This may be due to the presence of domain-relative SIDs, such as " +
                             "'LA', 'LG', 'CA', 'DA', 'DD', 'DU', 'DG', 'DC', 'SA', 'EA', 'PA', 'RS', 'ED' or 'RO'.`n" +
                             "Original error: $_"
                         )
@@ -103,7 +103,7 @@ function ConvertTo-SecurityDescriptor {
                 catch {
                     throw "Invalid input object. Expected valid base64 string."
                 }
-                
+
                 return [System.Security.AccessControl.RawSecurityDescriptor]::new($binary, 0)
             }
             "Binary" {
@@ -122,7 +122,7 @@ function ConvertTo-SecurityDescriptor {
                 if ($InputDescriptor -isnot [System.Security.AccessControl.CommonSecurityDescriptor]) {
                     throw "Invalid input type. Expected CommonSecurityDescriptor, got $($InputDescriptor.GetType().FullName)."
                 }
-                
+
                 $securityDescriptor = $InputDescriptor -as [System.Security.AccessControl.CommonSecurityDescriptor]
 
                 if (-not $securityDescriptor.IsContainer) {
@@ -142,7 +142,7 @@ function ConvertTo-SecurityDescriptor {
                 if ($InputDescriptor -isnot [System.Security.AccessControl.CommonSecurityDescriptor]) {
                     throw "Invalid input type. Expected CommonSecurityDescriptor, got $($InputDescriptor.GetType().FullName)."
                 }
-                
+
                 $securityDescriptor = $InputDescriptor -as [System.Security.AccessControl.CommonSecurityDescriptor]
 
                 if ($securityDescriptor.IsContainer) {
@@ -219,7 +219,7 @@ function Convert-SecurityDescriptor {
         Converts a security descriptor between different formats (Sddl, Base64, Binary, Raw).
 
     .DESCRIPTION
-        This script provides functionality to convert a security descriptor from one format to another. 
+        This script provides functionality to convert a security descriptor from one format to another.
         Supported formats include:
         - SDDL (Security Descriptor Definition Language)
         - Base64
@@ -227,21 +227,21 @@ function Convert-SecurityDescriptor {
         - RawSecurityDescriptor
         - CommonSecurityDescriptor (for folders and files)
 
-        Security descriptors are used to define access control and permissions for resources. 
-        This script is useful for scenarios where you need to translate security descriptors 
+        Security descriptors are used to define access control and permissions for resources.
+        This script is useful for scenarios where you need to translate security descriptors
         into a format compatible with a specific system or API.
 
     .PARAMETER InputDescriptor
         The security descriptor value in the format specified by the `From` parameter.
 
     .PARAMETER From
-        Specifies the format of the input security descriptor. 
+        Specifies the format of the input security descriptor.
         Accepted values: Sddl, Base64, Binary, Raw, FolderAcl, FileAcl.
 
     .PARAMETER To
-        Specifies the desired format for the output security descriptor. 
+        Specifies the desired format for the output security descriptor.
         Accepted values: Sddl, Base64, Binary, Raw, FolderAcl, FileAcl.
-    
+
     .EXAMPLE
         # Convert a security descriptor from SDDL to Base64
         Convert-SecurityDescriptor "O:BAG:BAD:(A;;FA;;;SY)" -From Sddl -To Base64

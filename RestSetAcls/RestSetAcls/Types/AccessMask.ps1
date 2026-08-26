@@ -60,7 +60,7 @@ enum BasicPermissions {
     #    [SpecificRights]::FILE_READ_ATTRIBUTES -bor
     #    [StandardRights]::READ_CONTROL
     READ = 131209
-    
+
     # 131241 is obtained via:
     #   [BasicPermissions]::READ -bor [SpecificRights]::FILE_EXECUTE
     READ_AND_EXECUTE = 131241
@@ -105,4 +105,3 @@ enum StandardRightsCombination {
     STANDARD_RIGHTS_REQUIRED = 983040
     STANDARD_RIGHTS_WRITE = [StandardRights]::READ_CONTROL
 }
-

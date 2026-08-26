@@ -32,7 +32,7 @@ Describe "Convert-SecurityDescriptor" {
             param (
                 [Parameter(Mandatory = $true)]
                 [string]$Format,
-                
+
                 [Parameter(Mandatory = $true)]
                 [object]$outputValue
             )
@@ -96,10 +96,10 @@ Describe "Convert-SecurityDescriptor" {
         ) {
             param ($From, $To)
             $inputValue = Get-TestInputValue $From
-            
+
             $outputValue = Convert-SecurityDescriptor $inputValue -From $From -To $To
 
-            Assert-OutputIsCorrect -Format $To -OutputValue $outputValue   
+            Assert-OutputIsCorrect -Format $To -OutputValue $outputValue
         }
 
         It "Should throw an error for null -From input format" {
@@ -127,18 +127,18 @@ Describe "Convert-SecurityDescriptor" {
             { Convert-SecurityDescriptor $sddl -From Binary -To Raw } | Should -Throw
             { Convert-SecurityDescriptor $sddl -From Base64 -To Raw } | Should -Throw
             { Convert-SecurityDescriptor $sddl -From Raw -To Raw } | Should -Throw
-    
+
             { Convert-SecurityDescriptor $binary -From Sddl -To Raw } | Should -Throw
             { Convert-SecurityDescriptor $binary -From Base64 -To Raw } | Should -Throw
             { Convert-SecurityDescriptor $binary -From Raw -To Raw } | Should -Throw
-    
+
             { Convert-SecurityDescriptor $base64 -From Sddl -To Raw } | Should -Throw
             { Convert-SecurityDescriptor $base64 -From Binary -To Raw } | Should -Throw
             { Convert-SecurityDescriptor $base64 -From Raw -To Raw } | Should -Throw
-    
+
             { Convert-SecurityDescriptor $rawSecurityDescriptor -From Sddl -To Raw } | Should -Throw
             { Convert-SecurityDescriptor $rawSecurityDescriptor -From Base64 -To Raw } | Should -Throw
-            { Convert-SecurityDescriptor $rawSecurityDescriptor -From Binary -To Raw } | Should -Throw        
+            { Convert-SecurityDescriptor $rawSecurityDescriptor -From Binary -To Raw } | Should -Throw
         }
     }
 
@@ -173,7 +173,7 @@ Describe "Convert-SecurityDescriptor" {
             $inputValue = Get-TestInputValue $From
 
             $outputValue = Convert-SecurityDescriptor $inputValue -To $To
-            
+
             Assert-OutputIsCorrect -Format $To -OutputValue $outputValue
         }
 
@@ -206,7 +206,7 @@ Describe "Convert-SecurityDescriptor" {
             $descriptor.DiscretionaryAcl.Count | Should -Be 7
             $descriptor.SystemAcl.Count | Should -Be 1
         }
-    
+
         It "Should parse inheritance and propagation flags" {
             $sddl = "O:SYG:SYD:AI(A;OICI;0x1301bf;;;WD)(A;NPIO;0x1201bf;;;WD)"
             $descriptor = Convert-SecurityDescriptor $sddl -From Sddl -To Raw
@@ -216,13 +216,13 @@ Describe "Convert-SecurityDescriptor" {
             $descriptor.DiscretionaryAcl[1].InheritanceFlags | Should -Be "None"
             $descriptor.DiscretionaryAcl[1].PropagationFlags | Should -Be "NoPropagateInherit, InheritOnly"
         }
-    
+
         It "Should be able to parse SDDL with D:NO_ACCESS_CONTROL" {
             $sddl = "O:SYG:SYD:NO_ACCESS_CONTROL"
             $descriptor = Convert-SecurityDescriptor $sddl -From Sddl -To Raw
             $descriptor.DiscretionaryAcl.Count | Should -Be 0
         }
-    
+
         It "Should be able to parse SDDL without a DACL" {
             $descriptor = Convert-SecurityDescriptor "O:SYG:SY" -From Sddl -To Raw
             $descriptor.DiscretionaryAcl.Count | Should -Be 0
@@ -349,19 +349,19 @@ Describe "Convert-SecurityDescriptor" {
             #
             # Therefore, in theory, we should not apply CC or KR to file system objects. But Windows does not enforce this.
             # See e.g. [C++ API][2] (which doesn't have a param for object type), or see [.NET SDK implementation][3].
-            # 
+            #
             # [1]: https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-dtyp/f4296d69-1c0f-491f-9587-a960b292d070
             # [2]: https://learn.microsoft.com/en-us/windows/win32/api/sddl/nf-sddl-convertstringsecuritydescriptortosecuritydescriptora
             # [3]: https://github.com/dotnet/runtime/blob/main/src/libraries/System.Security.AccessControl/src/System/Security/AccessControl/SecurityDescriptor.cs
             #
             $sddl = "O:SYG:SYD:(A;;${AccessRight};;;WD)"
             $descriptor = Convert-SecurityDescriptor $sddl -From Sddl -To Raw
-            
+
             $descriptor.DiscretionaryAcl.Count | Should -Be 1
             $mask = [int]$descriptor.DiscretionaryAcl[0].AccessMask
             $mask | Should -Be $Expected -Because "Expected access mask for $sddl to be $expected, but got $mask"
         }
-        
+
         It "Should throw an error when the SDDL contains domain-relative SIDs" {
             { Convert-SecurityDescriptor "O:DAB:SYD:NO_ACCESS_CONTROL" -From Sddl -To Raw } | Should -Throw
         }
@@ -382,14 +382,14 @@ Describe "Convert-SecurityDescriptor" {
                 0x24, 0x00, 0x00, 0x00, # OffsetGroup (36)
                 0x00, 0x00, 0x00, 0x00, # OffsetSacl (0, no SACL)
                 0x00, 0x00, 0x00, 0x00, # OffsetDacl (0, no DACL)
-    
+
                 # OWNER #
                 0x01, # Revision (1)
                 0x02, # SubAuthorityCount
                 0x00, 0x00, 0x00, 0x00, 0x00, 0x05, # IdentifierAuthority (5)
                 0x20, 0x00, 0x00, 0x00, # SubAuthority 0 (32)
                 0x20, 0x02, 0x00, 0x00, # SubAuthority 1 (544)
-    
+
                 # GROUP #
                 0x01, # Revision (1)
                 0x02, # SubAuthorityCount
@@ -547,14 +547,14 @@ Describe "Convert-SecurityDescriptor" {
                 0x24, 0x00, 0x00, 0x00, # OffsetGroup (36)
                 0x00, 0x00, 0x00, 0x00, # OffsetSacl (0, no SACL)
                 0x00, 0x00, 0x00, 0x00, # OffsetDacl (0, no DACL)
-    
+
                 # OWNER
                 0x01, # Revision (1)
                 0x02, # SubAuthorityCount
                 0x00, 0x00, 0x00, 0x00, 0x00, 0x05, # IdentifierAuthority (5)
                 0x20, 0x00, 0x00, 0x00, # SubAuthority 0 (32)
                 0x20, 0x02, 0x00, 0x00, # SubAuthority 1 (544)
-    
+
                 # GROUP
                 0x01, # Revision (1)
                 0x02, # SubAuthorityCount
@@ -563,7 +563,7 @@ Describe "Convert-SecurityDescriptor" {
                 0x20, 0x02, 0x00, 0x00  # SubAuthority 1 (544)
             )
 
-            { Convert-SecurityDescriptor $binary -From Binary -To Raw } | Should -Throw 
+            { Convert-SecurityDescriptor $binary -From Binary -To Raw } | Should -Throw
         }
     }
 
@@ -578,14 +578,14 @@ Describe "Convert-SecurityDescriptor" {
                 0x24, 0x00, 0x00, 0x00, # OffsetGroup (36)
                 0x00, 0x00, 0x00, 0x00, # OffsetSacl (0, no SACL)
                 0x00, 0x00, 0x00, 0x00, # OffsetDacl (0, no DACL)
-    
+
                 # OWNER #
                 0x01, # Revision (1)
                 0x02, # SubAuthorityCount
                 0x00, 0x00, 0x00, 0x00, 0x00, 0x05, # IdentifierAuthority (5)
                 0x20, 0x00, 0x00, 0x00, # SubAuthority 0 (32)
                 0x20, 0x02, 0x00, 0x00, # SubAuthority 1 (544)
-    
+
                 # GROUP #
                 0x01, # Revision (1)
                 0x02, # SubAuthorityCount
@@ -603,7 +603,7 @@ Describe "Convert-SecurityDescriptor" {
                 [System.Security.AccessControl.ControlFlags]::SystemAclProtected
             )
             $descriptor.DiscretionaryAcl | Should -BeNullOrEmpty
-            $descriptor.SystemAcl | Should -BeNullOrEmpty            
+            $descriptor.SystemAcl | Should -BeNullOrEmpty
         }
 
         It "Should throw an error when parsing invalid Base64" {

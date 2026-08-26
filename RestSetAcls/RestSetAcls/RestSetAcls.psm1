@@ -40,7 +40,7 @@ function Write-LiveFilesAndFoldersProcessingStatus {
         if (-not $Item["Success"]) {
             $failures++
         }
-        
+
         # To avoid overloading gui, only print at most every $msBetweenPrints
         # On a test with 6K files, printing at 60Hz saved ~20% perf compared to printing every update
         if ($timeSinceLastPrint.TotalMilliseconds -gt $msBetweenPrints) {
@@ -65,7 +65,7 @@ function Write-LiveFilesAndFoldersProcessingStatus {
             if (-not $overwriteLine) {
                 Write-Host
             }
-            
+
             $lastPrint = Get-Date
         }
 
@@ -94,7 +94,7 @@ function Write-FinalFilesAndFoldersProcessed {
 
     $seconds = [math]::Round($TotalTime.TotalSeconds, 2)
 
-    if ($errorCount -gt 0) {        
+    if ($errorCount -gt 0) {
         if ($errorCount -eq $processedCount) {
             # Setting ACLs failed for all files; report it.
             Write-FailedHeader
@@ -115,7 +115,7 @@ function Write-FinalFilesAndFoldersProcessed {
             Write-Host " seconds. Errors:"
         }
         Write-Host
-        
+
         # Print first $maxErrorsToShow errors
         $Errors.GetEnumerator() | Select-Object -First $MaxErrorsToShow | ForEach-Object {
             Write-Host "  $($_.Key): " -NoNewline
@@ -129,12 +129,12 @@ function Write-FinalFilesAndFoldersProcessed {
             Write-Host " more errors"
             Write-Host
         }
-        
+
         # Save all errors to a JSON file
         ConvertTo-Json $Errors | Out-File "errors.json"
         Write-Host "  Full list of errors has been saved in " -NoNewline
         Write-Host "errors.json" -ForegroundColor Blue
-        
+
         Write-Host
     }
     else {
@@ -261,7 +261,7 @@ function Get-AzureFilesRecursive {
         if (($isDirectory -and !$SkipDirectories) -or (!$isDirectory -and !$SkipFiles)) {
             Write-Output @{
                 FullPath = $fullPath
-                File     = $file   
+                File     = $file
             }
         }
     }
@@ -364,12 +364,12 @@ function New-AzFileAcl {
                 $permission = [Azure.Storage.Files.Shares.Models.ShareFilePermission]::new()
                 $permission.Permission = $base64
                 $permission.PermissionFormat = [Azure.Storage.Files.Shares.Models.FilePermissionFormat]::Binary
-    
+
                 $permissionInfo = $ShareClient.CreatePermission($permission, [System.Threading.CancellationToken]::None)
                 return $permissionInfo.Value.FilePermissionKey
             }
         }
-    }    
+    }
 }
 
 function Set-AzFileAclKey {
@@ -420,7 +420,7 @@ function Set-AzFileAclKey {
 
         [Parameter(Mandatory = $true, ParameterSetName = "FilePath", HelpMessage = "Azure storage context")]
         [Microsoft.Azure.Commands.Common.Authentication.Abstractions.IStorageContext]$Context,
-        
+
         [Parameter(Mandatory = $true, ParameterSetName = "FilePath", HelpMessage = "Name of the file share")]
         [string]$FileShareName,
 
@@ -478,9 +478,9 @@ function Set-AzFileAcl {
     Sets the Access Control List (ACL) for a specified Azure file or directory.
 
     .DESCRIPTION
-    The `Set-AzFileAcl` function applies an ACL to a specified Azure file or directory. 
-    It supports both SDDL (Security Descriptor Definition Language) and binary ACL formats. 
-    The function determines the ACL format if not explicitly provided and applies the ACL directly 
+    The `Set-AzFileAcl` function applies an ACL to a specified Azure file or directory.
+    It supports both SDDL (Security Descriptor Definition Language) and binary ACL formats.
+    The function determines the ACL format if not explicitly provided and applies the ACL directly
     or via a permission key, depending on the size of the ACL.
 
     .PARAMETER File
@@ -502,7 +502,7 @@ function Set-AzFileAcl {
     Specifies the ACL to be applied. This can be in SDDL format, base64-encoded binary, binary array, or RawSecurityDescriptor.
 
     .PARAMETER AclFormat
-    Specifies the format of the ACL. If not provided, the function will infer the format automatically. 
+    Specifies the format of the ACL. If not provided, the function will infer the format automatically.
     Supported formats include SDDL, Base64, and Binary.
 
     .OUTPUTS
@@ -533,7 +533,7 @@ function Set-AzFileAcl {
 
         [Parameter(Mandatory = $true, ParameterSetName = "FilePath", HelpMessage = "Azure storage context")]
         [Microsoft.Azure.Commands.Common.Authentication.Abstractions.IStorageContext]$Context,
-        
+
         [Parameter(Mandatory = $true, ParameterSetName = "FilePath", HelpMessage = "Name of the file share")]
         [string]$FileShareName,
 
@@ -542,7 +542,7 @@ function Set-AzFileAcl {
 
         [Parameter(Mandatory = $true, ParameterSetName = "Client")]
         [Object]$Client,
-        
+
         [Parameter(Mandatory = $true, ParameterSetName = "File")]
         [Parameter(Mandatory = $true, ParameterSetName = "FilePath")]
         [Parameter(Mandatory = $true, ParameterSetName = "Client")]
@@ -616,7 +616,7 @@ function Set-AzFileAcl {
                 -Acl $permission.Permission `
                 -AclFormat $aclCreationFormat `
                 -WhatIf:$WhatIfPreference
-            
+
             if ([string]::IsNullOrEmpty($key)) {
                 Write-Error "Failed to create file permission" -ErrorAction Stop
             }
@@ -633,9 +633,9 @@ function Get-AzFileAclKey {
     Retrieves the permission key from a file or directory in an Azure file share.
 
     .DESCRIPTION
-    The `Get-AzFileAclKey` function retrieves the ACL key for a given file or directory in an Azure file share. 
-    The ACL can be returned in various formats, including SDDL (Security Descriptor Definition Language) 
-    or binary formats. The function supports retrieving the ACL from a file share specified either 
+    The `Get-AzFileAclKey` function retrieves the ACL key for a given file or directory in an Azure file share.
+    The ACL can be returned in various formats, including SDDL (Security Descriptor Definition Language)
+    or binary formats. The function supports retrieving the ACL from a file share specified either
     directly or by its name and context.
 
     .PARAMETER File
@@ -661,7 +661,7 @@ function Get-AzFileAclKey {
     PS> $context = Get-AzStorageContext -StorageAccountName "mystorageaccount" -StorageAccountKey "mykey"
     PS> $file = Get-AzStorageFile -Context $context -ShareName "myfileshare" -Path "myfolder/myfile.txt"
     PS> Get-AzFileAclKey -File $file
-    
+
     Retrieves the permission key for the specified file.
 #>
     [CmdletBinding()]
@@ -672,7 +672,7 @@ function Get-AzFileAclKey {
 
         [Parameter(Mandatory = $true, ParameterSetName = "FilePath", HelpMessage = "Azure storage context")]
         [Microsoft.Azure.Commands.Common.Authentication.Abstractions.IStorageContext]$Context,
-        
+
         [Parameter(Mandatory = $true, ParameterSetName = "FilePath", HelpMessage = "Name of the file share")]
         [string]$FileShareName,
 
@@ -785,14 +785,14 @@ function Get-AzFileAclFromKey {
             if ($OutputFormat -eq [SecurityDescriptorFormat]::Sddl) {
                 $format = [Azure.Storage.Files.Shares.Models.FilePermissionFormat]::Sddl
                 $permissionInfo = $ShareClient.GetPermission($Key, $format, [System.Threading.CancellationToken]::None)
-                $sddl = $permissionInfo.Value.Permission 
+                $sddl = $permissionInfo.Value.Permission
                 return $sddl
             }
             else {
                 $format = [Azure.Storage.Files.Shares.Models.FilePermissionFormat]::Binary
                 $permissionInfo = $ShareClient.GetPermission($Key, $format, [System.Threading.CancellationToken]::None)
                 $base64 = $permissionInfo.Value.Permission
-                return Convert-SecurityDescriptor $base64 -From Base64 -To $OutputFormat  
+                return Convert-SecurityDescriptor $base64 -From Base64 -To $OutputFormat
             }
         }
     }
@@ -854,7 +854,7 @@ function Get-AzFileAcl {
 
         [Parameter(Mandatory = $true, ParameterSetName = "FilePath", HelpMessage = "Azure storage context")]
         [Microsoft.Azure.Commands.Common.Authentication.Abstractions.IStorageContext]$Context,
-        
+
         [Parameter(Mandatory = $true, ParameterSetName = "FilePath", HelpMessage = "Name of the file share")]
         [string]$FileShareName,
 
@@ -881,7 +881,7 @@ function Get-AzFileAcl {
 
     process {
         $key = Get-AzFileAclKey -Client $Client
-        
+
         if ([string]::IsNullOrEmpty($key)) {
             Write-Error "Failed to get file permission key" -ErrorAction Stop
         }
@@ -990,7 +990,7 @@ function Set-AzFileAclRecursive {
             -Acl $SddlPermission `
             -AclFormat Sddl `
             -WhatIf:$WhatIfPreference
-        
+
         if ([string]::IsNullOrEmpty($filePermissionKey)) {
             Write-Failure "Failed to create file permission"
             return
@@ -1004,7 +1004,7 @@ function Set-AzFileAclRecursive {
     # Get root directory
     # Calling Get-AzStorageFile with this parameter set returns a AzureStorageFileDirectory
     # (if the path is a directory) or AzureStorageFile (if the path is a file).
-    # If it's a directory, Get-AzureFilesRecursive will get its contents. 
+    # If it's a directory, Get-AzureFilesRecursive will get its contents.
     try {
         $directory = Get-AzStorageFile -Context $Context -ShareName $FileShareName -Path $FilePath -ErrorAction Stop
     }
@@ -1042,7 +1042,7 @@ function Set-AzFileAclRecursive {
                 $success = $false
                 $errorMessage = $_.Exception.Message
             }
-            
+
             # Write full output if requested, otherwise write minimal output
             if ($using:PassThru) {
                 Write-Output @{
@@ -1072,7 +1072,7 @@ function Set-AzFileAclRecursive {
         | Write-LiveFilesAndFoldersProcessingStatus -RefreshRateHertz 10 -StartTime $startTime -Silent:$Silent `
         | ForEach-Object { if ($PassThru) { Write-Output $_ } }
     }
-    else {       
+    else {
         Get-AzureFilesRecursive `
             -Context $Context `
             -DirectoryContents @($directory) `
@@ -1082,7 +1082,7 @@ function Set-AzFileAclRecursive {
             $fullPath = $_.FullPath
             $success = $true
             $errorMessage = ""
-            
+
             # Set the ACL
             try {
                 Set-AzFileAclKey -File $_.File -Key $filePermissionKey -WhatIf:$WhatIfPreference | Out-Null
@@ -1094,7 +1094,7 @@ function Set-AzFileAclRecursive {
             }
 
             $processedCount++
-            
+
             # Write full output if requested, otherwise write minimal output
             if ($PassThru) {
                 Write-Output @{
@@ -1118,7 +1118,7 @@ function Set-AzFileAclRecursive {
     }
 
     $ProgressPreference = "Continue"
-    
+
     if (-not $Silent) {
         $totalTime = (Get-Date) - $startTime
         Write-Host "`r" -NoNewline # Clear the line from the live progress reporting
@@ -1136,7 +1136,7 @@ function Restore-AzFileAclInheritance {
     or directory, or recursively to all items within a directory. This is useful to propagate inheritable permissions
     from a parent directory to its children, according to NTFS inheritance rules. The function supports both single
     file/directory and recursive modes.
-    
+
     .PARAMETER Context
     Specifies the Azure storage context. This is required to authenticate and interact with the Azure storage account.
 
@@ -1244,7 +1244,7 @@ function Restore-AzFileAclInheritance {
             -PassThru:$PassThru `
             -WhatIf:$WhatIfPreference
     }
-    elseif ($PSCmdlet.ParameterSetName -eq "Recursive" -and $Recursive) {  
+    elseif ($PSCmdlet.ParameterSetName -eq "Recursive" -and $Recursive) {
         $startTime = Get-Date
         $processedCount = 0
         $errors = @{}
@@ -1426,7 +1426,7 @@ function Restore-AzFileAclInheritanceRecursive {
                 -ParentDescriptor $directoryPermission `
                 -CreatorDescriptor $itemPermission `
                 -IsDirectory $item.IsDirectory
-            
+
             # Set new ACL on the item
             $itemClient = if ($item.IsDirectory) {
                 $directoryClient.GetSubdirectoryClient($item.Name)
@@ -1448,7 +1448,7 @@ function Restore-AzFileAclInheritanceRecursive {
                 -Acl $itemNewPermission `
                 -AclFormat $itemPermissionFormat `
                 -WhatIf:$WhatIfPreference
-            
+
             # Write to the pipeline
             if ($PassThru) {
                 Write-Output @{
@@ -1468,7 +1468,7 @@ function Restore-AzFileAclInheritanceRecursive {
                 })
             }
         }
-    }   
+    }
 }
 
 function Connect-MgGraphIfNeeded {
@@ -1488,7 +1488,7 @@ function Connect-MgGraphIfNeeded {
         }
         return
     }
-    
+
     # Determine if we the current connection has the required scopes
     $missingScopes = $false
     $currentScopes = [System.Collections.Generic.HashSet[string]]::new($context.Scopes)
@@ -1509,7 +1509,6 @@ function Connect-MgGraphIfNeeded {
     }
 }
 
-
 function Get-Sid {
     [CmdletBinding(SupportsShouldProcess = $true)]
     [OutputType([System.Security.Principal.SecurityIdentifier])]
@@ -1523,11 +1522,11 @@ function Get-Sid {
             Write-Verbose "Given identity is a SID."
             return [System.Security.Principal.SecurityIdentifier]::new($Identity)
         }
-        
+
         if ($Identity -match "^[^@]+@[^.]+\..+") {
             Write-Verbose "Given identity is a UPN."
             Connect-MgGraphIfNeeded -Scopes @("User.ReadBasic.All") -WhatIf:$WhatIfPreference | Out-Null
-            
+
             # Only users have UPNs. Look up the user by UPN.
             Write-Verbose "Querying Microsoft Graph for user with UPN '$Identity'"
             $user = Get-MgUserByUserPrincipalName -UserPrincipalName $Identity -Property "OnPremisesSecurityIdentifier","SecurityIdentifier" -ErrorAction Stop
@@ -1610,11 +1609,11 @@ function Get-Sid {
                 throw "No user or group found with ID '$Identity'"
             }
         }
-        
-        
+
+
         Write-Verbose "Given identity is a display name."
         Connect-MgGraphIfNeeded -Scopes @("User.ReadBasic.All", "GroupMember.Read.All") -WhatIf:$WhatIfPreference | Out-Null
-        
+
         # Replace single quotes with double quotes for the query
         # See https://learn.microsoft.com/en-us/graph/query-parameters?tabs=http#escaping-single-quotes
         $displayName = $Identity -replace "'", "''"
@@ -1707,7 +1706,7 @@ function Set-AzFileOwner {
 
         [Parameter(Mandatory = $true, ParameterSetName = "FilePath", HelpMessage = "Azure storage context")]
         [Microsoft.Azure.Commands.Common.Authentication.Abstractions.IStorageContext]$Context,
-        
+
         [Parameter(Mandatory = $true, ParameterSetName = "FilePath", HelpMessage = "Name of the file share")]
         [string]$FileShareName,
 
@@ -1716,7 +1715,7 @@ function Set-AzFileOwner {
 
         [Parameter(Mandatory = $false, ParameterSetName = "Client")]
         [object]$Client,
-        
+
         [Parameter(Mandatory = $true, ParameterSetName = "File")]
         [Parameter(Mandatory = $true, ParameterSetName = "FilePath")]
         [Parameter(Mandatory = $true, ParameterSetName = "Client")]
@@ -1744,7 +1743,7 @@ function Set-AzFileOwner {
 
         # Get the current ACL for the file or directory
         $acl = Get-AzFileAcl -Client $Client -OutputFormat Raw
-        
+
         # Update the owner in the ACL
         if ($PSCmdlet.ShouldProcess($Client.Path, "Set owner to '$OwnerSid'")) {
             $acl.Owner = $ownerSid
@@ -1830,7 +1829,7 @@ function Add-AzFileAce {
 
         [Parameter(Mandatory = $true, ParameterSetName = "FilePath", HelpMessage = "Azure storage context")]
         [Microsoft.Azure.Commands.Common.Authentication.Abstractions.IStorageContext]$Context,
-        
+
         [Parameter(Mandatory = $true, ParameterSetName = "FilePath", HelpMessage = "Name of the file share")]
         [string]$FileShareName,
 
@@ -1844,7 +1843,7 @@ function Add-AzFileAce {
         [Parameter(Mandatory = $true, ParameterSetName = "FilePath")]
         [Parameter(Mandatory = $true, ParameterSetName = "Client")]
         [System.Security.AccessControl.AccessControlType]$Type,
-        
+
         [Parameter(Mandatory = $true, ParameterSetName = "File")]
         [Parameter(Mandatory = $true, ParameterSetName = "FilePath")]
         [Parameter(Mandatory = $true, ParameterSetName = "Client")]
@@ -1938,7 +1937,7 @@ function Add-AzFileAce {
             $acl.DiscretionaryAcl = $dacl
         } else {
             # If there is a DACL already, we can use the DiscretionaryAcl.AddAccess method to add the new ACE directly.
-            $acl = Convert-SecurityDescriptor $acl -From Raw -To $aclFormat            
+            $acl = Convert-SecurityDescriptor $acl -From Raw -To $aclFormat
             $acl.DiscretionaryAcl.AddAccess(
                 $Type,
                 $sid,

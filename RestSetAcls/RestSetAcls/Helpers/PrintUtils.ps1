@@ -18,7 +18,7 @@ function Get-SpecialCharactersPrintable {
 }
 
 function Write-DoneHeader {
-    if (Get-SpecialCharactersPrintable) { 
+    if (Get-SpecialCharactersPrintable) {
         $checkmark = [System.Char]::ConvertFromUtf32([System.Convert]::ToInt32("2713", 16))
         Write-Host "($checkmark) Done: " -ForegroundColor Green -NoNewline
     }
@@ -28,7 +28,7 @@ function Write-DoneHeader {
 }
 
 function Write-PartialHeader {
-    if (Get-SpecialCharactersPrintable) { 
+    if (Get-SpecialCharactersPrintable) {
         $cross = [System.Char]::ConvertFromUtf32([System.Convert]::ToInt32("2717", 16))
         Write-Host "($cross) Partial: " -ForegroundColor Yellow -NoNewline
     }
@@ -38,7 +38,7 @@ function Write-PartialHeader {
 }
 
 function Write-FailedHeader {
-    if (Get-SpecialCharactersPrintable) { 
+    if (Get-SpecialCharactersPrintable) {
         $cross = [System.Char]::ConvertFromUtf32([System.Convert]::ToInt32("2717", 16))
         Write-Host "($cross) Failed: " -ForegroundColor Red -NoNewline
     }
@@ -48,7 +48,7 @@ function Write-FailedHeader {
 }
 
 function Write-WarningHeader {
-    if (Get-SpecialCharactersPrintable) { 
+    if (Get-SpecialCharactersPrintable) {
         $warning = [System.Char]::ConvertFromUtf32([System.Convert]::ToInt32("26A0", 16))
         Write-Host "($warning) Warning: " -ForegroundColor Yellow -NoNewline
     }
@@ -61,7 +61,7 @@ function Write-Failure {
     param (
         [Parameter(Mandatory = $true, Position = 0)]
         [string]$Overview,
-        
+
         [Parameter(Mandatory = $false)]
         [string]$Details = $null
     )
