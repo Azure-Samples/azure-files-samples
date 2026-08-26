@@ -1509,6 +1509,49 @@ function Connect-MgGraphIfNeeded {
     }
 }
 
+function Get-CloudSid {
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    [OutputType([System.Security.Principal.SecurityIdentifier])]
+    param (
+        [Parameter(Mandatory = $true)]
+        [string]$OnPremisesSid
+    )
+
+    process {
+        Connect-MgGraphIfNeeded -Scopes @("User.ReadBasic.All", "GroupMember.Read.All") -WhatIf:$WhatIfPreference | Out-Null
+
+        # Get the user by on-prem SID
+        Write-Verbose "Getting user by on-prem SID '$OnPremisesSid' in Microsoft Graph"
+        $user = Get-MgUser -Filter "OnPremisesSecurityIdentifier eq '$OnPremisesSid'" -Property "OnPremisesSecurityIdentifier","SecurityIdentifier" -ErrorAction Stop
+
+        if ($user) {
+            if ($user.SecurityIdentifier) {
+                Write-Verbose "Hybrid user found with On-Prem SID '$($user.OnPremisesSecurityIdentifier)' and Cloud SID '$($user.SecurityIdentifier)'"
+                return [System.Security.Principal.SecurityIdentifier]::new($user.SecurityIdentifier)
+            }
+            else {
+                throw "User with on-prem SID '$OnPremisesSid' was found, but it did not have a cloud SID."
+            }
+        }
+
+        # If no user was found, try to get the group by on-prem SID
+        Write-Verbose "Getting group by on-prem SID '$OnPremisesSid' in Microsoft Graph"
+        $group = Get-MgGroup -Filter "OnPremisesSecurityIdentifier eq '$OnPremisesSid'" -Property "OnPremisesSecurityIdentifier","SecurityIdentifier" -ErrorAction Stop
+        if ($group) {
+            if ($group.SecurityIdentifier) {
+                Write-Verbose "Hybrid group found with On-Prem SID '$($group.OnPremisesSecurityIdentifier)' and Cloud SID '$($group.SecurityIdentifier)'"
+                return [System.Security.Principal.SecurityIdentifier]::new($group.SecurityIdentifier)
+            }
+            else {
+                throw "Group with on-prem SID '$OnPremisesSid' was found, but it did not have a cloud SID."
+            }
+        }
+        else {
+            throw "No user or group found with on-prem SID '$OnPremisesSid'"
+        }
+    }
+}
+
 function Get-Sid {
     [CmdletBinding(SupportsShouldProcess = $true)]
     [OutputType([System.Security.Principal.SecurityIdentifier])]
