@@ -29,7 +29,7 @@ enum AutoInheritFlags {
     # defaults to the owner of the token specified by the Token parameter. The owner of the token is specified in the
     # token itself. In either case, if the CreatorDescriptor parameter is not NULL, the NewDescriptor owner is set to
     # the owner from CreatorDescriptor.
-    SEF_DEFAULT_OWNER_FROM_PARENT = 0x20 
+    SEF_DEFAULT_OWNER_FROM_PARENT = 0x20
 
     # The group of NewDescriptor defaults to the group from ParentDescriptor. If not set, the group of NewDescriptor
     # defaults to the group of the token specified by the Token parameter. The group of the token is specified in the
@@ -38,7 +38,7 @@ enum AutoInheritFlags {
     SEF_DEFAULT_GROUP_FROM_PARENT = 0x40
 
     # When this flag is set, the mandatory label ACE in CreatorDescriptor is not used to create a mandatory label ACE
-    # in NewDescriptor. Instead, a new SYSTEM_MANDATORY_LABEL_ACE with an access mask of 
+    # in NewDescriptor. Instead, a new SYSTEM_MANDATORY_LABEL_ACE with an access mask of
     # SYSTEM_MANDATORY_LABEL_NO_WRITE_UP and the SID from the token's integrity SID is added to NewDescriptor.
     SEF_MACL_NO_WRITE_UP = 0x100
 

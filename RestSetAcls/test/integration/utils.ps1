@@ -5,7 +5,7 @@ function Get-File {
         [Parameter(Mandatory = $true)]
         [string]$Path
     )
-    
+
     return Get-AzStorageFile -Context $global:context -ShareDirectoryClient $global:rootDirectoryClient -Path $Path
 }
 
@@ -38,7 +38,7 @@ function New-RandomString {
     param (
         [int]$Length = 8
     )
-    $lowercase = 97..122        
+    $lowercase = 97..122
     -join ($lowercase  | Get-Random -Count $length | ForEach-Object { [char]$_ })
 }
 

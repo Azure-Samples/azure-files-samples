@@ -27,7 +27,7 @@ Describe "Interop" {
 
             $parentDescriptor = Convert-SecurityDescriptor $ParentSddl -From Sddl -To FolderAcl
             $creatorDescriptor = Convert-SecurityDescriptor $ChildSddl -From Sddl -To $childFormat
-            
+
             $result = CreatePrivateObjectSecurityEx `
                 -ParentDescriptor $parentDescriptor `
                 -CreatorDescriptor $creatorDescriptor `

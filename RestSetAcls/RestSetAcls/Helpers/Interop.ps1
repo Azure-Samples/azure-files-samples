@@ -23,7 +23,7 @@ public static class NativeMethods {
         uint AutoInheritFlags,
         System.IntPtr Token,
         ref GENERIC_MAPPING GenericMapping);
-    
+
     [DllImport("advapi32.dll", SetLastError = false)]
     public static extern void MapGenericMask(
         ref uint accessMask,
@@ -123,10 +123,10 @@ function CreatePrivateObjectSecurityEx {
         [Parameter(Mandatory = $true)]
         [AllowNull()]
         [System.Security.AccessControl.GenericSecurityDescriptor]$ParentDescriptor,
-        
+
         [Parameter(Mandatory = $true)]
         [System.Security.AccessControl.GenericSecurityDescriptor]$CreatorDescriptor,
-        
+
         [Parameter(Mandatory = $true)]
         [bool]$IsDirectory
     )
@@ -156,7 +156,7 @@ function CreatePrivateObjectSecurityEx {
         $autoInheritFlags = (
             [AutoInheritFlags]::SEF_AVOID_PRIVILEGE_CHECK -bor
             [AutoInheritFlags]::SEF_AVOID_OWNER_CHECK
-        )     
+        )
 
         # TODO: this is a hack. This logic should be in the caller...
         # We want to opt in to ACL inheritance, so set the SEF_DACL_AUTO_INHERIT and SEF_SACL_AUTO_INHERIT flags if the DACL/SACL are not protected.
@@ -177,13 +177,13 @@ function CreatePrivateObjectSecurityEx {
         $genericMapping = Get-FileGenericMapping
 
         $success = [NativeMethods]::CreatePrivateObjectSecurityEx(
-            $parentSdIntPtr, 
-            $creatorSdIntPtr, 
-            [ref] $newDescriptorIntPtr, 
+            $parentSdIntPtr,
+            $creatorSdIntPtr,
+            [ref] $newDescriptorIntPtr,
             $objectTypeIntPtr,
             $isContainerObject,
             [uint32]$autoInheritFlags,
-            $token, 
+            $token,
             [ref] $genericMapping
         )
 

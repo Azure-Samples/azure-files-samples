@@ -14,7 +14,7 @@ class Config {
 }
 
 class User {
-    [string]$Upn    
+    [string]$Upn
     [string]$Sid
     [string]$DisplayName
     [string]$ObjectId
@@ -61,7 +61,7 @@ BeforeAll {
     }
 
     # Create a temporary file share in account
-    $global:fileShareName = New-RandomString -Length 12    
+    $global:fileShareName = New-RandomString -Length 12
     Write-Host "Creating a temporary file share $global:fileShareName in storage account $($Config.StorageAccountName)..."
     $global:share = New-AzStorageShare -Name $global:fileShareName -Context $global:context
     if ($null -eq $global:fileShareName) {
@@ -305,7 +305,7 @@ Describe "Set-AzFileAclKey" {
                 $key = New-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -Acl $sddl
 
                 $keyAfter = Set-AzFileAclKey -File $file -Key $key
-                
+
                 Assert-IsAclKey $keyAfter
                 $keyAfter | Should -Not -Be $keyBefore
                 $sddlAfter = Get-AzFileAclFromKey -Key $keyAfter -Share $global:share
@@ -319,7 +319,7 @@ Describe "Set-AzFileAclKey" {
                 $key = New-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -Acl $sddl
 
                 $keyAfter = Set-AzFileAclKey -Context $global:context -FileShareName $global:fileShareName -FilePath $fileName -Key $key
-                
+
                 Assert-IsAclKey $keyAfter
                 $keyAfter | Should -Not -Be $keyBefore
                 $sddlAfter = Get-AzFileAclFromKey -Key $keyAfter -Context $global:context -FileShareName $global:fileShareName
@@ -333,7 +333,7 @@ Describe "Set-AzFileAclKey" {
                 $key = New-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -Acl $sddl
 
                 $keyAfter = Set-AzFileAclKey -Client $client -Key $key
-                
+
                 Assert-IsAclKey $keyAfter
                 $keyAfter | Should -Not -Be $keyBefore
                 $sddlAfter = Get-AzFileAclFromKey -Key $keyAfter -Context $global:context -FileShareName $global:fileShareName
@@ -361,7 +361,7 @@ Describe "Set-AzFileAcl" {
                 }
                 return "${sddl}S:NO_ACCESS_CONTROL"
             }
-    
+
             $largeSddl = Get-LargeSddl
             $largeBase64 = Convert-SecurityDescriptor $largeSddl -From Sddl -To Base64
         }
@@ -401,7 +401,7 @@ Describe "Set-AzFileAcl" {
             ) {
                 $returnedKey = Set-AzFileAcl -File $file -Acl $Base64 -AclFormat Base64
                 Assert-IsAclKey $returnedKey
-                
+
                 $base64After = Get-AzFileAclFromKey -Key $returnedKey -Share $global:share -OutputFormat Base64
                 $base64After | Should -Be $Base64
             }
@@ -425,7 +425,7 @@ Describe "Set-AzFileAcl" {
             ) {
                 $returnedKey = Set-AzFileAcl  -Context $global:context -FileShareName $global:fileShareName -FilePath $fileName -Acl $Base64 -AclFormat Base64
                 Assert-IsAclKey $returnedKey
-                
+
                 $base64After = Get-AzFileAclFromKey -Key $returnedKey -Share $global:share -OutputFormat Base64
                 $base64After | Should -Be $Base64
             }
@@ -449,7 +449,7 @@ Describe "Set-AzFileAcl" {
             ) {
                 $returnedKey = Set-AzFileAcl -Client $client -Acl $Base64 -AclFormat Base64
                 Assert-IsAclKey $returnedKey
-                
+
                 $base64After = Get-AzFileAclFromKey -Key $returnedKey -Share $global:share -OutputFormat Base64
                 $base64After | Should -Be $Base64
             }
@@ -493,7 +493,7 @@ Describe "Set-AzFileOwner" {
                 } else {
                     throw "Invalid type specified. Use 'file' or 'directory'."
                 }
-    
+
                 # Get a reference to it
                 $file = Get-File $fileName
                 $client = if ($Type -eq "file") { $file.ShareFileClient } else { $file.ShareDirectoryClient }
@@ -519,7 +519,7 @@ Describe "Set-AzFileOwner" {
 
                     $result = Get-AzFileAclFromKey -Key $returnedKey -Share $global:share -OutputFormat Raw
                     $result.Owner.ToString() | Should -Be $_.Sid
-                    
+
                     $fileAclKey = Get-AzFileAclKey -Client $client
                     $fileAclKey | Should -Be $returnedKey
                 }
@@ -532,7 +532,7 @@ Describe "Set-AzFileOwner" {
 
                     $result = Get-AzFileAclFromKey -Key $returnedKey -Share $global:share -OutputFormat Raw
                     $result.Owner.ToString() | Should -Be $_.Sid
-                    
+
                     $fileAclKey = Get-AzFileAclKey -Client $client
                     $fileAclKey | Should -Be $returnedKey
                 }
@@ -771,7 +771,7 @@ Describe "Restore-AzFileAclInheritance" -Tag "Inheritance" {
 
             # Restore inheritance from parent to child in -Reset mode
             Restore-AzFileAclInheritance -Context $global:context -FileShareName $global:fileShareName -ParentPath $parent -ChildPath $child -Reset
-            
+
             # Verify that the child ACL got the inherited ACE from the parent, and that the explicit ACE was removed
             $parentNewSddl = Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $parent -OutputFormat Sddl
             $childNewSddl = Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $child -OutputFormat Sddl
@@ -798,7 +798,7 @@ Describe "Restore-AzFileAclInheritance" -Tag "Inheritance" {
 
             # Restore inheritance from parent to child in -Reset mode
             Restore-AzFileAclInheritance -Context $global:context -FileShareName $global:fileShareName -ParentPath $parent -ChildPath $childFile -Reset
-            
+
             # Verify that the child ACL got the inherited ACE from the parent, and that the explicit ACE was removed
             $parentNewSddl = Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $parent -OutputFormat Sddl
             $childNewSddl = Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $childFile -OutputFormat Sddl
@@ -841,7 +841,7 @@ Describe "Restore-AzFileAclInheritance" -Tag "Inheritance" {
         It "Fails when parent path does not exist" {
             $nonExistentParent = "non-existent-$(New-RandomString -Length 8)"
             $childPath = "non-existent-$(New-RandomString -Length 8).txt"
-            
+
             {
                 Restore-AzFileAclInheritance `
                     -Context $global:context `
@@ -851,13 +851,13 @@ Describe "Restore-AzFileAclInheritance" -Tag "Inheritance" {
                     -ErrorAction SilentlyContinue
             } | Should -Throw
         }
-        
+
         It "Fails when child path does not exist" {
             $parentDir = New-RandomString -Length 8
             New-Directory -Path $parentDir
 
             $nonExistentChild = "$parentDir/non-existent-$(New-RandomString -Length 8)"
-            
+
             {
                 Restore-AzFileAclInheritance `
                     -Context $global:context `
@@ -874,8 +874,8 @@ Describe "Restore-AzFileAclInheritance" -Tag "Inheritance" {
 
             $file2 = "$(New-RandomString -Length 8).txt"
             New-File -Path $file2 -Size 1024
-            
-            { 
+
+            {
                 Restore-AzFileAclInheritance `
                     -Context $global:context `
                     -FileShareName $global:fileShareName `
@@ -914,7 +914,7 @@ Describe "Restore-AzFileAclInheritance" -Tag "Inheritance" {
             Set-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $childFile -Acl $childrenSddl
             Set-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $grandChildFile -Acl $childrenSddl
             Set-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $grandChildDir -Acl $childrenSddl
-        
+
             # Restore inheritance recursively from parent to all children
             Restore-AzFileAclInheritance -Context $global:context -FileShareName $global:fileShareName -Path $parent -Recursive
 
@@ -964,7 +964,7 @@ Describe "Restore-AzFileAclInheritance" -Tag "Inheritance" {
             Set-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $childFile -Acl $childrenSddl
             Set-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $grandChildFile -Acl $childrenSddl
             Set-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $grandChildDir -Acl $childrenSddl
-        
+
             # Restore inheritance recursively from parent to all children in Reset mode
             Restore-AzFileAclInheritance -Context $global:context -FileShareName $global:fileShareName -Path $parent -Recursive -Reset
 
@@ -980,7 +980,7 @@ Describe "Restore-AzFileAclInheritance" -Tag "Inheritance" {
             $childFileNewSddl = Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $childFile -OutputFormat Sddl
             $grandChildFileNewSddl = Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $grandChildFile -OutputFormat Sddl
             $grandChildDirNewSddl = Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $grandChildDir -OutputFormat Sddl
-            
+
             $childDirNewSddl | Should -Be $expectedDirSddl
             $childFileNewSddl | Should -Be $expectedFileSddl
             $grandChildDirNewSddl | Should -Be $expectedDirSddl
@@ -1011,7 +1011,7 @@ Describe "Restore-AzFileAclInheritance" -Tag "Inheritance" {
             Set-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $childFile -Acl $childrenSddl
             Set-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $grandChildFile -Acl $childrenSddl
             Set-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $grandChildDir -Acl $childrenSddl
-        
+
             # Restore inheritance recursively from parent to all children in PassThru mode
             $results = Restore-AzFileAclInheritance `
                 -Context $global:context `
@@ -1042,7 +1042,7 @@ Describe "Restore-AzFileAclInheritance" -Tag "Inheritance" {
             $childFileNewSddl = Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $childFile -OutputFormat Sddl
             $grandChildFileNewSddl = Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $grandChildFile -OutputFormat Sddl
             $grandChildDirNewSddl = Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $grandChildDir -OutputFormat Sddl
-            
+
             $childDirNewSddl | Should -Be $expectedDirSddl
             $childFileNewSddl | Should -Be $expectedFileSddl
             $grandChildDirNewSddl | Should -Be $expectedDirSddl
@@ -1051,8 +1051,8 @@ Describe "Restore-AzFileAclInheritance" -Tag "Inheritance" {
 
         It "Fails when recursive path does not exist" {
             $nonExistentPath = "non-existent-$(New-RandomString -Length 8)"
-            
-            { 
+
+            {
                 Restore-AzFileAclInheritance `
                     -Context $global:context `
                     -FileShareName $global:fileShareName `
@@ -1065,8 +1065,8 @@ Describe "Restore-AzFileAclInheritance" -Tag "Inheritance" {
         It "Fails when recursive path is a file, not a directory" {
             $file = "$(New-RandomString -Length 8).txt"
             New-File -Path $file -Size 1024
-            
-            { 
+
+            {
                 Restore-AzFileAclInheritance `
                     -Context $global:context `
                     -FileShareName $global:fileShareName `
@@ -1097,7 +1097,7 @@ Describe "Add-AzFileAce" -Tag "Ace" {
             -Type Allow `
             -Principal "S-1-12-1-1-2-3-4" `
             -AccessRights Synchronize
-        
+
         $result = Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $filePath -OutputFormat Sddl
         $expected = "O:SYG:SYD:(A;;0x1200a9;;;AU)(A;;0x100000;;;S-1-12-1-1-2-3-4)S:NO_ACCESS_CONTROL"
         $result | Should -Be $expected
@@ -1131,7 +1131,7 @@ Describe "Add-AzFileAce" -Tag "Ace" {
             -Type Allow `
             -Principal "S-1-12-1-1-2-3-4" `
             -AccessRights Synchronize
-        
+
         $result = Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $directoryName -OutputFormat Sddl
         $expected = "O:SYG:SYD:(A;;0x1200a9;;;AU)(A;OICI;0x100000;;;S-1-12-1-1-2-3-4)S:NO_ACCESS_CONTROL"
         $result | Should -Be $expected
@@ -1156,7 +1156,7 @@ Describe "Add-AzFileAce" -Tag "Ace" {
 
         $sddl = "O:SYG:SYD:NO_ACCESS_CONTROL"
         Set-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $directoryName -Acl $sddl
-        
+
         $groupName = $Config.CloudNativeGroup.DisplayName
 
         Add-AzFileAce `
@@ -1166,7 +1166,7 @@ Describe "Add-AzFileAce" -Tag "Ace" {
             -Type Allow `
             -Principal $groupName `
             -AccessRights FullControl
-        
+
         $result = Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $directoryName -OutputFormat Sddl
         $groupSid = $Config.CloudNativeGroup.Sid
         $expected = "O:SYG:SYD:(A;OICI;FA;;;$groupSid)S:NO_ACCESS_CONTROL"
