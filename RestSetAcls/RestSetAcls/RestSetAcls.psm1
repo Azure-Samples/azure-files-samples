@@ -1471,6 +1471,249 @@ function Restore-AzFileAclInheritanceRecursive {
     }
 }
 
+function Update-AzFileAclOnPremToCloudSid {
+<#
+    .SYNOPSIS
+
+    .DESCRIPTION
+
+    .PARAMETER Context
+    Specifies the Azure storage context. This is required to authenticate and interact with the Azure storage account.
+
+    .PARAMETER FileShareName
+    Specifies the name of the Azure file share containing the files or directories.
+
+    .PARAMETER Recursive
+    Switch to enable recursive mode, updating all files under specified path.
+
+    .PARAMETER Path
+    Specifies the file or directory to update. In recursive mode, specifies the root directory.
+
+    .PARAMETER Silent
+    If specified, the commandlet will not output any progress or status messages. This is useful for scripting
+    scenarios where you want to suppress output.
+
+    .PARAMETER PassThru
+    If specified, the cmdlet will output the objects processed, including their paths and success status.
+
+    .PARAMETER AclKeyCacheMemoryLimitBytes
+    Maximum approximate memory, in bytes, used for cached ACL key strings in recursive mode. Once the limit is
+    reached, existing entries continue to be used but new entries are not added.
+
+    .OUTPUTS
+    System.Security.AccessControl.GenericSecurityDescriptor
+    In single mode, returns the updated ACL key for the file or directory.
+    In recursive mode, returns all the updated ACL keys for the files or directories.
+
+    .EXAMPLE
+    TODO: Create example
+
+#>
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    [OutputType([System.Security.AccessControl.GenericSecurityDescriptor])]
+    param (
+        [Parameter(Mandatory = $true, ParameterSetName = "Single")]
+        [Parameter(Mandatory = $true, ParameterSetName = "Recursive")]
+        [Microsoft.Azure.Commands.Common.Authentication.Abstractions.IStorageContext]$Context,
+
+        [Parameter(Mandatory = $true, ParameterSetName = "Single")]
+        [Parameter(Mandatory = $true, ParameterSetName = "Recursive")]
+        [string]$FileShareName,
+
+        [Parameter(Mandatory = $true, ParameterSetName = "Single")]
+        [Parameter(Mandatory = $true, ParameterSetName = "Recursive")]
+        [string]$Path,
+
+        [Parameter(Mandatory = $true, ParameterSetName = "Recursive")]
+        [switch]$Recursive,
+
+        [Parameter(Mandatory = $false, ParameterSetName = "Recursive")]
+        [bool]$Parallel = $true,
+
+        [Parameter(Mandatory = $false,  ParameterSetName = "Recursive")]
+        [int]$ThrottleLimit = 10,
+
+        [Parameter(Mandatory = $false,  ParameterSetName = "Recursive")]
+        [switch]$SkipFiles = $false,
+
+        [Parameter(Mandatory = $false,  ParameterSetName = "Recursive")]
+        [switch]$SkipDirectories = $false,
+
+        [Parameter(Mandatory = $false, ParameterSetName = "Single")]
+        [Parameter(Mandatory = $false, ParameterSetName = "Recursive")]
+        [switch]$Silent = $false,
+
+        [Parameter(Mandatory = $false, ParameterSetName = "Single")]
+        [Parameter(Mandatory = $false, ParameterSetName = "Recursive")]
+        [switch]$PassThru = $false
+    )
+
+    # Check PowerShell version for -Parallel support
+    if ($PSVersionTable.PSVersion.Major -lt 7) {
+        throw "This function is only supported on PowerShell 7+."
+    }
+
+    $file = Get-AzStorageFile -Context $Context -ShareName $FileShareName -Path $Path
+    if ($null -eq $file) {
+        throw "The specified path '$Path' does not exist."
+    }
+
+    $client = Get-ClientFromFile $file
+    $shareClient = Get-ShareClientFromFileOrDirectoryClient $client
+
+    if ($PSCmdlet.ParameterSetName -eq "Single") {
+        $currentAclKey = Get-AzFileAclKey -Client $client
+        $updatedAclKey = Update-AzFileAclOnPremToCloudSidSingle `
+            -ShareClient $shareClient `
+            -FileOrDirectoryClient $client `
+            -CurrentAclKey $currentAclKey `
+            -WhatIf:$WhatIfPreference
+
+        if ($PassThru) {
+            return $updatedAclKey
+        }
+    }
+    elseif ($PSCmdlet.ParameterSetName -eq "Recursive" -and $Recursive) {
+        if ($SkipFiles -and $SkipDirectories) {
+            Write-Warning "Both -SkipFiles and -SkipDirectories are set. Nothing to do."
+            return
+        }
+
+        $startTime = Get-Date
+        $processedCount = 0
+        $errors = @{}
+        $ProgressPreference = "SilentlyContinue"
+
+        if ($Parallel) {
+            $updateAzFileAclOnPremToCloudSidSingle = ${function:Update-AzFileAclOnPremToCloudSidSingle}.ToString()
+            $setAzFileAcl = ${function:Set-AzFileAcl}.ToString()
+            $getIsDirectoryClient = ${function:Get-IsDirectoryClient}.ToString()
+            $getFileClientFromFile = ${function:Get-ClientFromFile}.ToString()
+            $getCloudSid = ${function:Get-CloudSid}.ToString()
+            $connectMgGraphIfNeeded = ${function:Connect-MgGraphIfNeeded}.ToString()
+            $copyRawSecurityDescriptor = ${function:Copy-RawSecurityDescriptor}.ToString()
+            $copyGenericAce = ${function:Copy-GenericAce}.ToString()
+
+            Get-AzureFilesRecursive `
+                -Context $Context `
+                -DirectoryContents @($file) `
+                -SkipFiles:$SkipFiles `
+                -SkipDirectories:$SkipDirectories `
+            | ForEach-Object -ThrottleLimit $ThrottleLimit -Parallel {
+                # Set the ACL
+                ${function:Update-AzFileAclOnPremToCloudSidSingle} = $using:updateAzFileAclOnPremToCloudSidSingle
+                ${function:Set-AzFileAcl} = $using:setAzFileAcl
+                ${function:Get-IsDirectoryClient} = $using:getIsDirectoryClient
+                ${function:Get-ClientFromFile} = $using:getFileClientFromFile
+                ${function:Get-CloudSid} = $using:getCloudSid
+                ${function:Connect-MgGraphIfNeeded} = $using:connectMgGraphIfNeeded
+                ${function:Copy-RawSecurityDescriptor} = $using:copyRawSecurityDescriptor
+                ${function:Copy-GenericAce} = $using:copyGenericAce
+
+                $success = $true
+                $errorMessage = ""
+
+                try {
+                    $client = Get-ClientFromFile $_.File
+                    $currentAclKey = Get-AzFileAclKey -Client $client
+                    $updatedAclKey = Update-AzFileAclOnPremToCloudSidSingle `
+                        -ShareClient $using:shareClient `
+                        -FileOrDirectoryClient $client `
+                        -CurrentAclKey $currentAclKey `
+                        -WhatIf:$using:WhatIfPreference
+                }
+                catch {
+                    $success = $false
+                    $errorMessage = $_.Exception.Message
+                }
+
+                # Write full output if requested, otherwise write minimal output
+                if ($using:PassThru) {
+                    Write-Output @{
+                        Time         = (Get-Date).ToString("o")
+                        FullPath     = $_.FullPath
+                        AclKey       = $updatedAclKey
+                        Success      = $success
+                        ErrorMessage = $errorMessage
+                    }
+                }
+                else {
+                    Write-Output @{
+                        FullPath     = $_.FullPath
+                        Success      = $success
+                        ErrorMessage = $errorMessage
+                    }
+                }
+            } `
+            | ForEach-Object {
+                # Can't write in the parallel block, so we write here
+                if (-not $_.Success) {
+                    $errors[$_.FullPath] = $_.ErrorMessage
+                }
+                $processedCount++
+                Write-Output $_
+            } `
+            | Write-LiveFilesAndFoldersProcessingStatus -RefreshRateHertz 10 -StartTime $startTime -Silent:$Silent `
+            | ForEach-Object { if ($PassThru) { Write-Output $_ } }
+        }
+        else {
+            Get-AzureFilesRecursive `
+                -Context $Context `
+                -DirectoryContents @($file) `
+                -SkipFiles:$SkipFiles `
+                -SkipDirectories:$SkipDirectories `
+            | ForEach-Object {
+                $fullPath = $_.FullPath
+                $success = $true
+                $errorMessage = ""
+
+                try {
+                    $client = Get-ClientFromFile $_.File
+                    $currentAclKey = Get-AzFileAclKey -Client $client
+                    $updatedAclKey = Update-AzFileAclOnPremToCloudSidSingle `
+                        -ShareClient $shareClient `
+                        -FileOrDirectoryClient $client `
+                        -CurrentAclKey $currentAclKey `
+                        -WhatIf:$WhatIfPreference
+                }
+                catch {
+                    $success = $false
+                    $errorMessage = $_.Exception.Message
+                }
+
+                # Write full output if requested, otherwise write minimal output
+                if ($PassThru) {
+                    Write-Output @{
+                        Time         = (Get-Date).ToString("o")
+                        FullPath     = $_.FullPath
+                        AclKey       = $updatedAclKey
+                        Success      = $success
+                        ErrorMessage = $errorMessage
+                    }
+                }
+                else {
+                    Write-Output @{
+                        FullPath     = $_.FullPath
+                        Success      = $success
+                        ErrorMessage = $errorMessage
+                    }
+                }
+            } `
+            | Write-LiveFilesAndFoldersProcessingStatus -RefreshRateHertz 10 -StartTime $startTime -Silent:$Silent `
+            | ForEach-Object { if ($PassThru) { Write-Output $_ } }
+        }
+
+        $ProgressPreference = "Continue"
+
+        if (-not $Silent) {
+            $totalTime = (Get-Date) - $startTime
+            Write-Host "`r" -NoNewline # Clear the line from the live progress reporting
+            Write-FinalFilesAndFoldersProcessed -ProcessedCount $processedCount -Errors $errors -TotalTime $totalTime
+        }
+
+    }
+}
+
 function Update-AzFileAclOnPremToCloudSidSingle {
     [CmdletBinding(SupportsShouldProcess = $true)]
     [OutputType([string])]
