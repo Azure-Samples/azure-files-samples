@@ -5290,15 +5290,27 @@ function Set-StorageAccountDomainProperties {
             -SPNValue $spnValue `
             -Domain $Domain `
             -ErrorAction Stop
-        $azureStorageSid = $azureStorageIdentity.SID.Value
+        
         $samAccountName = $azureStorageIdentity.SamAccountName.TrimEnd("$")
         $domainGuid = $domainInformation.ObjectGUID.ToString()
         $domainName = $domainInformation.DnsRoot
-        $domainSid = $domainInformation.DomainSID.Value
         $forestName = $domainInformation.Forest
         $netBiosDomainName = $domainInformation.DnsRoot
-        $accountType = ""
 
+        # PowerShell 7 returns SIDs as string, PowerShell 5.1 returns System.Security.Principal.SecurityIdentifier
+        if ($domainInformation.DomainSID -is [string]) {
+            $domainSid = $domainSid = $domainInformation.DomainSID
+        } else {
+            $domainSid = $domainInformation.DomainSID.Value
+        }
+
+        if ($azureStorageIdentity.SID -is [string]) {
+            $azureStorageSid = $azureStorageIdentity.SID
+        } else {
+            $azureStorageSid = $azureStorageIdentity.SID.Value
+        }
+        
+        $accountType = ""
         switch ($azureStorageIdentity.ObjectClass) {
             "computer" {
                 $accountType = "Computer"
@@ -5314,21 +5326,29 @@ function Set-StorageAccountDomainProperties {
         }
 
         Write-Verbose "Setting AD properties on $StorageAccountName in $ResourceGroupName : `
-            EnableActiveDirectoryDomainServicesForFile=$true, ActiveDirectoryDomainName=$domainName, `
-            ActiveDirectoryNetBiosDomainName=$netBiosDomainName, ActiveDirectoryForestName=$($domainInformation.Forest) `
-            ActiveDirectoryDomainGuid=$domainGuid, ActiveDirectoryDomainSid=$domainSid, `
+            EnableActiveDirectoryDomainServicesForFile=$true, `
+            ActiveDirectoryDomainName=$domainName, `
+            ActiveDirectoryNetBiosDomainName=$netBiosDomainName, `
+            ActiveDirectoryForestName=$($domainInformation.Forest), `
+            ActiveDirectoryDomainGuid=$domainGuid, `
+            ActiveDirectoryDomainSid=$domainSid, `
             ActiveDirectoryAzureStorageSid=$azureStorageSid, `
             ActiveDirectorySamAccountName=$samAccountName, `
             ActiveDirectoryAccountType=$accountType"
 
         # Requires Az.Storage
-        Set-AzStorageAccount -ResourceGroupName $ResourceGroupName -AccountName $StorageAccountName `
-             -EnableActiveDirectoryDomainServicesForFile $true -ActiveDirectoryDomainName $domainName `
-             -ActiveDirectoryNetBiosDomainName $netBiosDomainName -ActiveDirectoryForestName $forestName `
-             -ActiveDirectoryDomainGuid $domainGuid -ActiveDirectoryDomainSid $domainSid `
-             -ActiveDirectoryAzureStorageSid $azureStorageSid `
-             -ActiveDirectorySamAccountName $samAccountName `
-             -ActiveDirectoryAccountType $accountType
+        Set-AzStorageAccount -ResourceGroupName $ResourceGroupName `
+            -AccountName $StorageAccountName `
+            -EnableActiveDirectoryDomainServicesForFile $true `
+            -ActiveDirectoryDomainName $domainName `
+            -ActiveDirectoryNetBiosDomainName $netBiosDomainName `
+            -ActiveDirectoryForestName $forestName `
+            -ActiveDirectoryDomainGuid $domainGuid `
+            -ActiveDirectoryDomainSid $domainSid `
+            -ActiveDirectoryAzureStorageSid $azureStorageSid `
+            -ActiveDirectorySamAccountName $samAccountName `
+            -ActiveDirectoryAccountType $accountType `
+            -ErrorAction Stop
     }
 
     Write-Verbose "Set-StorageAccountDomainProperties: Complete"
@@ -5617,30 +5637,21 @@ function Update-AzStorageAccountADObjectPassword {
                 Where-Object { $_.KeyName -eq $RotateToKerbKey } | `
                 Select-Object -ExpandProperty Value
 
-            # $otherKerbKey = $kerbKeys | `
-            #     Where-Object { $_.KeyName -eq $otherKerbKeyName } | `
-            #     Select-Object -ExpandProperty Value
-
-            # $oldPassword = ConvertTo-SecureString -String $otherKerbKey -AsPlainText -Force
             $newPassword = ConvertTo-SecureString -String $kerbKey -AsPlainText -Force
 
-            # if ($Force.ToBool()) {
-                Write-Verbose -Message ("Attempt reset on " + $adObj.SamAccountName + " to $RotateToKerbKey")
-                Set-ADAccountPassword `
-                    -Identity $adObj `
-                    -Reset `
-                    -NewPassword $newPassword `
-                    -Server $domain `
-                    -ErrorAction Stop
-            # } else {
-            #     Write-Verbose `
-            #         -Message ("Change password on " + $adObj.SamAccountName + " from $otherKerbKeyName to $RotateToKerbKey.")
-            #     Set-ADAccountPassword `
-            #         -Identity $adObj `
-            #         -OldPassword $oldPassword `
-            #         -NewPassword $newPassword `
-            #         -ErrorAction Stop
-            # }
+            # PROBLEM!
+            # On PowerShell 5, $adObj is a Microsoft.ActiveDirectory.Management.ADComputer
+            # On PowerShell 7.1, $adObj is System.Management.Automation.PSObject
+            # In either case, .DistinguishedName returns a string, which Set-ADAccountPassword also accepts.
+            $identity = $adObj.DistinguishedName
+
+            Write-Verbose -Message ("Attempt reset on " + $adObj.SamAccountName + " to $RotateToKerbKey")
+            Set-ADAccountPassword `
+                -Identity $identity `
+                -Reset `
+                -NewPassword $newPassword `
+                -Server $domain `
+                -ErrorAction Stop
 
             Write-Verbose -Message "Password changed successfully."
         } else {
