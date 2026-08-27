@@ -1471,6 +1471,90 @@ function Restore-AzFileAclInheritanceRecursive {
     }
 }
 
+function Update-AzFileAclOnPremToCloudSidSingle {
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    [OutputType([string])]
+    param (
+        [Parameter(Mandatory = $true)]
+        [Azure.Storage.Files.Shares.ShareClient]$ShareClient,
+
+        [Parameter(Mandatory = $true)]
+        [object]$FileOrDirectoryClient,
+
+        [Parameter(Mandatory = $true)]
+        [string]$CurrentAclKey
+    )
+
+    # It is responsibility of the caller to ensure $CurrentAclKey is the current ACL for the file represented by $FileOrDirectoryClient
+    $currentAcl = Get-AzFileAclFromKey -Key $CurrentAclKey -ShareClient $ShareClient -OutputFormat Raw
+
+    $updatedAcl = Copy-RawSecurityDescriptor -SecurityDescriptor $currentAcl
+
+    $currentSids = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    foreach ($currentAce in $currentAcl.DiscretionaryAcl) {
+        if ($currentAce -is [System.Security.AccessControl.KnownAce]) {
+            $currentSids.Add($currentAce.SecurityIdentifier.Value) | Out-Null
+        }
+    }
+
+    # Iterate from last to first and Insert new ACEs right after the current ACE to preserve order.
+    for ($i = $currentAcl.DiscretionaryAcl.Count - 1; $i -ge 0; $i--) {
+        $ace = $currentAcl.DiscretionaryAcl[$i]
+        if ($ace -is [System.Security.AccessControl.KnownAce] -and $ace.SecurityIdentifier.Value.StartsWith("S-1-5-21-")) {
+            $cloudSid = Get-CloudSid -OnPremisesSid $ace.SecurityIdentifier.Value -Verbose:$VerbosePreference -WhatIf:$WhatIfPreference -ErrorAction SilentlyContinue
+            if ($null -eq $cloudSid) {
+                Write-Verbose "No cloud SID found for on-premises SID '$($ace.SecurityIdentifier.Value)'. Skipping."
+                continue
+            }
+            if ($currentSids.Contains($cloudSid.Value)) {
+                Write-Verbose "Cloud SID '$($cloudSid.Value)' is already present in the current ACL. Skipping."
+                continue
+            }
+
+            $duplicateAce = Copy-GenericAce -Ace $ace
+            $duplicateAce.SecurityIdentifier = $cloudSid
+            $updatedAcl.DiscretionaryAcl.InsertAce($i + 1, $duplicateAce)
+
+            Write-Verbose "ACE count: $($updatedAcl.DiscretionaryAcl.Count)"
+        }
+    }
+
+    # Update the ACL on the file or directory
+    if ($PSCmdlet.ShouldProcess($FileOrDirectoryClient.Path, "Set ACL with updated cloud SIDs")) {
+        return Set-AzFileAcl -Client $FileOrDirectoryClient -Acl $updatedAcl -AclFormat Raw -WhatIf:$WhatIfPreference
+    }
+}
+
+function Copy-RawSecurityDescriptor {
+    [CmdletBinding()]
+    [OutputType([System.Security.AccessControl.RawSecurityDescriptor])]
+    param (
+        [Parameter(Mandatory = $true)]
+        [System.Security.AccessControl.RawSecurityDescriptor]$SecurityDescriptor
+    )
+
+    process {
+        $bytes = New-Object byte[] $SecurityDescriptor.BinaryLength
+        $SecurityDescriptor.GetBinaryForm($bytes, 0)
+        return [System.Security.AccessControl.RawSecurityDescriptor]::new($bytes, 0)
+    }
+}
+
+function Copy-GenericAce {
+    [CmdletBinding()]
+    [OutputType([System.Security.AccessControl.GenericAce])]
+    param (
+        [Parameter(Mandatory = $true)]
+        [System.Security.AccessControl.GenericAce]$Ace
+    )
+
+    process {
+        $bytes = New-Object byte[] $Ace.BinaryLength
+        $Ace.GetBinaryForm($bytes, 0)
+        return [System.Security.AccessControl.GenericAce]::CreateFromBinaryForm($bytes, 0)
+    }
+}
+
 function Connect-MgGraphIfNeeded {
     [CmdletBinding(SupportsShouldProcess = $true)]
     param (
