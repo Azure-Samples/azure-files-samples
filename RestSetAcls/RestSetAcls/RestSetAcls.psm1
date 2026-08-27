@@ -1474,8 +1474,16 @@ function Restore-AzFileAclInheritanceRecursive {
 function Update-AzFileAclOnPremToCloudSid {
 <#
     .SYNOPSIS
+    Adds cloud SID access control entries for on-premises SIDs in Azure Files ACLs.
 
     .DESCRIPTION
+    Updates the ACL of a file or directory by finding on-premises SIDs and adding equivalent access control entries
+    for their mapped cloud SIDs. Existing access control entries are preserved, and a cloud SID is not added when it
+    is already present in the ACL.
+
+    In recursive mode, the command processes the specified path and its descendants. ACL key mappings are cached so
+    that files and directories sharing an ACL can reuse the previously updated ACL key. Requires PowerShell 7 or
+    later.
 
     .PARAMETER Context
     Specifies the Azure storage context. This is required to authenticate and interact with the Azure storage account.
@@ -1484,10 +1492,23 @@ function Update-AzFileAclOnPremToCloudSid {
     Specifies the name of the Azure file share containing the files or directories.
 
     .PARAMETER Recursive
-    Switch to enable recursive mode, updating all files under specified path.
+    Enables recursive mode, updating the specified path and its descendants.
 
     .PARAMETER Path
     Specifies the file or directory to update. In recursive mode, specifies the root directory.
+
+    .PARAMETER Parallel
+    Specifies whether recursive processing runs in parallel. The default is true. Set this parameter to false to
+    process items sequentially.
+
+    .PARAMETER ThrottleLimit
+    Specifies the maximum number of concurrent operations in parallel recursive mode. The default is 10.
+
+    .PARAMETER SkipFiles
+    Excludes files from recursive processing.
+
+    .PARAMETER SkipDirectories
+    Excludes directories from recursive processing.
 
     .PARAMETER Silent
     If specified, the commandlet will not output any progress or status messages. This is useful for scripting
@@ -1497,16 +1518,32 @@ function Update-AzFileAclOnPremToCloudSid {
     If specified, the cmdlet will output the objects processed, including their paths and success status.
 
     .PARAMETER AclKeyCacheMemoryLimitBytes
-    Maximum approximate memory, in bytes, used for cached ACL key strings in recursive mode. Once the limit is
-    reached, existing entries continue to be used but new entries are not added.
+    Specifies the maximum approximate memory, in bytes, used for cached ACL key strings in recursive mode. The
+    default is 104857600 bytes (100 MB). Once the limit is reached, existing entries continue to be used but new
+    entries are not added. Set this parameter to 0 to disable adding cache entries.
 
     .OUTPUTS
-    System.Security.AccessControl.GenericSecurityDescriptor
-    In single mode, returns the updated ACL key for the file or directory.
-    In recursive mode, returns all the updated ACL keys for the files or directories.
+    System.String
+    In single mode with PassThru, returns the updated ACL key.
+
+    System.Collections.Hashtable
+    In recursive mode with PassThru, returns a result for each processed item containing its path, updated ACL key,
+    success status, error message, and processing time.
 
     .EXAMPLE
-    TODO: Create example
+    PS> Update-AzFileAclOnPremToCloudSid -Context $context -FileShareName "myshare" -Path "folder/file.txt" -PassThru
+
+    Adds cloud SID entries to the ACL of folder/file.txt and returns its updated ACL key.
+
+    .EXAMPLE
+    PS> Update-AzFileAclOnPremToCloudSid -Context $context -FileShareName "myshare" -Path "folder" -Recursive -ThrottleLimit 20 -PassThru
+
+    Updates the ACLs of the folder and its descendants in parallel, using up to 20 concurrent operations.
+
+    .EXAMPLE
+    PS> Update-AzFileAclOnPremToCloudSid -Context $context -FileShareName "myshare" -Path "folder" -Recursive -Parallel $false -SkipDirectories -Silent
+
+    Sequentially updates files under the folder without processing directories or displaying progress messages.
 
 #>
     [CmdletBinding(SupportsShouldProcess = $true)]
