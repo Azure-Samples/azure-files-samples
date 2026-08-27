@@ -1078,6 +1078,146 @@ Describe "Restore-AzFileAclInheritance" -Tag "Inheritance" {
     }
 }
 
+Describe "Update-AzFileAclOnPremToCloudSid" -Tag "SidMigration" {
+    BeforeAll {
+        $hybridUser = Get-MgUser -UserId $Config.HybridUser.ObjectId -Property "SecurityIdentifier"
+        $hybridUserCloudSid = $hybridUser.SecurityIdentifier
+
+        $hybridGroup = Get-MgGroup -GroupId $Config.HybridGroup.ObjectId -Property "SecurityIdentifier"
+        $hybridGroupCloudSid = $hybridGroup.SecurityIdentifier
+    }
+
+    It "Adds cloud SID ACEs without removing the on-premises SID ACEs" {
+        $filePath = "$(New-RandomString -Length 8).txt"
+        New-File -Path $filePath
+
+        $sddl = "O:SYG:SYD:P(A;;0x1200a9;;;$($Config.HybridUser.Sid))(A;;0x100000;;;$($Config.HybridGroup.Sid))S:NO_ACCESS_CONTROL"
+        Set-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $filePath -Acl $sddl
+
+        $updatedAclKey = Update-AzFileAclOnPremToCloudSid `
+            -Context $global:context `
+            -FileShareName $global:fileShareName `
+            -Path $filePath `
+            -PassThru
+
+        Assert-IsAclKey $updatedAclKey
+        Get-AzFileAclKey -Context $global:context -FileShareName $global:fileShareName -FilePath $filePath | Should -Be $updatedAclKey
+
+        $updatedSddl = Get-AzFileAclFromKey -Key $updatedAclKey -Share $global:share
+        $updatedSddl | Should -Match ([regex]::Escape("(A;;0x1200a9;;;$($Config.HybridUser.Sid))"))
+        $updatedSddl | Should -Match ([regex]::Escape("(A;;0x1200a9;;;$hybridUserCloudSid)"))
+        $updatedSddl | Should -Match ([regex]::Escape("(A;;0x100000;;;$($Config.HybridGroup.Sid))"))
+        $updatedSddl | Should -Match ([regex]::Escape("(A;;0x100000;;;$hybridGroupCloudSid)"))
+
+        Update-AzFileAclOnPremToCloudSid `
+            -Context $global:context `
+            -FileShareName $global:fileShareName `
+            -Path $filePath
+
+        $idempotentSddl = Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $filePath -OutputFormat Sddl
+        ([regex]::Matches($idempotentSddl, [regex]::Escape($hybridUserCloudSid))).Count | Should -Be 1
+        ([regex]::Matches($idempotentSddl, [regex]::Escape($hybridGroupCloudSid))).Count | Should -Be 1
+    }
+
+    It "Reuses cached ACL keys in sequential recursive mode" {
+        $directoryName = "sidcache-$(New-RandomString -Length 8)"
+        New-Directory -Path $directoryName
+        $filePaths = @("$directoryName/file1.txt", "$directoryName/file2.txt")
+        $filePaths | ForEach-Object { New-File -Path $_ }
+
+        $sddl = "O:SYG:SYD:P(A;;0x1200a9;;;$($Config.HybridUser.Sid))S:NO_ACCESS_CONTROL"
+        $sharedAclKey = New-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -Acl $sddl
+        Set-AzFileAclKey -Context $global:context -FileShareName $global:fileShareName -FilePath $directoryName -Key $sharedAclKey
+        $filePaths | ForEach-Object {
+            Set-AzFileAclKey -Context $global:context -FileShareName $global:fileShareName -FilePath $_ -Key $sharedAclKey
+        }
+
+        $output = Update-AzFileAclOnPremToCloudSid `
+            -Context $global:context `
+            -FileShareName $global:fileShareName `
+            -Path $directoryName `
+            -Recursive `
+            -Parallel $false `
+            -Silent `
+            -PassThru `
+            -Verbose 4>&1
+        $results = @($output | Where-Object { $_ -is [hashtable] })
+        $cacheMessages = @($output | Where-Object { $_ -is [System.Management.Automation.VerboseRecord] })
+
+        $results.Count | Should -Be 3
+        $results.Success | Should -Not -Contain $false
+        ($results.AclKey | Select-Object -Unique).Count | Should -Be 1
+        @($cacheMessages | Where-Object Message -Like "Found cached ACL key for '*'").Count | Should -Be 2
+
+        foreach ($result in $results) {
+            $updatedSddl = Get-AzFileAclFromKey -Key $result.AclKey -Share $global:share
+            $updatedSddl | Should -Match ([regex]::Escape($hybridUserCloudSid))
+        }
+    }
+
+    It "Stops adding cache entries when the cache memory limit is reached" {
+        $directoryName = "sidcachelimit-$(New-RandomString -Length 8)"
+        New-Directory -Path $directoryName
+        $filePaths = @("$directoryName/file1.txt", "$directoryName/file2.txt")
+        $filePaths | ForEach-Object { New-File -Path $_ }
+
+        $sddl = "O:SYG:SYD:P(A;;0x1200a9;;;$($Config.HybridUser.Sid))S:NO_ACCESS_CONTROL"
+        $sharedAclKey = New-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -Acl $sddl
+        Set-AzFileAclKey -Context $global:context -FileShareName $global:fileShareName -FilePath $directoryName -Key $sharedAclKey
+        $filePaths | ForEach-Object {
+            Set-AzFileAclKey -Context $global:context -FileShareName $global:fileShareName -FilePath $_ -Key $sharedAclKey
+        }
+
+        $output = Update-AzFileAclOnPremToCloudSid `
+            -Context $global:context `
+            -FileShareName $global:fileShareName `
+            -Path $directoryName `
+            -Recursive `
+            -Parallel $false `
+            -AclKeyCacheMemoryLimitBytes 0 `
+            -Silent `
+            -PassThru `
+            -Verbose 4>&1
+        $results = @($output | Where-Object { $_ -is [hashtable] })
+        $cacheMessages = @($output | Where-Object { $_ -is [System.Management.Automation.VerboseRecord] })
+
+        $results.Count | Should -Be 3
+        $results.Success | Should -Not -Contain $false
+        @($cacheMessages | Where-Object Message -Like "Found cached ACL key for '*'").Count | Should -Be 0
+    }
+
+    It "Updates all items in parallel recursive mode" {
+        $directoryName = "sidparallel-$(New-RandomString -Length 8)"
+        New-Directory -Path $directoryName
+        New-File -Path "$directoryName/file1.txt"
+        New-File -Path "$directoryName/file2.txt"
+
+        $sddl = "O:SYG:SYD:P(A;;0x1200a9;;;$($Config.HybridUser.Sid))S:NO_ACCESS_CONTROL"
+        Set-AzFileAclRecursive `
+            -Context $global:context `
+            -FileShareName $global:fileShareName `
+            -FilePath $directoryName `
+            -SddlPermission $sddl
+
+        $results = Update-AzFileAclOnPremToCloudSid `
+            -Context $global:context `
+            -FileShareName $global:fileShareName `
+            -Path $directoryName `
+            -Recursive `
+            -Parallel $true `
+            -ThrottleLimit 2 `
+            -Silent `
+            -PassThru
+
+        $results.Count | Should -Be 3
+        $results.Success | Should -Not -Contain $false
+        foreach ($result in $results) {
+            $updatedSddl = Get-AzFileAclFromKey -Key $result.AclKey -Share $global:share
+            $updatedSddl | Should -Match ([regex]::Escape($hybridUserCloudSid))
+        }
+    }
+}
+
 Describe "Add-AzFileAce" -Tag "Ace" {
     It "Adds an ACE to a file" {
         $directoryName = New-RandomString -Length 8
