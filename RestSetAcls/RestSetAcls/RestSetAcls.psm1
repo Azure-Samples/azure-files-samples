@@ -1539,6 +1539,10 @@ function Update-AzFileAclOnPremToCloudSid {
         [Parameter(Mandatory = $false,  ParameterSetName = "Recursive")]
         [switch]$SkipDirectories = $false,
 
+        [Parameter(Mandatory = $false, ParameterSetName = "Recursive")]
+        [ValidateRange(0, [long]::MaxValue)]
+        [long]$AclKeyCacheMemoryLimitBytes = 104857600,
+
         [Parameter(Mandatory = $false, ParameterSetName = "Single")]
         [Parameter(Mandatory = $false, ParameterSetName = "Recursive")]
         [switch]$Silent = $false,
@@ -1584,9 +1588,15 @@ function Update-AzFileAclOnPremToCloudSid {
         $errors = @{}
         $ProgressPreference = "SilentlyContinue"
 
+        # ACL Key Cache to avoid processing the same ACL multiple times.
+        $aclKeyCache = [System.Collections.Concurrent.ConcurrentDictionary[string, string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+        $aclKeyCacheMemoryBytes = [long[]]@(0)
+        $aclKeyCacheLock = [object]::new()
+
         if ($Parallel) {
             $updateAzFileAclOnPremToCloudSidSingle = ${function:Update-AzFileAclOnPremToCloudSidSingle}.ToString()
             $setAzFileAcl = ${function:Set-AzFileAcl}.ToString()
+            $setAzFileAclKey = ${function:Set-AzFileAclKey}.ToString()
             $getIsDirectoryClient = ${function:Get-IsDirectoryClient}.ToString()
             $getFileClientFromFile = ${function:Get-ClientFromFile}.ToString()
             $getCloudSid = ${function:Get-CloudSid}.ToString()
@@ -1603,6 +1613,7 @@ function Update-AzFileAclOnPremToCloudSid {
                 # Set the ACL
                 ${function:Update-AzFileAclOnPremToCloudSidSingle} = $using:updateAzFileAclOnPremToCloudSidSingle
                 ${function:Set-AzFileAcl} = $using:setAzFileAcl
+                ${function:Set-AzFileAclKey} = $using:setAzFileAclKey
                 ${function:Get-IsDirectoryClient} = $using:getIsDirectoryClient
                 ${function:Get-ClientFromFile} = $using:getFileClientFromFile
                 ${function:Get-CloudSid} = $using:getCloudSid
@@ -1610,17 +1621,46 @@ function Update-AzFileAclOnPremToCloudSid {
                 ${function:Copy-RawSecurityDescriptor} = $using:copyRawSecurityDescriptor
                 ${function:Copy-GenericAce} = $using:copyGenericAce
 
+                $aclKeyCache = $using:aclKeyCache
+                $aclKeyCacheMemoryBytes = $using:aclKeyCacheMemoryBytes
+                $aclKeyCacheLock = $using:aclKeyCacheLock
+                $aclKeyCacheMemoryLimitBytes = $using:AclKeyCacheMemoryLimitBytes
                 $success = $true
                 $errorMessage = ""
 
                 try {
                     $client = Get-ClientFromFile $_.File
                     $currentAclKey = Get-AzFileAclKey -Client $client
-                    $updatedAclKey = Update-AzFileAclOnPremToCloudSidSingle `
-                        -ShareClient $using:shareClient `
-                        -FileOrDirectoryClient $client `
-                        -CurrentAclKey $currentAclKey `
-                        -WhatIf:$using:WhatIfPreference
+                    $cachedAclKey = $null
+                    if ($aclKeyCache.TryGetValue($currentAclKey, [ref]$cachedAclKey)) {
+                        Write-Verbose "Found cached ACL key for '$currentAclKey': '$cachedAclKey'"
+
+                        $updatedAclKey = Set-AzFileAclKey `
+                            -Client $client `
+                            -Key $cachedAclKey `
+                            -WhatIf:$using:WhatIfPreference
+                    }
+                    else {
+                        $updatedAclKey = Update-AzFileAclOnPremToCloudSidSingle `
+                            -ShareClient $using:shareClient `
+                            -FileOrDirectoryClient $client `
+                            -CurrentAclKey $currentAclKey `
+                            -WhatIf:$using:WhatIfPreference
+
+                        if ($null -ne $updatedAclKey) {
+                            $entrySize = [System.Text.Encoding]::Unicode.GetByteCount($currentAclKey + $updatedAclKey)
+                            [System.Threading.Monitor]::Enter($aclKeyCacheLock)
+                            try {
+                                if (($aclKeyCacheMemoryBytes[0] + $entrySize) -le $aclKeyCacheMemoryLimitBytes -and
+                                    $aclKeyCache.TryAdd($currentAclKey, $updatedAclKey)) {
+                                    $aclKeyCacheMemoryBytes[0] += $entrySize
+                                }
+                            }
+                            finally {
+                                [System.Threading.Monitor]::Exit($aclKeyCacheLock)
+                            }
+                        }
+                    }
                 }
                 catch {
                     $success = $false
@@ -1670,11 +1710,30 @@ function Update-AzFileAclOnPremToCloudSid {
                 try {
                     $client = Get-ClientFromFile $_.File
                     $currentAclKey = Get-AzFileAclKey -Client $client
-                    $updatedAclKey = Update-AzFileAclOnPremToCloudSidSingle `
-                        -ShareClient $shareClient `
-                        -FileOrDirectoryClient $client `
-                        -CurrentAclKey $currentAclKey `
-                        -WhatIf:$WhatIfPreference
+                    $cachedAclKey = $null
+                    if ($aclKeyCache.TryGetValue($currentAclKey, [ref]$cachedAclKey)) {
+                        Write-Verbose "Found cached ACL key for '$currentAclKey': '$cachedAclKey'"
+
+                        $updatedAclKey = Set-AzFileAclKey `
+                            -Client $client `
+                            -Key $cachedAclKey `
+                            -WhatIf:$WhatIfPreference
+                    }
+                    else {
+                        $updatedAclKey = Update-AzFileAclOnPremToCloudSidSingle `
+                            -ShareClient $shareClient `
+                            -FileOrDirectoryClient $client `
+                            -CurrentAclKey $currentAclKey `
+                            -WhatIf:$WhatIfPreference
+
+                        if ($null -ne $updatedAclKey) {
+                            $entrySize = [System.Text.Encoding]::Unicode.GetByteCount($currentAclKey + $updatedAclKey)
+                            if (($aclKeyCacheMemoryBytes[0] + $entrySize) -le $AclKeyCacheMemoryLimitBytes -and
+                                $aclKeyCache.TryAdd($currentAclKey, $updatedAclKey)) {
+                                $aclKeyCacheMemoryBytes[0] += $entrySize
+                            }
+                        }
+                    }
                 }
                 catch {
                     $success = $false
