@@ -1628,7 +1628,8 @@ function Update-AzFileAclOnPremToCloudSid {
         $ProgressPreference = "SilentlyContinue"
 
         # ACL Key Cache to avoid processing the same ACL multiple times.
-        $aclKeyCache = [System.Collections.Concurrent.ConcurrentDictionary[string, string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+        $aclKeyFileCache = [System.Collections.Concurrent.ConcurrentDictionary[string, string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+        $aclKeyDirectoryCache = [System.Collections.Concurrent.ConcurrentDictionary[string, string]]::new([System.StringComparer]::OrdinalIgnoreCase)
 
         if ($Parallel) {
             $updateAzFileAclOnPremToCloudSidSingle = ${function:Update-AzFileAclOnPremToCloudSidSingle}.ToString()
@@ -1658,17 +1659,27 @@ function Update-AzFileAclOnPremToCloudSid {
                 ${function:Copy-RawSecurityDescriptor} = $using:copyRawSecurityDescriptor
                 ${function:Copy-GenericAce} = $using:copyGenericAce
 
-                $aclKeyCache = $using:aclKeyCache
+                $aclKeyDirectoryCache = $using:aclKeyDirectoryCache
+                $aclKeyFileCache = $using:aclKeyFileCache
                 $aclKeyCacheMaxEntries = $using:AclKeyCacheMaxEntries
                 $success = $true
                 $errorMessage = ""
 
                 try {
                     $client = Get-ClientFromFile $_.File
+                    $isDirectory = Get-IsDirectoryClient $client
                     $currentAclKey = Get-AzFileAclKey -Client $client
                     $cachedAclKey = $null
-                    if ($aclKeyCache.TryGetValue($currentAclKey, [ref]$cachedAclKey)) {
-                        Write-Verbose "Found cached ACL key for '$currentAclKey': '$cachedAclKey'"
+                    if ($isDirectory -and $aclKeyDirectoryCache.TryGetValue($currentAclKey, [ref]$cachedAclKey)) {
+                        Write-Verbose "Found cached Directory ACL key for '$currentAclKey': '$cachedAclKey'"
+
+                        $updatedAclKey = Set-AzFileAclKey `
+                            -Client $client `
+                            -Key $cachedAclKey `
+                            -WhatIf:$using:WhatIfPreference
+                    }
+                    elseif (-not $isDirectory -and $aclKeyFileCache.TryGetValue($currentAclKey, [ref]$cachedAclKey)) {
+                        Write-Verbose "Found cached File ACL key for '$currentAclKey': '$cachedAclKey'"
 
                         $updatedAclKey = Set-AzFileAclKey `
                             -Client $client `
@@ -1683,8 +1694,15 @@ function Update-AzFileAclOnPremToCloudSid {
                             -WhatIf:$using:WhatIfPreference
 
                         if ($null -ne $updatedAclKey) {
-                            if ($aclKeyCache.Count -lt $aclKeyCacheMaxEntries) {
-                                $aclKeyCache.TryAdd($currentAclKey, $updatedAclKey) | Out-Null
+                            if ($isDirectory) {
+                                if ($aclKeyDirectoryCache.Count -lt $aclKeyCacheMaxEntries) {
+                                    $aclKeyDirectoryCache.TryAdd($currentAclKey, $updatedAclKey) | Out-Null
+                                }
+                            }
+                            else {
+                                if ($aclKeyFileCache.Count -lt $aclKeyCacheMaxEntries) {
+                                    $aclKeyFileCache.TryAdd($currentAclKey, $updatedAclKey) | Out-Null
+                                }
                             }
                         }
                     }
@@ -1735,10 +1753,19 @@ function Update-AzFileAclOnPremToCloudSid {
 
                 try {
                     $client = Get-ClientFromFile $_.File
+                    $isDirectory = Get-IsDirectoryClient $client
                     $currentAclKey = Get-AzFileAclKey -Client $client
                     $cachedAclKey = $null
-                    if ($aclKeyCache.TryGetValue($currentAclKey, [ref]$cachedAclKey)) {
-                        Write-Verbose "Found cached ACL key for '$currentAclKey': '$cachedAclKey'"
+                    if ($isDirectory -and $aclKeyDirectoryCache.TryGetValue($currentAclKey, [ref]$cachedAclKey)) {
+                        Write-Verbose "Found cached Directory ACL key for '$currentAclKey': '$cachedAclKey'"
+
+                        $updatedAclKey = Set-AzFileAclKey `
+                            -Client $client `
+                            -Key $cachedAclKey `
+                            -WhatIf:$WhatIfPreference
+                    }
+                    elseif (-not $isDirectory -and $aclKeyFileCache.TryGetValue($currentAclKey, [ref]$cachedAclKey)) {
+                        Write-Verbose "Found cached File ACL key for '$currentAclKey': '$cachedAclKey'"
 
                         $updatedAclKey = Set-AzFileAclKey `
                             -Client $client `
@@ -1753,8 +1780,15 @@ function Update-AzFileAclOnPremToCloudSid {
                             -WhatIf:$WhatIfPreference
 
                         if ($null -ne $updatedAclKey) {
-                            if ($aclKeyCache.Count -lt $AclKeyCacheMaxEntries) {
-                                $aclKeyCache.TryAdd($currentAclKey, $updatedAclKey) | Out-Null
+                            if ($isDirectory) {
+                                if ($aclKeyDirectoryCache.Count -lt $AclKeyCacheMaxEntries) {
+                                    $aclKeyDirectoryCache.TryAdd($currentAclKey, $updatedAclKey) | Out-Null
+                                }
+                            }
+                            else {
+                                if ($aclKeyFileCache.Count -lt $AclKeyCacheMaxEntries) {
+                                    $aclKeyFileCache.TryAdd($currentAclKey, $updatedAclKey) | Out-Null
+                                }
                             }
                         }
                     }
@@ -1791,6 +1825,7 @@ function Update-AzFileAclOnPremToCloudSid {
         if (-not $Silent) {
             $totalTime = (Get-Date) - $startTime
             Write-Host "`r" -NoNewline # Clear the line from the live progress reporting
+            Write-Host "Cached $($aclKeyDirectoryCache.Count) directory ACL keys and $($aclKeyFileCache.Count) file ACL keys."
             Write-FinalFilesAndFoldersProcessed -ProcessedCount $processedCount -Errors $errors -TotalTime $totalTime
         }
 
@@ -1816,13 +1851,6 @@ function Update-AzFileAclOnPremToCloudSidSingle {
 
     $updatedAcl = Copy-RawSecurityDescriptor -SecurityDescriptor $currentAcl
 
-    $currentSids = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
-    foreach ($currentAce in $currentAcl.DiscretionaryAcl) {
-        if ($currentAce -is [System.Security.AccessControl.KnownAce] -and $currentAce.SecurityIdentifier.Value.StartsWith("S-1-12-")) {
-            $currentSids.Add($currentAce.SecurityIdentifier.Value) | Out-Null
-        }
-    }
-
     # Iterate from last to first and Insert new ACEs right after the current ACE to preserve order.
     for ($i = $currentAcl.DiscretionaryAcl.Count - 1; $i -ge 0; $i--) {
         $ace = $currentAcl.DiscretionaryAcl[$i]
@@ -1830,10 +1858,6 @@ function Update-AzFileAclOnPremToCloudSidSingle {
             $cloudSid = Get-CloudSid -OnPremisesSid $ace.SecurityIdentifier.Value -Verbose:$VerbosePreference -WhatIf:$WhatIfPreference -ErrorAction SilentlyContinue
             if ($null -eq $cloudSid) {
                 Write-Verbose "No cloud SID found for on-premises SID '$($ace.SecurityIdentifier.Value)'. Skipping."
-                continue
-            }
-            if ($currentSids.Contains($cloudSid.Value)) {
-                Write-Verbose "Cloud SID '$($cloudSid.Value)' is already present in the current ACL. Skipping."
                 continue
             }
 
@@ -1846,6 +1870,14 @@ function Update-AzFileAclOnPremToCloudSidSingle {
         elseif ($ace -isnot [System.Security.AccessControl.KnownAce]) {
             Write-Verbose "ACE at index $i is not a KnownAce. Skipping."
         }
+    }
+
+    # Normalize Security Descriptor
+    if (Get-IsDirectoryClient -Client $FileOrDirectoryClient) {
+        $updatedAcl = $updatedAcl | Convert-SecurityDescriptor -From Raw -To FolderAcl | Convert-SecurityDescriptor -From FolderAcl -To Raw
+    }
+    else {
+        $updatedAcl = $updatedAcl | Convert-SecurityDescriptor -From Raw -To FileAcl | Convert-SecurityDescriptor -From FileAcl -To Raw
     }
 
     # Update the ACL on the file or directory

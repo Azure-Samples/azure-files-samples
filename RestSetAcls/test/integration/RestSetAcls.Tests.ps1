@@ -1119,15 +1119,20 @@ Describe "Update-AzFileAclOnPremToCloudSid" -Tag "SidMigration" {
         ([regex]::Matches($idempotentSddl, [regex]::Escape($hybridGroupCloudSid))).Count | Should -Be 1
     }
 
-    It "Reuses cached ACL keys in sequential recursive mode" {
+    It "Reuses file and directory ACL keys from separate caches in sequential recursive mode" {
         $directoryName = "sidcache-$(New-RandomString -Length 8)"
         New-Directory -Path $directoryName
+        $directoryPaths = @("$directoryName/directory1", "$directoryName/directory2")
+        $directoryPaths | ForEach-Object { New-Directory -Path $_ }
         $filePaths = @("$directoryName/file1.txt", "$directoryName/file2.txt")
         $filePaths | ForEach-Object { New-File -Path $_ }
 
         $sddl = "O:SYG:SYD:P(A;;0x1200a9;;;$($Config.HybridUser.Sid))S:NO_ACCESS_CONTROL"
         $sharedAclKey = New-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -Acl $sddl
         Set-AzFileAclKey -Context $global:context -FileShareName $global:fileShareName -FilePath $directoryName -Key $sharedAclKey
+        $directoryPaths | ForEach-Object {
+            Set-AzFileAclKey -Context $global:context -FileShareName $global:fileShareName -FilePath $_ -Key $sharedAclKey
+        }
         $filePaths | ForEach-Object {
             Set-AzFileAclKey -Context $global:context -FileShareName $global:fileShareName -FilePath $_ -Key $sharedAclKey
         }
@@ -1144,10 +1149,11 @@ Describe "Update-AzFileAclOnPremToCloudSid" -Tag "SidMigration" {
         $results = @($output | Where-Object { $_ -is [hashtable] })
         $cacheMessages = @($output | Where-Object { $_ -is [System.Management.Automation.VerboseRecord] })
 
-        $results.Count | Should -Be 3
+        $results.Count | Should -Be 5
         $results.Success | Should -Not -Contain $false
         ($results.AclKey | Select-Object -Unique).Count | Should -Be 1
-        @($cacheMessages | Where-Object Message -Like "Found cached ACL key for '*'").Count | Should -Be 2
+        @($cacheMessages | Where-Object Message -Like "Found cached File ACL key for '*'").Count | Should -Be 1
+        @($cacheMessages | Where-Object Message -Like "Found cached Directory ACL key for '*'").Count | Should -Be 2
 
         foreach ($result in $results) {
             $updatedSddl = Get-AzFileAclFromKey -Key $result.AclKey -Share $global:share
@@ -1155,15 +1161,20 @@ Describe "Update-AzFileAclOnPremToCloudSid" -Tag "SidMigration" {
         }
     }
 
-    It "Stops adding cache entries when the maximum entry count is reached" {
+    It "Stops adding file and directory cache entries when the maximum entry count is reached" {
         $directoryName = "sidcachelimit-$(New-RandomString -Length 8)"
         New-Directory -Path $directoryName
+        $directoryPaths = @("$directoryName/directory1", "$directoryName/directory2")
+        $directoryPaths | ForEach-Object { New-Directory -Path $_ }
         $filePaths = @("$directoryName/file1.txt", "$directoryName/file2.txt")
         $filePaths | ForEach-Object { New-File -Path $_ }
 
         $sddl = "O:SYG:SYD:P(A;;0x1200a9;;;$($Config.HybridUser.Sid))S:NO_ACCESS_CONTROL"
         $sharedAclKey = New-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -Acl $sddl
         Set-AzFileAclKey -Context $global:context -FileShareName $global:fileShareName -FilePath $directoryName -Key $sharedAclKey
+        $directoryPaths | ForEach-Object {
+            Set-AzFileAclKey -Context $global:context -FileShareName $global:fileShareName -FilePath $_ -Key $sharedAclKey
+        }
         $filePaths | ForEach-Object {
             Set-AzFileAclKey -Context $global:context -FileShareName $global:fileShareName -FilePath $_ -Key $sharedAclKey
         }
@@ -1181,9 +1192,10 @@ Describe "Update-AzFileAclOnPremToCloudSid" -Tag "SidMigration" {
         $results = @($output | Where-Object { $_ -is [hashtable] })
         $cacheMessages = @($output | Where-Object { $_ -is [System.Management.Automation.VerboseRecord] })
 
-        $results.Count | Should -Be 3
+        $results.Count | Should -Be 5
         $results.Success | Should -Not -Contain $false
-        @($cacheMessages | Where-Object Message -Like "Found cached ACL key for '*'").Count | Should -Be 0
+        @($cacheMessages | Where-Object Message -Like "Found cached File ACL key for '*'").Count | Should -Be 0
+        @($cacheMessages | Where-Object Message -Like "Found cached Directory ACL key for '*'").Count | Should -Be 0
     }
 
     It "Updates all items in parallel recursive mode" {
