@@ -1155,7 +1155,7 @@ Describe "Update-AzFileAclOnPremToCloudSid" -Tag "SidMigration" {
         }
     }
 
-    It "Stops adding cache entries when the cache memory limit is reached" {
+    It "Stops adding cache entries when the maximum entry count is reached" {
         $directoryName = "sidcachelimit-$(New-RandomString -Length 8)"
         New-Directory -Path $directoryName
         $filePaths = @("$directoryName/file1.txt", "$directoryName/file2.txt")
@@ -1174,7 +1174,7 @@ Describe "Update-AzFileAclOnPremToCloudSid" -Tag "SidMigration" {
             -Path $directoryName `
             -Recursive `
             -Parallel $false `
-            -AclKeyCacheMemoryLimitBytes 0 `
+            -AclKeyCacheMaxEntries 0 `
             -Silent `
             -PassThru `
             -Verbose 4>&1

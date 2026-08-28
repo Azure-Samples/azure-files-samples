@@ -1584,7 +1584,7 @@ function Update-AzFileAclOnPremToCloudSid {
 
         [Parameter(Mandatory = $false, ParameterSetName = "Recursive")]
         [ValidateRange(0, [long]::MaxValue)]
-        [long]$AclKeyCacheMemoryLimitBytes = 104857600,
+        [long]$AclKeyCacheMaxEntries = 100000,
 
         [Parameter(Mandatory = $false, ParameterSetName = "Single")]
         [Parameter(Mandatory = $false, ParameterSetName = "Recursive")]
@@ -1600,11 +1600,7 @@ function Update-AzFileAclOnPremToCloudSid {
         throw "This function is only supported on PowerShell 7+."
     }
 
-    $file = Get-AzStorageFile -Context $Context -ShareName $FileShareName -Path $Path
-    if ($null -eq $file) {
-        throw "The specified path '$Path' does not exist."
-    }
-
+    $file = Get-AzStorageFile -Context $Context -ShareName $FileShareName -Path $Path -ErrorAction Stop
     $client = Get-ClientFromFile $file
     $shareClient = Get-ShareClientFromFileOrDirectoryClient $client
 
@@ -1633,8 +1629,6 @@ function Update-AzFileAclOnPremToCloudSid {
 
         # ACL Key Cache to avoid processing the same ACL multiple times.
         $aclKeyCache = [System.Collections.Concurrent.ConcurrentDictionary[string, string]]::new([System.StringComparer]::OrdinalIgnoreCase)
-        $aclKeyCacheMemoryBytes = [long[]]@(0)
-        $aclKeyCacheLock = [object]::new()
 
         if ($Parallel) {
             $updateAzFileAclOnPremToCloudSidSingle = ${function:Update-AzFileAclOnPremToCloudSidSingle}.ToString()
@@ -1665,9 +1659,7 @@ function Update-AzFileAclOnPremToCloudSid {
                 ${function:Copy-GenericAce} = $using:copyGenericAce
 
                 $aclKeyCache = $using:aclKeyCache
-                $aclKeyCacheMemoryBytes = $using:aclKeyCacheMemoryBytes
-                $aclKeyCacheLock = $using:aclKeyCacheLock
-                $aclKeyCacheMemoryLimitBytes = $using:AclKeyCacheMemoryLimitBytes
+                $aclKeyCacheMaxEntries = $using:AclKeyCacheMaxEntries
                 $success = $true
                 $errorMessage = ""
 
@@ -1691,16 +1683,8 @@ function Update-AzFileAclOnPremToCloudSid {
                             -WhatIf:$using:WhatIfPreference
 
                         if ($null -ne $updatedAclKey) {
-                            $entrySize = [System.Text.Encoding]::Unicode.GetByteCount($currentAclKey + $updatedAclKey)
-                            [System.Threading.Monitor]::Enter($aclKeyCacheLock)
-                            try {
-                                if (($aclKeyCacheMemoryBytes[0] + $entrySize) -le $aclKeyCacheMemoryLimitBytes -and
-                                    $aclKeyCache.TryAdd($currentAclKey, $updatedAclKey)) {
-                                    $aclKeyCacheMemoryBytes[0] += $entrySize
-                                }
-                            }
-                            finally {
-                                [System.Threading.Monitor]::Exit($aclKeyCacheLock)
+                            if ($aclKeyCache.Count -lt $aclKeyCacheMaxEntries) {
+                                $aclKeyCache.TryAdd($currentAclKey, $updatedAclKey) | Out-Null
                             }
                         }
                     }
@@ -1769,10 +1753,8 @@ function Update-AzFileAclOnPremToCloudSid {
                             -WhatIf:$WhatIfPreference
 
                         if ($null -ne $updatedAclKey) {
-                            $entrySize = [System.Text.Encoding]::Unicode.GetByteCount($currentAclKey + $updatedAclKey)
-                            if (($aclKeyCacheMemoryBytes[0] + $entrySize) -le $AclKeyCacheMemoryLimitBytes -and
-                                $aclKeyCache.TryAdd($currentAclKey, $updatedAclKey)) {
-                                $aclKeyCacheMemoryBytes[0] += $entrySize
+                            if ($aclKeyCache.Count -lt $AclKeyCacheMaxEntries) {
+                                $aclKeyCache.TryAdd($currentAclKey, $updatedAclKey) | Out-Null
                             }
                         }
                     }
@@ -1836,7 +1818,7 @@ function Update-AzFileAclOnPremToCloudSidSingle {
 
     $currentSids = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
     foreach ($currentAce in $currentAcl.DiscretionaryAcl) {
-        if ($currentAce -is [System.Security.AccessControl.KnownAce]) {
+        if ($currentAce -is [System.Security.AccessControl.KnownAce] -and $currentAce.SecurityIdentifier.Value.StartsWith("S-1-12-")) {
             $currentSids.Add($currentAce.SecurityIdentifier.Value) | Out-Null
         }
     }
@@ -1860,6 +1842,9 @@ function Update-AzFileAclOnPremToCloudSidSingle {
             $updatedAcl.DiscretionaryAcl.InsertAce($i + 1, $duplicateAce)
 
             Write-Verbose "ACE count: $($updatedAcl.DiscretionaryAcl.Count)"
+        }
+        elseif ($ace -isnot [System.Security.AccessControl.KnownAce]) {
+            Write-Verbose "ACE at index $i is not a KnownAce. Skipping."
         }
     }
 
@@ -1946,7 +1931,7 @@ function Get-CloudSid {
     )
 
     process {
-        Connect-MgGraphIfNeeded -Scopes @("User.ReadBasic.All", "GroupMember.Read.All") -WhatIf:$WhatIfPreference | Out-Null
+        Connect-MgGraphIfNeeded -Scopes @("User.ReadBasic.All", "GroupMember.ReadBasic.All") -WhatIf:$WhatIfPreference | Out-Null
 
         # Get the user by on-prem SID
         Write-Verbose "Getting user by on-prem SID '$OnPremisesSid' in Microsoft Graph"
