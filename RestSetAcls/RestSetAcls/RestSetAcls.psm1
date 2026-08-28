@@ -1548,6 +1548,12 @@ function Update-AzFileAclOnPremToCloudSid {
 #>
     [CmdletBinding(SupportsShouldProcess = $true)]
     [OutputType([System.Security.AccessControl.GenericSecurityDescriptor])]
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseCompatibleCommands',
+        'ForEach-Object/Parallel',
+        Justification = "We are guarding the usage of -Parallel with a PowerShell version check")]
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseCompatibleCommands',
+        'ForEach-Object/ThrottleLimit',
+        Justification = "We are guarding the usage of -ThrottleLimit with a PowerShell version check")]
     param (
         [Parameter(Mandatory = $true, ParameterSetName = "Single")]
         [Parameter(Mandatory = $true, ParameterSetName = "Recursive")]
@@ -1740,7 +1746,6 @@ function Update-AzFileAclOnPremToCloudSid {
                 -SkipFiles:$SkipFiles `
                 -SkipDirectories:$SkipDirectories `
             | ForEach-Object {
-                $fullPath = $_.FullPath
                 $success = $true
                 $errorMessage = ""
 
