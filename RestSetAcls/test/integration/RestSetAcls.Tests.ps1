@@ -1092,6 +1092,7 @@ Describe "Update-AzFileAclOnPremToCloudSid" -Tag "SidMigration" {
         New-File -Path $filePath
 
         $sddl = "O:SYG:SYD:P(A;;0x1200a9;;;$($Config.HybridUser.Sid))(A;;0x100000;;;$($Config.HybridGroup.Sid))S:NO_ACCESS_CONTROL"
+        $expectedSddl = "O:SYG:SYD:P(A;;0x1200a9;;;$($Config.HybridUser.Sid))(A;;0x100000;;;$($Config.HybridGroup.Sid))(A;;0x1200a9;;;$hybridUserCloudSid)(A;;0x100000;;;$hybridGroupCloudSid)S:NO_ACCESS_CONTROL"
         Set-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $filePath -Acl $sddl
 
         $updatedAclKey = Update-AzFileAclOnPremToCloudSid `
@@ -1104,10 +1105,7 @@ Describe "Update-AzFileAclOnPremToCloudSid" -Tag "SidMigration" {
         Get-AzFileAclKey -Context $global:context -FileShareName $global:fileShareName -FilePath $filePath | Should -Be $updatedAclKey
 
         $updatedSddl = Get-AzFileAclFromKey -Key $updatedAclKey -Share $global:share
-        $updatedSddl | Should -Match ([regex]::Escape("(A;;0x1200a9;;;$($Config.HybridUser.Sid))"))
-        $updatedSddl | Should -Match ([regex]::Escape("(A;;0x1200a9;;;$hybridUserCloudSid)"))
-        $updatedSddl | Should -Match ([regex]::Escape("(A;;0x100000;;;$($Config.HybridGroup.Sid))"))
-        $updatedSddl | Should -Match ([regex]::Escape("(A;;0x100000;;;$hybridGroupCloudSid)"))
+        $updatedSddl | Should -Be $expectedSddl
 
         Update-AzFileAclOnPremToCloudSid `
             -Context $global:context `
@@ -1115,8 +1113,7 @@ Describe "Update-AzFileAclOnPremToCloudSid" -Tag "SidMigration" {
             -Path $filePath
 
         $idempotentSddl = Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $filePath -OutputFormat Sddl
-        ([regex]::Matches($idempotentSddl, [regex]::Escape($hybridUserCloudSid))).Count | Should -Be 1
-        ([regex]::Matches($idempotentSddl, [regex]::Escape($hybridGroupCloudSid))).Count | Should -Be 1
+        $idempotentSddl | Should -Be $updatedSddl
     }
 
     It "Reuses file and directory ACL keys from separate caches in sequential recursive mode" {
@@ -1128,6 +1125,7 @@ Describe "Update-AzFileAclOnPremToCloudSid" -Tag "SidMigration" {
         $filePaths | ForEach-Object { New-File -Path $_ }
 
         $sddl = "O:SYG:SYD:P(A;;0x1200a9;;;$($Config.HybridUser.Sid))S:NO_ACCESS_CONTROL"
+        $expectedSddl = "O:SYG:SYD:P(A;;0x1200a9;;;$($Config.HybridUser.Sid))(A;;0x1200a9;;;$hybridUserCloudSid)S:NO_ACCESS_CONTROL"
         $sharedAclKey = New-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -Acl $sddl
         Set-AzFileAclKey -Context $global:context -FileShareName $global:fileShareName -FilePath $directoryName -Key $sharedAclKey
         $directoryPaths | ForEach-Object {
@@ -1149,15 +1147,27 @@ Describe "Update-AzFileAclOnPremToCloudSid" -Tag "SidMigration" {
         $results = @($output | Where-Object { $_ -is [hashtable] })
         $cacheMessages = @($output | Where-Object { $_ -is [System.Management.Automation.VerboseRecord] })
 
+        $expectedFullPaths = @(
+            "$directoryName/"
+            "$directoryName/directory1/"
+            "$directoryName/directory2/"
+            "$directoryName/file1.txt"
+            "$directoryName/file2.txt"
+        )
         $results.Count | Should -Be 5
+        Compare-Object $expectedFullPaths $results.FullPath | Should -BeNullOrEmpty
         $results.Success | Should -Not -Contain $false
         ($results.AclKey | Select-Object -Unique).Count | Should -Be 1
         @($cacheMessages | Where-Object Message -Like "Found cached File ACL key for '*'").Count | Should -Be 1
         @($cacheMessages | Where-Object Message -Like "Found cached Directory ACL key for '*'").Count | Should -Be 2
 
         foreach ($result in $results) {
+            $filePath = $result.FullPath.TrimEnd([char]'/')
+            $currentAclKey = Get-AzFileAclKey -Context $global:context -FileShareName $global:fileShareName -FilePath $filePath
+            $currentAclKey | Should -Be $result.AclKey
+
             $updatedSddl = Get-AzFileAclFromKey -Key $result.AclKey -Share $global:share
-            $updatedSddl | Should -Match ([regex]::Escape($hybridUserCloudSid))
+            $updatedSddl | Should -Be $expectedSddl
         }
     }
 
@@ -1170,6 +1180,7 @@ Describe "Update-AzFileAclOnPremToCloudSid" -Tag "SidMigration" {
         $filePaths | ForEach-Object { New-File -Path $_ }
 
         $sddl = "O:SYG:SYD:P(A;;0x1200a9;;;$($Config.HybridUser.Sid))S:NO_ACCESS_CONTROL"
+        $expectedSddl = "O:SYG:SYD:P(A;;0x1200a9;;;$($Config.HybridUser.Sid))(A;;0x1200a9;;;$hybridUserCloudSid)S:NO_ACCESS_CONTROL"
         $sharedAclKey = New-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -Acl $sddl
         Set-AzFileAclKey -Context $global:context -FileShareName $global:fileShareName -FilePath $directoryName -Key $sharedAclKey
         $directoryPaths | ForEach-Object {
@@ -1192,10 +1203,27 @@ Describe "Update-AzFileAclOnPremToCloudSid" -Tag "SidMigration" {
         $results = @($output | Where-Object { $_ -is [hashtable] })
         $cacheMessages = @($output | Where-Object { $_ -is [System.Management.Automation.VerboseRecord] })
 
+        $expectedFullPaths = @(
+            "$directoryName/"
+            "$directoryName/directory1/"
+            "$directoryName/directory2/"
+            "$directoryName/file1.txt"
+            "$directoryName/file2.txt"
+        )
         $results.Count | Should -Be 5
+        Compare-Object $expectedFullPaths $results.FullPath | Should -BeNullOrEmpty
         $results.Success | Should -Not -Contain $false
         @($cacheMessages | Where-Object Message -Like "Found cached File ACL key for '*'").Count | Should -Be 0
         @($cacheMessages | Where-Object Message -Like "Found cached Directory ACL key for '*'").Count | Should -Be 0
+
+        foreach ($result in $results) {
+            $filePath = $result.FullPath.TrimEnd([char]'/')
+            $currentAclKey = Get-AzFileAclKey -Context $global:context -FileShareName $global:fileShareName -FilePath $filePath
+            $currentAclKey | Should -Be $result.AclKey
+
+            $updatedSddl = Get-AzFileAclFromKey -Key $result.AclKey -Share $global:share
+            $updatedSddl | Should -Be $expectedSddl
+        }
     }
 
     It "Updates all items in parallel recursive mode" {
@@ -1204,7 +1232,9 @@ Describe "Update-AzFileAclOnPremToCloudSid" -Tag "SidMigration" {
         New-File -Path "$directoryName/file1.txt"
         New-File -Path "$directoryName/file2.txt"
 
-        $sddl = "O:SYG:SYD:P(A;;0x1200a9;;;$($Config.HybridUser.Sid))S:NO_ACCESS_CONTROL"
+        $sddl = "O:SYG:SYD:P(A;OICI;0x1200a9;;;$($Config.HybridUser.Sid))S:NO_ACCESS_CONTROL"
+        $expectedDirectorySddl = "O:SYG:SYD:P(A;OICI;0x1200a9;;;$($Config.HybridUser.Sid))(A;OICI;0x1200a9;;;$hybridUserCloudSid)S:NO_ACCESS_CONTROL"
+        $expectedFileSddl = "O:SYG:SYD:P(A;;0x1200a9;;;$($Config.HybridUser.Sid))(A;;0x1200a9;;;$hybridUserCloudSid)S:NO_ACCESS_CONTROL"
         Set-AzFileAclRecursive `
             -Context $global:context `
             -FileShareName $global:fileShareName `
@@ -1221,11 +1251,22 @@ Describe "Update-AzFileAclOnPremToCloudSid" -Tag "SidMigration" {
             -Silent `
             -PassThru
 
+        $expectedFullPaths = @(
+            "$directoryName/"
+            "$directoryName/file1.txt"
+            "$directoryName/file2.txt"
+        )
         $results.Count | Should -Be 3
+        Compare-Object $expectedFullPaths $results.FullPath | Should -BeNullOrEmpty
         $results.Success | Should -Not -Contain $false
         foreach ($result in $results) {
+            $filePath = $result.FullPath.TrimEnd([char]'/')
+            $currentAclKey = Get-AzFileAclKey -Context $global:context -FileShareName $global:fileShareName -FilePath $filePath
+            $currentAclKey | Should -Be $result.AclKey
+
             $updatedSddl = Get-AzFileAclFromKey -Key $result.AclKey -Share $global:share
-            $updatedSddl | Should -Match ([regex]::Escape($hybridUserCloudSid))
+            $expectedSddl = if ($result.FullPath.EndsWith('/')) { $expectedDirectorySddl } else { $expectedFileSddl }
+            $updatedSddl | Should -Be $expectedSddl
         }
     }
 }
