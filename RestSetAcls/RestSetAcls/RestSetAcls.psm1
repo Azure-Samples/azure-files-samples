@@ -1478,8 +1478,8 @@ function Update-AzFileAclOnPremToCloudSid {
 
     .DESCRIPTION
     Updates the ACL of a file or directory by finding on-premises SIDs and adding equivalent access control entries
-    for their mapped cloud SIDs. Existing access control entries are preserved, and a cloud SID is not added when it
-    is already present in the ACL.
+    for their mapped cloud SIDs. Existing access control entries are preserved, and if cloud SID entries already exist
+    they are merged and normalized, keeping the most permissive access control entries.
 
     In recursive mode, the command processes the specified path and its descendants. ACL key mappings are cached so
     that files and directories sharing an ACL can reuse the previously updated ACL key. Requires PowerShell 7 or
