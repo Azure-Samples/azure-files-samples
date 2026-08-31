@@ -105,6 +105,7 @@
         "Get-AzFileAcl",
         "Set-AzFileOwner",
         "Restore-AzFileAclInheritance",
+        "Update-AzFileAclOnPremToCloudSid",
         "Add-AzFileAce"
     )
 

@@ -1471,6 +1471,451 @@ function Restore-AzFileAclInheritanceRecursive {
     }
 }
 
+function Update-AzFileAclOnPremToCloudSid {
+<#
+    .SYNOPSIS
+    Adds cloud SID access control entries for on-premises SIDs in Azure Files ACLs.
+
+    .DESCRIPTION
+    Updates the ACL of a file or directory by finding on-premises SIDs and adding equivalent access control entries
+    for their mapped cloud SIDs. Existing access control entries are preserved, and if cloud SID entries already exist
+    they are merged and normalized, keeping the most permissive access control entries.
+
+    In recursive mode, the command processes the specified path and its descendants. ACL key mappings are cached so
+    that files and directories sharing an ACL can reuse the previously updated ACL key. Requires PowerShell 7 or
+    later.
+
+    .PARAMETER Context
+    Specifies the Azure storage context. This is required to authenticate and interact with the Azure storage account.
+
+    .PARAMETER FileShareName
+    Specifies the name of the Azure file share containing the files or directories.
+
+    .PARAMETER Recursive
+    Enables recursive mode, updating the specified path and its descendants.
+
+    .PARAMETER Path
+    Specifies the file or directory to update. In recursive mode, specifies the root directory.
+
+    .PARAMETER Parallel
+    Specifies whether recursive processing runs in parallel. The default is true. Set this parameter to false to
+    process items sequentially.
+
+    .PARAMETER ThrottleLimit
+    Specifies the maximum number of concurrent operations in parallel recursive mode. The default is 10.
+
+    .PARAMETER SkipFiles
+    Excludes files from recursive processing.
+
+    .PARAMETER SkipDirectories
+    Excludes directories from recursive processing.
+
+    .PARAMETER Silent
+    If specified, the commandlet will not output any progress or status messages. This is useful for scripting
+    scenarios where you want to suppress output.
+
+    .PARAMETER PassThru
+    If specified, the cmdlet will output the objects processed, including their paths and success status.
+
+    .PARAMETER AclKeyCacheMemoryLimitBytes
+    Specifies the maximum approximate memory, in bytes, used for cached ACL key strings in recursive mode. The
+    default is 104857600 bytes (100 MB). Once the limit is reached, existing entries continue to be used but new
+    entries are not added. Set this parameter to 0 to disable adding cache entries.
+
+    .OUTPUTS
+    System.String
+    In single mode with PassThru, returns the updated ACL key.
+
+    System.Collections.Hashtable
+    In recursive mode with PassThru, returns a result for each processed item containing its path, updated ACL key,
+    success status, error message, and processing time.
+
+    .EXAMPLE
+    PS> Update-AzFileAclOnPremToCloudSid -Context $context -FileShareName "myshare" -Path "folder/file.txt" -PassThru
+
+    Adds cloud SID entries to the ACL of folder/file.txt and returns its updated ACL key.
+
+    .EXAMPLE
+    PS> Update-AzFileAclOnPremToCloudSid -Context $context -FileShareName "myshare" -Path "folder" -Recursive -ThrottleLimit 20 -PassThru
+
+    Updates the ACLs of the folder and its descendants in parallel, using up to 20 concurrent operations.
+
+    .EXAMPLE
+    PS> Update-AzFileAclOnPremToCloudSid -Context $context -FileShareName "myshare" -Path "folder" -Recursive -Parallel $false -SkipDirectories -Silent
+
+    Sequentially updates files under the folder without processing directories or displaying progress messages.
+
+#>
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    [OutputType([System.Security.AccessControl.GenericSecurityDescriptor])]
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseCompatibleCommands',
+        'ForEach-Object/Parallel',
+        Justification = "We are guarding the usage of -Parallel with a PowerShell version check")]
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseCompatibleCommands',
+        'ForEach-Object/ThrottleLimit',
+        Justification = "We are guarding the usage of -ThrottleLimit with a PowerShell version check")]
+    param (
+        [Parameter(Mandatory = $true, ParameterSetName = "Single")]
+        [Parameter(Mandatory = $true, ParameterSetName = "Recursive")]
+        [Microsoft.Azure.Commands.Common.Authentication.Abstractions.IStorageContext]$Context,
+
+        [Parameter(Mandatory = $true, ParameterSetName = "Single")]
+        [Parameter(Mandatory = $true, ParameterSetName = "Recursive")]
+        [string]$FileShareName,
+
+        [Parameter(Mandatory = $true, ParameterSetName = "Single")]
+        [Parameter(Mandatory = $true, ParameterSetName = "Recursive")]
+        [string]$Path,
+
+        [Parameter(Mandatory = $true, ParameterSetName = "Recursive")]
+        [switch]$Recursive,
+
+        [Parameter(Mandatory = $false, ParameterSetName = "Recursive")]
+        [bool]$Parallel = $true,
+
+        [Parameter(Mandatory = $false,  ParameterSetName = "Recursive")]
+        [int]$ThrottleLimit = 10,
+
+        [Parameter(Mandatory = $false,  ParameterSetName = "Recursive")]
+        [switch]$SkipFiles = $false,
+
+        [Parameter(Mandatory = $false,  ParameterSetName = "Recursive")]
+        [switch]$SkipDirectories = $false,
+
+        [Parameter(Mandatory = $false, ParameterSetName = "Recursive")]
+        [ValidateRange(0, [long]::MaxValue)]
+        [long]$AclKeyCacheMaxEntries = 100000,
+
+        [Parameter(Mandatory = $false, ParameterSetName = "Single")]
+        [Parameter(Mandatory = $false, ParameterSetName = "Recursive")]
+        [switch]$Silent = $false,
+
+        [Parameter(Mandatory = $false, ParameterSetName = "Single")]
+        [Parameter(Mandatory = $false, ParameterSetName = "Recursive")]
+        [switch]$PassThru = $false
+    )
+
+    # Check PowerShell version for -Parallel support
+    if ($PSVersionTable.PSVersion.Major -lt 7) {
+        throw "This function is only supported on PowerShell 7+."
+    }
+
+    $file = Get-AzStorageFile -Context $Context -ShareName $FileShareName -Path $Path -ErrorAction Stop
+    $client = Get-ClientFromFile $file
+    $shareClient = Get-ShareClientFromFileOrDirectoryClient $client
+
+    if ($PSCmdlet.ParameterSetName -eq "Single") {
+        $currentAclKey = Get-AzFileAclKey -Client $client
+        $updatedAclKey = Update-AzFileAclOnPremToCloudSidSingle `
+            -ShareClient $shareClient `
+            -FileOrDirectoryClient $client `
+            -CurrentAclKey $currentAclKey `
+            -WhatIf:$WhatIfPreference
+
+        if ($PassThru) {
+            return $updatedAclKey
+        }
+    }
+    elseif ($PSCmdlet.ParameterSetName -eq "Recursive" -and $Recursive) {
+        if ($SkipFiles -and $SkipDirectories) {
+            Write-Warning "Both -SkipFiles and -SkipDirectories are set. Nothing to do."
+            return
+        }
+
+        $startTime = Get-Date
+        $processedCount = 0
+        $errors = @{}
+        $ProgressPreference = "SilentlyContinue"
+
+        # ACL Key Cache to avoid processing the same ACL multiple times.
+        $aclKeyFileCache = [System.Collections.Concurrent.ConcurrentDictionary[string, string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+        $aclKeyDirectoryCache = [System.Collections.Concurrent.ConcurrentDictionary[string, string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+
+        if ($Parallel) {
+            $updateAzFileAclOnPremToCloudSidSingle = ${function:Update-AzFileAclOnPremToCloudSidSingle}.ToString()
+            $setAzFileAcl = ${function:Set-AzFileAcl}.ToString()
+            $setAzFileAclKey = ${function:Set-AzFileAclKey}.ToString()
+            $getIsDirectoryClient = ${function:Get-IsDirectoryClient}.ToString()
+            $getFileClientFromFile = ${function:Get-ClientFromFile}.ToString()
+            $getCloudSid = ${function:Get-CloudSid}.ToString()
+            $connectMgGraphIfNeeded = ${function:Connect-MgGraphIfNeeded}.ToString()
+            $copyRawSecurityDescriptor = ${function:Copy-RawSecurityDescriptor}.ToString()
+            $copyGenericAce = ${function:Copy-GenericAce}.ToString()
+
+            Get-AzureFilesRecursive `
+                -Context $Context `
+                -DirectoryContents @($file) `
+                -SkipFiles:$SkipFiles `
+                -SkipDirectories:$SkipDirectories `
+            | ForEach-Object -ThrottleLimit $ThrottleLimit -Parallel {
+                # Set the ACL
+                ${function:Update-AzFileAclOnPremToCloudSidSingle} = $using:updateAzFileAclOnPremToCloudSidSingle
+                ${function:Set-AzFileAcl} = $using:setAzFileAcl
+                ${function:Set-AzFileAclKey} = $using:setAzFileAclKey
+                ${function:Get-IsDirectoryClient} = $using:getIsDirectoryClient
+                ${function:Get-ClientFromFile} = $using:getFileClientFromFile
+                ${function:Get-CloudSid} = $using:getCloudSid
+                ${function:Connect-MgGraphIfNeeded} = $using:connectMgGraphIfNeeded
+                ${function:Copy-RawSecurityDescriptor} = $using:copyRawSecurityDescriptor
+                ${function:Copy-GenericAce} = $using:copyGenericAce
+
+                $aclKeyDirectoryCache = $using:aclKeyDirectoryCache
+                $aclKeyFileCache = $using:aclKeyFileCache
+                $aclKeyCacheMaxEntries = $using:AclKeyCacheMaxEntries
+                $success = $true
+                $errorMessage = ""
+
+                try {
+                    $client = Get-ClientFromFile $_.File
+                    $isDirectory = Get-IsDirectoryClient $client
+                    $currentAclKey = Get-AzFileAclKey -Client $client
+                    $cachedAclKey = $null
+                    if ($isDirectory -and $aclKeyDirectoryCache.TryGetValue($currentAclKey, [ref]$cachedAclKey)) {
+                        Write-Verbose "Found cached Directory ACL key for '$currentAclKey': '$cachedAclKey'"
+
+                        $updatedAclKey = Set-AzFileAclKey `
+                            -Client $client `
+                            -Key $cachedAclKey `
+                            -WhatIf:$using:WhatIfPreference
+                    }
+                    elseif (-not $isDirectory -and $aclKeyFileCache.TryGetValue($currentAclKey, [ref]$cachedAclKey)) {
+                        Write-Verbose "Found cached File ACL key for '$currentAclKey': '$cachedAclKey'"
+
+                        $updatedAclKey = Set-AzFileAclKey `
+                            -Client $client `
+                            -Key $cachedAclKey `
+                            -WhatIf:$using:WhatIfPreference
+                    }
+                    else {
+                        $updatedAclKey = Update-AzFileAclOnPremToCloudSidSingle `
+                            -ShareClient $using:shareClient `
+                            -FileOrDirectoryClient $client `
+                            -CurrentAclKey $currentAclKey `
+                            -WhatIf:$using:WhatIfPreference
+
+                        if ($null -ne $updatedAclKey) {
+                            if ($isDirectory) {
+                                if ($aclKeyDirectoryCache.Count -lt $aclKeyCacheMaxEntries) {
+                                    $aclKeyDirectoryCache.TryAdd($currentAclKey, $updatedAclKey) | Out-Null
+                                }
+                            }
+                            else {
+                                if ($aclKeyFileCache.Count -lt $aclKeyCacheMaxEntries) {
+                                    $aclKeyFileCache.TryAdd($currentAclKey, $updatedAclKey) | Out-Null
+                                }
+                            }
+                        }
+                    }
+                }
+                catch {
+                    $success = $false
+                    $errorMessage = $_.Exception.Message
+                }
+
+                # Write full output if requested, otherwise write minimal output
+                if ($using:PassThru) {
+                    Write-Output @{
+                        Time         = (Get-Date).ToString("o")
+                        FullPath     = $_.FullPath
+                        AclKey       = $updatedAclKey
+                        Success      = $success
+                        ErrorMessage = $errorMessage
+                    }
+                }
+                else {
+                    Write-Output @{
+                        FullPath     = $_.FullPath
+                        Success      = $success
+                        ErrorMessage = $errorMessage
+                    }
+                }
+            } `
+            | ForEach-Object {
+                # Can't write in the parallel block, so we write here
+                if (-not $_.Success) {
+                    $errors[$_.FullPath] = $_.ErrorMessage
+                }
+                $processedCount++
+                Write-Output $_
+            } `
+            | Write-LiveFilesAndFoldersProcessingStatus -RefreshRateHertz 10 -StartTime $startTime -Silent:$Silent `
+            | ForEach-Object { if ($PassThru) { Write-Output $_ } }
+        }
+        else {
+            Get-AzureFilesRecursive `
+                -Context $Context `
+                -DirectoryContents @($file) `
+                -SkipFiles:$SkipFiles `
+                -SkipDirectories:$SkipDirectories `
+            | ForEach-Object {
+                $success = $true
+                $errorMessage = ""
+
+                try {
+                    $client = Get-ClientFromFile $_.File
+                    $isDirectory = Get-IsDirectoryClient $client
+                    $currentAclKey = Get-AzFileAclKey -Client $client
+                    $cachedAclKey = $null
+                    if ($isDirectory -and $aclKeyDirectoryCache.TryGetValue($currentAclKey, [ref]$cachedAclKey)) {
+                        Write-Verbose "Found cached Directory ACL key for '$currentAclKey': '$cachedAclKey'"
+
+                        $updatedAclKey = Set-AzFileAclKey `
+                            -Client $client `
+                            -Key $cachedAclKey `
+                            -WhatIf:$WhatIfPreference
+                    }
+                    elseif (-not $isDirectory -and $aclKeyFileCache.TryGetValue($currentAclKey, [ref]$cachedAclKey)) {
+                        Write-Verbose "Found cached File ACL key for '$currentAclKey': '$cachedAclKey'"
+
+                        $updatedAclKey = Set-AzFileAclKey `
+                            -Client $client `
+                            -Key $cachedAclKey `
+                            -WhatIf:$WhatIfPreference
+                    }
+                    else {
+                        $updatedAclKey = Update-AzFileAclOnPremToCloudSidSingle `
+                            -ShareClient $shareClient `
+                            -FileOrDirectoryClient $client `
+                            -CurrentAclKey $currentAclKey `
+                            -WhatIf:$WhatIfPreference
+
+                        if ($null -ne $updatedAclKey) {
+                            if ($isDirectory) {
+                                if ($aclKeyDirectoryCache.Count -lt $AclKeyCacheMaxEntries) {
+                                    $aclKeyDirectoryCache.TryAdd($currentAclKey, $updatedAclKey) | Out-Null
+                                }
+                            }
+                            else {
+                                if ($aclKeyFileCache.Count -lt $AclKeyCacheMaxEntries) {
+                                    $aclKeyFileCache.TryAdd($currentAclKey, $updatedAclKey) | Out-Null
+                                }
+                            }
+                        }
+                    }
+                }
+                catch {
+                    $success = $false
+                    $errorMessage = $_.Exception.Message
+                }
+
+                # Write full output if requested, otherwise write minimal output
+                if ($PassThru) {
+                    Write-Output @{
+                        Time         = (Get-Date).ToString("o")
+                        FullPath     = $_.FullPath
+                        AclKey       = $updatedAclKey
+                        Success      = $success
+                        ErrorMessage = $errorMessage
+                    }
+                }
+                else {
+                    Write-Output @{
+                        FullPath     = $_.FullPath
+                        Success      = $success
+                        ErrorMessage = $errorMessage
+                    }
+                }
+            } `
+            | Write-LiveFilesAndFoldersProcessingStatus -RefreshRateHertz 10 -StartTime $startTime -Silent:$Silent `
+            | ForEach-Object { if ($PassThru) { Write-Output $_ } }
+        }
+
+        $ProgressPreference = "Continue"
+
+        if (-not $Silent) {
+            $totalTime = (Get-Date) - $startTime
+            Write-Host "`r" -NoNewline # Clear the line from the live progress reporting
+            Write-Host "Cached $($aclKeyDirectoryCache.Count) directory ACL keys and $($aclKeyFileCache.Count) file ACL keys."
+            Write-FinalFilesAndFoldersProcessed -ProcessedCount $processedCount -Errors $errors -TotalTime $totalTime
+        }
+
+    }
+}
+
+function Update-AzFileAclOnPremToCloudSidSingle {
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    [OutputType([string])]
+    param (
+        [Parameter(Mandatory = $true)]
+        [Azure.Storage.Files.Shares.ShareClient]$ShareClient,
+
+        [Parameter(Mandatory = $true)]
+        [object]$FileOrDirectoryClient,
+
+        [Parameter(Mandatory = $true)]
+        [string]$CurrentAclKey
+    )
+
+    # It is responsibility of the caller to ensure $CurrentAclKey is the current ACL for the file represented by $FileOrDirectoryClient
+    $currentAcl = Get-AzFileAclFromKey -Key $CurrentAclKey -ShareClient $ShareClient -OutputFormat Raw
+
+    $updatedAcl = Copy-RawSecurityDescriptor -SecurityDescriptor $currentAcl
+
+    # Iterate from last to first and Insert new ACEs right after the current ACE to preserve order.
+    for ($i = $currentAcl.DiscretionaryAcl.Count - 1; $i -ge 0; $i--) {
+        $ace = $currentAcl.DiscretionaryAcl[$i]
+        if ($ace -is [System.Security.AccessControl.KnownAce] -and $ace.SecurityIdentifier.Value.StartsWith("S-1-5-21-")) {
+            $cloudSid = Get-CloudSid -OnPremisesSid $ace.SecurityIdentifier.Value -Verbose:$VerbosePreference -WhatIf:$WhatIfPreference -ErrorAction SilentlyContinue
+            if ($null -eq $cloudSid) {
+                Write-Verbose "No cloud SID found for on-premises SID '$($ace.SecurityIdentifier.Value)'. Skipping."
+                continue
+            }
+
+            $duplicateAce = Copy-GenericAce -Ace $ace
+            $duplicateAce.SecurityIdentifier = $cloudSid
+            $updatedAcl.DiscretionaryAcl.InsertAce($i + 1, $duplicateAce)
+
+            Write-Verbose "ACE count: $($updatedAcl.DiscretionaryAcl.Count)"
+        }
+        elseif ($ace -isnot [System.Security.AccessControl.KnownAce]) {
+            Write-Verbose "ACE at index $i is not a KnownAce. Skipping."
+        }
+    }
+
+    # Normalize Security Descriptor
+    if (Get-IsDirectoryClient -Client $FileOrDirectoryClient) {
+        $updatedAcl = $updatedAcl | Convert-SecurityDescriptor -From Raw -To FolderAcl | Convert-SecurityDescriptor -From FolderAcl -To Raw
+    }
+    else {
+        $updatedAcl = $updatedAcl | Convert-SecurityDescriptor -From Raw -To FileAcl | Convert-SecurityDescriptor -From FileAcl -To Raw
+    }
+
+    # Update the ACL on the file or directory
+    if ($PSCmdlet.ShouldProcess($FileOrDirectoryClient.Path, "Set ACL with updated cloud SIDs")) {
+        return Set-AzFileAcl -Client $FileOrDirectoryClient -Acl $updatedAcl -AclFormat Raw -WhatIf:$WhatIfPreference
+    }
+}
+
+function Copy-RawSecurityDescriptor {
+    [CmdletBinding()]
+    [OutputType([System.Security.AccessControl.RawSecurityDescriptor])]
+    param (
+        [Parameter(Mandatory = $true)]
+        [System.Security.AccessControl.RawSecurityDescriptor]$SecurityDescriptor
+    )
+
+    process {
+        $bytes = New-Object byte[] $SecurityDescriptor.BinaryLength
+        $SecurityDescriptor.GetBinaryForm($bytes, 0)
+        return [System.Security.AccessControl.RawSecurityDescriptor]::new($bytes, 0)
+    }
+}
+
+function Copy-GenericAce {
+    [CmdletBinding()]
+    [OutputType([System.Security.AccessControl.GenericAce])]
+    param (
+        [Parameter(Mandatory = $true)]
+        [System.Security.AccessControl.GenericAce]$Ace
+    )
+
+    process {
+        $bytes = New-Object byte[] $Ace.BinaryLength
+        $Ace.GetBinaryForm($bytes, 0)
+        return [System.Security.AccessControl.GenericAce]::CreateFromBinaryForm($bytes, 0)
+    }
+}
+
 function Connect-MgGraphIfNeeded {
     [CmdletBinding(SupportsShouldProcess = $true)]
     param (
@@ -1506,6 +1951,49 @@ function Connect-MgGraphIfNeeded {
     }
     else {
         Write-Verbose "Already connected to Microsoft Graph, tenant $($context.TenantId), with scopes $($currentScopes -join ",")"
+    }
+}
+
+function Get-CloudSid {
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    [OutputType([System.Security.Principal.SecurityIdentifier])]
+    param (
+        [Parameter(Mandatory = $true)]
+        [string]$OnPremisesSid
+    )
+
+    process {
+        Connect-MgGraphIfNeeded -Scopes @("User.ReadBasic.All", "GroupMember.ReadBasic.All") -WhatIf:$WhatIfPreference | Out-Null
+
+        # Get the user by on-prem SID
+        Write-Verbose "Getting user by on-prem SID '$OnPremisesSid' in Microsoft Graph"
+        $user = Get-MgUser -Filter "OnPremisesSecurityIdentifier eq '$OnPremisesSid'" -Property "OnPremisesSecurityIdentifier","SecurityIdentifier" -ErrorAction Stop
+
+        if ($user) {
+            if ($user.SecurityIdentifier) {
+                Write-Verbose "Hybrid user found with On-Prem SID '$($user.OnPremisesSecurityIdentifier)' and Cloud SID '$($user.SecurityIdentifier)'"
+                return [System.Security.Principal.SecurityIdentifier]::new($user.SecurityIdentifier)
+            }
+            else {
+                throw "User with on-prem SID '$OnPremisesSid' was found, but it did not have a cloud SID."
+            }
+        }
+
+        # If no user was found, try to get the group by on-prem SID
+        Write-Verbose "Getting group by on-prem SID '$OnPremisesSid' in Microsoft Graph"
+        $group = Get-MgGroup -Filter "OnPremisesSecurityIdentifier eq '$OnPremisesSid'" -Property "OnPremisesSecurityIdentifier","SecurityIdentifier" -ErrorAction Stop
+        if ($group) {
+            if ($group.SecurityIdentifier) {
+                Write-Verbose "Hybrid group found with On-Prem SID '$($group.OnPremisesSecurityIdentifier)' and Cloud SID '$($group.SecurityIdentifier)'"
+                return [System.Security.Principal.SecurityIdentifier]::new($group.SecurityIdentifier)
+            }
+            else {
+                throw "Group with on-prem SID '$OnPremisesSid' was found, but it did not have a cloud SID."
+            }
+        }
+        else {
+            throw "No user or group found with on-prem SID '$OnPremisesSid'"
+        }
     }
 }
 
