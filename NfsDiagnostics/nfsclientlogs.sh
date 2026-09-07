@@ -9,10 +9,19 @@ NFS_PORT=2049
 TRACE_NFSBPF_ABS_PATH="$(cd "$(dirname "trace-nfsbpf")" && pwd)/$(basename "trace-nfsbpf")"
 PYTHON_PROG='python'
 
+DEFAULT_TRACE_EVENTS_CSV="nfs,nfs4"
+
 # Ring buffer defaults (override via env before invoking)
 TCPDUMP_ROTATE_FILE_SIZE_MB=${TCPDUMP_ROTATE_FILE_SIZE_MB:-100}
 TCPDUMP_ROTATE_FILE_COUNT=${TCPDUMP_ROTATE_FILE_COUNT:-10}
 TCPDUMP_SNAPLEN=${TCPDUMP_SNAPLEN:-1024}
+
+# Additional port range to capture (override via env before invoking)
+TCPDUMP_EXTRA_PORTRANGE=${TCPDUMP_EXTRA_PORTRANGE:-20049-20099}
+
+AZNFS_STUNNEL_SHARE_DIR="/etc/stunnel/microsoft/aznfs/nfsv4_fileShare"
+AZNFS_DATA_DIR="/opt/microsoft/aznfs/data"
+AZNFS_PROXY_SERVICE="azurefile-proxy.service"
 
 am_i_root() {
     local euid=$(id -u)
@@ -39,7 +48,7 @@ main() {
   then
     stop
   else
-    echo "Usage: ./nfsclientlogs.sh <v3b | v4> <start | stop> <CaptureNetwork> <OnAnomaly> <VerboseLogs>"
+    echo "Usage: ./nfsclientlogs.sh <v3b | v4> <start | stop> <CaptureNetwork> <OnAnomaly> <VerboseLogs> [TraceEvents=<comma-separated trace events>]"
     exit 1
   fi
 
@@ -86,6 +95,11 @@ init() {
     chown tcpdump:tcpdump "$DIRNAME" 2>/dev/null || true
     chmod 750 "$DIRNAME" 2>/dev/null || true
   fi
+
+  # Capture existing kernel logs before starting the capture window
+  echo "======= dmesg at start =======" > "${DIRNAME}/nfs_dmesg"
+  dmesg -T >> "${DIRNAME}/nfs_dmesg" 2>&1 || true
+  dmesg -Tc > /dev/null
 }
 
 check_utils() {
@@ -138,6 +152,28 @@ validate_tcpdump_rotation() {
   return 0
 }
 
+# Validate extra port range (expected like 20049-20099)
+validate_tcpdump_portrange() {
+  [ -z "${TCPDUMP_EXTRA_PORTRANGE}" ] && return 0
+
+  case "${TCPDUMP_EXTRA_PORTRANGE}" in
+    *-*) ;;
+    *) return 1 ;;
+  esac
+
+  local start_port="${TCPDUMP_EXTRA_PORTRANGE%%-*}"
+  local end_port="${TCPDUMP_EXTRA_PORTRANGE##*-}"
+
+  case "${start_port}" in ''|*[!0-9]*) return 1;; esac
+  case "${end_port}" in ''|*[!0-9]*) return 1;; esac
+
+  if [ "${start_port}" -gt "${end_port}" ]; then
+    return 1
+  fi
+
+  return 0
+}
+
 start_trace() {
   # Enable rpcdebug only if explicitly requested via "VerboseLogs" argument
   if [[ "$*" =~ "VerboseLogs" ]]; then
@@ -148,7 +184,28 @@ start_trace() {
   else
     rm -f "${RPCDEBUG_STATEFILE}"
   fi
-  trace-cmd start -e nfs -e nfs4
+
+  # Trace events default to nfs,nfs4 but can be overridden via TraceEvents=<csv>
+  local trace_events_csv="${DEFAULT_TRACE_EVENTS_CSV}"
+  local arg
+  for arg in "$@"; do
+    case "$arg" in
+      TraceEvents=*) trace_events_csv="${arg#TraceEvents=}" ;;
+    esac
+  done
+
+  local -a trace_args=(start)
+  local -a specs
+  IFS=',' read -r -a specs <<< "$trace_events_csv"
+
+  local spec
+  for spec in "${specs[@]}"; do
+    spec="${spec//[[:space:]]/}"
+    [ -z "$spec" ] && continue
+    trace_args+=( -e "$spec" )
+  done
+
+  trace-cmd "${trace_args[@]}"
 }
 
 dump_os_information() {
@@ -173,8 +230,9 @@ dump_debug_stats() {
   mount -t nfs4 >> nfs_diag.txt
   echo -e "\n======= NFS TCP Connections =======" >> nfs_diag.txt
   ss -t | grep nfs >> nfs_diag.txt
-  echo -e "\n======= List of processes in system =======" >> nfs_diag.txt
-  ps -ef >> nfs_diag.txt
+  echo -e "\n======= Process state snapshot (STAT/ETIME/WCHAN) =======" >> nfs_diag.txt
+  echo "PID PPID USER STAT ETIME %CPU %MEM WCHAN CMD" >> nfs_diag.txt
+  ps --cols 2000 -eo pid,ppid,user,stat,etime,pcpu,pmem,wchan:32,cmd --sort=-etime >> nfs_diag.txt
 }
 
 dump_process_callstacks() {
@@ -192,15 +250,57 @@ dump_process_callstacks() {
 }
 
 capture_network() {
+  local -a tcpdump_iface=()
+  local -a tcpdump_filter=( "(" port "${NFS_PORT}" ")" )
+
+  # aznfs proxies NFS over loopback stunnel ports, so widen capture only then
+  if is_aznfs_present; then
+    tcpdump_iface=( -i any )
+    if validate_tcpdump_portrange; then
+      [ -n "${TCPDUMP_EXTRA_PORTRANGE}" ] && tcpdump_filter+=( or "(" portrange "${TCPDUMP_EXTRA_PORTRANGE}" ")" )
+    else
+      echo "Warning: ignoring invalid TCPDUMP_EXTRA_PORTRANGE=${TCPDUMP_EXTRA_PORTRANGE} (expected like 20049-20099)" >&2
+    fi
+  fi
+
   if validate_tcpdump_rotation; then
     local total=$((TCPDUMP_ROTATE_FILE_SIZE_MB * TCPDUMP_ROTATE_FILE_COUNT))
     echo "Starting circular tcpdump in ${DIRNAME} (${TCPDUMP_ROTATE_FILE_COUNT} files x ${TCPDUMP_ROTATE_FILE_SIZE_MB}MB ~= ${total}MB max)" >&2
-    nohup tcpdump -p -n -Z root -s "${TCPDUMP_SNAPLEN}" -C "${TCPDUMP_ROTATE_FILE_SIZE_MB}" -W "${TCPDUMP_ROTATE_FILE_COUNT}" -w "${DIRNAME}/nfs_traffic.pcap" port ${NFS_PORT} &
+    nohup tcpdump "${tcpdump_iface[@]}" -p -n -Z root -s "${TCPDUMP_SNAPLEN}" -C "${TCPDUMP_ROTATE_FILE_SIZE_MB}" -W "${TCPDUMP_ROTATE_FILE_COUNT}" -w "${DIRNAME}/nfs_traffic.pcap" "${tcpdump_filter[@]}" &
     echo $! > "${PIDFILE}"
   else
     echo "Falling back to single-file tcpdump capture in ${DIRNAME} (no rotation)." >&2
-    nohup tcpdump -p -Z root -s "${TCPDUMP_SNAPLEN}" port ${NFS_PORT} -w "${DIRNAME}/nfs_traffic.pcap" &
+    nohup tcpdump "${tcpdump_iface[@]}" -p -Z root -s "${TCPDUMP_SNAPLEN}" "${tcpdump_filter[@]}" -w "${DIRNAME}/nfs_traffic.pcap" &
     echo $! > "${PIDFILE}"
+  fi
+}
+
+# Return 0 if this host uses the aznfs mount helper
+is_aznfs_present() {
+  [ -d "${AZNFS_DATA_DIR}" ] || [ -d "${AZNFS_STUNNEL_SHARE_DIR}" ]
+}
+
+collect_aznfs_logs() {
+  local dest_dir="${DIRNAME}/aznfs"
+
+  if [ -d "${AZNFS_STUNNEL_SHARE_DIR}" ]; then
+    mkdir -p "${dest_dir}"
+    cp -a "${AZNFS_STUNNEL_SHARE_DIR}" "${dest_dir}/" 2>/dev/null || true
+  fi
+
+  if [ -d "${AZNFS_DATA_DIR}" ]; then
+    mkdir -p "${dest_dir}"
+    cp -a "${AZNFS_DATA_DIR}" "${dest_dir}/" 2>/dev/null || true
+  fi
+
+  if command -v journalctl >/dev/null 2>&1; then
+    mkdir -p "${dest_dir}"
+    journalctl -u "${AZNFS_PROXY_SERVICE}" --no-pager --all > "${dest_dir}/azurefile-proxy.journalctl.txt" 2>&1 || true
+  fi
+
+  if command -v systemctl >/dev/null 2>&1; then
+    mkdir -p "${dest_dir}"
+    systemctl status "${AZNFS_PROXY_SERVICE}" --no-pager --full > "${dest_dir}/azurefile-proxy.systemctl-status.txt" 2>&1 || true
   fi
 }
 
@@ -213,9 +313,11 @@ stop() {
     echo "Warning: 'stop' called without a matching 'start'. The log bundle may be incomplete."
   fi
   mkdir -p "${DIRNAME}"
-  dmesg -T > "${DIRNAME}/nfs_dmesg"
+  echo -e "\n\n======= dmesg at end =======" >> "${DIRNAME}/nfs_dmesg"
+  dmesg -T >> "${DIRNAME}/nfs_dmesg" 2>&1 || true
   stop_trace
   stop_capture_network
+  collect_aznfs_logs
   echo -e "\n\n======= Dumping NFS Debug Stats at the end =======" >> nfs_diag.txt
   dump_debug_stats
   echo -e "\n\n======= Dumping Process callstacks at end  ========" >> process_callstack.txt
