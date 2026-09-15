@@ -1592,7 +1592,16 @@ function Update-AzFileAclOnPremToCloudSid {
 
         [Parameter(Mandatory = $false, ParameterSetName = "Single")]
         [Parameter(Mandatory = $false, ParameterSetName = "Recursive")]
-        [switch]$PassThru = $false
+        [switch]$PassThru = $false,
+
+        [Parameter(Mandatory = $false, ParameterSetName = "Single")]
+        [Parameter(Mandatory = $false, ParameterSetName = "Recursive")]
+        [string]$TenantId,
+
+        [Parameter(Mandatory = $false, ParameterSetName = "Single")]
+        [Parameter(Mandatory = $false, ParameterSetName = "Recursive")]
+        [Alias("Enviroment")]
+        [string]$Environment
     )
 
     # Check PowerShell version for -Parallel support
@@ -1604,12 +1613,22 @@ function Update-AzFileAclOnPremToCloudSid {
     $client = Get-ClientFromFile $file
     $shareClient = Get-ShareClientFromFileOrDirectoryClient $client
 
+    # Connect to Microsoft Graph before iterating over files
+    Connect-MgGraphIfNeeded `
+        -Scopes @("User.ReadBasic.All", "GroupMember.ReadBasic.All") `
+        -TenantId $TenantId `
+        -Environment $Environment `
+        -WhatIf:$WhatIfPreference `
+    | Out-Null
+
     if ($PSCmdlet.ParameterSetName -eq "Single") {
         $currentAclKey = Get-AzFileAclKey -Client $client
         $updatedAclKey = Update-AzFileAclOnPremToCloudSidSingle `
             -ShareClient $shareClient `
             -FileOrDirectoryClient $client `
             -CurrentAclKey $currentAclKey `
+            -TenantId $TenantId `
+            -Environment $Environment `
             -WhatIf:$WhatIfPreference
 
         if ($PassThru) {
@@ -1691,6 +1710,8 @@ function Update-AzFileAclOnPremToCloudSid {
                             -ShareClient $using:shareClient `
                             -FileOrDirectoryClient $client `
                             -CurrentAclKey $currentAclKey `
+                            -TenantId $using:TenantId `
+                            -Environment $using:Environment `
                             -WhatIf:$using:WhatIfPreference
 
                         if ($null -ne $updatedAclKey) {
@@ -1777,6 +1798,8 @@ function Update-AzFileAclOnPremToCloudSid {
                             -ShareClient $shareClient `
                             -FileOrDirectoryClient $client `
                             -CurrentAclKey $currentAclKey `
+                            -TenantId $TenantId `
+                            -Environment $Environment `
                             -WhatIf:$WhatIfPreference
 
                         if ($null -ne $updatedAclKey) {
@@ -1843,7 +1866,14 @@ function Update-AzFileAclOnPremToCloudSidSingle {
         [object]$FileOrDirectoryClient,
 
         [Parameter(Mandatory = $true)]
-        [string]$CurrentAclKey
+        [string]$CurrentAclKey,
+
+        [Parameter(Mandatory = $false)]
+        [string]$TenantId,
+
+        [Parameter(Mandatory = $false)]
+        [Alias("Enviroment")]
+        [string]$Environment
     )
 
     # It is responsibility of the caller to ensure $CurrentAclKey is the current ACL for the file represented by $FileOrDirectoryClient
@@ -1855,7 +1885,13 @@ function Update-AzFileAclOnPremToCloudSidSingle {
     for ($i = $currentAcl.DiscretionaryAcl.Count - 1; $i -ge 0; $i--) {
         $ace = $currentAcl.DiscretionaryAcl[$i]
         if ($ace -is [System.Security.AccessControl.KnownAce] -and $ace.SecurityIdentifier.Value.StartsWith("S-1-5-21-")) {
-            $cloudSid = Get-CloudSid -OnPremisesSid $ace.SecurityIdentifier.Value -Verbose:$VerbosePreference -WhatIf:$WhatIfPreference -ErrorAction SilentlyContinue
+            $cloudSid = Get-CloudSid `
+                -OnPremisesSid $ace.SecurityIdentifier.Value `
+                -TenantId $TenantId `
+                -Environment $Environment `
+                -Verbose:$VerbosePreference `
+                -WhatIf:$WhatIfPreference `
+                -ErrorAction SilentlyContinue
             if ($null -eq $cloudSid) {
                 Write-Verbose "No cloud SID found for on-premises SID '$($ace.SecurityIdentifier.Value)'. Skipping."
                 continue
@@ -1920,8 +1956,26 @@ function Connect-MgGraphIfNeeded {
     [CmdletBinding(SupportsShouldProcess = $true)]
     param (
         [Parameter(Mandatory = $true)]
-        [string[]]$Scopes
+        [string[]]$Scopes,
+
+        [Parameter(Mandatory = $false)]
+        [string]$TenantId,
+
+        [Parameter(Mandatory = $false)]
+        [Alias("Enviroment")]
+        [string]$Environment
     )
+
+    $connectParameters = @{
+        Scopes = $Scopes
+        ErrorAction = "Stop"
+    }
+    if (-not [string]::IsNullOrEmpty($TenantId)) {
+        $connectParameters.TenantId = $TenantId
+    }
+    if (-not [string]::IsNullOrEmpty($Environment)) {
+        $connectParameters.Environment = $Environment
+    }
 
     # Determine if we are connected to Microsoft Graph
     $context = Get-MgContext
@@ -1929,7 +1983,23 @@ function Connect-MgGraphIfNeeded {
         Write-Verbose "Not connected to Microsoft Graph"
         if ($PSCmdlet.ShouldProcess("Microsoft Graph", "Connect")) {
             Write-Verbose "Connecting to Microsoft Graph with required scopes '$Scopes'"
-            Connect-MgGraph -Scopes $Scopes -ErrorAction Stop
+            Connect-MgGraph @connectParameters
+        }
+        return
+    }
+
+    # Determine if we are connected to the right tenant and environment
+    if (-not [string]::IsNullOrEmpty($TenantId) -and $context.TenantId -ne $TenantId) {
+        Write-Verbose "Current connection to Microsoft Graph is for tenant '$($context.TenantId)', but tenant '$TenantId' is required"
+        if ($PSCmdlet.ShouldProcess("Microsoft Graph", "Connect")) {
+            Connect-MgGraph @connectParameters
+        }
+        return
+    }
+    if (-not [string]::IsNullOrEmpty($Environment) -and $context.Environment -ne $Environment) {
+        Write-Verbose "Current connection to Microsoft Graph is for environment '$($context.Environment)', but environment '$Environment' is required"
+        if ($PSCmdlet.ShouldProcess("Microsoft Graph", "Connect")) {
+            Connect-MgGraph @connectParameters
         }
         return
     }
@@ -1947,7 +2017,13 @@ function Connect-MgGraphIfNeeded {
     # Connect with the required scopes if needed
     if ($missingScopes -and $PSCmdlet.ShouldProcess("Microsoft Graph", "Connect")) {
         Write-Verbose "Connecting to Microsoft Graph, tenant $($context.TenantId) with required scopes '$Scopes'"
-        Connect-MgGraph -TenantId $context.TenantId -Scopes $Scopes -ErrorAction Stop
+        if ([string]::IsNullOrEmpty($TenantId)) {
+            $connectParameters.TenantId = $context.TenantId
+        }
+        if ([string]::IsNullOrEmpty($Environment)) {
+            $connectParameters.Environment = $context.Environment
+        }
+        Connect-MgGraph @connectParameters
     }
     else {
         Write-Verbose "Already connected to Microsoft Graph, tenant $($context.TenantId), with scopes $($currentScopes -join ",")"
@@ -1959,11 +2035,23 @@ function Get-CloudSid {
     [OutputType([System.Security.Principal.SecurityIdentifier])]
     param (
         [Parameter(Mandatory = $true)]
-        [string]$OnPremisesSid
+        [string]$OnPremisesSid,
+
+        [Parameter(Mandatory = $false)]
+        [string]$TenantId,
+
+        [Parameter(Mandatory = $false)]
+        [Alias("Enviroment")]
+        [string]$Environment
     )
 
     process {
-        Connect-MgGraphIfNeeded -Scopes @("User.ReadBasic.All", "GroupMember.ReadBasic.All") -WhatIf:$WhatIfPreference | Out-Null
+        Connect-MgGraphIfNeeded `
+            -Scopes @("User.ReadBasic.All", "GroupMember.ReadBasic.All") `
+            -TenantId $TenantId `
+            -Environment $Environment `
+            -WhatIf:$WhatIfPreference `
+        | Out-Null
 
         # Get the user by on-prem SID
         Write-Verbose "Getting user by on-prem SID '$OnPremisesSid' in Microsoft Graph"
