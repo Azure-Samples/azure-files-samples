@@ -1992,7 +1992,6 @@ function Connect-MgGraphIfNeeded {
     if (-not [string]::IsNullOrEmpty($TenantId) -and $context.TenantId -ne $TenantId) {
         Write-Verbose "Current connection to Microsoft Graph is for tenant '$($context.TenantId)', but tenant '$TenantId' is required"
         if ($PSCmdlet.ShouldProcess("Microsoft Graph", "Connect")) {
-            $connectParameters.TenantId = $TenantId
             Connect-MgGraph @connectParameters
         }
         return
@@ -2000,7 +1999,6 @@ function Connect-MgGraphIfNeeded {
     if (-not [string]::IsNullOrEmpty($Environment) -and $context.Environment -ne $Environment) {
         Write-Verbose "Current connection to Microsoft Graph is for environment '$($context.Environment)', but environment '$Environment' is required"
         if ($PSCmdlet.ShouldProcess("Microsoft Graph", "Connect")) {
-            $connectParameters.Environment = $Environment
             Connect-MgGraph @connectParameters
         }
         return
