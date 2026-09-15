@@ -1167,12 +1167,6 @@ function Restore-AzFileAclInheritance {
     .PARAMETER PassThru
     If specified, the cmdlet will output the objects processed, including their paths and success status.
 
-    .PARAMETER TenantId
-    Specifies the tenant to use when connecting to Microsoft Graph.
-
-    .PARAMETER Environment
-    Specifies the cloud environment to use when connecting to Microsoft Graph.
-
     .OUTPUTS
     System.Security.AccessControl.GenericSecurityDescriptor
     In single mode, returns the updated ACL for the child file or directory.
@@ -1994,6 +1988,24 @@ function Connect-MgGraphIfNeeded {
         return
     }
 
+    # Determine if we are connected to the right tenant and environment
+    if (-not [string]::IsNullOrEmpty($TenantId) -and $context.TenantId -ne $TenantId) {
+        Write-Verbose "Current connection to Microsoft Graph is for tenant '$($context.TenantId)', but tenant '$TenantId' is required"
+        if ($PSCmdlet.ShouldProcess("Microsoft Graph", "Connect")) {
+            $connectParameters.TenantId = $TenantId
+            Connect-MgGraph @connectParameters
+        }
+        return
+    }
+    if (-not [string]::IsNullOrEmpty($Environment) -and $context.Environment -ne $Environment) {
+        Write-Verbose "Current connection to Microsoft Graph is for environment '$($context.Environment)', but environment '$Environment' is required"
+        if ($PSCmdlet.ShouldProcess("Microsoft Graph", "Connect")) {
+            $connectParameters.Environment = $Environment
+            Connect-MgGraph @connectParameters
+        }
+        return
+    }
+
     # Determine if we the current connection has the required scopes
     $missingScopes = $false
     $currentScopes = [System.Collections.Generic.HashSet[string]]::new($context.Scopes)
@@ -2009,6 +2021,9 @@ function Connect-MgGraphIfNeeded {
         Write-Verbose "Connecting to Microsoft Graph, tenant $($context.TenantId) with required scopes '$Scopes'"
         if ([string]::IsNullOrEmpty($TenantId)) {
             $connectParameters.TenantId = $context.TenantId
+        }
+        if ([string]::IsNullOrEmpty($Environment)) {
+            $connectParameters.Environment = $context.Environment
         }
         Connect-MgGraph @connectParameters
     }
