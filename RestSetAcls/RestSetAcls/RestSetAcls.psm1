@@ -931,7 +931,10 @@ function Get-AzFileAcl {
         [object]$Client,
 
         [Parameter(Mandatory = $false, HelpMessage = "Output format of the security descriptor")]
-        [SecurityDescriptorFormat]$OutputFormat = [SecurityDescriptorFormat]::Sddl
+        [SecurityDescriptorFormat]$OutputFormat = [SecurityDescriptorFormat]::Sddl,
+
+        [Parameter(Mandatory = $false, HelpMessage = "If the ACL is missing, allow writing the default ACL before returning")]
+        [switch]$WriteDefaultIfMissing = $false
     )
 
     begin {
@@ -948,13 +951,28 @@ function Get-AzFileAcl {
     process {
         $key = Get-AzFileAclKey -Client $Client
 
+        # On brand new file shares, the permission might not be set on the root yet.
+        # Backfill it if the caller authorized it.
         if ([string]::IsNullOrEmpty($key)) {
-            Write-Error "Failed to get file permission key" -ErrorAction Stop
+            if ($WriteDefaultIfMissing) {
+                Write-Verbose "The item at path '$($Client.Path)' did not have an ACL key. Explicitly backfilling with the default ACL."
+                Set-AzFileDefaultAcl -Client $Client | Out-Null
+
+                $key = Get-AzFileAclKey -Client $Client
+                Write-Verbose "ACL key after backfill: $key"
+
+                if ([string]::IsNullOrEmpty($key)) {
+                    Write-Error "Something went wrong when attempting to backfill the default ACL for the file '$($Client.Path)' in account '$($Client.AccountName)'." -ErrorAction Stop
+                }
+            } else {
+                Write-Error "Failed to get file permission key for the file '$($Client.Path)' in account '$($Client.AccountName)'. " `
+                            "Re-run this function with -WriteDefaultIfMissing to backfill the default ACL." `
+                            -ErrorAction Stop
+            }
         }
 
         $shareClient = Get-ShareClientFromFileOrDirectoryClient $Client
         return Get-AzFileAclFromKey -Key $key -ShareClient $shareClient -OutputFormat $OutputFormat
-
     }
 }
 
@@ -2384,7 +2402,7 @@ function Set-AzFileOwner {
         }
 
         # Get the current ACL for the file or directory
-        $acl = Get-AzFileAcl -Client $Client -OutputFormat Raw
+        $acl = Get-AzFileAcl -Client $Client -OutputFormat Raw -WriteDefaultIfMissing
 
         # Update the owner in the ACL
         if ($PSCmdlet.ShouldProcess($Client.Path, "Set owner to '$OwnerSid'")) {
@@ -2523,7 +2541,7 @@ function Add-AzFileAce {
 
         # Set default inheritance flags if not specified
         if (-not $PSBoundParameters.ContainsKey("InheritanceFlags") -and $isDirectory) {
-            Write-Verbose "The item is a directory, and no InheritanceFlags were specified. Defaulting to 'ContainerInherit, ObjectInherit'."
+            Write-Verbose "Add-AzFileAce: The item is a directory, and no InheritanceFlags were specified. Defaulting to 'ContainerInherit, ObjectInherit'."
             $InheritanceFlags = [System.Security.AccessControl.InheritanceFlags]::ContainerInherit `
                 -bor [System.Security.AccessControl.InheritanceFlags]::ObjectInherit
         }
@@ -2533,8 +2551,9 @@ function Add-AzFileAce {
         # Convert the principal to a SID
         $sid = Get-Sid -Identity $Principal -Verbose:$VerbosePreference -WhatIf:$WhatIfPreference
 
-        # Get ACL from file
-        $acl = Get-AzFileAcl -Client $Client -OutputFormat Raw
+        # Get ACL from file. Allow backfill of default ACL if no ACL is present.
+        Write-Verbose "Retrieving current ACL for the item at path '$($Client.Path)'"
+        $acl = Get-AzFileAcl -Client $Client -OutputFormat Raw -WriteDefaultIfMissing
 
         if ($null -eq $acl.DiscretionaryAcl) {
             # If there is no DACL, we need to create a new one.

@@ -130,6 +130,25 @@ Describe "Get-AzFileAclKey" {
             }
         }
     }
+
+    Context "root directory" {
+        BeforeEach {
+            $tmpShareName = New-RandomString -Length 12
+
+            Write-Host "Creating a temporary file share $tmpShareName in storage account $($Config.StorageAccountName)..."
+            $tmpShare = New-AzStorageShare -Name $tmpShareName -Context $global:context
+        }
+
+        AfterEach {
+            Write-Host "Deleting temporary file share $tmpShareName in storage account $($Config.StorageAccountName)..."
+            Remove-AzStorageShare -Name $tmpShareName -Context $global:context -Force
+        }
+        
+        It "Should return null for the root directory of a new share" {
+            $key = Get-AzFileAclKey -Context $global:context -FileShareName $tmpShareName -FilePath "/"
+            $key | Should -Be $null   
+        }
+    }
 }
 
 Describe "Get-AzFileAclFromKey" {
@@ -245,6 +264,32 @@ Describe "Get-AzFileAcl" {
                 Assert-IsBase64Acl $acl
                 Convert-SecurityDescriptor $acl -From Base64 -To Sddl | Should -Be $_.Sddl
             }
+        }
+    }
+
+    Context "root directory" -Tag "wip" {
+        BeforeEach {
+            $tmpShareName = New-RandomString -Length 12
+
+            Write-Host "Creating a temporary file share $tmpShareName in storage account $($Config.StorageAccountName)..."
+            $tmpShare = New-AzStorageShare -Name $tmpShareName -Context $global:context
+        }
+
+        AfterEach {
+            Write-Host "Deleting temporary file share $tmpShareName in storage account $($Config.StorageAccountName)..."
+            Remove-AzStorageShare -Name $tmpShareName -Context $global:context -Force
+        }
+        
+        It "Should fail when trying to retrieve the ACL for the root directory without an ACL" {
+            { Get-AzFileAcl -Context $global:context -FileShareName $tmpShareName -FilePath "/" } | Should -Throw
+        }
+
+        It "Should backfill the default ACL when invoked with -WriteDefaultIfMissing" {
+            $sddl = Get-AzFileAcl -Context $global:context -FileShareName $tmpShareName -FilePath "/" -WriteDefaultIfMissing
+            $sddl | Should -Be "O:SYG:SYD:(A;OICIIO;GA;;;CO)(A;OICI;0x1301bf;;;AU)(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICIIO;GXGR;;;BU)(A;;0x1200a9;;;BU)S:NO_ACCESS_CONTROL"
+
+            $sddl = Get-AzFileAcl -Context $global:context -FileShareName $tmpShareName -FilePath "/"
+            $sddl | Should -Be "O:SYG:SYD:(A;OICIIO;GA;;;CO)(A;OICI;0x1301bf;;;AU)(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICIIO;GXGR;;;BU)(A;;0x1200a9;;;BU)S:NO_ACCESS_CONTROL"
         }
     }
 }
@@ -537,6 +582,35 @@ Describe "Set-AzFileOwner" {
                     $fileAclKey | Should -Be $returnedKey
                 }
             }
+        }
+    }
+
+    Context "root directory" {
+        BeforeEach {
+            $tmpShareName = New-RandomString -Length 12
+
+            Write-Host "Creating a temporary file share $tmpShareName in storage account $($Config.StorageAccountName)..."
+            $tmpShare = New-AzStorageShare -Name $tmpShareName -Context $global:context
+        }
+
+        AfterEach {
+            Write-Host "Deleting temporary file share $tmpShareName in storage account $($Config.StorageAccountName)..."
+            Remove-AzStorageShare -Name $tmpShareName -Context $global:context -Force
+        }
+        
+        It "Is able to update the owner even when the root directory has no ACL" {
+            $key = Set-AzFileOwner `
+                -Context $global:context `
+                -FileShareName $tmpShareName `
+                -FilePath "/" `
+                -Owner "S-1-12-1-1-2-3-4"
+            
+            $actualKey = Get-AzFileAclKey -Context $global:context -FileShareName $tmpShareName -FilePath "/"
+            $key | Should -Be $actualKey
+            
+            $acl = Get-AzFileAcl -Context $global:context -FileShareName $tmpShareName -FilePath "/" -OutputFormat Sddl
+            $acl | Should -Not -Be $null
+            $acl | Should -Be "O:S-1-12-1-1-2-3-4G:SYD:(A;OICIIO;GA;;;CO)(A;OICI;0x1301bf;;;AU)(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICIIO;GXGR;;;BU)(A;;0x1200a9;;;BU)S:NO_ACCESS_CONTROL"
         }
     }
 }
@@ -1414,5 +1488,36 @@ Describe "Add-AzFileAce" -Tag "Ace" {
         $groupSid = $Config.CloudNativeGroup.Sid
         $expected = "O:SYG:SYD:(A;OICI;FA;;;$groupSid)S:NO_ACCESS_CONTROL"
         $result | Should -Be $expected
+    }
+
+    Context "root directory" {
+        BeforeEach {
+            $tmpShareName = New-RandomString -Length 12
+
+            Write-Host "Creating a temporary file share $tmpShareName in storage account $($Config.StorageAccountName)..."
+            $tmpShare = New-AzStorageShare -Name $tmpShareName -Context $global:context
+        }
+
+        AfterEach {
+            Write-Host "Deleting temporary file share $tmpShareName in storage account $($Config.StorageAccountName)..."
+            Remove-AzStorageShare -Name $tmpShareName -Context $global:context -Force
+        }
+        
+        It "Is able to insert an ACE even when the root directory has no ACL" {
+            $key = Add-AzFileAce `
+                -Context $global:context `
+                -FileShareName $tmpShareName `
+                -FilePath "/" `
+                -Type Allow `
+                -Principal "S-1-12-1-1-2-3-4" `
+                -AccessRights FullControl
+
+            $actualKey = Get-AzFileAclKey -Context $global:context -FileShareName $tmpShareName -FilePath "/"
+            $key | Should -Be $actualKey
+            
+            $acl = Get-AzFileAcl -Context $global:context -FileShareName $tmpShareName -FilePath "/" -OutputFormat Sddl
+            $acl | Should -Not -Be $null
+            $acl | Should -Be "O:SYG:SYD:(A;OICIIO;GA;;;CO)(A;OICI;0x1301bf;;;AU)(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICIIO;GXGR;;;BU)(A;;0x1200a9;;;BU)(A;OICI;FA;;;S-1-12-1-1-2-3-4)S:NO_ACCESS_CONTROL"
+        }
     }
 }
