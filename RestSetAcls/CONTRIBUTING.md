@@ -26,7 +26,9 @@ Test
 
 ### Run integration tests
 
-First, create a file in `RestSetAcls/test/integration` called `config.json`. The fields of the config should match the `Config` class in `RestSetAcls/test/integration/RestSetAcls.Tests.ps1`. E.g.:
+First, create a file in `RestSetAcls/test/integration` called `config.json`. You can either create it manually, or run `New-IntegrationTestConfig` to generate it automatically with random accounts and users/groups from your Entra tenant.
+
+The fields of the config should match the `Config` class in `RestSetAcls/test/integration/RestSetAcls.Tests.ps1`. E.g.:
 
 ```json
 {
