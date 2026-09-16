@@ -267,7 +267,7 @@ Describe "Get-AzFileAcl" {
         }
     }
 
-    Context "root directory" -Tag "wip" {
+    Context "root directory" {
         BeforeEach {
             $tmpShareName = New-RandomString -Length 12
 
