@@ -14,19 +14,20 @@ Retrieves the ACL (Access Control List) for a specified file or directory.
 
 ### File
 ```
-Get-AzFileAcl -File <AzureStorageBase> [-OutputFormat <SecurityDescriptorFormat>]
+Get-AzFileAcl -File <AzureStorageBase> [-OutputFormat <SecurityDescriptorFormat>] [-WriteDefaultIfMissing]
  [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
 ### FilePath
 ```
 Get-AzFileAcl -Context <IStorageContext> -FileShareName <String> -FilePath <String>
- [-OutputFormat <SecurityDescriptorFormat>] [-ProgressAction <ActionPreference>] [<CommonParameters>]
+ [-OutputFormat <SecurityDescriptorFormat>] [-WriteDefaultIfMissing] [-ProgressAction <ActionPreference>]
+ [<CommonParameters>]
 ```
 
 ### Client
 ```
-Get-AzFileAcl [-Client <Object>] [-OutputFormat <SecurityDescriptorFormat>]
+Get-AzFileAcl [-Client <Object>] [-OutputFormat <SecurityDescriptorFormat>] [-WriteDefaultIfMissing]
  [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
@@ -139,6 +140,21 @@ Accepted values: Sddl, Binary, Base64, Raw, FolderAcl, FileAcl
 Required: False
 Position: Named
 Default value: Sddl
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -WriteDefaultIfMissing
+If the ACL is missing, allow writing the default ACL before returning
+
+```yaml
+Type: SwitchParameter
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: False
 Accept pipeline input: False
 Accept wildcard characters: False
 ```
