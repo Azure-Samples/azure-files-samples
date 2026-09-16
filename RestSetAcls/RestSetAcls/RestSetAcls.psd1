@@ -102,6 +102,7 @@
         "Get-AzFileAclKey",
         "Get-AzFileAclFromKey",
         "Set-AzFileAcl",
+        "Set-AzFileDefaultAcl",
         "Get-AzFileAcl",
         "Set-AzFileOwner",
         "Restore-AzFileAclInheritance",

@@ -472,6 +472,75 @@ function Set-AzFileAclKey {
     }
 }
 
+function Set-AzFileDefaultAcl {
+<#
+    .SYNOPSIS
+    Sets the default Access Control List (ACL) for a specified Azure file or directory.
+
+    .DESCRIPTION
+    The `Set-AzFileDefaultAcl` function applies the default ACL to a specified Azure file or directory.
+
+    .PARAMETER File
+    Specifies the Azure storage file or directory on which to set the default ACL.
+
+    .PARAMETER Context
+    Specifies the Azure storage context. This is required to authenticate and interact with the Azure storage account.
+
+    .PARAMETER FileShareName
+    Specifies the name of the Azure file share where the ACL will be applied.
+
+    .PARAMETER Client
+    Specifies the Azure storage file or directory client with which the ACL will be applied.
+
+    .OUTPUTS
+    System.String
+    Returns the file permission key associated with the applied default ACL.
+
+    .EXAMPLE
+    PS> $context = Get-AzStorageContext -StorageAccountName "mystorageaccount" -StorageAccountKey "mykey"
+    PS> Set-AzFileDefaultAcl -Context $context -FileShareName "myfileshare" -FilePath "myfolder/myfile.txt"
+
+    Sets the default SDDL ACL on the given file.
+#>
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    [OutputType([string])]
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipeline = $true, ParameterSetName = "File")]
+        [Microsoft.WindowsAzure.Commands.Common.Storage.ResourceModel.AzureStorageBase]$File,
+
+        [Parameter(Mandatory = $true, ParameterSetName = "FilePath", HelpMessage = "Azure storage context")]
+        [Microsoft.Azure.Commands.Common.Authentication.Abstractions.IStorageContext]$Context,
+
+        [Parameter(Mandatory = $true, ParameterSetName = "FilePath", HelpMessage = "Name of the file share")]
+        [string]$FileShareName,
+
+        [Parameter(Mandatory = $true, ParameterSetName = "FilePath", HelpMessage = "Path to the file or directory on which to set the permission key")]
+        [string]$FilePath,
+
+        [Parameter(Mandatory = $true, ParameterSetName = "Client")]
+        [Object]$Client
+    )
+
+    begin {
+        # Convert parameters to a $Client
+        if ($PSCmdlet.ParameterSetName -eq "FilePath") {
+            $File = Get-AzStorageFile -Context $Context -ShareName $FileShareName -Path $FilePath -ErrorAction Stop
+            $Client = Get-ClientFromFile $File
+        }
+        elseif ($PSCmdlet.ParameterSetName -eq "File") {
+            $Client = Get-ClientFromFile $File
+        }
+    }
+
+    process {
+        Set-AzFileAcl `
+            -Client $Client `
+            -Acl "O:SYG:SYD:(A;OICIIO;GA;;;CO)(A;OICI;0x1301bf;;;AU)(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICIIO;GXGR;;;BU)(A;;0x1200a9;;;BU)" `
+            -AclFormat Sddl
+    }
+}
+
+
 function Set-AzFileAcl {
 <#
     .SYNOPSIS
@@ -494,9 +563,6 @@ function Set-AzFileAcl {
 
     .PARAMETER Client
     Specifies the Azure storage file or directory client with which the ACL will be applied.
-
-    .PARAMETER Client
-    Specifies the Azure storage file or directory client with which to set the ACL.
 
     .PARAMETER Acl
     Specifies the ACL to be applied. This can be in SDDL format, base64-encoded binary, binary array, or RawSecurityDescriptor.
