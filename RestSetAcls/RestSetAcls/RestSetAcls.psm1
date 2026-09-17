@@ -934,7 +934,7 @@ function Get-AzFileAcl {
         [SecurityDescriptorFormat]$OutputFormat = [SecurityDescriptorFormat]::Sddl,
 
         [Parameter(Mandatory = $false, HelpMessage = "If the ACL is missing, allow writing the default ACL before returning")]
-        [switch]$WriteDefaultIfMissing = $false
+        [switch]$SetDefaultAclIfMissing = $false
     )
 
     begin {
@@ -954,7 +954,7 @@ function Get-AzFileAcl {
         # On brand new file shares, the permission might not be set on the root yet.
         # Backfill it if the caller authorized it.
         if ([string]::IsNullOrEmpty($key)) {
-            if ($WriteDefaultIfMissing) {
+            if ($SetDefaultAclIfMissing) {
                 Write-Verbose "The item at path '$($Client.Path)' did not have an ACL key. Explicitly backfilling with the default ACL."
                 Set-AzFileDefaultAcl -Client $Client | Out-Null
 
@@ -966,7 +966,7 @@ function Get-AzFileAcl {
                 }
             } else {
                 Write-Error "Failed to get file permission key for the file '$($Client.Path)' in account '$($Client.AccountName)'. " `
-                            "Re-run this function with -WriteDefaultIfMissing to backfill the default ACL." `
+                            "Re-run this function with -SetDefaultAclIfMissing to backfill the default ACL." `
                             -ErrorAction Stop
             }
         }
@@ -2402,7 +2402,7 @@ function Set-AzFileOwner {
         }
 
         # Get the current ACL for the file or directory
-        $acl = Get-AzFileAcl -Client $Client -OutputFormat Raw -WriteDefaultIfMissing
+        $acl = Get-AzFileAcl -Client $Client -OutputFormat Raw -SetDefaultAclIfMissing
 
         # Update the owner in the ACL
         if ($PSCmdlet.ShouldProcess($Client.Path, "Set owner to '$OwnerSid'")) {
@@ -2553,7 +2553,7 @@ function Add-AzFileAce {
 
         # Get ACL from file. Allow backfill of default ACL if no ACL is present.
         Write-Verbose "Retrieving current ACL for the item at path '$($Client.Path)'"
-        $acl = Get-AzFileAcl -Client $Client -OutputFormat Raw -WriteDefaultIfMissing
+        $acl = Get-AzFileAcl -Client $Client -OutputFormat Raw -SetDefaultAclIfMissing
 
         if ($null -eq $acl.DiscretionaryAcl) {
             # If there is no DACL, we need to create a new one.

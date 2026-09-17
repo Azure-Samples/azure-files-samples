@@ -14,20 +14,20 @@ Retrieves the ACL (Access Control List) for a specified file or directory.
 
 ### File
 ```
-Get-AzFileAcl -File <AzureStorageBase> [-OutputFormat <SecurityDescriptorFormat>] [-WriteDefaultIfMissing]
+Get-AzFileAcl -File <AzureStorageBase> [-OutputFormat <SecurityDescriptorFormat>] [-SetDefaultAclIfMissing]
  [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
 ### FilePath
 ```
 Get-AzFileAcl -Context <IStorageContext> -FileShareName <String> -FilePath <String>
- [-OutputFormat <SecurityDescriptorFormat>] [-WriteDefaultIfMissing] [-ProgressAction <ActionPreference>]
+ [-OutputFormat <SecurityDescriptorFormat>] [-SetDefaultAclIfMissing] [-ProgressAction <ActionPreference>]
  [<CommonParameters>]
 ```
 
 ### Client
 ```
-Get-AzFileAcl [-Client <Object>] [-OutputFormat <SecurityDescriptorFormat>] [-WriteDefaultIfMissing]
+Get-AzFileAcl [-Client <Object>] [-OutputFormat <SecurityDescriptorFormat>] [-SetDefaultAclIfMissing]
  [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
@@ -144,7 +144,7 @@ Accept pipeline input: False
 Accept wildcard characters: False
 ```
 
-### -WriteDefaultIfMissing
+### -SetDefaultAclIfMissing
 If the ACL is missing, allow writing the default ACL before returning
 
 ```yaml
