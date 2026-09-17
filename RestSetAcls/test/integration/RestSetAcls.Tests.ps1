@@ -284,8 +284,8 @@ Describe "Get-AzFileAcl" {
             { Get-AzFileAcl -Context $global:context -FileShareName $tmpShareName -FilePath "/" } | Should -Throw
         }
 
-        It "Should backfill the default ACL when invoked with -WriteDefaultIfMissing" {
-            $sddl = Get-AzFileAcl -Context $global:context -FileShareName $tmpShareName -FilePath "/" -WriteDefaultIfMissing
+        It "Should backfill the default ACL when invoked with -SetDefaultAclIfMissing" {
+            $sddl = Get-AzFileAcl -Context $global:context -FileShareName $tmpShareName -FilePath "/" -SetDefaultAclIfMissing
             $sddl | Should -Be "O:SYG:SYD:(A;OICIIO;GA;;;CO)(A;OICI;0x1301bf;;;AU)(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICIIO;GXGR;;;BU)(A;;0x1200a9;;;BU)S:NO_ACCESS_CONTROL"
 
             $sddl = Get-AzFileAcl -Context $global:context -FileShareName $tmpShareName -FilePath "/"
