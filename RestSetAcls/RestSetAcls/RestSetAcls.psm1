@@ -472,6 +472,75 @@ function Set-AzFileAclKey {
     }
 }
 
+function Set-AzFileDefaultAcl {
+<#
+    .SYNOPSIS
+    Sets the default Access Control List (ACL) for a specified Azure file or directory.
+
+    .DESCRIPTION
+    The `Set-AzFileDefaultAcl` function applies the default ACL to a specified Azure file or directory.
+
+    .PARAMETER File
+    Specifies the Azure storage file or directory on which to set the default ACL.
+
+    .PARAMETER Context
+    Specifies the Azure storage context. This is required to authenticate and interact with the Azure storage account.
+
+    .PARAMETER FileShareName
+    Specifies the name of the Azure file share where the ACL will be applied.
+
+    .PARAMETER Client
+    Specifies the Azure storage file or directory client with which the ACL will be applied.
+
+    .OUTPUTS
+    System.String
+    Returns the file permission key associated with the applied default ACL.
+
+    .EXAMPLE
+    PS> $context = Get-AzStorageContext -StorageAccountName "mystorageaccount" -StorageAccountKey "mykey"
+    PS> Set-AzFileDefaultAcl -Context $context -FileShareName "myfileshare" -FilePath "myfolder/myfile.txt"
+
+    Sets the default SDDL ACL on the given file.
+#>
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    [OutputType([string])]
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipeline = $true, ParameterSetName = "File")]
+        [Microsoft.WindowsAzure.Commands.Common.Storage.ResourceModel.AzureStorageBase]$File,
+
+        [Parameter(Mandatory = $true, ParameterSetName = "FilePath", HelpMessage = "Azure storage context")]
+        [Microsoft.Azure.Commands.Common.Authentication.Abstractions.IStorageContext]$Context,
+
+        [Parameter(Mandatory = $true, ParameterSetName = "FilePath", HelpMessage = "Name of the file share")]
+        [string]$FileShareName,
+
+        [Parameter(Mandatory = $true, ParameterSetName = "FilePath", HelpMessage = "Path to the file or directory on which to set the permission key")]
+        [string]$FilePath,
+
+        [Parameter(Mandatory = $true, ParameterSetName = "Client")]
+        [Object]$Client
+    )
+
+    begin {
+        # Convert parameters to a $Client
+        if ($PSCmdlet.ParameterSetName -eq "FilePath") {
+            $File = Get-AzStorageFile -Context $Context -ShareName $FileShareName -Path $FilePath -ErrorAction Stop
+            $Client = Get-ClientFromFile $File
+        }
+        elseif ($PSCmdlet.ParameterSetName -eq "File") {
+            $Client = Get-ClientFromFile $File
+        }
+    }
+
+    process {
+        Set-AzFileAcl `
+            -Client $Client `
+            -Acl "O:SYG:SYD:(A;OICIIO;GA;;;CO)(A;OICI;0x1301bf;;;AU)(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICIIO;GXGR;;;BU)(A;;0x1200a9;;;BU)" `
+            -AclFormat Sddl
+    }
+}
+
+
 function Set-AzFileAcl {
 <#
     .SYNOPSIS
@@ -494,9 +563,6 @@ function Set-AzFileAcl {
 
     .PARAMETER Client
     Specifies the Azure storage file or directory client with which the ACL will be applied.
-
-    .PARAMETER Client
-    Specifies the Azure storage file or directory client with which to set the ACL.
 
     .PARAMETER Acl
     Specifies the ACL to be applied. This can be in SDDL format, base64-encoded binary, binary array, or RawSecurityDescriptor.
@@ -865,7 +931,10 @@ function Get-AzFileAcl {
         [object]$Client,
 
         [Parameter(Mandatory = $false, HelpMessage = "Output format of the security descriptor")]
-        [SecurityDescriptorFormat]$OutputFormat = [SecurityDescriptorFormat]::Sddl
+        [SecurityDescriptorFormat]$OutputFormat = [SecurityDescriptorFormat]::Sddl,
+
+        [Parameter(Mandatory = $false, HelpMessage = "If the ACL is missing, allow writing the default ACL before returning")]
+        [switch]$SetDefaultAclIfMissing = $false
     )
 
     begin {
@@ -882,13 +951,28 @@ function Get-AzFileAcl {
     process {
         $key = Get-AzFileAclKey -Client $Client
 
+        # On brand new file shares, the permission might not be set on the root yet.
+        # Backfill it if the caller authorized it.
         if ([string]::IsNullOrEmpty($key)) {
-            Write-Error "Failed to get file permission key" -ErrorAction Stop
+            if ($SetDefaultAclIfMissing) {
+                Write-Verbose "The item at path '$($Client.Path)' did not have an ACL key. Explicitly backfilling with the default ACL."
+                Set-AzFileDefaultAcl -Client $Client | Out-Null
+
+                $key = Get-AzFileAclKey -Client $Client
+                Write-Verbose "ACL key after backfill: $key"
+
+                if ([string]::IsNullOrEmpty($key)) {
+                    Write-Error "Something went wrong when attempting to backfill the default ACL for the file '$($Client.Path)' in account '$($Client.AccountName)'." -ErrorAction Stop
+                }
+            } else {
+                Write-Error "Failed to get file permission key for the file '$($Client.Path)' in account '$($Client.AccountName)'. " `
+                            "Re-run this function with -SetDefaultAclIfMissing to backfill the default ACL." `
+                            -ErrorAction Stop
+            }
         }
 
         $shareClient = Get-ShareClientFromFileOrDirectoryClient $Client
         return Get-AzFileAclFromKey -Key $key -ShareClient $shareClient -OutputFormat $OutputFormat
-
     }
 }
 
@@ -1233,7 +1317,7 @@ function Restore-AzFileAclInheritance {
 
     # Dispatch to either recursive or single file processing
     if ($PSCmdlet.ParameterSetName -eq "Single") {
-        $parentAcl = Get-AzFileAcl -File $parentFile -OutputFormat Raw
+        $parentAcl = Get-AzFileAcl -File $parentFile -OutputFormat Raw -SetDefaultAclIfMissing
 
         return Restore-AzFileAclInheritanceSingle `
             -Context $Context `
@@ -1374,6 +1458,12 @@ function Restore-AzFileAclInheritanceRecursive {
 
     # Presupposition: the parent path exists and is a directory. It is the responsibility of the caller to check this.
     $directoryPermissionKey = $DirectoryClient.GetProperties().Value.SmbProperties.FilePermissionKey
+    if ($null -eq $directoryPermissionKey) {
+        Write-Verbose "The directory '$($DirectoryClient.Name)' does not have a permission key. Backfilling with default ACL."
+        Set-AzFileDefaultAcl -Client $DirectoryClient -WhatIf:$WhatIfPreference
+
+        $directoryPermissionKey = $DirectoryClient.GetProperties().Value.SmbProperties.FilePermissionKey
+    }
 
     $shareClient = Get-ShareClientFromFileOrDirectoryClient $DirectoryClient
 
@@ -2318,7 +2408,7 @@ function Set-AzFileOwner {
         }
 
         # Get the current ACL for the file or directory
-        $acl = Get-AzFileAcl -Client $Client -OutputFormat Raw
+        $acl = Get-AzFileAcl -Client $Client -OutputFormat Raw -SetDefaultAclIfMissing
 
         # Update the owner in the ACL
         if ($PSCmdlet.ShouldProcess($Client.Path, "Set owner to '$OwnerSid'")) {
@@ -2457,7 +2547,7 @@ function Add-AzFileAce {
 
         # Set default inheritance flags if not specified
         if (-not $PSBoundParameters.ContainsKey("InheritanceFlags") -and $isDirectory) {
-            Write-Verbose "The item is a directory, and no InheritanceFlags were specified. Defaulting to 'ContainerInherit, ObjectInherit'."
+            Write-Verbose "Add-AzFileAce: The item is a directory, and no InheritanceFlags were specified. Defaulting to 'ContainerInherit, ObjectInherit'."
             $InheritanceFlags = [System.Security.AccessControl.InheritanceFlags]::ContainerInherit `
                 -bor [System.Security.AccessControl.InheritanceFlags]::ObjectInherit
         }
@@ -2467,8 +2557,9 @@ function Add-AzFileAce {
         # Convert the principal to a SID
         $sid = Get-Sid -Identity $Principal -Verbose:$VerbosePreference -WhatIf:$WhatIfPreference
 
-        # Get ACL from file
-        $acl = Get-AzFileAcl -Client $Client -OutputFormat Raw
+        # Get ACL from file. Allow backfill of default ACL if no ACL is present.
+        Write-Verbose "Retrieving current ACL for the item at path '$($Client.Path)'"
+        $acl = Get-AzFileAcl -Client $Client -OutputFormat Raw -SetDefaultAclIfMissing
 
         if ($null -eq $acl.DiscretionaryAcl) {
             # If there is no DACL, we need to create a new one.

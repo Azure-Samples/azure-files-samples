@@ -5,54 +5,48 @@ online version:
 schema: 2.0.0
 ---
 
-# Get-AzFileAcl
+# Set-AzFileDefaultAcl
 
 ## SYNOPSIS
-Retrieves the ACL (Access Control List) for a specified file or directory.
+Sets the default Access Control List (ACL) for a specified Azure file or directory.
 
 ## SYNTAX
 
 ### File
 ```
-Get-AzFileAcl -File <AzureStorageBase> [-OutputFormat <SecurityDescriptorFormat>] [-SetDefaultAclIfMissing]
- [-ProgressAction <ActionPreference>] [<CommonParameters>]
+Set-AzFileDefaultAcl -File <AzureStorageBase> [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm]
+ [<CommonParameters>]
 ```
 
 ### FilePath
 ```
-Get-AzFileAcl -Context <IStorageContext> -FileShareName <String> -FilePath <String>
- [-OutputFormat <SecurityDescriptorFormat>] [-SetDefaultAclIfMissing] [-ProgressAction <ActionPreference>]
- [<CommonParameters>]
+Set-AzFileDefaultAcl -Context <IStorageContext> -FileShareName <String> -FilePath <String>
+ [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
 ```
 
 ### Client
 ```
-Get-AzFileAcl [-Client <Object>] [-OutputFormat <SecurityDescriptorFormat>] [-SetDefaultAclIfMissing]
- [-ProgressAction <ActionPreference>] [<CommonParameters>]
+Set-AzFileDefaultAcl -Client <Object> [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm]
+ [<CommonParameters>]
 ```
 
 ## DESCRIPTION
-The \`Get-AzFileAcl\` function retrieves the ACL for a specified file or directory.
-It supports retrieving the ACL in
-various formats, including SDDL (Security Descriptor Definition Language) or binary formats.
-The function supports
-retrieving the ACL from a file share specified either directly or its name and context.
+The \`Set-AzFileDefaultAcl\` function applies the default ACL to a specified Azure file or directory.
 
 ## EXAMPLES
 
 ### EXAMPLE 1
 ```
 $context = Get-AzStorageContext -StorageAccountName "mystorageaccount" -StorageAccountKey "mykey"
-PS> $file = Get-AzStorageFile -Context $context -ShareName "myfileshare" -Path "myfolder/myfile.txt"
-PS> Get-AzFileAcl -File $file
+PS> Set-AzFileDefaultAcl -Context $context -FileShareName "myfileshare" -FilePath "myfolder/myfile.txt"
 ```
 
-Retrieves the SDDL ACL for the specified file using the permission key.
+Sets the default SDDL ACL on the given file.
 
 ## PARAMETERS
 
 ### -File
-Specifies the Azure storage file or directory from which to retrieve the ACL key.
+Specifies the Azure storage file or directory on which to set the default ACL.
 
 ```yaml
 Type: AzureStorageBase
@@ -62,7 +56,7 @@ Aliases:
 Required: True
 Position: Named
 Default value: None
-Accept pipeline input: False
+Accept pipeline input: True (ByValue)
 Accept wildcard characters: False
 ```
 
@@ -83,7 +77,7 @@ Accept wildcard characters: False
 ```
 
 ### -FileShareName
-Specifies the name of the Azure file share from which to retrieve the ACL key.
+Specifies the name of the Azure file share where the ACL will be applied.
 
 ```yaml
 Type: String
@@ -98,7 +92,7 @@ Accept wildcard characters: False
 ```
 
 ### -FilePath
-Specifies the path to the file or directory from which to retrieve the ACL key.
+Path to the file or directory on which to set the permission key
 
 ```yaml
 Type: String
@@ -113,12 +107,28 @@ Accept wildcard characters: False
 ```
 
 ### -Client
-Specifies the Azure storage file share client with which to retrieve the ACL key.
+Specifies the Azure storage file or directory client with which the ACL will be applied.
 
 ```yaml
 Type: Object
 Parameter Sets: Client
 Aliases:
+
+Required: True
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -WhatIf
+Shows what would happen if the cmdlet runs.
+The cmdlet is not run.
+
+```yaml
+Type: SwitchParameter
+Parameter Sets: (All)
+Aliases: wi
 
 Required: False
 Position: Named
@@ -127,34 +137,17 @@ Accept pipeline input: False
 Accept wildcard characters: False
 ```
 
-### -OutputFormat
-Specifies the output format of the security descriptor.
-Supported formats include SDDL, Base64, and Binary.
-
-```yaml
-Type: SecurityDescriptorFormat
-Parameter Sets: (All)
-Aliases:
-Accepted values: Sddl, Binary, Base64, Raw, FolderAcl, FileAcl
-
-Required: False
-Position: Named
-Default value: Sddl
-Accept pipeline input: False
-Accept wildcard characters: False
-```
-
-### -SetDefaultAclIfMissing
-If the ACL is missing, allow writing the default ACL before returning
+### -Confirm
+Prompts you for confirmation before running the cmdlet.
 
 ```yaml
 Type: SwitchParameter
 Parameter Sets: (All)
-Aliases:
+Aliases: cf
 
 Required: False
 Position: Named
-Default value: False
+Default value: None
 Accept pipeline input: False
 Accept wildcard characters: False
 ```
@@ -182,14 +175,7 @@ This cmdlet supports the common parameters: -Debug, -ErrorAction, -ErrorVariable
 ## OUTPUTS
 
 ### System.String
-### Returns the ACL in the specified format. The default format is SDDL.
+### Returns the file permission key associated with the applied default ACL.
 ## NOTES
 
 ## RELATED LINKS
-
-[New-AzFileAcl]()
-
-[Set-AzFileAcl]()
-
-[Set-AzFileAclKey]()
-
