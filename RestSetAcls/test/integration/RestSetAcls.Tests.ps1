@@ -1168,6 +1168,11 @@ Describe "Update-AzFileAclOnPremToCloudSid" -Tag "SidMigration" {
 
             $sddl = "O:SYG:SYD:P(A;;0x1200a9;;;$($Config.HybridUser.Sid))(A;;0x100000;;;$($Config.HybridGroup.Sid))S:NO_ACCESS_CONTROL"
             $expectedSddl = "O:SYG:SYD:P(A;;0x1200a9;;;$($Config.HybridUser.Sid))(A;;0x100000;;;$($Config.HybridGroup.Sid))(A;;0x1200a9;;;$hybridUserCloudSid)(A;;0x100000;;;$hybridGroupCloudSid)S:NO_ACCESS_CONTROL"
+            
+            # Normalize expected SDDL (this orders ACEs by alphanumeric ordering of SIDs)
+            $expectedSddl = $expectedSddl | Convert-SecurityDescriptor -From Sddl -To FolderAcl | Convert-SecurityDescriptor -From FolderAcl -To Sddl
+            $expectedSddl += "S:NO_ACCESS_CONTROL"
+
             Set-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $filePath -Acl $sddl
 
             $updatedAclKey = Update-AzFileAclOnPremToCloudSid `
