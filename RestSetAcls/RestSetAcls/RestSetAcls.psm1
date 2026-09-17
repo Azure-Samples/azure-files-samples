@@ -1317,7 +1317,7 @@ function Restore-AzFileAclInheritance {
 
     # Dispatch to either recursive or single file processing
     if ($PSCmdlet.ParameterSetName -eq "Single") {
-        $parentAcl = Get-AzFileAcl -File $parentFile -OutputFormat Raw
+        $parentAcl = Get-AzFileAcl -File $parentFile -OutputFormat Raw -SetDefaultAclIfMissing
 
         return Restore-AzFileAclInheritanceSingle `
             -Context $Context `
@@ -1458,6 +1458,12 @@ function Restore-AzFileAclInheritanceRecursive {
 
     # Presupposition: the parent path exists and is a directory. It is the responsibility of the caller to check this.
     $directoryPermissionKey = $DirectoryClient.GetProperties().Value.SmbProperties.FilePermissionKey
+    if ($null -eq $directoryPermissionKey) {
+        Write-Verbose "The directory '$($DirectoryClient.Name)' does not have a permission key. Backfilling with default ACL."
+        Set-AzFileDefaultAcl -Client $DirectoryClient -WhatIf:$WhatIfPreference
+
+        $directoryPermissionKey = $DirectoryClient.GetProperties().Value.SmbProperties.FilePermissionKey
+    }
 
     $shareClient = Get-ShareClientFromFileOrDirectoryClient $DirectoryClient
 
