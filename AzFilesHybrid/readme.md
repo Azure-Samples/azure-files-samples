@@ -33,7 +33,7 @@ Install-Module -Name AzFilesHybrid -Repository PSGallery
 3. Open a PowerShell terminal, navigate to the directory of the extracted files
 4. Run the following command
    ```powershell
-   .\CopyToPath.ps1
+   .\CopyToPSPath.ps1
    ```
 ## Uninstall
 ### If Installed From PSGallery
