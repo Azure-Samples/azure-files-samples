@@ -99,7 +99,6 @@ init() {
   # Capture existing kernel logs before starting the capture window
   echo "======= dmesg at start =======" > "${DIRNAME}/nfs_dmesg"
   dmesg -T >> "${DIRNAME}/nfs_dmesg" 2>&1 || true
-  dmesg -Tc > /dev/null
 }
 
 check_utils() {
