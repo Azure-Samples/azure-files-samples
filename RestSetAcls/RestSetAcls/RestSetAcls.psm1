@@ -1975,7 +1975,8 @@ function Get-CloudSid {
                 return [System.Security.Principal.SecurityIdentifier]::new($user.SecurityIdentifier)
             }
             else {
-                throw "User with on-prem SID '$OnPremisesSid' was found, but it did not have a cloud SID."
+                Write-Error "User with on-prem SID '$OnPremisesSid' was found, but it did not have a cloud SID."
+                return $null
             }
         }
 
@@ -1988,11 +1989,13 @@ function Get-CloudSid {
                 return [System.Security.Principal.SecurityIdentifier]::new($group.SecurityIdentifier)
             }
             else {
-                throw "Group with on-prem SID '$OnPremisesSid' was found, but it did not have a cloud SID."
+                Write-Error "Group with on-prem SID '$OnPremisesSid' was found, but it did not have a cloud SID."
+                return $null
             }
         }
         else {
-            throw "No user or group found with on-prem SID '$OnPremisesSid'"
+            Write-Error "No user or group found with on-prem SID '$OnPremisesSid'"
+            return $null
         }
     }
 }
@@ -2028,11 +2031,13 @@ function Get-Sid {
                     return [System.Security.Principal.SecurityIdentifier]::new($user.SecurityIdentifier)
                 }
                 else {
-                    throw "User with UPN '$Identity' was found, but it did not have a SID."
+                    Write-Error "User with UPN '$Identity' was found, but it did not have a SID."
+                    return $null
                 }
             }
             else {
-                throw "No user found with UPN '$Identity'"
+                Write-Error "No user found with UPN '$Identity'"
+                return $null
             }
         }
 
@@ -2064,7 +2069,8 @@ function Get-Sid {
                     return [System.Security.Principal.SecurityIdentifier]::new($user.SecurityIdentifier)
                 }
                 else {
-                    throw "User with object ID '$Identity' was found, but it did not have a SID."
+                    Write-Error "User with object ID '$Identity' was found, but it did not have a SID."
+                    return $null
                 }
             }
 
@@ -2090,11 +2096,13 @@ function Get-Sid {
                     return [System.Security.Principal.SecurityIdentifier]::new($group.SecurityIdentifier)
                 }
                 else {
-                    throw "Group with object ID '$Identity' was found, but it did not have a SID."
+                    Write-Error "Group with object ID '$Identity' was found, but it did not have a SID."
+                    return $null
                 }
             }
             else {
-                throw "No user or group found with ID '$Identity'"
+                Write-Error "No user or group found with ID '$Identity'"
+                return $null
             }
         }
 
@@ -2113,7 +2121,8 @@ function Get-Sid {
 
         if ($user) {
             if ($user -is [array] -and $user.Count -gt 1) {
-                throw "$($user.Count) users found with display name '$Identity'. Use SID, object ID or UPN to specify which user is being referred to."
+                Write-Error "$($user.Count) users found with display name '$Identity'. Use SID, object ID or UPN to specify which user is being referred to."
+                return $null
             }
 
             if ($user.OnPremisesSecurityIdentifier) {
@@ -2125,7 +2134,8 @@ function Get-Sid {
                 return [System.Security.Principal.SecurityIdentifier]::new($user.SecurityIdentifier)
             }
             else {
-                throw "User with display name '$Identity' was found, but it did not have a SID."
+                Write-Error "User with display name '$Identity' was found, but it did not have a SID."
+                return $null
             }
         }
 
@@ -2134,7 +2144,8 @@ function Get-Sid {
         $group = Get-MgGroup -Filter $filter -Property "OnPremisesSecurityIdentifier","SecurityIdentifier" -ErrorAction Stop
         if ($group) {
             if ($group -is [array] -and $group.Count -gt 1) {
-                throw "$($group.Count) groups found with display name '$Identity'. Use SID or object ID to specify which group is being referred to."
+                Write-Error "$($group.Count) groups found with display name '$Identity'. Use SID or object ID to specify which group is being referred to."
+                return $null
             }
 
             if ($group.OnPremisesSecurityIdentifier) {
@@ -2146,11 +2157,13 @@ function Get-Sid {
                 return [System.Security.Principal.SecurityIdentifier]::new($group.SecurityIdentifier)
             }
             else {
-                throw "Group with display name '$Identity' was found, but it did not have a SID."
+                Write-Error "Group with display name '$Identity' was found, but it did not have a SID."
+                return $null
             }
         }
         else {
-            throw "No user or group found with display name '$Identity'"
+            Write-Error "No user or group found with display name '$Identity'"
+            return $null
         }
     }
 }
@@ -2377,7 +2390,7 @@ function Add-AzFileAce {
 
     process {
         # Convert the principal to a SID
-        $sid = Get-Sid -Identity $Principal -Verbose:$VerbosePreference -WhatIf:$WhatIfPreference
+        $sid = Get-Sid -Identity $Principal -Verbose:$VerbosePreference -WhatIf:$WhatIfPreference -ErrorAction Stop
 
         # Get ACL from file
         $acl = Get-AzFileAcl -Client $Client -OutputFormat Raw
