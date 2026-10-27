@@ -1586,6 +1586,10 @@ function Update-AzFileAclOnPremToCloudSid {
         [ValidateRange(0, [long]::MaxValue)]
         [long]$AclKeyCacheMaxEntries = 100000,
 
+        [Parameter(Mandatory = $false, ParameterSetName = "Recursive")]
+        [ValidateRange(0, [long]::MaxValue)]
+        [long]$OnPremToCloudSidCacheMaxEntries = 10000,
+
         [Parameter(Mandatory = $false, ParameterSetName = "Single")]
         [Parameter(Mandatory = $false, ParameterSetName = "Recursive")]
         [switch]$Silent = $false,
@@ -1630,6 +1634,7 @@ function Update-AzFileAclOnPremToCloudSid {
         # ACL Key Cache to avoid processing the same ACL multiple times.
         $aclKeyFileCache = [System.Collections.Concurrent.ConcurrentDictionary[string, string]]::new([System.StringComparer]::OrdinalIgnoreCase)
         $aclKeyDirectoryCache = [System.Collections.Concurrent.ConcurrentDictionary[string, string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+        $onpremToCloudSidCache = [System.Collections.Concurrent.ConcurrentDictionary[string, string]]::new([System.StringComparer]::OrdinalIgnoreCase)
 
         if ($Parallel) {
             $updateAzFileAclOnPremToCloudSidSingle = ${function:Update-AzFileAclOnPremToCloudSidSingle}.ToString()
@@ -1691,6 +1696,8 @@ function Update-AzFileAclOnPremToCloudSid {
                             -ShareClient $using:shareClient `
                             -FileOrDirectoryClient $client `
                             -CurrentAclKey $currentAclKey `
+                            -OnPremToCloudSidCache $using:OnPremToCloudSidCache `
+                            -OnPremToCloudSidCacheMaxEntries $using:OnPremToCloudSidCacheMaxEntries `
                             -WhatIf:$using:WhatIfPreference
 
                         if ($null -ne $updatedAclKey) {
@@ -1777,6 +1784,8 @@ function Update-AzFileAclOnPremToCloudSid {
                             -ShareClient $shareClient `
                             -FileOrDirectoryClient $client `
                             -CurrentAclKey $currentAclKey `
+                            -OnPremToCloudSidCache $using:OnPremToCloudSidCache `
+                            -OnPremToCloudSidCacheMaxEntries $using:OnPremToCloudSidCacheMaxEntries `
                             -WhatIf:$WhatIfPreference
 
                         if ($null -ne $updatedAclKey) {
@@ -1843,7 +1852,13 @@ function Update-AzFileAclOnPremToCloudSidSingle {
         [object]$FileOrDirectoryClient,
 
         [Parameter(Mandatory = $true)]
-        [string]$CurrentAclKey
+        [string]$CurrentAclKey,
+
+        [Parameter(Mandatory = $false)]
+        [System.Collections.Concurrent.ConcurrentDictionary[string, string]]$OnPremToCloudSidCache = $null,
+
+        [Parameter(Mandatory = $false)]
+        [long]$OnPremToCloudSidCacheMaxEntries = 10000
     )
 
     # It is responsibility of the caller to ensure $CurrentAclKey is the current ACL for the file represented by $FileOrDirectoryClient
@@ -1855,7 +1870,14 @@ function Update-AzFileAclOnPremToCloudSidSingle {
     for ($i = $currentAcl.DiscretionaryAcl.Count - 1; $i -ge 0; $i--) {
         $ace = $currentAcl.DiscretionaryAcl[$i]
         if ($ace -is [System.Security.AccessControl.KnownAce] -and $ace.SecurityIdentifier.Value.StartsWith("S-1-5-21-")) {
-            $cloudSid = Get-CloudSid -OnPremisesSid $ace.SecurityIdentifier.Value -Verbose:$VerbosePreference -WhatIf:$WhatIfPreference -ErrorAction SilentlyContinue
+            $cloudSid = $null
+            if ($null -ne $OnPremToCloudSidCache -and -not $OnPremToCloudSidCache.TryGetValue($ace.SecurityIdentifier.Value, [ref]$cloudSid)) {
+                $cloudSid = Get-CloudSid -OnPremisesSid $ace.SecurityIdentifier.Value -Verbose:$VerbosePreference -WhatIf:$WhatIfPreference -ErrorAction SilentlyContinue
+                if ($OnPremToCloudSidCache.Count -lt $OnPremToCloudSidCacheMaxEntries) {
+                    $OnPremToCloudSidCache.TryAdd($ace.SecurityIdentifier.Value, $cloudSid) | Out-Null
+                }
+            }
+
             if ($null -eq $cloudSid) {
                 Write-Verbose "No cloud SID found for on-premises SID '$($ace.SecurityIdentifier.Value)'. Skipping."
                 continue
