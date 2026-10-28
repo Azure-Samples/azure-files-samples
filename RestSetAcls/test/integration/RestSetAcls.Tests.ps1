@@ -1162,6 +1162,31 @@ Describe "Update-AzFileAclOnPremToCloudSid" -Tag "SidMigration" {
             $secondUpdatedAclKey | Should -Be $firstUpdatedAclKey
         }
 
+        It "Skips SIDs that do not exist in Entra and translates the remaining SIDs" {
+            $filePath = "$(New-RandomString -Length 8).txt"
+            New-File -Path $filePath
+
+            $missingSid = "S-1-5-21-111111111-222222222-333333333-9999"
+            $sddl = "O:SYG:SYD:P(A;;0x1200a9;;;$($Config.HybridUser.Sid))(A;;0x120089;;;$missingSid)(A;;0x100000;;;$($Config.HybridGroup.Sid))S:NO_ACCESS_CONTROL"
+            Set-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $filePath -Acl $sddl
+
+            { Update-AzFileAclOnPremToCloudSid `
+                -Context $global:context `
+                -FileShareName $global:fileShareName `
+                -Path $filePath } | Should -Not -Throw
+
+            $updatedSddl = Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $filePath -OutputFormat Sddl
+            $acePattern = '\([^)]*\)'
+            $header = $updatedSddl -replace "$acePattern.*$", ''
+            $updatedAces = [regex]::Matches($updatedSddl, $acePattern).Value
+            $header | Should -Be "O:SYG:SYD:P"
+            $updatedAces | Should -HaveCount 5
+            $updatedAces | Should -Contain "(A;;0x1200a9;;;$($Config.HybridUser.Sid))"
+            $updatedAces | Should -Contain "(A;;0x1200a9;;;$hybridUserCloudSid)"
+            $updatedAces | Should -Contain "(A;;FR;;;$missingSid)"
+            $updatedAces | Should -Contain "(A;;0x100000;;;$($Config.HybridGroup.Sid))"
+            $updatedAces | Should -Contain "(A;;0x100000;;;$hybridGroupCloudSid)"
+        }
     }
 
     Context "Recursive mode" {
@@ -1275,6 +1300,73 @@ Describe "Update-AzFileAclOnPremToCloudSid" -Tag "SidMigration" {
             }
         }
 
+        It "Looks up each on-premises SID only once across items with different ACLs" {
+            $directoryName = "sidmapcache-$(New-RandomString -Length 8)"
+            New-Directory -Path $directoryName
+            $missingSid = "S-1-5-21-111111111-222222222-333333333-9999"
+            $userSid = $Config.HybridUser.Sid
+
+            $sddl1 = "O:SYG:SYD:P(A;;0x1200a9;;;$userSid)(A;;0x120089;;;$missingSid)S:NO_ACCESS_CONTROL"
+            $sddl2 = "O:SYG:SYD:P(A;;0x100000;;;$userSid)(A;;0x120089;;;$missingSid)S:NO_ACCESS_CONTROL"
+            $filePaths = @("$directoryName/file1.txt", "$directoryName/file2.txt", "$directoryName/file3.txt")
+            $filePaths | ForEach-Object { New-File -Path $_ }
+            Set-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $filePaths[0] -Acl $sddl1
+            Set-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $filePaths[1] -Acl $sddl2
+            Set-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $filePaths[2] -Acl "O:SYG:SYD:P(A;;0x1200a9;;;$userSid)(A;;0x100000;;;$missingSid)S:NO_ACCESS_CONTROL"
+
+            $output = Update-AzFileAclOnPremToCloudSid `
+                -Context $global:context `
+                -FileShareName $global:fileShareName `
+                -Path $directoryName `
+                -Recursive `
+                -Parallel $false `
+                -SkipDirectories `
+                -Silent `
+                -PassThru `
+                -Verbose 4>&1
+            $results = @($output | Where-Object { $_ -is [hashtable] })
+            $messages = @($output | Where-Object { $_ -is [System.Management.Automation.VerboseRecord] })
+
+            $results.Count | Should -Be 3
+            $results.Success | Should -Not -Contain $false -Because ($results.ErrorMessage -join "; ")
+            ($results.AclKey | Select-Object -Unique).Count | Should -Be 3
+
+            @($messages | Where-Object Message -Like "Getting user by on-prem SID '$userSid' in Microsoft Graph").Count | Should -Be 1
+            @($messages | Where-Object Message -Like "Getting user by on-prem SID '$missingSid' in Microsoft Graph").Count | Should -Be 1
+
+            $updatedSddl = Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $filePaths[0] -OutputFormat Sddl
+            $updatedSddl | Should -Be "O:SYG:SYD:P(A;;0x1200a9;;;$userSid)(A;;FR;;;$missingSid)(A;;0x1200a9;;;$hybridUserCloudSid)S:NO_ACCESS_CONTROL"
+        }
+
+        It "Does not cache on-premises SIDs when OnPremToCloudSidCacheMaxEntries is 0" {
+            $directoryName = "sidmapnocache-$(New-RandomString -Length 8)"
+            New-Directory -Path $directoryName
+            $userSid = $Config.HybridUser.Sid
+
+            $filePaths = @("$directoryName/file1.txt", "$directoryName/file2.txt")
+            $filePaths | ForEach-Object { New-File -Path $_ }
+            Set-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $filePaths[0] -Acl "O:SYG:SYD:P(A;;0x1200a9;;;$userSid)S:NO_ACCESS_CONTROL"
+            Set-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $filePaths[1] -Acl "O:SYG:SYD:P(A;;0x100000;;;$userSid)S:NO_ACCESS_CONTROL"
+
+            $output = Update-AzFileAclOnPremToCloudSid `
+                -Context $global:context `
+                -FileShareName $global:fileShareName `
+                -Path $directoryName `
+                -Recursive `
+                -Parallel $false `
+                -SkipDirectories `
+                -OnPremToCloudSidCacheMaxEntries 0 `
+                -Silent `
+                -PassThru `
+                -Verbose 4>&1
+            $results = @($output | Where-Object { $_ -is [hashtable] })
+            $messages = @($output | Where-Object { $_ -is [System.Management.Automation.VerboseRecord] })
+
+            $results.Count | Should -Be 2
+            $results.Success | Should -Not -Contain $false
+            @($messages | Where-Object Message -Like "Getting user by on-prem SID '$userSid' in Microsoft Graph").Count | Should -Be 2
+        }
+
         It "Updates all items in parallel recursive mode" {
             $directoryName = "sidparallel-$(New-RandomString -Length 8)"
             New-Directory -Path $directoryName
@@ -1307,7 +1399,7 @@ Describe "Update-AzFileAclOnPremToCloudSid" -Tag "SidMigration" {
             )
             $results.Count | Should -Be 3
             Compare-Object $expectedFullPaths $results.FullPath | Should -BeNullOrEmpty
-            $results.Success | Should -Not -Contain $false
+            $results.Success | Should -Not -Contain $false -Because ($results.ErrorMessage -join "; ")
             foreach ($result in $results) {
                 $filePath = $result.FullPath.TrimEnd([char]'/')
                 $currentAclKey = Get-AzFileAclKey -Context $global:context -FileShareName $global:fileShareName -FilePath $filePath

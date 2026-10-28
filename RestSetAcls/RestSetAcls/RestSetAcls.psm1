@@ -1696,7 +1696,7 @@ function Update-AzFileAclOnPremToCloudSid {
                             -ShareClient $using:shareClient `
                             -FileOrDirectoryClient $client `
                             -CurrentAclKey $currentAclKey `
-                            -OnPremToCloudSidCache $using:OnPremToCloudSidCache `
+                            -OnPremToCloudSidCache $using:onPremToCloudSidCache `
                             -OnPremToCloudSidCacheMaxEntries $using:OnPremToCloudSidCacheMaxEntries `
                             -WhatIf:$using:WhatIfPreference
 
@@ -1784,8 +1784,8 @@ function Update-AzFileAclOnPremToCloudSid {
                             -ShareClient $shareClient `
                             -FileOrDirectoryClient $client `
                             -CurrentAclKey $currentAclKey `
-                            -OnPremToCloudSidCache $using:OnPremToCloudSidCache `
-                            -OnPremToCloudSidCacheMaxEntries $using:OnPremToCloudSidCacheMaxEntries `
+                            -OnPremToCloudSidCache $onpremToCloudSidCache `
+                            -OnPremToCloudSidCacheMaxEntries $OnPremToCloudSidCacheMaxEntries `
                             -WhatIf:$WhatIfPreference
 
                         if ($null -ne $updatedAclKey) {
@@ -1871,20 +1871,20 @@ function Update-AzFileAclOnPremToCloudSidSingle {
         $ace = $currentAcl.DiscretionaryAcl[$i]
         if ($ace -is [System.Security.AccessControl.KnownAce] -and $ace.SecurityIdentifier.Value.StartsWith("S-1-5-21-")) {
             $cloudSid = $null
-            if ($null -ne $OnPremToCloudSidCache -and -not $OnPremToCloudSidCache.TryGetValue($ace.SecurityIdentifier.Value, [ref]$cloudSid)) {
+            if ($null -eq $OnPremToCloudSidCache -or -not $OnPremToCloudSidCache.TryGetValue($ace.SecurityIdentifier.Value, [ref]$cloudSid)) {
                 $cloudSid = Get-CloudSid -OnPremisesSid $ace.SecurityIdentifier.Value -Verbose:$VerbosePreference -WhatIf:$WhatIfPreference -ErrorAction SilentlyContinue
-                if ($OnPremToCloudSidCache.Count -lt $OnPremToCloudSidCacheMaxEntries) {
+                if ($null -ne $OnPremToCloudSidCache -and $OnPremToCloudSidCache.Count -lt $OnPremToCloudSidCacheMaxEntries) {
                     $OnPremToCloudSidCache.TryAdd($ace.SecurityIdentifier.Value, $cloudSid) | Out-Null
                 }
             }
 
-            if ($null -eq $cloudSid) {
+            if ([string]::IsNullOrEmpty([string]$cloudSid)) {
                 Write-Verbose "No cloud SID found for on-premises SID '$($ace.SecurityIdentifier.Value)'. Skipping."
                 continue
             }
 
             $duplicateAce = Copy-GenericAce -Ace $ace
-            $duplicateAce.SecurityIdentifier = $cloudSid
+            $duplicateAce.SecurityIdentifier = [System.Security.Principal.SecurityIdentifier]::new([string]$cloudSid)
             $updatedAcl.DiscretionaryAcl.InsertAce($i + 1, $duplicateAce)
 
             Write-Verbose "ACE count: $($updatedAcl.DiscretionaryAcl.Count)"
