@@ -12,7 +12,7 @@
     RootModule        = 'RestSetAcls.psm1'
 
     # Version number of this module.
-    ModuleVersion     = '0.2.11'
+    ModuleVersion     = '0.2.12'
 
     # Supported PSEditions
     # CompatiblePSEditions = @()
@@ -102,6 +102,7 @@
         "Get-AzFileAclKey",
         "Get-AzFileAclFromKey",
         "Set-AzFileAcl",
+        "Set-AzFileDefaultAcl",
         "Get-AzFileAcl",
         "Set-AzFileOwner",
         "Restore-AzFileAclInheritance",

@@ -156,6 +156,171 @@ function Test-Integration {
     Invoke-Pester -Container $container -Output Detailed @params
 }
 
+function New-IntegrationTestConfig {
+    [CmdletBinding(SupportsShouldProcess)]
+    param (
+        [Parameter(Mandatory = $false)]
+        [string]$Path = "$PSScriptRoot\test\integration\config.json"
+    )
+
+    Write-Host "Creating integration test configuration" -ForegroundColor White
+
+    #
+    # Check Azure and Microsoft Graph contexts
+    #
+
+    Write-Host "  Checking Azure and Microsoft Graph contexts..." -NoNewline
+
+    $azContext = Get-AzContext -ErrorAction SilentlyContinue
+    if (-not $azContext) {
+        Write-Error "No Azure context found. Please log in to Azure using Connect-AzAccount." -ErrorAction Stop
+    }
+
+    $mgContext = Get-MgContext -ErrorAction SilentlyContinue
+    if (-not $mgContext) {
+        Write-Error "No Microsoft Graph context found. Please log in to Microsoft Graph using Connect-MgGraph." -ErrorAction Stop
+    }
+
+    if ($azContext.Tenant.Id -ne $mgContext.TenantId) {
+        Write-Error "Azure context tenant ID ($($azContext.Tenant.Id)) does not match Microsoft Graph context tenant ID ($($mgContext.TenantId))." -ErrorAction Stop
+    }
+    Write-Host " Done" -ForegroundColor Green
+
+    #
+    # Find a storage account
+    #
+
+    Write-Host "  Selecting storage account..." -NoNewline
+    $storageAccount = Get-AzStorageAccount -ErrorAction Stop | Select-Object -First 1
+    if (-not $storageAccount) {
+        Write-Error "No storage accounts were found in the current Azure context." -ErrorAction Stop
+    }
+
+    $storageAccountKey = Get-AzStorageAccountKey `
+        -ResourceGroupName $storageAccount.ResourceGroupName `
+        -Name $storageAccount.StorageAccountName `
+        -ErrorAction Stop `
+    | Select-Object -First 1
+    if (-not $storageAccountKey) {
+        Write-Error "No keys were found for storage account $($storageAccount.StorageAccountName)." -ErrorAction Stop
+    }
+    Write-Host " $($storageAccount.StorageAccountName)" -ForegroundColor Green
+
+    #
+    # Find Microsoft Graph identities
+    #
+
+    Write-Host "  Finding Microsoft Graph identities" -ForegroundColor White
+    $userProperties = @(
+        "Id",
+        "DisplayName",
+        "UserPrincipalName",
+        "SecurityIdentifier",
+        "OnPremisesSecurityIdentifier",
+        "OnPremisesSyncEnabled"
+    )
+    
+    Write-Host "    Finding hybrid user...      " -NoNewline
+
+    $hybridUser = Get-MgUser `
+        -Filter "onPremisesSyncEnabled eq true" `
+        -Top 1 `
+        -Property $userProperties `
+        -ErrorAction Stop
+
+    if (-not $hybridUser) {
+        Write-Error "No hybrid user was found in Microsoft Graph." -ErrorAction Stop
+    }
+
+    Write-Host "$($hybridUser.DisplayName)" -ForegroundColor Green
+
+    Write-Host "    Finding cloud-only user...  " -NoNewline
+
+    $cloudNativeUser = Get-MgUser `
+        -Filter "onPremisesSyncEnabled eq null" `
+        -ConsistencyLevel eventual `
+        -CountVariable cloudNativeUserCount `
+        -Top 1 `
+        -Property $userProperties `
+        -ErrorAction Stop
+    
+    if (-not $cloudNativeUser) {
+        Write-Error "No cloud-only user was found in Microsoft Graph." -ErrorAction Stop
+    }
+    
+    Write-Host "$($cloudNativeUser.DisplayName)" -ForegroundColor Green
+
+    $groupProperties = @(
+        "Id",
+        "DisplayName",
+        "SecurityEnabled",
+        "SecurityIdentifier",
+        "OnPremisesSecurityIdentifier",
+        "OnPremisesSyncEnabled"
+    )
+
+    Write-Host "    Finding hybrid group...     " -NoNewline
+    $hybridGroup = Get-MgGroup `
+        -Filter "securityEnabled eq true and onPremisesSyncEnabled eq true" `
+        -Top 1 `
+        -Property $groupProperties `
+        -ErrorAction Stop
+    
+    if (-not $hybridGroup) {
+        Write-Error "No hybrid group was found in Microsoft Graph." -ErrorAction Stop
+    }
+    Write-Host "$($hybridGroup.DisplayName)" -ForegroundColor Green
+
+    Write-Host "    Finding cloud-only group... " -NoNewline
+    $cloudNativeGroup = Get-MgGroup `
+        -Filter "securityEnabled eq true and onPremisesSyncEnabled eq null" `
+        -ConsistencyLevel eventual `
+        -CountVariable cloudNativeGroupCount `
+        -Top 1 `
+        -Property $groupProperties `
+        -ErrorAction Stop
+    
+    if (-not $cloudNativeGroup) {
+        Write-Error "No cloud-only group was found in Microsoft Graph." -ErrorAction Stop
+    }
+    Write-Host "$($cloudNativeGroup.DisplayName)" -ForegroundColor Green
+
+    $config = [ordered]@{
+        ResourceGroupName  = $storageAccount.ResourceGroupName
+        StorageAccountName = $storageAccount.StorageAccountName
+        StorageAccountKey  = $storageAccountKey.Value
+        HybridUser         = [ordered]@{
+            Upn         = $hybridUser.UserPrincipalName
+            Sid         = $hybridUser.OnPremisesSecurityIdentifier
+            DisplayName = $hybridUser.DisplayName
+            ObjectId    = $hybridUser.Id
+        }
+        HybridGroup        = [ordered]@{
+            Sid         = $hybridGroup.OnPremisesSecurityIdentifier
+            DisplayName = $hybridGroup.DisplayName
+            ObjectId    = $hybridGroup.Id
+        }
+        CloudNativeUser    = [ordered]@{
+            Upn         = $cloudNativeUser.UserPrincipalName
+            Sid         = $cloudNativeUser.SecurityIdentifier
+            DisplayName = $cloudNativeUser.DisplayName
+            ObjectId    = $cloudNativeUser.Id
+        }
+        CloudNativeGroup   = [ordered]@{
+            Sid         = $cloudNativeGroup.SecurityIdentifier
+            DisplayName = $cloudNativeGroup.DisplayName
+            ObjectId    = $cloudNativeGroup.Id
+        }
+    }
+
+    if ($PSCmdlet.ShouldProcess($Path, "Write integration test configuration")) {
+        Write-Host "  Writing config..." -NoNewline
+        $config | ConvertTo-Json -Depth 3 | Set-Content -Path $Path -Encoding UTF8
+        Write-Host " Done" -ForegroundColor Green
+        Write-Host "Created $Path"
+    }
+}
+
 function Test-Manifest {
     Test-ModuleManifest -Path $PSScriptRoot\RestSetAcls\RestSetAcls.psd1
 }
