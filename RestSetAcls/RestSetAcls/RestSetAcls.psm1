@@ -1836,6 +1836,17 @@ function Update-AzFileAclOnPremToCloudSid {
             Write-Host "`r" -NoNewline # Clear the line from the live progress reporting
             Write-Host "Cached $($aclKeyDirectoryCache.Count) directory ACL keys and $($aclKeyFileCache.Count) file ACL keys."
             Write-FinalFilesAndFoldersProcessed -ProcessedCount $processedCount -Errors $errors -TotalTime $totalTime
+
+            $unmappedSids = @(
+                $onpremToCloudSidCache.GetEnumerator() |
+                    Where-Object { [string]::IsNullOrEmpty($_.Value) } |
+                    Sort-Object -Property Key |
+                    Select-Object -ExpandProperty Key
+            )
+            Write-Warning "Cached on-premises SIDs without a corresponding cloud SID: $($unmappedSids.Count)"
+            foreach ($sid in $unmappedSids) {
+                Write-Warning "  $sid"
+            }
         }
 
     }
