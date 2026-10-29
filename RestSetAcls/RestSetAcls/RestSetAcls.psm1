@@ -1607,9 +1607,14 @@ function Update-AzFileAclOnPremToCloudSid {
     .PARAMETER PassThru
     If specified, the cmdlet will output the objects processed, including their paths and success status.
 
-    .PARAMETER AclKeyCacheMemoryLimitBytes
-    Specifies the maximum approximate memory, in bytes, used for cached ACL key strings in recursive mode. The
-    default is 104857600 bytes (100 MB). Once the limit is reached, existing entries continue to be used but new
+    .PARAMETER AclKeyCacheMaxEntries
+    Specifies the maximum number of entries used for cached ACL key strings in recursive mode. The
+    default is 100000 entries. Once the limit is reached, existing entries continue to be used but new
+    entries are not added. Set this parameter to 0 to disable adding cache entries.
+
+    .PARAMETER OnPremToCloudSidCacheMaxEntries
+    Specifies the maximum number of entries used for cached on-premises to cloud SID mappings in recursive mode. The
+    default is 10000 entries. Once the limit is reached, existing entries continue to be used but new
     entries are not added. Set this parameter to 0 to disable adding cache entries.
 
     .OUTPUTS
@@ -1743,7 +1748,7 @@ function Update-AzFileAclOnPremToCloudSid {
         # ACL Key Cache to avoid processing the same ACL multiple times.
         $aclKeyFileCache = [System.Collections.Concurrent.ConcurrentDictionary[string, string]]::new([System.StringComparer]::OrdinalIgnoreCase)
         $aclKeyDirectoryCache = [System.Collections.Concurrent.ConcurrentDictionary[string, string]]::new([System.StringComparer]::OrdinalIgnoreCase)
-        $onpremToCloudSidCache = [System.Collections.Concurrent.ConcurrentDictionary[string, string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+        $onpremToCloudSidCache = [System.Collections.Concurrent.ConcurrentDictionary[string, System.Security.Principal.SecurityIdentifier]]::new([System.StringComparer]::OrdinalIgnoreCase)
 
         if ($Parallel) {
             $updateAzFileAclOnPremToCloudSidSingle = ${function:Update-AzFileAclOnPremToCloudSidSingle}.ToString()
@@ -1952,7 +1957,7 @@ function Update-AzFileAclOnPremToCloudSid {
 
             $unmappedSids = @(
                 $onpremToCloudSidCache.GetEnumerator() |
-                    Where-Object { [string]::IsNullOrEmpty($_.Value) } |
+                    Where-Object { $null -eq $_.Value } |
                     Sort-Object -Property Key |
                     Select-Object -ExpandProperty Key
             )
@@ -1979,7 +1984,7 @@ function Update-AzFileAclOnPremToCloudSidSingle {
         [string]$CurrentAclKey,
 
         [Parameter(Mandatory = $false)]
-        [System.Collections.Concurrent.ConcurrentDictionary[string, string]]$OnPremToCloudSidCache = $null,
+        [System.Collections.Concurrent.ConcurrentDictionary[string, System.Security.Principal.SecurityIdentifier]]$OnPremToCloudSidCache = $null,
 
         [Parameter(Mandatory = $false)]
         [long]$OnPremToCloudSidCacheMaxEntries = 10000,
@@ -2009,19 +2014,21 @@ function Update-AzFileAclOnPremToCloudSidSingle {
                     -Environment $Environment `
                     -Verbose:$VerbosePreference `
                     -WhatIf:$WhatIfPreference `
-                -ErrorAction SilentlyContinue
+                    -ErrorAction SilentlyContinue
+
                 if ($null -ne $OnPremToCloudSidCache -and $OnPremToCloudSidCache.Count -lt $OnPremToCloudSidCacheMaxEntries) {
+                    # $cloudSid may be $null and that is a valid scenario, indicating no corresponding cloud SID was found.
                     $OnPremToCloudSidCache.TryAdd($ace.SecurityIdentifier.Value, $cloudSid) | Out-Null
                 }
             }
 
-            if ([string]::IsNullOrEmpty([string]$cloudSid)) {
+            if ($null -eq $cloudSid) {
                 Write-Verbose "No cloud SID found for on-premises SID '$($ace.SecurityIdentifier.Value)'. Skipping."
                 continue
             }
 
             $duplicateAce = Copy-GenericAce -Ace $ace
-            $duplicateAce.SecurityIdentifier = [System.Security.Principal.SecurityIdentifier]::new([string]$cloudSid)
+            $duplicateAce.SecurityIdentifier = $cloudSid
             $updatedAcl.DiscretionaryAcl.InsertAce($i + 1, $duplicateAce)
 
             Write-Verbose "ACE count: $($updatedAcl.DiscretionaryAcl.Count)"

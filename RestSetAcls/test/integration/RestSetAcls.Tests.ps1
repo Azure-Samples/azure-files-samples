@@ -143,10 +143,10 @@ Describe "Get-AzFileAclKey" {
             Write-Host "Deleting temporary file share $tmpShareName in storage account $($Config.StorageAccountName)..."
             Remove-AzStorageShare -Name $tmpShareName -Context $global:context -Force
         }
-        
+
         It "Should return null for the root directory of a new share" {
             $key = Get-AzFileAclKey -Context $global:context -FileShareName $tmpShareName -FilePath "/"
-            $key | Should -Be $null   
+            $key | Should -Be $null
         }
     }
 }
@@ -279,7 +279,7 @@ Describe "Get-AzFileAcl" {
             Write-Host "Deleting temporary file share $tmpShareName in storage account $($Config.StorageAccountName)..."
             Remove-AzStorageShare -Name $tmpShareName -Context $global:context -Force
         }
-        
+
         It "Should fail when trying to retrieve the ACL for the root directory without an ACL" {
             { Get-AzFileAcl -Context $global:context -FileShareName $tmpShareName -FilePath "/" } | Should -Throw
         }
@@ -597,17 +597,17 @@ Describe "Set-AzFileOwner" {
             Write-Host "Deleting temporary file share $tmpShareName in storage account $($Config.StorageAccountName)..."
             Remove-AzStorageShare -Name $tmpShareName -Context $global:context -Force
         }
-        
+
         It "Is able to update the owner even when the root directory has no ACL" {
             $key = Set-AzFileOwner `
                 -Context $global:context `
                 -FileShareName $tmpShareName `
                 -FilePath "/" `
                 -Owner "S-1-12-1-1-2-3-4"
-            
+
             $actualKey = Get-AzFileAclKey -Context $global:context -FileShareName $tmpShareName -FilePath "/"
             $key | Should -Be $actualKey
-            
+
             $acl = Get-AzFileAcl -Context $global:context -FileShareName $tmpShareName -FilePath "/" -OutputFormat Sddl
             $acl | Should -Not -Be $null
             $acl | Should -Be "O:S-1-12-1-1-2-3-4G:SYD:(A;OICIIO;GA;;;CO)(A;OICI;0x1301bf;;;AU)(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICIIO;GXGR;;;BU)(A;;0x1200a9;;;BU)S:NO_ACCESS_CONTROL"
@@ -1168,7 +1168,7 @@ Describe "Update-AzFileAclOnPremToCloudSid" -Tag "SidMigration" {
 
             $sddl = "O:SYG:SYD:P(A;;0x1200a9;;;$($Config.HybridUser.Sid))(A;;0x100000;;;$($Config.HybridGroup.Sid))S:NO_ACCESS_CONTROL"
             $expectedSddl = "O:SYG:SYD:P(A;;0x1200a9;;;$($Config.HybridUser.Sid))(A;;0x100000;;;$($Config.HybridGroup.Sid))(A;;0x1200a9;;;$hybridUserCloudSid)(A;;0x100000;;;$hybridGroupCloudSid)S:NO_ACCESS_CONTROL"
-            
+
             # Normalize expected SDDL (this orders ACEs by alphanumeric ordering of SIDs)
             $expectedSddl = $expectedSddl | Convert-SecurityDescriptor -From Sddl -To FolderAcl | Convert-SecurityDescriptor -From FolderAcl -To Sddl
             $expectedSddl += "S:NO_ACCESS_CONTROL"
@@ -1247,24 +1247,14 @@ Describe "Update-AzFileAclOnPremToCloudSid" -Tag "SidMigration" {
 
             $missingSid = "S-1-5-21-111111111-222222222-333333333-9999"
             $sddl = "O:SYG:SYD:P(A;;0x1200a9;;;$($Config.HybridUser.Sid))(A;;0x120089;;;$missingSid)(A;;0x100000;;;$($Config.HybridGroup.Sid))S:NO_ACCESS_CONTROL"
+            $expectedSddl = "O:SYG:SYD:P(A;;0x1200a9;;;$($Config.HybridUser.Sid))(A;;0x100000;;;$($Config.HybridGroup.Sid))(A;;FR;;;$missingSid)(A;;0x1200a9;;;$hybridUserCloudSid)(A;;0x100000;;;$hybridGroupCloudSid)S:NO_ACCESS_CONTROL"
             Set-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $filePath -Acl $sddl
 
-            { Update-AzFileAclOnPremToCloudSid `
-                -Context $global:context `
-                -FileShareName $global:fileShareName `
-                -Path $filePath } | Should -Not -Throw
+            Update-AzFileAclOnPremToCloudSid -Context $global:context -FileShareName $global:fileShareName -Path $filePath
 
             $updatedSddl = Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $filePath -OutputFormat Sddl
-            $acePattern = '\([^)]*\)'
-            $header = $updatedSddl -replace "$acePattern.*$", ''
-            $updatedAces = [regex]::Matches($updatedSddl, $acePattern).Value
-            $header | Should -Be "O:SYG:SYD:P"
-            $updatedAces | Should -HaveCount 5
-            $updatedAces | Should -Contain "(A;;0x1200a9;;;$($Config.HybridUser.Sid))"
-            $updatedAces | Should -Contain "(A;;0x1200a9;;;$hybridUserCloudSid)"
-            $updatedAces | Should -Contain "(A;;FR;;;$missingSid)"
-            $updatedAces | Should -Contain "(A;;0x100000;;;$($Config.HybridGroup.Sid))"
-            $updatedAces | Should -Contain "(A;;0x100000;;;$hybridGroupCloudSid)"
+            Write-Host $updatedSddl
+            $updatedSddl | Should -Be $expectedSddl
         }
     }
 
@@ -1599,7 +1589,7 @@ Describe "Add-AzFileAce" -Tag "Ace" {
             Write-Host "Deleting temporary file share $tmpShareName in storage account $($Config.StorageAccountName)..."
             Remove-AzStorageShare -Name $tmpShareName -Context $global:context -Force
         }
-        
+
         It "Is able to insert an ACE even when the root directory has no ACL" {
             $key = Add-AzFileAce `
                 -Context $global:context `
@@ -1611,7 +1601,7 @@ Describe "Add-AzFileAce" -Tag "Ace" {
 
             $actualKey = Get-AzFileAclKey -Context $global:context -FileShareName $tmpShareName -FilePath "/"
             $key | Should -Be $actualKey
-            
+
             $acl = Get-AzFileAcl -Context $global:context -FileShareName $tmpShareName -FilePath "/" -OutputFormat Sddl
             $acl | Should -Not -Be $null
             $acl | Should -Be "O:SYG:SYD:(A;OICIIO;GA;;;CO)(A;OICI;0x1301bf;;;AU)(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICIIO;GXGR;;;BU)(A;;0x1200a9;;;BU)(A;OICI;FA;;;S-1-12-1-1-2-3-4)S:NO_ACCESS_CONTROL"
