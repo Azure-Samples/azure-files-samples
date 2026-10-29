@@ -1253,7 +1253,6 @@ Describe "Update-AzFileAclOnPremToCloudSid" -Tag "SidMigration" {
             Update-AzFileAclOnPremToCloudSid -Context $global:context -FileShareName $global:fileShareName -Path $filePath
 
             $updatedSddl = Get-AzFileAcl -Context $global:context -FileShareName $global:fileShareName -FilePath $filePath -OutputFormat Sddl
-            Write-Host $updatedSddl
             $updatedSddl | Should -Be $expectedSddl
         }
     }
