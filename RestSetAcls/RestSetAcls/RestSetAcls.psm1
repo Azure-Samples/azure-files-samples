@@ -1961,7 +1961,7 @@ function Update-AzFileAclOnPremToCloudSid {
                     Sort-Object -Property Key |
                     Select-Object -ExpandProperty Key
             )
-            Write-Warning "Cached on-premises SIDs without a corresponding cloud SID: $($unmappedSids.Count)"
+            Write-Warning "The following SIDs could not be converted to cloud SIDs, and were left unchanged in the ACLs: $($unmappedSids.Count)"
             foreach ($sid in $unmappedSids) {
                 Write-Warning "  $sid"
             }
