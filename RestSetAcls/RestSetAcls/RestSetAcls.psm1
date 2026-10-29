@@ -1607,9 +1607,14 @@ function Update-AzFileAclOnPremToCloudSid {
     .PARAMETER PassThru
     If specified, the cmdlet will output the objects processed, including their paths and success status.
 
-    .PARAMETER AclKeyCacheMemoryLimitBytes
-    Specifies the maximum approximate memory, in bytes, used for cached ACL key strings in recursive mode. The
-    default is 104857600 bytes (100 MB). Once the limit is reached, existing entries continue to be used but new
+    .PARAMETER AclKeyCacheMaxEntries
+    Specifies the maximum number of entries used for cached ACL key strings in recursive mode. The
+    default is 100000 entries. Once the limit is reached, existing entries continue to be used but new
+    entries are not added. Set this parameter to 0 to disable adding cache entries.
+
+    .PARAMETER OnPremToCloudSidCacheMaxEntries
+    Specifies the maximum number of entries used for cached on-premises to cloud SID mappings in recursive mode. The
+    default is 10000 entries. Once the limit is reached, existing entries continue to be used but new
     entries are not added. Set this parameter to 0 to disable adding cache entries.
 
     .OUTPUTS
@@ -1676,6 +1681,10 @@ function Update-AzFileAclOnPremToCloudSid {
         [ValidateRange(0, [long]::MaxValue)]
         [long]$AclKeyCacheMaxEntries = 100000,
 
+        [Parameter(Mandatory = $false, ParameterSetName = "Recursive")]
+        [ValidateRange(0, [long]::MaxValue)]
+        [long]$OnPremToCloudSidCacheMaxEntries = 10000,
+
         [Parameter(Mandatory = $false, ParameterSetName = "Single")]
         [Parameter(Mandatory = $false, ParameterSetName = "Recursive")]
         [switch]$Silent = $false,
@@ -1739,6 +1748,7 @@ function Update-AzFileAclOnPremToCloudSid {
         # ACL Key Cache to avoid processing the same ACL multiple times.
         $aclKeyFileCache = [System.Collections.Concurrent.ConcurrentDictionary[string, string]]::new([System.StringComparer]::OrdinalIgnoreCase)
         $aclKeyDirectoryCache = [System.Collections.Concurrent.ConcurrentDictionary[string, string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+        $onpremToCloudSidCache = [System.Collections.Concurrent.ConcurrentDictionary[string, System.Security.Principal.SecurityIdentifier]]::new([System.StringComparer]::OrdinalIgnoreCase)
 
         if ($Parallel) {
             $updateAzFileAclOnPremToCloudSidSingle = ${function:Update-AzFileAclOnPremToCloudSidSingle}.ToString()
@@ -1800,6 +1810,8 @@ function Update-AzFileAclOnPremToCloudSid {
                             -ShareClient $using:shareClient `
                             -FileOrDirectoryClient $client `
                             -CurrentAclKey $currentAclKey `
+                            -OnPremToCloudSidCache $using:onPremToCloudSidCache `
+                            -OnPremToCloudSidCacheMaxEntries $using:OnPremToCloudSidCacheMaxEntries `
                             -TenantId $using:TenantId `
                             -Environment $using:Environment `
                             -WhatIf:$using:WhatIfPreference
@@ -1888,6 +1900,8 @@ function Update-AzFileAclOnPremToCloudSid {
                             -ShareClient $shareClient `
                             -FileOrDirectoryClient $client `
                             -CurrentAclKey $currentAclKey `
+                            -OnPremToCloudSidCache $onpremToCloudSidCache `
+                            -OnPremToCloudSidCacheMaxEntries $OnPremToCloudSidCacheMaxEntries `
                             -TenantId $TenantId `
                             -Environment $Environment `
                             -WhatIf:$WhatIfPreference
@@ -1940,6 +1954,17 @@ function Update-AzFileAclOnPremToCloudSid {
             Write-Host "`r" -NoNewline # Clear the line from the live progress reporting
             Write-Host "Cached $($aclKeyDirectoryCache.Count) directory ACL keys and $($aclKeyFileCache.Count) file ACL keys."
             Write-FinalFilesAndFoldersProcessed -ProcessedCount $processedCount -Errors $errors -TotalTime $totalTime
+
+            $unmappedSids = @(
+                $onpremToCloudSidCache.GetEnumerator() |
+                    Where-Object { $null -eq $_.Value } |
+                    Sort-Object -Property Key |
+                    Select-Object -ExpandProperty Key
+            )
+            Write-Warning "The following SIDs could not be converted to cloud SIDs, and were left unchanged in the ACLs: $($unmappedSids.Count)"
+            foreach ($sid in $unmappedSids) {
+                Write-Warning "  $sid"
+            }
         }
 
     }
@@ -1959,6 +1984,12 @@ function Update-AzFileAclOnPremToCloudSidSingle {
         [string]$CurrentAclKey,
 
         [Parameter(Mandatory = $false)]
+        [System.Collections.Concurrent.ConcurrentDictionary[string, System.Security.Principal.SecurityIdentifier]]$OnPremToCloudSidCache = $null,
+
+        [Parameter(Mandatory = $false)]
+        [long]$OnPremToCloudSidCacheMaxEntries = 10000,
+
+        [Parameter(Mandatory = $false)]
         [string]$TenantId,
 
         [Parameter(Mandatory = $false)]
@@ -1975,13 +2006,22 @@ function Update-AzFileAclOnPremToCloudSidSingle {
     for ($i = $currentAcl.DiscretionaryAcl.Count - 1; $i -ge 0; $i--) {
         $ace = $currentAcl.DiscretionaryAcl[$i]
         if ($ace -is [System.Security.AccessControl.KnownAce] -and $ace.SecurityIdentifier.Value.StartsWith("S-1-5-21-")) {
-            $cloudSid = Get-CloudSid `
-                -OnPremisesSid $ace.SecurityIdentifier.Value `
-                -TenantId $TenantId `
-                -Environment $Environment `
-                -Verbose:$VerbosePreference `
-                -WhatIf:$WhatIfPreference `
-                -ErrorAction SilentlyContinue
+            $cloudSid = $null
+            if ($null -eq $OnPremToCloudSidCache -or -not $OnPremToCloudSidCache.TryGetValue($ace.SecurityIdentifier.Value, [ref]$cloudSid)) {
+                $cloudSid = Get-CloudSid `
+                    -OnPremisesSid $ace.SecurityIdentifier.Value `
+                    -TenantId $TenantId `
+                    -Environment $Environment `
+                    -Verbose:$VerbosePreference `
+                    -WhatIf:$WhatIfPreference `
+                    -ErrorAction SilentlyContinue
+
+                if ($null -ne $OnPremToCloudSidCache -and $OnPremToCloudSidCache.Count -lt $OnPremToCloudSidCacheMaxEntries) {
+                    # $cloudSid may be $null and that is a valid scenario, indicating no corresponding cloud SID was found.
+                    $OnPremToCloudSidCache.TryAdd($ace.SecurityIdentifier.Value, $cloudSid) | Out-Null
+                }
+            }
+
             if ($null -eq $cloudSid) {
                 Write-Verbose "No cloud SID found for on-premises SID '$($ace.SecurityIdentifier.Value)'. Skipping."
                 continue
@@ -2153,7 +2193,8 @@ function Get-CloudSid {
                 return [System.Security.Principal.SecurityIdentifier]::new($user.SecurityIdentifier)
             }
             else {
-                throw "User with on-prem SID '$OnPremisesSid' was found, but it did not have a cloud SID."
+                Write-Error "User with on-prem SID '$OnPremisesSid' was found, but it did not have a cloud SID."
+                return $null
             }
         }
 
@@ -2166,11 +2207,13 @@ function Get-CloudSid {
                 return [System.Security.Principal.SecurityIdentifier]::new($group.SecurityIdentifier)
             }
             else {
-                throw "Group with on-prem SID '$OnPremisesSid' was found, but it did not have a cloud SID."
+                Write-Error "Group with on-prem SID '$OnPremisesSid' was found, but it did not have a cloud SID."
+                return $null
             }
         }
         else {
-            throw "No user or group found with on-prem SID '$OnPremisesSid'"
+            Write-Error "No user or group found with on-prem SID '$OnPremisesSid'"
+            return $null
         }
     }
 }
@@ -2206,11 +2249,13 @@ function Get-Sid {
                     return [System.Security.Principal.SecurityIdentifier]::new($user.SecurityIdentifier)
                 }
                 else {
-                    throw "User with UPN '$Identity' was found, but it did not have a SID."
+                    Write-Error "User with UPN '$Identity' was found, but it did not have a SID."
+                    return $null
                 }
             }
             else {
-                throw "No user found with UPN '$Identity'"
+                Write-Error "No user found with UPN '$Identity'"
+                return $null
             }
         }
 
@@ -2242,7 +2287,8 @@ function Get-Sid {
                     return [System.Security.Principal.SecurityIdentifier]::new($user.SecurityIdentifier)
                 }
                 else {
-                    throw "User with object ID '$Identity' was found, but it did not have a SID."
+                    Write-Error "User with object ID '$Identity' was found, but it did not have a SID."
+                    return $null
                 }
             }
 
@@ -2268,11 +2314,13 @@ function Get-Sid {
                     return [System.Security.Principal.SecurityIdentifier]::new($group.SecurityIdentifier)
                 }
                 else {
-                    throw "Group with object ID '$Identity' was found, but it did not have a SID."
+                    Write-Error "Group with object ID '$Identity' was found, but it did not have a SID."
+                    return $null
                 }
             }
             else {
-                throw "No user or group found with ID '$Identity'"
+                Write-Error "No user or group found with ID '$Identity'"
+                return $null
             }
         }
 
@@ -2291,7 +2339,8 @@ function Get-Sid {
 
         if ($user) {
             if ($user -is [array] -and $user.Count -gt 1) {
-                throw "$($user.Count) users found with display name '$Identity'. Use SID, object ID or UPN to specify which user is being referred to."
+                Write-Error "$($user.Count) users found with display name '$Identity'. Use SID, object ID or UPN to specify which user is being referred to."
+                return $null
             }
 
             if ($user.OnPremisesSecurityIdentifier) {
@@ -2303,7 +2352,8 @@ function Get-Sid {
                 return [System.Security.Principal.SecurityIdentifier]::new($user.SecurityIdentifier)
             }
             else {
-                throw "User with display name '$Identity' was found, but it did not have a SID."
+                Write-Error "User with display name '$Identity' was found, but it did not have a SID."
+                return $null
             }
         }
 
@@ -2312,7 +2362,8 @@ function Get-Sid {
         $group = Get-MgGroup -Filter $filter -Property "OnPremisesSecurityIdentifier","SecurityIdentifier" -ErrorAction Stop
         if ($group) {
             if ($group -is [array] -and $group.Count -gt 1) {
-                throw "$($group.Count) groups found with display name '$Identity'. Use SID or object ID to specify which group is being referred to."
+                Write-Error "$($group.Count) groups found with display name '$Identity'. Use SID or object ID to specify which group is being referred to."
+                return $null
             }
 
             if ($group.OnPremisesSecurityIdentifier) {
@@ -2324,11 +2375,13 @@ function Get-Sid {
                 return [System.Security.Principal.SecurityIdentifier]::new($group.SecurityIdentifier)
             }
             else {
-                throw "Group with display name '$Identity' was found, but it did not have a SID."
+                Write-Error "Group with display name '$Identity' was found, but it did not have a SID."
+                return $null
             }
         }
         else {
-            throw "No user or group found with display name '$Identity'"
+            Write-Error "No user or group found with display name '$Identity'"
+            return $null
         }
     }
 }
@@ -2555,7 +2608,7 @@ function Add-AzFileAce {
 
     process {
         # Convert the principal to a SID
-        $sid = Get-Sid -Identity $Principal -Verbose:$VerbosePreference -WhatIf:$WhatIfPreference
+        $sid = Get-Sid -Identity $Principal -Verbose:$VerbosePreference -WhatIf:$WhatIfPreference -ErrorAction Stop
 
         # Get ACL from file. Allow backfill of default ACL if no ACL is present.
         Write-Verbose "Retrieving current ACL for the item at path '$($Client.Path)'"
