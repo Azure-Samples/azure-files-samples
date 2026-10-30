@@ -1792,18 +1792,30 @@ function Update-AzFileAclOnPremToCloudSid {
                     if ($isDirectory -and $aclKeyDirectoryCache.TryGetValue($currentAclKey, [ref]$cachedAclKey)) {
                         Write-Verbose "Found cached Directory ACL key for '$currentAclKey': '$cachedAclKey'"
 
-                        $updatedAclKey = Set-AzFileAclKey `
-                            -Client $client `
-                            -Key $cachedAclKey `
-                            -WhatIf:$using:WhatIfPreference
+                        # Update only if it isn't already up-to-date
+                        if ($cachedAclKey -ne $currentAclKey) {
+                            $updatedAclKey = Set-AzFileAclKey `
+                                -Client $client `
+                                -Key $cachedAclKey `
+                                -WhatIf:$using:WhatIfPreference
+                        }
+                        else {
+                            $updatedAclKey = $cachedAclKey
+                        }
                     }
                     elseif (-not $isDirectory -and $aclKeyFileCache.TryGetValue($currentAclKey, [ref]$cachedAclKey)) {
                         Write-Verbose "Found cached File ACL key for '$currentAclKey': '$cachedAclKey'"
 
-                        $updatedAclKey = Set-AzFileAclKey `
-                            -Client $client `
-                            -Key $cachedAclKey `
-                            -WhatIf:$using:WhatIfPreference
+                        # Update only if it isn't already up-to-date
+                        if ($cachedAclKey -ne $currentAclKey) {
+                            $updatedAclKey = Set-AzFileAclKey `
+                                -Client $client `
+                                -Key $cachedAclKey `
+                                -WhatIf:$using:WhatIfPreference
+                        }
+                        else {
+                            $updatedAclKey = $cachedAclKey
+                        }
                     }
                     else {
                         $updatedAclKey = Update-AzFileAclOnPremToCloudSidSingle `
@@ -1882,18 +1894,30 @@ function Update-AzFileAclOnPremToCloudSid {
                     if ($isDirectory -and $aclKeyDirectoryCache.TryGetValue($currentAclKey, [ref]$cachedAclKey)) {
                         Write-Verbose "Found cached Directory ACL key for '$currentAclKey': '$cachedAclKey'"
 
-                        $updatedAclKey = Set-AzFileAclKey `
-                            -Client $client `
-                            -Key $cachedAclKey `
-                            -WhatIf:$WhatIfPreference
+                        # Update only if it isn't already up-to-date
+                        if ($cachedAclKey -ne $currentAclKey) {
+                            $updatedAclKey = Set-AzFileAclKey `
+                                -Client $client `
+                                -Key $cachedAclKey `
+                                -WhatIf:$WhatIfPreference
+                        }
+                        else {
+                            $updatedAclKey = $cachedAclKey
+                        }
                     }
                     elseif (-not $isDirectory -and $aclKeyFileCache.TryGetValue($currentAclKey, [ref]$cachedAclKey)) {
                         Write-Verbose "Found cached File ACL key for '$currentAclKey': '$cachedAclKey'"
-
-                        $updatedAclKey = Set-AzFileAclKey `
-                            -Client $client `
-                            -Key $cachedAclKey `
-                            -WhatIf:$WhatIfPreference
+                        
+                        # Update only if it isn't already up-to-date
+                        if ($cachedAclKey -ne $currentAclKey) {
+                            $updatedAclKey = Set-AzFileAclKey `
+                                -Client $client `
+                                -Key $cachedAclKey `
+                                -WhatIf:$WhatIfPreference
+                        }
+                        else {
+                            $updatedAclKey = $cachedAclKey
+                        }
                     }
                     else {
                         $updatedAclKey = Update-AzFileAclOnPremToCloudSidSingle `
