@@ -19,7 +19,7 @@ jobs:
         shell: pwsh
     steps:
       - name: Check out repository code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: Print PowerShell version
         run: $PSVersionTable
       - name: Run all Pester tests
@@ -36,7 +36,7 @@ jobs:
         shell: powershell
     steps:
       - name: Check out repository code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: Print PowerShell version
         run: $PSVersionTable
       - name: Run all Pester tests
@@ -53,7 +53,7 @@ jobs:
         shell: pwsh
     steps:
       - name: Check out repository code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: Test PowerShell formatting
         run: |
           .\init.ps1
@@ -67,7 +67,7 @@ jobs:
         working-directory: .\RestSetAcls
         shell: pwsh
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: Check .psd1 file with Test-ModuleManifest
         run: |
           .\init.ps1
@@ -81,7 +81,7 @@ jobs:
         working-directory: .\RestSetAcls
         shell: pwsh
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: Lint with PSScriptAnalyzer
         run: |
           .\init.ps1
@@ -95,7 +95,7 @@ jobs:
         working-directory: .\RestSetAcls
         shell: powershell
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: Lint with PSScriptAnalyzer
         run: |
           .\init.ps1
