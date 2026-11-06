@@ -2147,15 +2147,18 @@ function Invoke-TraceStop
 
     $etsArg = if ($useEts) { "-ets" } else { $null }
 
+    $collectorNotFound = 0x80300002 # PLA_E_DCS_NOT_FOUND
+    $collectorNotRunning = 0x80300104 # PLA_E_DCS_NOT_RUNNING
+
     $output = $null
 
     try {
         Invoke-Cmd logman stop -n $fullName $etsArg | Write-Output -OutVariable output | Write-Verbose
     } catch {
-        $strOutput = $output | Out-String
-        if (($strOutput.IndexOf("Data Collector Set is not running") -lt 0) -and
-            ($strOutput.IndexOf("Data Collector Set was not found") -lt 0))
+        if (($LASTEXITCODE -ne $collectorNotRunning) -and
+            ($LASTEXITCODE -ne $collectorNotFound))
         {
+            $strOutput = $output | Out-String
             Write-Error $strOutput
             throw
         }
@@ -2166,9 +2169,9 @@ function Invoke-TraceStop
     try {
         Invoke-Cmd logman delete -n $fullName $etsArg | Write-Output -OutVariable output | Write-Verbose
     } catch {
-        $strOutput = $output | Out-String
-        if ($strOutput.IndexOf("Data Collector Set was not found") -lt 0)
+        if ($LASTEXITCODE -ne $collectorNotFound)
         {
+            $strOutput = $output | Out-String
             Write-Error $strOutput
             throw
         }
