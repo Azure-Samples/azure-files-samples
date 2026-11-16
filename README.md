@@ -10,5 +10,7 @@ This repository contains supporting code (PowerShell modules/scripts, ARM templa
 
 - Instructions for setting up a Point-to-Site VPN (P2S) to bypass port 445. The most up-to-date instructions for configuring a Point-to-Site VPN are available [here](https://docs.microsoft.com/azure/storage/files/storage-files-configure-p2s-vpn-windows), however, we have maintained this information in this repository for now since the P2S here use a slightly different approach some customers may find useful.
 
+- A [change feed incremental copy sample](./ChangeFeedIncrementalCopy/README.md) that uses Azure Files change feed (preview) to copy only changed files between two file shares, and compares it with a full namespace scan.
+
 ### How to contribute
 We welcome issue submission and direct contributions. Please feel free to create pull requests or issues as needed.

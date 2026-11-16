@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Prerelease: Azure Files change feed is in preview and this API surface can change. -->
+    <PackageReference Include="Azure.Storage.Files.Shares.ChangeFeed" Version="12.0.0-beta.1" />
+  </ItemGroup>
+
+</Project>
