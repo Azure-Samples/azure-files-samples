@@ -31,4 +31,7 @@ Contents of Zip file:
 2) nfs_trace - Output of trace-cmd, which contain the kernel event logs.
 3) os_details.txt - Info about the operating system, which will help developers to understand which features/fixes are missing. 
 4) nfs_traffic.pcap - network capture of NFS traffic in case CaptureNetwork option was used.
+5) aznfs - Logs of the AZNFS mount helper, if installed: its data directory and stunnel configs/logs, the aznfs and
+   stunnel messages from the journal and syslog files (aznfs 3.0.21 and later log NFSv4 to syslog by default), the
+   log files in AZNFS_LOGDIR if configured, and the aznfswatchdogv4 service's status.
 
